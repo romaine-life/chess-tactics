@@ -139,18 +139,20 @@ function ContinuePanel({ inventory }: { inventory: ContinueInventory }): ReactEl
           {selected ? (
             <div className="continue-resume" data-testid="continue-detail" aria-label={selected.title}>
               <div className="ce-selected-head"><h2>{selected.title}</h2></div>
-              {/* Same field, same material as Run's: a facts box holds rows, so it is structural
-                  teal stone and the Continue verb under it is the only oak (ADR-0433). */}
-              <InnerChromeBox className="play-detail-facts" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
-                <dl>
-                  {selected.facts.map((fact) => (
-                    <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>
-                  ))}
-                </dl>
+              {/* The same one-field card Run's detail uses: facts and the verb that completes them
+                  inside one structural stone region, with the oak plaque as its only leaf. */}
+              <InnerChromeBox className="play-detail-card" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
+                <div className="play-detail-facts">
+                  <dl>
+                    {selected.facts.map((fact) => (
+                      <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>
+                    ))}
+                  </dl>
+                </div>
+                <div className="ce-preview-actions is-single">
+                  <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE} to={selected.playHref}><span>Continue</span></ChromeNavButton>
+                </div>
               </InnerChromeBox>
-              <div className="ce-preview-actions is-single">
-                <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE} to={selected.playHref}><span>Continue</span></ChromeNavButton>
-              </div>
             </div>
           ) : (
             <div className="settings-section-rows">
@@ -366,30 +368,32 @@ function RunPanel({
           <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Two active Runs" data-testid="run-detail-current">
             <div className="ce-selected-head"><h2>Two active Runs</h2></div>
             <div className="play-detail-body">
-              <div className="run-adoption-conflict" data-testid="run-adoption-conflict">
-                <div className="run-adoption-conflict-copy">
-                  <p>This browser has {presentation.adoptionConflict.browserRun.war.name}; your account has {presentation.adoptionConflict.accountRun.war.name}. Choose which one the account keeps.</p>
+              <InnerChromeBox className="play-detail-card" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
+                <div className="run-adoption-conflict" data-testid="run-adoption-conflict">
+                  <div className="run-adoption-conflict-copy">
+                    <p>This browser has {presentation.adoptionConflict.browserRun.war.name}; your account has {presentation.adoptionConflict.accountRun.war.name}. Choose which one the account keeps.</p>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div className="ce-preview-actions run-adoption-decision">
-              <ChromeButton unit="inner-text-button"
-                className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
-                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                data-testid="run-keep-account"
-                onClick={keepAccountRun}
-              >
-                <span>Keep account Run</span>
-              </ChromeButton>
-              <ChromeButton unit="inner-text-button"
-                className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
-                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                data-testid="run-adopt-browser"
-                disabled={presentation.syncing}
-                onClick={() => { void adoptBrowserRun(); }}
-              >
-                <span>Adopt browser Run</span>
-              </ChromeButton>
+                <div className="ce-preview-actions run-adoption-decision">
+                  <ChromeButton unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
+                    data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                    data-testid="run-keep-account"
+                    onClick={keepAccountRun}
+                  >
+                    <span>Keep account Run</span>
+                  </ChromeButton>
+                  <ChromeButton unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
+                    data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                    data-testid="run-adopt-browser"
+                    disabled={presentation.syncing}
+                    onClick={() => { void adoptBrowserRun(); }}
+                  >
+                    <span>Adopt browser Run</span>
+                  </ChromeButton>
+                </div>
+              </InnerChromeBox>
             </div>
           </aside>
         ) : choice === 'current' && presentedRun ? (
@@ -398,21 +402,26 @@ function RunPanel({
              restating the press that got you here. The aside keeps the name as a landmark. */
           <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Current Run" data-testid="run-detail-current">
             <div className="play-detail-body">
-              {/* Marble, not oak. The facts are a standing statement about the Run — nothing in
-                  the box takes a click — so it wears the structural teal stone every field that
-                  holds subordinate rows wears, and only the Play verb below it is oak (ADR-0433). */}
-              <InnerChromeBox className="play-detail-facts" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
-                <dl>
-                  <div><dt>Battle</dt><dd>{presentedRun.battleIndex + 1} of {presentedRun.war.battles.length}</dd></div>
-                  <div><dt>Army</dt><dd>{presentedRun.army.length} units</dd></div>
-                  <div><dt>Gold</dt><dd>{formatGold(presentedRun.goldTenths)}</dd></div>
-                  <div><dt>Ataraxia</dt><dd>{ATARAXIA_BY_TIER[presentedRun.ataraxiaTier].label}</dd></div>
-                  <div><dt>Deployment</dt><dd>Arrange formations</dd></div>
-                </dl>
+              {/* One field, not a stack of floats. The facts and the verb that completes them
+                  share a single structural stone card, so neither stands as bare text on the live
+                  vista. The card is teal because it establishes a region; the Play plaque inside
+                  it is oak because it is the one thing here that takes a click (ADR-0433). The
+                  verb still directly follows the facts it completes (ADR-0475) — it is inside the
+                  same field now rather than under it. */}
+              <InnerChromeBox className="play-detail-card" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
+                <div className="play-detail-facts">
+                  <dl>
+                    <div><dt>Battle</dt><dd>{presentedRun.battleIndex + 1} of {presentedRun.war.battles.length}</dd></div>
+                    <div><dt>Army</dt><dd>{presentedRun.army.length} units</dd></div>
+                    <div><dt>Gold</dt><dd>{formatGold(presentedRun.goldTenths)}</dd></div>
+                    <div><dt>Ataraxia</dt><dd>{ATARAXIA_BY_TIER[presentedRun.ataraxiaTier].label}</dd></div>
+                    <div><dt>Deployment</dt><dd>Arrange formations</dd></div>
+                  </dl>
+                </div>
+                <div className="ce-preview-actions is-single">
+                  <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE} to="/run"><span>Play</span></ChromeNavButton>
+                </div>
               </InnerChromeBox>
-            </div>
-            <div className="ce-preview-actions is-single">
-              <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE} to="/run"><span>Play</span></ChromeNavButton>
             </div>
           </aside>
         ) : null}

@@ -28199,8 +28199,18 @@ button.run-card-formation-cell {
   gap: var(--ds-stack);
 }
 
-.play-detail-facts {
+/* One card per detail column: the facts (or the adoption question) and the verb that completes
+   them share a single structural stone field, so nothing in the column reads as text floating on
+   the live vista. The card owns the inset; its contents pay none of their own, and the action row
+   drops the bottom padding it carried when it sat loose in the column. */
+.play-detail-card {
+  display: grid;
+  gap: var(--ds-stack);
   padding: var(--ds-inset);
+}
+
+.play-detail-card .ce-preview-actions {
+  padding: 0;
 }
 
 .play-detail-facts dl {
