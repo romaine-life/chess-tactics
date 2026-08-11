@@ -43,11 +43,27 @@ VELVET = [(0.00000,"#2a0709"),(0.05139,"#5a1013"),(0.09918,"#8a1c1c"),(0.15729,"
 # cloth averages to an in-between brightness and takes an in-between stop, so
 # sub-pixel detail degrades into shading rather than into blocks. Shadow reads velvet,
 # highlight reads gold, and the crown holds its shape at any threshold.
+# The accent ramp's colours, per piece.
+#
+# CROWN is the king's: dark red cushion through to bright gilt, tuned on his crown.
+# Handing that to another piece paints it a crown -- the rook came back red and gold
+# because its gate inherited these, which is nothing to do with a wooden gate in a
+# stone wall. ACCENT_RAMP names which set to use.
 CROWN = [(0.00000, "#2a0709"), (0.03628, "#5a1013"), (0.07803, "#8a1c1c"), (0.17240, "#b8933a"), (0.24367, "#e2c268")]
+
+# Iron banding and oak planks, lit from the same direction as the stone. Positions
+# start on the body's shared ladder rather than the crown's, since a gate is a surface
+# in the wall and not a jewel sitting on top of it.
+GATE = [(0.00000, "#1a1206"), (0.05139, "#33240f"), (0.10824, "#4d3a1c"), (0.13614, "#6b5330"), (0.25274, "#8a6f45")]
+
+# A tiara is gilt, so it does start from the crown's warm end, without the cushion red.
+TIARA = [(0.00000, "#241a06"), (0.05139, "#463410"), (0.10824, "#6b5219"), (0.13614, "#9c7a2b"), (0.25274, "#d8b45c")]
+
+ACCENT_RAMPS = {"CROWN": CROWN, "GATE": GATE, "TIARA": TIARA}
 
 ACCENTS = [(2, "CROWN gold", GOLD), (3, "CROWN velvet", VELVET)]
 if os.environ.get("CROWN_SPLIT") is None:
-    ACCENTS = [(2, ACCENT_LABEL, CROWN)]
+    ACCENTS = [(2, ACCENT_LABEL, ACCENT_RAMPS.get(ACCENT_LABEL, CROWN))]
 # Which HUE each accent owns, measured off the restored crown texture rather than
 # assumed. Gold sits in the yellows; velvet is red and wraps past 0, so it is written
 # as two bands and summed.
