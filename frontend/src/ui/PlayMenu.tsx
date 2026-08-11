@@ -44,8 +44,8 @@ import {
 import { useWars, runEligibleOfficialWars } from '../war/store';
 import { useActiveRun, type RunAdoptionConflict } from '../run/store';
 import {
-  ATARAXIA_BY_TIER, DEFAULT_RUN_RULES, createRun, formatArmySize, formatGold, snapshotWar,
-  type RunRules, type AtaraxiaTier,
+  ATARAXIA_BY_TIER, DEFAULT_RUN_RULES, createRun, formatCardCount, formatGold, runHeldCardCount,
+  snapshotWar, type RunRules, type AtaraxiaTier,
 } from '../run/model';
 import {
   RUN_PROGRESSION_EVENT,
@@ -456,7 +456,11 @@ function RunPanel({
                 <div className="play-detail-facts">
                   <dl>
                     <div><dt>Battle</dt><dd>{presentedRun.battleIndex + 1} of {presentedRun.war.battles.length}</dd></div>
-                    <div><dt>Army</dt><dd>{formatArmySize(presentedRun.army.length)}</dd></div>
+                    {/* Cards, not units: Deployment deals the CHARTULARY, one whole card at a
+                        time, and a card that overruns the level's band takes none of its units
+                        onto the board — so a unit count states a force this Run may never
+                        field. The unit roster is the Army ledger's subject, not this row's. */}
+                    <div><dt>Army</dt><dd>{formatCardCount(runHeldCardCount(presentedRun))}</dd></div>
                     <div><dt>Gold</dt><dd>{formatGold(presentedRun.goldTenths)}</dd></div>
                     <div><dt>Ataraxia</dt><dd>{ATARAXIA_BY_TIER[presentedRun.ataraxiaTier].label}</dd></div>
                     <div><dt>Deployment</dt><dd>Arrange formations</dd></div>

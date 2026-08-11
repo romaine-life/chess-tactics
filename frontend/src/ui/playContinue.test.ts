@@ -26,7 +26,10 @@ const run = (updatedAt: string, battleLevelId = 'run-battle'): RunDocument => ({
   updatedAt,
   phase: 'battle',
   battleIndex: 0,
-  army: [],
+  // A Run always carries both: the Army fact counts the CARDS that still seat a surviving unit,
+  // because that is what Deployment deals (runHeldCardCount).
+  army: [{ id: 'unit-1', type: 'pawn' }],
+  cards: [{ id: 'card-1', coreId: 'p', unitSeats: ['unit-1'] }],
   goldTenths: 0,
   ataraxiaTier: 0,
   war: {

@@ -4,12 +4,16 @@ import { runAdoptionFacts } from './runAdoption';
 
 const NOW = Date.parse('2026-08-10T12:00:00.000Z');
 
+const unit = (id: string): unknown => ({ id, type: 'pawn' });
+const card = (id: string, unitIds: Array<string | null>): unknown => ({ id, coreId: id, unitSeats: unitIds });
+
 const run = (overrides: Partial<RunDocument> = {}): RunDocument => ({
   id: 'run-1',
   updatedAt: '2026-08-10T11:30:00.000Z',
   phase: 'battle',
   battleIndex: 2,
-  army: [{}, {}, {}],
+  army: [unit('u1'), unit('u2'), unit('u3')],
+  cards: [card('c1', ['u1', 'u2']), card('c2', ['u3'])],
   goldTenths: 440,
   ataraxiaTier: 0,
   war: {
@@ -30,10 +34,14 @@ describe('Run adoption candidate facts', () => {
     const facts = runAdoptionFacts(browser, account, NOW);
     expect(labels(facts)).toEqual(['Progress', 'Army', 'Gold', 'Last played']);
     expect(facts).toContainEqual({ label: 'Progress', value: 'Battle 3 of 10' });
-    expect(facts).toContainEqual({ label: 'Army', value: '3 units' });
-    // An army of one is reachable — the King is not counted — and "1 units" is not a sentence.
-    expect(runAdoptionFacts(run({ army: [{}] } as Partial<RunDocument>), account, NOW))
-      .toContainEqual({ label: 'Army', value: '1 unit' });
+    // Cards, not units: Deployment deals whole cards, so a unit count states a force the Run may
+    // never field. Three units across two cards is "2 cards".
+    expect(facts).toContainEqual({ label: 'Army', value: '2 cards' });
+    expect(runAdoptionFacts(
+      run({ army: [unit('u1')], cards: [card('c1', ['u1'])] } as Partial<RunDocument>),
+      account,
+      NOW,
+    )).toContainEqual({ label: 'Army', value: '1 card' });
     expect(facts).toContainEqual({ label: 'Last played', value: '30 minutes ago' });
   });
 
@@ -51,6 +59,17 @@ describe('Run adoption candidate facts', () => {
 
   it('never states Ataraxia, which has exactly one tier and so cannot tell two Runs apart', () => {
     expect(labels(runAdoptionFacts(run(), run({ id: 'run-2' }), NOW))).not.toContain('Ataraxia');
+  });
+
+  it('does not count a card whose every unit has fallen — it is dealt as nothing', () => {
+    // A casualty leaves a null seat rather than removing the card from the Chartulary, so a
+    // hollow card is still in `run.cards`. It deals nothing, so it is not a force.
+    const hollow = run({
+      army: [unit('u1')],
+      cards: [card('c1', ['u1']), card('c2', [null, null])],
+    } as Partial<RunDocument>);
+    expect(runAdoptionFacts(hollow, run({ id: 'run-2' }), NOW))
+      .toContainEqual({ label: 'Army', value: '1 card' });
   });
 
   it('distinguishes two Runs sitting at different points of the same War', () => {

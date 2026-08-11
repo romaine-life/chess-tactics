@@ -198,6 +198,12 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // absent entirely — one tier exists, so the row could only repeat itself on both sides.
     expect(runAdoption).toContain("if (run.war.name !== other.war.name) facts.push({ label: 'War', value: run.war.name });");
     expect(runAdoption).not.toContain('ATARAXIA_BY_TIER');
+    // The row counts CARDS. Deployment deals the Chartulary a whole card at a time, so a unit
+    // count states a force the Run may never field (resolveDeploymentCapacity).
+    expect(runAdoption).toContain("facts.push({ label: 'Army', value: formatCardCount(runHeldCardCount(run)) });");
+    expect(playMenu).not.toContain('formatArmySize');
+    expect(readFileSync(new URL('./playContinue.ts', import.meta.url), 'utf8'))
+      .toContain("{ label: 'Army', value: formatCardCount(runHeldCardCount(run)) },");
     expect(runAdoption).toContain("facts.push({ label: 'Progress', value: runPhaseLabel(run) });");
     expect(runAdoption).toContain("facts.push({ label: 'Last played', value: relativeTimeLabel(run.updatedAt, now) });");
     // Progress and "how long ago" are each written ONCE in the app: Continue's own resume card

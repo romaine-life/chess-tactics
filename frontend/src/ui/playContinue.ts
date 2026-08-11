@@ -1,6 +1,6 @@
 import type { Campaign, Level } from '../core/level';
 import type { PersistedMatch } from '../game/matchPersistence';
-import { ATARAXIA_BY_TIER, formatArmySize, formatGold, runBattleActivityId, type RunDocument } from '../run/model';
+import { ATARAXIA_BY_TIER, formatCardCount, formatGold, runBattleActivityId, runHeldCardCount, type RunDocument } from '../run/model';
 import { playContinueSelectorHref, type PlayContinueChoice } from './playHubRoute';
 import { playSkirmishLevelHref } from './skirmishMaps';
 import { playModeEntryEnabled } from './playModeAvailability';
@@ -69,7 +69,7 @@ export function continueInventory(
       facts: [
         { label: 'War', value: run.war.name },
         { label: 'Progress', value: phase },
-        { label: 'Army', value: formatArmySize(run.army.length) },
+        { label: 'Army', value: formatCardCount(runHeldCardCount(run)) },
         { label: 'Gold', value: formatGold(run.goldTenths) },
         { label: 'Ataraxia', value: ATARAXIA_BY_TIER[run.ataraxiaTier].label },
       ],

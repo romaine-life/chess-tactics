@@ -4360,11 +4360,32 @@ export function formatGold(goldTenths: number): string {
 }
 
 /** How large an army is, said once. This counts UNITS — individual pieces, the King among
- *  them — not the formation cards that seat them; `run.cards` is that other number, and one
- *  card seats up to four units. An army of one is the King alone, so the singular is reachable
- *  and every surface that showed "1 units" wrote its own copy of this string. */
+ *  them — not the formation cards that seat them. It belongs on the Army ledger, where each
+ *  unit is its own row you can name, inspect and lose. For "how big is this Run", the honest
+ *  measure is cards: see runHeldCardCount below. */
 export function formatArmySize(units: number): string {
   return `${units} unit${units === 1 ? '' : 's'}`;
+}
+
+export function formatCardCount(cards: number): string {
+  return `${cards} card${cards === 1 ? '' : 's'}`;
+}
+
+/**
+ * How many cards this Run can actually field.
+ *
+ * The card — not the unit — is what Deployment deals: `resolveDeploymentCapacity` walks the deal
+ * in card order and admits each card WHOLE or not at all, so a formation that overruns the
+ * level's band takes none of its units onto the board. That makes a unit count the wrong measure
+ * of a Run's size at a glance, and this the right one.
+ *
+ * A card whose every unit has fallen keeps its seats as nulls rather than leaving the
+ * Chartulary, and deals nothing. It is not counted here — only Expunctio removes a card, and a
+ * hollow one is not a force.
+ */
+export function runHeldCardCount(run: Pick<RunDocument, 'cards' | 'army'>): number {
+  const alive = new Set(run.army.map((unit) => unit.id));
+  return run.cards.filter((card) => runCardUnitIds(card).some((unitId) => alive.has(unitId))).length;
 }
 
 /** What a card of `value` points costs, in gold — the price on its coin. */

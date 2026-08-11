@@ -1,4 +1,4 @@
-import { formatArmySize, formatGold, type RunDocument } from '../run/model';
+import { formatCardCount, formatGold, runHeldCardCount, type RunDocument } from '../run/model';
 import { runPhaseLabel } from './playContinue';
 import { relativeTimeLabel } from './relativeTime';
 
@@ -24,7 +24,7 @@ export function runAdoptionFacts(
   const facts: Array<{ label: string; value: string }> = [];
   if (run.war.name !== other.war.name) facts.push({ label: 'War', value: run.war.name });
   facts.push({ label: 'Progress', value: runPhaseLabel(run) });
-  facts.push({ label: 'Army', value: formatArmySize(run.army.length) });
+  facts.push({ label: 'Army', value: formatCardCount(runHeldCardCount(run)) });
   facts.push({ label: 'Gold', value: formatGold(run.goldTenths) });
   facts.push({ label: 'Last played', value: relativeTimeLabel(run.updatedAt, now) });
   return facts;
