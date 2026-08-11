@@ -926,16 +926,28 @@ if os.environ.get("LAB_OUT"):
     # Dilate/Erode and a Mix -- and did, leaving the owner hunting through the
     # machinery for the one control that actually draws an outline.
     _tunable_types = {"ShaderNodeValue", "ShaderNodeValToRGB", "CompositorNodePixelate",
-                      "CompositorNodeDilateErode", "ShaderNodeMix"}
-    _tune_names = ("PALETTE", "BODY ", "BLOCK SIZE", "STROKE", "ACCENT EDGE", "ALPHA CUTOFF", ACCENT_LABEL)
+                      "CompositorNodeDilateErode", "ShaderNodeMix", "CompositorNodeSwitch"}
+    _tune_names = ("PALETTE", "BODY ", "BLOCK SIZE", "STROKE", "ACCENT EDGE", "ALPHA CUTOFF", "OUTLINE", ACCENT_LABEL)
     _tune = [n for n in _nodes
              if n.bl_idname in _tunable_types
              and (n.label or "").upper().startswith(_tune_names)]
-    _tune.sort(key=lambda n: (
-        0 if (n.label or "").startswith("PALETTE") else
-        1 if (n.label or "").startswith("BODY ") else
-        2 if (n.label or "").upper().startswith(ACCENT_LABEL) else 3,
-        (n.label or "").lower()))
+    # Ordered by how often it is reached for, not alphabetically.
+    #
+    # The six body ramps are bulky, so sorting them first pushed the stroke controls
+    # 4,500 units down the column and off screen -- the owner could not find the one
+    # control that draws an outline. Outline and stroke go at the top; the palette
+    # ramps, which are tuned once and then left, go at the bottom.
+    _ORDER = ["OUTLINE", "STROKE WIDTH", "STROKE INK", "ACCENT EDGE", "ALPHA CUTOFF",
+              "BLOCK SIZE", "PALETTE", ACCENT_LABEL, "BODY "]
+
+    def _rank(n):
+        lab = (n.label or "").upper()
+        for i, key in enumerate(_ORDER):
+            if lab.startswith(key):
+                return (i, lab)
+        return (len(_ORDER), lab)
+
+    _tune.sort(key=_rank)
     _frame = tree.nodes.new("NodeFrame")
     _frame.label = "TUNE THESE"
     _frame.location = (-820, 200)
