@@ -37,7 +37,7 @@ PIECE_TUNING = {
     "rook":   {"block": 5, "outline_sensitivity": 4.0, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
     "queen":  {"block": 6, "outline_sensitivity": 3.0, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
     "bishop": {"block": 7, "outline_sensitivity": 3.0, "positions": [0.00000, 0.04837, 0.10824, 0.16031, 0.25274]},
-    "knight": {"block": 7, "outline_sensitivity": 3.0, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
+    "knight": {"block": 3, "outline_sensitivity": 3.0, "positions": [0.00000, 0.05139, 0.09428, 0.16715, 0.22410]},
 }
 PIECE = os.environ.get("PIECE", "")
 _tuning = PIECE_TUNING.get(PIECE, {"block": 7, "outline_sensitivity": 3.0, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]})
