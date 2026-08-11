@@ -150,6 +150,16 @@ export type RunRules = Readonly<{
    * dealt with. This does not change which cards exist -- only what may be done with one.
    */
   mayRotate: boolean;
+  /**
+   * Which ladder sorts the catalog into Common, Uncommon and Rare — see `RUN_RARITY_RULES`.
+   *
+   * `price-shifts` is the game: a flat cut on the printed price, then the shifts it declares.
+   * `material-bands` is what the market ran on before ADR-0567, kept selectable because the
+   * difference between the two is the whole argument and a rule you cannot play is a rule nobody
+   * can judge. It leaves six Common identities against sixteen pile seats under a two-by-two
+   * market, so a Sectio row deals the same card twice; that is what it is FOR.
+   */
+  rarity: RunRarityRuleId;
 }>;
 
 export const RUN_CARD_SPANS: readonly (2 | 4)[] = Object.freeze([2, 4]);
@@ -173,14 +183,17 @@ export const RUN_CARD_SPANS: readonly (2 | 4)[] = Object.freeze([2, 4]);
  * at the ceiling may cost more than the ceiling reads. It still cannot outrun the opening purse:
  * the dearest card the six-value band admits is a lone Rook at six gold against a starting eight.
  */
-export const DEFAULT_RUN_RULES: RunRules = Object.freeze({ cardSpan: 2, mayRotate: true, pricing: 'density' });
+export const DEFAULT_RUN_RULES: RunRules = Object.freeze({ cardSpan: 2, mayRotate: true, pricing: 'density', rarity: 'price-shifts' });
 
 /**
  * What a Run written before rules existed was already playing: the wide catalog, turnable. NOT the
  * new default -- a Run mid-flight was dealt from the wide pool and is holding cards from it, and
  * narrowing its market now would leave it with formations its own market could no longer offer.
  */
-export const LEGACY_RUN_RULES: RunRules = Object.freeze({ cardSpan: 4, mayRotate: true, pricing: 'material' });
+// Rarity is NOT part of what a pre-rules Run was playing: it was global and derived, so it has
+// always followed the code rather than the document. A legacy Run therefore meets the current
+// ladder, exactly as it always has.
+export const LEGACY_RUN_RULES: RunRules = Object.freeze({ cardSpan: 4, mayRotate: true, pricing: 'material', rarity: 'price-shifts' });
 
 /** The longest side of a formation, blind to which way round it was authored. */
 export function formationSpan(formation: readonly RunCardFormationCell[] | undefined): number {
@@ -1124,11 +1137,47 @@ export type RunRarityShift = Readonly<{
   name: string;
   why: string;
   from?: RunCardRarity;
-  to: RunCardRarity;
+  /** Where the cards land: a named tier, or a signed step along the ladder, clamped at both ends.
+   * A shift moves a card at most once, so a step never cascades into the next shift's answer. */
+  to?: RunCardRarity;
+  step?: -1 | 1;
   holds: (card: RunCardRarityInput) => boolean;
 }>;
 
+/** A whole rarity rule: where the flat cuts fall, and the shifts that follow them. */
+export type RunRarityRule = Readonly<{
+  id: RunRarityRuleId;
+  label: string;
+  /** What the flat cut reads. `price` is the gold the card face prints; `material` is raw points. */
+  cut: 'price' | 'material';
+  commonMax: number;
+  uncommonMax: number;
+  shifts: readonly RunRarityShift[];
+}>;
+
+export type RunRarityRuleId = 'price-shifts' | 'material-bands';
+
+export const RUN_RARITY_RULE_IDS: readonly RunRarityRuleId[] = Object.freeze(['price-shifts', 'material-bands']);
+
 const MINOR_PIECES: ReadonlySet<AdlectablePieceType> = new Set(['bishop', 'knight']);
+
+/**
+ * The five four-cell footprints that waste the deployment band, each written here in the form it
+ * takes lying in that band. Every one of them is a bar with the fourth seat pushed off the line, so
+ * the shape cannot be tucked against a neighbour the way a square, a straight run, or a corner can.
+ * Both Z chiralities are separate card identities, and both are listed.
+ *
+ * Every one is also THREE CELLS LONG, which is why the demotion reading this set moves nothing under
+ * a two-by-two shape rule. That is not a footnote — it is the failure this whole mechanism exists to
+ * make visible, and the audit says so out loud on the rule that still carries it.
+ */
+const AWKWARD_CARD_FOOTPRINTS: ReadonlySet<string> = new Set(([
+  [[0, 0], [1, 0], [1, 1], [2, 1]], // ##. / .##  Z
+  [[1, 0], [2, 0], [0, 1], [1, 1]], // .## / ##.  S
+  [[0, 0], [1, 0], [2, 0], [1, 1]], // ### / .#.  T
+  [[0, 0], [0, 1], [1, 1], [2, 1]], // #.. / ###  J
+  [[0, 0], [1, 0], [2, 0], [0, 1]], // ### / #..  L
+] as const).map((cells) => rotationalFootprintId(cells.map(([x, y]) => ({ x, y })))));
 
 /**
  * The shifts the shipped ladder declares, applied in this order.
@@ -1140,46 +1189,106 @@ const MINOR_PIECES: ReadonlySet<AdlectablePieceType> = new Set(['bishop', 'knigh
  * pair; that survives below, as the cluster rule, which reaches the Knight pair on the same
  * argument instead of singling out one piece.
  */
-export const RUN_CARD_RARITY_SHIFTS: readonly RunRarityShift[] = Object.freeze([
-  Object.freeze({
-    id: 'minor-cluster',
-    name: 'A card of nothing but minors is Rare',
-    why: 'Price reads a card as material over squares, and two or three minors in a tight cluster '
-      + 'price as ordinary. What they are worth is not their material: the player places every '
-      + 'formation by hand (ADR-0526), so a card of two Bishops IS the opposite-colour pair, and a '
-      + 'card of three minors is a whole minor piece battery arriving already assembled. No cut on '
-      + 'price can see that, which is what a shift is for.',
-    to: 'rare',
-    holds: (card: RunCardRarityInput) => card.pieces.length >= 2
-      && card.pieces.every((piece: AdlectablePieceType) => MINOR_PIECES.has(piece)),
+export const RUN_RARITY_RULES: Readonly<Record<RunRarityRuleId, RunRarityRule>> = Object.freeze({
+  'price-shifts': Object.freeze({
+    id: 'price-shifts',
+    label: 'Priced',
+    cut: 'price',
+    commonMax: RUN_CARD_RARITY_COMMON_MAX_GOLD,
+    uncommonMax: RUN_CARD_RARITY_UNCOMMON_MAX_GOLD,
+    shifts: Object.freeze([
+      Object.freeze({
+        id: 'minor-cluster',
+        name: 'A card of nothing but minors is Rare',
+        why: 'Price reads a card as material over squares, and two or three minors in a tight '
+          + 'cluster price as ordinary. What they are worth is not their material: the player places '
+          + 'every formation by hand (ADR-0526), so a card of two Bishops IS the opposite-colour '
+          + 'pair, and a card of three minors is a whole minor piece battery arriving already '
+          + 'assembled. No cut on price can see that, which is what a shift is for.',
+        to: 'rare',
+        holds: (card: RunCardRarityInput) => card.pieces.length >= 2
+          && card.pieces.every((piece: AdlectablePieceType) => MINOR_PIECES.has(piece)),
+      }),
+    ]),
   }),
-]);
+  'material-bands': Object.freeze({
+    id: 'material-bands',
+    label: 'By material',
+    cut: 'material',
+    commonMax: 4,
+    uncommonMax: 6,
+    shifts: Object.freeze([
+      Object.freeze({
+        id: 'awkward-footprint',
+        name: 'A shape that wastes the band drops a tier',
+        why: 'Each of the five is a bar with its fourth seat pushed off the line, so it cannot be '
+          + 'tucked against a neighbour and its material overstates what it is worth on a board. '
+          + 'This is what stocked the Common tier under this rule -- and every one of those shapes '
+          + 'is three cells long, so a two-by-two market leaves it holding nothing.',
+        step: -1 as const,
+        holds: (card: RunCardRarityInput) => AWKWARD_CARD_FOOTPRINTS.has(rotationalFootprintId(card.formation)),
+      }),
+      Object.freeze({
+        id: 'bishop-step',
+        name: 'A card carrying a Bishop climbs a tier',
+        why: 'Material understates a Bishop, because free placement (ADR-0526) lets the player '
+          + 'choose the square each one lands on, so any two Bishops they own become the '
+          + 'opposite-colour pair whichever cards those arrived on.',
+        step: 1 as const,
+        holds: (card: RunCardRarityInput) => card.pieces.includes('bishop'),
+      }),
+    ]),
+  }),
+});
 
-/** The tier the flat formula gives a card, before any shift. */
-export function runCardRarityBand(card: RunCardRarityInput): RunCardRarity {
-  // Priced on the canonical curve rather than the asking Run's, so a card's tier is a property of
-  // the catalog: the frame a card wears must not change because a Run is playing the legacy rules.
-  const gold = runCardCost({
-    value: card.pieces.reduce((total, piece) => total + PIECE_VALUE[piece], 0),
-    formation: [...card.formation],
-    pieces: [...card.pieces],
-  }, DEFAULT_RUN_RULES) * GOLD_SCALE;
-  if (gold <= RUN_CARD_RARITY_COMMON_MAX_GOLD) return 'common';
-  return gold <= RUN_CARD_RARITY_UNCOMMON_MAX_GOLD ? 'uncommon' : 'rare';
+/** What a new Run uses unless the player chooses otherwise at Run start. */
+export const DEFAULT_RUN_RARITY_RULE: RunRarityRuleId = 'price-shifts';
+
+/** One step along the rarity ladder, clamped at both ends. */
+function stepRarity(rarity: RunCardRarity, steps: number): RunCardRarity {
+  const index = RUN_CARD_RARITIES.indexOf(rarity) + steps;
+  return RUN_CARD_RARITIES[Math.max(0, Math.min(RUN_CARD_RARITIES.length - 1, index))];
 }
 
-/** The flat band, then every shift that holds, in declared order. */
+/** The tier the flat cut gives a card, before any shift. */
+export function runCardRarityBand(
+  card: RunCardRarityInput,
+  rule: RunRarityRule = RUN_RARITY_RULES[DEFAULT_RUN_RARITY_RULE],
+): RunCardRarity {
+  const value = card.pieces.reduce((total, piece) => total + PIECE_VALUE[piece], 0);
+  // Priced on the canonical curve rather than the asking Run's own pricing rule: a Run that pays
+  // flat material still meets the same ladder, because the tier says what a card IS and the price
+  // rule says what this Run is charged for it.
+  const read = rule.cut === 'material'
+    ? value
+    : runCardCost({ value, formation: [...card.formation], pieces: [...card.pieces] }, DEFAULT_RUN_RULES) * GOLD_SCALE;
+  if (read <= rule.commonMax) return 'common';
+  return read <= rule.uncommonMax ? 'uncommon' : 'rare';
+}
+
+/** The flat cut, then every shift that holds, in declared order. */
 export function runCardRarity(
   pieces: readonly AdlectablePieceType[],
   formation: readonly RunCardFormationCell[],
+  ruleId: RunRarityRuleId = DEFAULT_RUN_RARITY_RULE,
 ): RunCardRarity {
+  const rule = RUN_RARITY_RULES[ruleId] ?? RUN_RARITY_RULES[DEFAULT_RUN_RARITY_RULE];
   const card: RunCardRarityInput = { pieces, formation };
-  let band = runCardRarityBand(card);
-  for (const shift of RUN_CARD_RARITY_SHIFTS) {
+  let band = runCardRarityBand(card, rule);
+  for (const shift of rule.shifts) {
     if (shift.from !== undefined && band !== shift.from) continue;
-    if (shift.holds(card)) band = shift.to;
+    if (!shift.holds(card)) continue;
+    band = shift.step !== undefined ? stepRarity(band, shift.step) : shift.to ?? band;
   }
   return band;
+}
+
+/** The tier a card carries for a Run playing `rules`, which is what its market deals it at. */
+export function runCardRarityFor(
+  card: Pick<RunCoreCard, 'pieces' | 'formation'>,
+  rules: RunRules,
+): RunCardRarity {
+  return runCardRarity(card.pieces, card.formation ?? [], rules.rarity);
 }
 
 export type RunRarityShiftReport = Readonly<{
@@ -1197,17 +1306,19 @@ export type RunRarityShiftReport = Readonly<{
  * it is not a debugging aid — it is the thing that makes a shift safe to declare.
  */
 export function runRarityShiftAudit(rules: RunRules = DEFAULT_RUN_RULES): RunRarityShiftReport[] {
+  const rule = RUN_RARITY_RULES[rules.rarity] ?? RUN_RARITY_RULES[DEFAULT_RUN_RARITY_RULE];
   const market = RUN_CARD_DECK.filter((card) => cardAllowedByRules(card, rules));
-  const reports = RUN_CARD_RARITY_SHIFTS.map((shift) => ({ shift, moved: [] as string[], declined: [] as string[] }));
+  const reports = rule.shifts.map((shift) => ({ shift, moved: [] as string[], declined: [] as string[] }));
   for (const card of market) {
     const input: RunCardRarityInput = { pieces: card.pieces, formation: card.formation ?? [] };
-    let band = runCardRarityBand(input);
+    let band = runCardRarityBand(input, rule);
     for (const report of reports) {
       const { shift } = report;
       if (!shift.holds(input)) continue;
       if (shift.from !== undefined && band !== shift.from) { report.declined.push(card.id); continue; }
-      if (band === shift.to) continue;
-      band = shift.to;
+      const landed = shift.step !== undefined ? stepRarity(band, shift.step) : shift.to ?? band;
+      if (landed === band) continue;
+      band = landed;
       report.moved.push(card.id);
     }
   }
@@ -1611,6 +1722,9 @@ export function createRunCardOffer(
     formation: card.formation?.map((cell) => ({ ...cell })),
     offerId: `sectio-${battleIndex}-${slotIndex}-${card.id}`,
     cost: runCardCost(card, rules),
+    // The tier the OFFERING Run reads, not the catalog's default one, so a Run started on the
+    // material ladder sees its own tiers on the cards it is dealt and in the frames they wear.
+    rarity: runCardRarityFor(card, rules),
   };
 }
 
@@ -1674,7 +1788,7 @@ export function sectioPileRarityQuota(
   // A tier the Run's rules leave empty is not "present": its seats re-apportion to the tiers that
   // can actually fill them, exactly as a cost ceiling emptying a tier already does.
   const present = RUN_CARD_RARITIES.filter((rarity) => RUN_CARD_DECK
-    .some((card) => card.value <= maxValue && card.rarity === rarity && cardAllowedByRules(card, rules)));
+    .some((card) => card.value <= maxValue && runCardRarityFor(card, rules) === rarity && cardAllowedByRules(card, rules)));
   const declared = present.reduce((total, rarity) => total + RUN_CARD_RARITY_PERCENT[rarity], 0);
   if (!declared) return quota;
   const remainders = present.map((rarity) => {
@@ -1706,7 +1820,7 @@ export function sectioCardPile(
   const quota = sectioPileRarityQuota(maxValue, rules);
   const seats = RUN_CARD_RARITIES.flatMap((rarity) => {
     const pool = RUN_CARD_DECK.filter((card) => (
-      card.value <= maxValue && card.rarity === rarity && cardAllowedByRules(card, rules)
+      card.value <= maxValue && runCardRarityFor(card, rules) === rarity && cardAllowedByRules(card, rules)
     ));
     const drawn: RunCoreCard[] = [];
     // A tier smaller than its quota repeats identities rather than shrinking the pile; no live

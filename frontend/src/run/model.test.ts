@@ -20,7 +20,8 @@ import {
   RUN_CARD_DECK,
   RUN_CARD_RARITIES,
   RUN_CARD_RARITY_COMMON_MAX_GOLD,
-  RUN_CARD_RARITY_SHIFTS,
+  RUN_RARITY_RULES,
+  DEFAULT_RUN_RARITY_RULE,
   RUN_CARD_RARITY_UNCOMMON_MAX_GOLD,
   RUN_LIPSANA,
   RUN_STARTER_CARD_BY_ID,
@@ -59,6 +60,7 @@ import {
   undoRunBattleMove,
   runCardUnitIds,
   runCardRarity,
+  runCardRarityFor,
   runRarityShiftAudit,
   runCardRarityForRoll,
   runSectioCardMaxValue,
@@ -237,7 +239,7 @@ describe('formation card catalog', () => {
   it('cuts the bands at the declared prices and nowhere else', () => {
     for (const card of RUN_CARD_DECK) {
       const gold = runCardCost(card, DEFAULT_RUN_RULES) * GOLD_SCALE;
-      const shifted = RUN_CARD_RARITY_SHIFTS.some((shift) => shift.holds(
+      const shifted = RUN_RARITY_RULES[DEFAULT_RUN_RARITY_RULE].shifts.some((shift) => shift.holds(
         { pieces: card.pieces, formation: card.formation ?? [] },
       ));
       if (shifted) continue;
@@ -267,7 +269,7 @@ describe('formation card catalog', () => {
     // any card at all when the shape rule narrowed, and nothing anywhere reported that -- it
     // surfaced as a Sectio dealing the same card twice. A shift is auditable for that reason.
     const audit = runRarityShiftAudit(DEFAULT_RUN_RULES);
-    expect(audit).toHaveLength(RUN_CARD_RARITY_SHIFTS.length);
+    expect(audit).toHaveLength(RUN_RARITY_RULES[DEFAULT_RUN_RARITY_RULE].shifts.length);
     for (const report of audit) {
       expect(report.moved.length, `${report.shift.id} moves nothing and is dead`).toBeGreaterThan(0);
     }
@@ -276,6 +278,39 @@ describe('formation card catalog', () => {
     expect(cluster.moved).toContain('bb-vertical');
     expect(cluster.moved).toContain('kk-horizontal');
     expect(cluster.moved).toContain('f-011011-kkk');
+  });
+
+  it('lets a Run be started on the older ladder, and deals it what that ladder deals', () => {
+    const material: RunRules = { ...DEFAULT_RUN_RULES, rarity: 'material-bands' };
+    const tally = (rules: RunRules) => Object.fromEntries(RUN_CARD_RARITIES.map((rarity) => [
+      rarity,
+      RUN_CARD_DECK.filter((card) => (
+        cardAllowedByRules(card, rules) && runCardRarityFor(card, rules) === rarity
+      )).length,
+    ]));
+    expect(tally(DEFAULT_RUN_RULES)).toEqual({ common: 41, uncommon: 14, rare: 14 });
+    expect(tally(material)).toEqual({ common: 6, uncommon: 9, rare: 54 });
+
+    // The option is only worth having if it reaches the market. Six Commons cannot fill sixteen
+    // seats, so the older ladder deals the repeated row it always did -- which is the whole reason
+    // to keep it playable rather than only described.
+    const repeats = sectioCardPile(23, 0, Number.POSITIVE_INFINITY, material);
+    expect(new Set(repeats.map((card) => card.id)).size).toBeLessThan(repeats.length);
+    const distinct = sectioCardPile(23, 0, Number.POSITIVE_INFINITY, DEFAULT_RUN_RULES);
+    expect(new Set(distinct.map((card) => card.id)).size).toBe(distinct.length);
+  });
+
+  it('reports the older ladder’s footprint shift as dead on the narrow market', () => {
+    // The failure that started this, stated by the machinery itself rather than by a comment. The
+    // demotion is alive on the wide catalog and moves nothing on the two-by-two one, because all
+    // five of the shapes it names are three cells long.
+    const wide = runRarityShiftAudit({ ...LEGACY_RUN_RULES, rarity: 'material-bands' });
+    const narrow = runRarityShiftAudit({ ...DEFAULT_RUN_RULES, rarity: 'material-bands' });
+    const footprint = (audit: typeof wide) => audit.find((report) => report.shift.id === 'awkward-footprint')!;
+    expect(footprint(wide).moved.length).toBeGreaterThan(0);
+    expect(footprint(narrow).moved).toEqual([]);
+    // And the Bishop step is alive on both, so a dead reading is about that shift and not the audit.
+    expect(narrow.find((report) => report.shift.id === 'bishop-step')!.moved.length).toBeGreaterThan(0);
   });
 
   it('holds a Common tier large enough that a pile cannot repeat itself', () => {

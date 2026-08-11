@@ -22862,7 +22862,8 @@ const ACTIVE_RUN_PHASES = new Set([
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
 const ACTIVE_RUN_CARD_SPANS = new Set([2, 4]);
 const ACTIVE_RUN_CARD_PRICING = new Set(['material', 'density']);
-const ACTIVE_RUN_RULES_FIELDS = new Set(['cardSpan', 'pricing', 'mayRotate']);
+const ACTIVE_RUN_RARITY_RULES = new Set(['price-shifts', 'material-bands']);
+const ACTIVE_RUN_RULES_FIELDS = new Set(['cardSpan', 'pricing', 'mayRotate', 'rarity']);
 const ACTIVE_RUN_UNIT_SOURCES = new Set(['king', 'starting', 'adlectio']);
 const ACTIVE_RUN_SECTIO_FIELDS = new Set([
   'afterBattleIndex',
@@ -22977,6 +22978,9 @@ function formationRunRulesIssue(rules) {
   if (!ACTIVE_RUN_CARD_SPANS.has(rules.cardSpan)) return 'run.rules.cardSpan is invalid';
   if (!ACTIVE_RUN_CARD_PRICING.has(rules.pricing)) return 'run.rules.pricing is invalid';
   if (typeof rules.mayRotate !== 'boolean') return 'run.rules.mayRotate is invalid';
+  // Absent is valid: rarity was global and derived before ADR-0567, so a Run saved without it is
+  // not malformed -- it predates the field and reads the default.
+  if (rules.rarity !== undefined && !ACTIVE_RUN_RARITY_RULES.has(rules.rarity)) return 'run.rules.rarity is invalid';
   return null;
 }
 
