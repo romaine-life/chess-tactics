@@ -36,7 +36,7 @@ PIECE_TUNING = {
     "king":   {"block": 6, "outline_sensitivity": 3.0},
     "rook":   {"block": 5, "outline_sensitivity": 4.0},
     "queen":  {"block": 6, "outline_sensitivity": 3.0},
-    "bishop": {"block": 7, "outline_sensitivity": 3.0},
+    "bishop": {"block": 6, "outline_sensitivity": 3.0},
     "knight": {"block": 7, "outline_sensitivity": 3.0},
 }
 PIECE = os.environ.get("PIECE", "")
@@ -85,7 +85,13 @@ GATE = [(0.03323, "#1a1206"), (0.07254, "#33240f"), (0.12637, "#4d3a1c"), (0.389
 # lighter rather than by hue.
 TIARA = [(0.00000, "#2b333d"), (0.05139, "#4d5966"), (0.10824, "#7d8b98"), (0.13614, "#b3c0cb"), (0.25274, "#eef3f8")]
 
-ACCENT_RAMPS = {"CROWN": CROWN, "GATE": GATE, "TIARA": TIARA}
+# The bishop's mitre shares the body's material and colour, so the art says nothing
+# about what it should be. It starts as a copy of the body's navy -- separated but
+# unchanged -- rather than a look invented for it. That was the tiara mistake: a ramp
+# built from a name instead of from what was there.
+MITRE = [(0.00000, "#0d1926"), (0.05139, "#17314a"), (0.10824, "#224466"), (0.13614, "#2f5983"), (0.25274, "#416e9c")]
+
+ACCENT_RAMPS = {"CROWN": CROWN, "GATE": GATE, "TIARA": TIARA, "MITRE": MITRE}
 
 ACCENTS = [(2, "CROWN gold", GOLD), (3, "CROWN velvet", VELVET)]
 if os.environ.get("CROWN_SPLIT") is None:
@@ -159,10 +165,29 @@ for o in bpy.data.objects:
 ACCENT_2_MATCH = [x.strip().lower() for x in os.environ.get("ACCENT_2", "crown,tiara,gold").split(",") if x.strip()]
 ACCENT_3_MATCH = [x.strip().lower() for x in os.environ.get("ACCENT_3", "velvet").split(",") if x.strip()]
 
+# Accent by OBJECT, for pieces whose parts share a material name.
+#
+# The bishop's body and mitre are both "navy stone" -- same name, same colour -- so a
+# name match cannot tell them apart. The mitre is its own object though, so its
+# material slots can be claimed that way. Matching on ".001" would work today and break
+# the moment anything is re-imported.
+ACCENT_OBJECTS = [x.strip().lower() for x in os.environ.get("ACCENT_OBJECTS", "").split(",") if x.strip()]
+_by_object = set()
+for _o in bpy.data.objects:
+    if _o.type != "MESH" or not any(x in _o.name.lower() for x in ACCENT_OBJECTS):
+        continue
+    for _slot in _o.material_slots:
+        if _slot.material:
+            _by_object.add(_slot.material.name)
+if ACCENT_OBJECTS and not _by_object:
+    raise SystemExit("ACCENT_OBJECTS matched no mesh: %r" % ACCENT_OBJECTS)
+
 _matched = []
 for m in bpy.data.materials:
     n = m.name.lower()
-    if any(x in n for x in ACCENT_3_MATCH):
+    if m.name in _by_object:
+        m.pass_index = 2
+    elif any(x in n for x in ACCENT_3_MATCH):
         m.pass_index = 3
     elif any(x in n for x in ACCENT_2_MATCH):
         m.pass_index = 2
