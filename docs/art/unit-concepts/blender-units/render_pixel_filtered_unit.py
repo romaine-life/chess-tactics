@@ -200,6 +200,20 @@ scene.render.image_settings.color_mode = "RGBA"
 tree = scene.compositing_node_group
 pix = next(n for n in tree.nodes if n.bl_idname == "CompositorNodePixelate")
 next(s for s in pix.inputs if s.name == "Size").default_value = BLOCK
+
+# The addon's demo compositor ships decorative effects AHEAD of everything, and they
+# were never turned off: the chain ran Clean Image -> Fog -> Flares -> Outline ->
+# Pixelate. Flares draws lens stars on bright pixels, which Pixelate then mashed into
+# speckle -- a good part of what looked like a confused gold mask was star flare that
+# had been quantised. Fog fades by depth, which flattens a piece meant to read at 51px.
+#
+# Clean Image is left alone: it denoises, which a 256-sample Cycles render wants.
+for _n in tree.nodes:
+    if _n.bl_idname != "CompositorNodeGroup" or not _n.node_tree:
+        continue
+    if _n.node_tree.name.split(".")[0] in {"Flares", "Fog"}:
+        _n.mute = not os.environ.get("KEEP_DEMO_EFFECTS")
+
 outline = next((n for n in tree.nodes if n.bl_idname == "CompositorNodeGroup"
                 and n.node_tree and n.node_tree.name.startswith("Outline")), None)
 if outline:
