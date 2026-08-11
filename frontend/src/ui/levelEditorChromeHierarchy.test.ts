@@ -13,6 +13,9 @@ const victoryConditions = readFileSync(new URL('./VictoryConditionsEditor.tsx', 
 const stepper = readFileSync(new URL('./shared/Stepper.tsx', import.meta.url), 'utf8');
 const houseSelect = readFileSync(new URL('./shared/HouseSelect.tsx', import.meta.url), 'utf8');
 const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url), 'utf8');
+const chromeDividedGrid = readFileSync(new URL('./shared/ChromeDividedGrid.tsx', import.meta.url), 'utf8');
+const chromeSeatGrid = readFileSync(new URL('./shared/ChromeSeatGrid.tsx', import.meta.url), 'utf8');
+const headerAccountCluster = readFileSync(new URL('./shared/HeaderAccountCluster.tsx', import.meta.url), 'utf8');
 const confirmDialog = readFileSync(new URL('./shared/ConfirmDialog.tsx', import.meta.url), 'utf8');
 const titleBarControls = readFileSync(new URL('./shell/TitleBarControls.tsx', import.meta.url), 'utf8');
 const cyclePicker = readFileSync(new URL('./shared/CyclePicker.tsx', import.meta.url), 'utf8');
@@ -315,9 +318,36 @@ describe('Level Editor chrome hierarchy', () => {
     expect(levelEditor).not.toContain('selectedTown.sections.length > 1 ?');
   });
 
-  it('registers both facing-cell implementations as tool squares', () => {
-    expectRegisteredFamily(levelEditor, 'unit-facing-cell', 'inner-tool-square');
-    expectRegisteredFamily(studioBoard, 'unit-facing-cell', 'inner-tool-square');
+  it('seats both facing pads in one divided box instead of framing every key', () => {
+    // A key is a COMPARTMENT of the pad, so it must not bring a frame of its own: the unit is what
+    // brings one, and the box already drew one around all nine (ADR-0570). Neither pad may state a
+    // track, a gap or a compartment size either — the grid derives all of it from one opening.
+    for (const source of [levelEditor, studioBoard]) {
+      expect(source).toContain('<ChromeSeatGrid');
+      expect(source).toContain("seatClassName=\"unit-facing-cell\"");
+      expect(source).not.toContain("'unit-facing-cell'");
+      expect(source).not.toMatch(/chromeUnitClassNames\([^)]*unit-facing-cell/);
+    }
+    expect(styleCss).not.toMatch(/\.unit-facing-cell \{[^}]*\b(?:background|border|box-shadow):/);
+    expect(styleCss).not.toMatch(/\.unit-facing-compass \{/);
+    // Both pads are the SAME object, so neither may declare its own opening — the default is the
+    // opening a framed tool square gives its glyph, derived once on the grid.
+    expect(chromeSeatGrid).toContain("opening = 'var(--chrome-seat-opening)'");
+    expect(styleCss).toMatch(/--chrome-seat-opening:\s*\r?\n?\s*calc\(var\(--le-inner-square, 38px\) - 2 \* var\(--le-chrome-inner-rail-w, 7px\)\)/);
+    expect(levelEditor).not.toContain('opening=');
+    expect(studioBoard).not.toContain('opening=');
+  });
+
+  it('derives every divided pad track and inset from one rail-overlap rule', () => {
+    // Equal tracks do NOT give equal compartments: a rail straddles its grid line, so a middle
+    // cell pays half of it twice and an outer one once (ADR-0569). Stating that in two places is
+    // how it shipped wrong; the grid owns both halves now and every pad asks it.
+    expect(chromeDividedGrid).toContain('export function chromeDividedSeatAxis(');
+    expect(chromeDividedGrid).toContain('const internal = Number(start) + Number(end);');
+    expect(chromeSeatGrid).toContain('const columns = chromeDividedSeatAxis(columnCount, opening);');
+    expect(chromeSeatGrid).toContain('const bands = chromeDividedSeatAxis(rows.length, opening);');
+    expect(headerAccountCluster).toMatch(/const columns = chromeDividedSeatAxis\(\s*seats\.length,/);
+    expect(headerAccountCluster).not.toMatch(/const railSides =/);
   });
 
   it('offers only complete eight-way artwork and keeps its facing control in the source brush panel', () => {
@@ -336,19 +366,29 @@ describe('Level Editor chrome hierarchy', () => {
   it('registers dropdown triggers and frames each popup as one divided inner box', () => {
     expectRegisteredFamily(paletteSelect, 'palette-select-trigger', 'inner-dropdown');
     expect(houseSelect).toMatch(/chromeUnitClassNames\(\s*'inner-dropdown',\s*'house-select',\s*'le-select-wrap',\s*'house-select-trigger',\s*className,/);
-    expect(houseSelect).toMatch(/<ChromeButton unit="inner-dropdown"\s+ref=\{buttonRef\}\s+className=\{triggerClass\}/);
+    expect(houseSelect).toMatch(/<ChromeButton unit="inner-dropdown" \{\.\.\.triggerProps\} ref=\{buttonRef\}>/);
+    // A picker SEATED in a cell of a divided box names no unit, because `inner-dropdown` IS the
+    // 9-slice frame and the cell it fills has no room for one — the box's rails are its edges.
+    // Only that fork may go unregistered; every free-standing picker still wears the unit.
+    expect(houseSelect).toMatch(/seated\s*\?\s*\['house-select', 'house-select-trigger', 'house-select-seated', className\]/);
+    expect(houseSelect).toMatch(/\{seated \? \([\s\S]*?<button \{\.\.\.triggerProps\} type="button" ref=\{buttonRef\}>/);
     expect(houseSelect).not.toContain('<div ref={rootRef} data-chrome-unit="inner-dropdown"');
     expect(houseSelect).toContain('if (option.value !== value) onChange(option.value);');
-    expect(houseSelect).toContain("import { KitScroll } from '../KitScroll';");
-    expect(houseSelect).toMatch(/<KitScroll\s+className="house-select-menu-scroll"/);
+    // The menu IS the divided box, so its scroll and its gutter are the grid's own rather than a
+    // KitScroll this file places and an apron it computes by hand.
+    expect(houseSelect).not.toContain("import { KitScroll } from '../KitScroll';");
+    expect(houseSelect).toMatch(/<DividedInnerChromeBox[\s\S]*?scroll[\s\S]*?className="house-select-menu-box"/);
 
     expectRegisteredFamily(paletteSelect, 'palette-select-option', 'inner-list-row');
     expect(houseSelect).toContain('className="house-select-menu chrome-family-surface"');
-    expect(houseSelect).toContain('<InnerChromeBox');
     expect(houseSelect).toContain('className="house-select-menu-box"');
-    expect(houseSelect).toContain('className="house-select-option-group" role="group"');
+    expect(houseSelect).toContain('className="house-select-option-group"');
+    expect(houseSelect).toContain('role="group"');
     expect(houseSelect).toContain('className="house-select-option-group-label"');
-    expect(houseSelect).toContain('{optionIndex > 0 ? <ChromeDivider role="inner" /> : null}');
+    // Every rail in the menu belongs to the grid. A divider written HERE could only cap its ends as
+    // though they met a frame, and the ends it actually has are row boundaries the grid owns.
+    expect(houseSelect).not.toContain('<ChromeDivider');
+    expect(houseSelect).toMatch(/<ChromeDividedGridRow\s+key=\{option\.value\}\s+as="button"/);
     expect(houseSelect).toContain('className={`house-select-option ${index === activeIndex ? \'is-active\' : \'\'}`.trim()}');
     expect(houseSelect).not.toContain("chromeUnitClassNames('inner-list-row', 'house-select-option'");
     expect(houseSelect).not.toContain('data-chrome-unit="inner-list-row"');
@@ -357,7 +397,8 @@ describe('Level Editor chrome hierarchy', () => {
     expect(houseSelect).toContain("paintOverhang('--le-inner-atom-top-overhang')");
     expect(houseSelect).toContain("paintOverhang('--le-inner-atom-bottom-overhang')");
     expect(houseSelect).not.toContain('data-disabled=');
-    expect(styleCss).toMatch(/\.house-select-menu-scroll > \.kit-scroll-rail\s*\{[\s\S]*?bottom:\s*0;[\s\S]*?right:\s*calc\(var\(--house-select-clip-apron-right\) - var\(--le-chrome-inner-rail-w, 7px\)\);[\s\S]*?top:\s*0;[\s\S]*?z-index:\s*5;/);
+    expect(styleCss).toMatch(/\.house-select-menu-box > \.chrome-divided-grid__scroll\s*\{[\s\S]*?max-block-size:\s*calc\(var\(--house-select-menu-max-height, 260px\) - \(var\(--le-chrome-inner-rail-w, 7px\) \* 2\)\);/);
+    expect(styleCss).not.toContain('--house-select-clip-apron-right');
     expect(styleCss).not.toMatch(/\.house-select[^\n{]*(?:disabled|data-disabled)[^\n{]*::after/);
   });
 

@@ -114,8 +114,15 @@ export function KitScroll({ children, className, style, contentRef }: {
     const el = content.current;
     const track = rail.current;
     if (!el || !track) return;
+    // Read the box ONCE, here, where we are already measuring. `clientHeight` used to be read
+    // inside the setGutter updater below — and React runs an updater during the RENDER phase,
+    // re-running it whenever it re-renders before the state settles. That put a forced synchronous
+    // layout inside every render of every scrolling pane in the app, paid against whatever the
+    // pane happens to contain: on the Enchiridion's 284-card gallery it was hundreds of
+    // milliseconds, inside a commit the browser cannot paint through.
+    const clientHeight = el.clientHeight;
     const metrics = computeKitScrollMetrics({
-      clientHeight: el.clientHeight,
+      clientHeight,
       scrollHeight: el.scrollHeight,
       scrollTop: el.scrollTop,
       trackHeight: track.clientHeight,
@@ -123,7 +130,7 @@ export function KitScroll({ children, className, style, contentRef }: {
     setM(metrics);
     setGutter((previous) => resolveKitScrollGutter({
       overflows: metrics.scrollable,
-      clientHeight: el.clientHeight,
+      clientHeight,
       previous,
     }));
   };

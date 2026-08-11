@@ -29,7 +29,7 @@ import {
   sizeCanvasForBounds,
 } from './BoardCanvasLayer';
 import { objectBaseZIndex } from './sceneDepth';
-import { ViewPane, minimumZoomToCoverViewport, type ViewPaneViewportSize } from '../ui/shared/ViewPane';
+import { ViewPane, boardZoomFloor, type ViewPaneViewportSize } from '../ui/shared/ViewPane';
 import { PawnPromotionPicker } from '../ui/PawnPromotionPicker';
 import { BattleGoldNoticeMarker } from '../ui/BattleGoldNotice';
 import { useBoardCameraFraming } from '../ui/shared/BoardViewFraming';
@@ -53,7 +53,7 @@ import {
   BOARD_PREVIEW_ASPECT,
   boardBounds,
   boardContentHash,
-  boardDrawOps,
+  boardDrawOps,
   effectiveBoardCameraCoverPolygon,
   boardVisualFeatures,
   boardVisualTerrainCells,
@@ -675,8 +675,15 @@ export function unitArrivalPlan(
   };
 }
 
+/**
+ * What the arrival order is actually read from. Narrower than `Piece` so a surface with seats but
+ * no game — Exploratio's shuffled preview — can be ordered by this same function instead of
+ * copying its rule (ADR-0059). Every `Piece` satisfies it.
+ */
+export type ArrivalOrderedUnit = Pick<Piece, 'id' | 'side' | 'type' | 'x' | 'y'> & { startY?: number };
+
 export function computeArrivalDelays(
-  pieces: readonly Piece[],
+  pieces: readonly ArrivalOrderedUnit[],
   baseDelayMs = ARRIVAL_BASE_MS,
 ): Map<string, number> {
   const delays = new Map<string, number>();
@@ -749,6 +756,33 @@ export function structureArrivalOp(
   if (arrival.dy === 0 && arrival.opacity >= 1) return op;
   return { ...op, dy: op.dy + arrival.dy, opacity: (op.opacity ?? 1) * arrival.opacity };
 }
+
+/**
+ * Apply a unit's entrance to one of its draw ops — ADR-0045's drop, on the exact curve the
+ * battlefield plays it at, not a second one.
+ *
+ * The same shape `structureArrivalOp` takes, and for the same reason: a surface that composes its
+ * board through `boardDrawOps` rather than through the live game renderer has a flat op list and
+ * an identity on each op, so it can play an entrance without owning a piece model. `dx` moves too,
+ * so a track that comes in from the side is available here as well as the drop.
+ */
+export function unitArrivalOp(
+  op: BoardDrawOp,
+  plan: UnitArrivalPlan | undefined,
+  timeMs: number,
+  track: UnitArrivalTrack = 'drop',
+): BoardDrawOp {
+  if (!plan) return op;
+  const arrival = arrivalOffset(timeMs, plan, track);
+  if (arrival.dx === 0 && arrival.dy === 0 && arrival.opacity >= 1) return op;
+  return {
+    ...op,
+    dx: op.dx + arrival.dx,
+    dy: op.dy + arrival.dy,
+    opacity: (op.opacity ?? 1) * arrival.opacity,
+  };
+}
+
 
 /**
  * The moment a prop's fall reaches the ground — where the impact belongs. This is NOT the end of
@@ -863,6 +897,9 @@ const ARRIVAL_ANIM_MS = 620;
 export const ARRIVAL_CONTACT_PROGRESS = 0.82;
 /** The whole entrance, fall through impact — what a review surface has to be able to replay. */
 export const STRUCTURE_ENTRANCE_MS = ARRIVAL_ANIM_MS + STRUCTURE_IMPACT_MS;
+/** A unit's entrance, from its own release to standing. A surface that plays one outside the
+ *  battlefield uses it to know when the motion is over and it can go back to being still. */
+export const UNIT_ENTRANCE_MS = ARRIVAL_ANIM_MS;
 const FORMATION_SLIDE_ANIM_MS = 560;
 const ZERO_BOARD_DELTA: Vec = { x: 0, y: 0 };
 
@@ -1686,6 +1723,15 @@ const EMPTY_PREMOVES: readonly PremoveStep[] = [];
 const EMPTY_PREVIEW_PIECES: readonly Piece[] = [];
 const EMPTY_PLANNED_PIECE_IDS: ReadonlySet<string> = new Set();
 export interface SkirmishBoardSurfaceState {
+  /**
+   * What this passive position IS. A `plan` is a position still being built and never played
+   * (Deployment). A `review` is an earlier position of the SAME live match, held up for
+   * reading: board facts that no move can change — the grid, the authored promotion cells —
+   * still describe it truthfully and stay on, while anything derived from where the pieces
+   * stand (legal moves, threat squares) belongs to the live board and does not.
+   * Defaults to `plan`, which is what every existing caller means.
+   */
+  kind?: 'plan' | 'review';
   /** A passive position projected through the live Battle compositor without starting a match. */
   game: GameState;
   seed: number;
@@ -1739,7 +1785,8 @@ export function SkirmishBoard({
   renderCellOverlay?: (context: SkirmishBoardCellOverlayContext) => ReactNode;
   /** Board-space content, such as a placement ghost, seated in the canonical scene. */
   boardOverlay?: ReactNode;
-  /** A secondary click that never panned. Reserved for non-destructive phase modes. */
+  /** A secondary click that never panned, claimed by a phase that carries something on the
+   *  cursor. Left unset, the board takes its own premove chain back (ADR-0550). */
   onSecondaryClick?: () => void;
   className?: string;
   ariaLabel?: string;
@@ -1790,7 +1837,7 @@ export function SkirmishBoard({
   const showEnemyMoves = surfaceState ? false : storedShowEnemyMoves;
   const showPlayerAttacks = surfaceState ? false : storedShowPlayerAttacks;
   const showPlayerMoves = surfaceState ? false : storedShowPlayerMoves;
-  const showPromotionZones = surfaceState ? false : storedShowPromotionZones;
+  const showPromotionZones = surfaceState && surfaceState.kind !== 'review' ? false : storedShowPromotionZones;
   const showGrid = useSkirmishView((s) => s.showGrid);
   // The sprite resolvers above read the chosen player color from module state, which React cannot
   // see. Subscribing here is what repaints the board when the setting changes under a live battle.
@@ -1969,20 +2016,18 @@ export function SkirmishBoard({
   useEffect(() => {
     setAuthoredZoomIn(normalizeCameraZoomIn(exactBoard?.cameraZoomIn) ?? null);
   }, [exactBoard?.cameraZoomIn, setAuthoredZoomIn]);
+  const cameraBoundsSubject = exactBoard ?? { cols: game.size.cols, rows: game.size.rows };
   const cameraCoverPolygon = useMemo(
-    () => effectiveBoardCameraCoverPolygon(
-      exactBoard ?? { cols: game.size.cols, rows: game.size.rows },
-      predrawnCoverPolygon,
-    ),
-    [exactBoard, game.size.cols, game.size.rows, predrawnCoverPolygon],
+    () => effectiveBoardCameraCoverPolygon(cameraBoundsSubject),
+    [exactBoard, game.size.cols, game.size.rows],
   );
   const boardViewKey = surfaceState?.viewKey
     ?? storedActivityId
     ?? `${storedLevelId ?? 'free'}:${storedBoardViewEpoch}`;
   const preparedMinimumZoom = useMemo(() => viewViewportSize
-    ? minimumZoomToCoverViewport({
+    ? boardZoomFloor({
         viewport: viewViewportSize,
-        polygon: cameraCoverPolygon,
+        coverPolygon: cameraCoverPolygon,
         minZoom: PLAYER_TECHNICAL_MINIMUM_ZOOM,
         maxZoom: 16,
       })
@@ -2213,8 +2258,10 @@ export function SkirmishBoard({
     premovedOriginPieceAt(x, y) ?? provisionalLocalPieceAt(x, y);
 
   // Whose promotion is being asked about, and where the callout attaches. A mid-commit move asks
-  // beside the Pawn it has just landed; a queue-time question asks beside that Pawn's GHOST, which
-  // the premove projection is already drawing on the promotion cell (ADR-0541).
+  // beside the destination its Pawn is projected onto — which is where the callout sits from the
+  // frame the move is authored, while the sprite is still gliding in (ADR-0559). A queue-time
+  // question asks beside that Pawn's GHOST, which the premove projection is already drawing on
+  // the promotion cell (ADR-0541).
   const promotingPiece = choosingPromotion
     ? (choosingPromotion.mode === 'premove-queue' ? provGame.pieces : livePieces)
         .find((piece) => piece.id === choosingPromotion.pieceId && piece.alive) ?? null
@@ -2236,6 +2283,19 @@ export function SkirmishBoard({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [premoves.length, premoveSelectedId, clearPremoves]);
+  // ...and so does a right click on the board (ADR-0550), which is the gesture a chess player
+  // already reaches for. The board is wall-to-wall hit targets, so the secondary button also
+  // pans (ADR-0128) — ViewPane owns that distinction and only calls this for a press that
+  // released without ever crossing the pan threshold. A right DRAG moves the camera and keeps
+  // the chain; with nothing queued this does nothing at all.
+  const takeBackPremoves = useCallback(() => {
+    if (!interactionEnabled) return;
+    clearPremoves();
+    setPremoveSelectedId(null);
+  }, [clearPremoves, interactionEnabled]);
+  // Run Deployment claims the button to turn the formation it is carrying (ADR-0526). An
+  // ordinary battle board carries no formation, so the gesture is the take-back there.
+  const secondaryClick = onSecondaryClick ?? takeBackPremoves;
 
   // Resolve targets from the CURRENT input boundary, not the pickup boundary. In particular,
   // a premove drag may outlive the post-reply landing beat; once live control resumes, both its
@@ -2560,11 +2620,11 @@ export function SkirmishBoard({
         maxZoom={boardMaxZoom}
         onZoomChange={setZoom}
         onPanChange={setBoardPan}
-        coverPolygon={cameraCoverPolygon}
+        coverPolygon={cameraCoverPolygon}
         onMinimumZoomChange={setMinZoom}
         onViewportSizeChange={setViewViewportSize}
         onViewInteraction={markViewInteraction}
-        onSecondaryClick={onSecondaryClick}
+        onSecondaryClick={secondaryClick}
       >
         <BoardLabBoard
           board={board}
@@ -2686,7 +2746,7 @@ export function SkirmishBoard({
             <PawnPromotionPicker
               piece={promotingPiece}
               choices={choosingPromotion.choices}
-              subject={choosingPromotion.mode === 'premove-queue' ? 'queued' : 'arrived'}
+              subject={choosingPromotion.mode === 'premove-queue' ? 'queued' : 'promoting'}
               boardSeat={promotionPickerSeat}
               boardZoom={boardZoom}
               onChoose={choosePromotion}

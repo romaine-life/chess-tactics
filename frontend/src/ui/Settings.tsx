@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactEle
 import { readDisabledUrls, writeDisabledUrls, sendBgmCommand, BGM_STATE_EVENT } from '../bgmPrefs.js';
 import { normalizeRoutePath, readValidatedReturnTo } from './navigation';
 import { KitScroll } from './KitScroll';
-import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
+import { SettingsButton, SettingsGroup, SettingsRow, SettingsSection } from './shared/SettingsControls';
 import { FittedTabLabel } from './shared/FittedTabLabel';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
@@ -16,7 +16,7 @@ import { useAuthSession } from '../net/authSession';
 import { AdminControls } from './AdminControls';
 import { ChromeNavButton } from './shared/ChromeButton';
 import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
-import { ApparatusRailColumn } from './shared/ApparatusRailTab';
+import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { SettingsContentSceneSlot } from './shell/AuthoredSceneSlot';
 import {
   DEFAULT_APP_SETTINGS,
@@ -444,90 +444,99 @@ export function Settings({
     ? [nowPlaying.paused ? 'Paused' : null, nowPlayingTrack.artist].filter(Boolean).join(' · ')
     : '';
 
+  // One stack, no eyebrows. Interface / Defaults / Administration were three named groups of ONE
+  // row each, so every eyebrow restated the row under it — and each was bare text on the night
+  // vista with nothing behind it. They are all General; the tab already says so.
   const renderGeneral = () => (
-    <>
-      <SettingsSection title="Interface">
-        <SettingsRow
-          title="UI Scale"
-          description="Interface scale for this browser."
-        >
-          <Stepper
-            value={settings.uiScale}
-            suffix="%"
-            decreaseLabel="Decrease UI Scale"
-            increaseLabel="Increase UI Scale"
-            onDecrease={() => adjustScale(-5)}
-            onIncrease={() => adjustScale(5)}
-            fillSurface={CHROME_LEAF_FILL_SURFACE}
-          />
-        </SettingsRow>
-      </SettingsSection>
-      <SettingsSection title="Defaults">
-        <SettingsRow
-          title="Reset to Defaults"
-          description={confirmingReset ? 'Press reset again to confirm.' : 'Restore General and Audio settings for this browser.'}
-          value={<span>{confirmingReset ? 'Confirm' : 'Ready'}</span>}
-        >
-          <SettingsButton tone="danger" onClick={resetDefaults}>Reset</SettingsButton>
-        </SettingsRow>
-      </SettingsSection>
+    <SettingsSection>
+      <SettingsRow
+        title="UI Scale"
+        description="Interface scale for this browser."
+      >
+        <Stepper
+          value={settings.uiScale}
+          suffix="%"
+          decreaseLabel="Decrease UI Scale"
+          increaseLabel="Increase UI Scale"
+          onDecrease={() => adjustScale(-5)}
+          onIncrease={() => adjustScale(5)}
+          fillSurface={CHROME_LEAF_FILL_SURFACE}
+        />
+      </SettingsRow>
+      <SettingsRow
+        title="Reset to Defaults"
+        description={confirmingReset ? 'Press reset again to confirm.' : 'Restore General and Audio settings for this browser.'}
+        value={<span>{confirmingReset ? 'Confirm' : 'Ready'}</span>}
+      >
+        <SettingsButton tone="danger" onClick={resetDefaults}>Reset</SettingsButton>
+      </SettingsRow>
       {adminAuth.isAdmin ? (
-        <SettingsSection title="Administration">
-          <SettingsRow
-            title="Admin Controls"
-            description="Open playtest interventions for the active Battle or Run."
-          >
-            <SettingsButton tone="primary" href={withReturnTo('/settings/admin')} ariaLabel="Open Admin Controls">
-              Open
-            </SettingsButton>
-          </SettingsRow>
-        </SettingsSection>
+        <SettingsRow
+          title="Admin Controls"
+          description="Open playtest interventions for the active Battle or Run."
+        >
+          <SettingsButton tone="primary" href={withReturnTo('/settings/admin')} ariaLabel="Open Admin Controls">
+            Open
+          </SettingsButton>
+        </SettingsRow>
       ) : null}
-    </>
+    </SettingsSection>
   );
 
+  // Master, Music and Notes were named groups of one row, so their eyebrows only restated the row.
+  // Effects genuinely holds two settings, so it keeps its name — in a BOX, where the name has a
+  // surface, rather than as bare text on the vista. Inside it the rows are members: unframed, told
+  // apart by the kit's divider, and "Effects Volume" is just "Volume" because the box says Effects.
   const renderAudio = () => (
-    <>
-      <SettingsSection title="Master">
-        <SettingsRow title="Master Audio" description="Mute or restore all browser audio for Chess Tactics.">
-          <Toggle checked={settings.masterAudio} label="Toggle Master Audio" onChange={setMasterAudio} fillSurface={CHROME_LEAF_FILL_SURFACE} />
-        </SettingsRow>
-      </SettingsSection>
-      <SettingsSection title="Music">
-        {/* Background-music on/off lives on the persistent title-bar mute control now
-            (ADR-0044) — it drove the same MUTE_KEY as this row, so the row was a dup.
-            Master Audio above is the all-sound master; this section keeps mix + tracks. */}
-        <SettingsRow title="Music Volume" description="Set the target music mix for this browser.">
-          <Slider
-            value={settings.musicVolume}
-            suffix="%"
-            label="Music Volume"
-            onChange={(next) => updateSetting('musicVolume', clamp(next, 0, 100, DEFAULT_APP_SETTINGS.musicVolume))}
-          />
-          <SettingsButton href={withReturnTo(TRACKS_PATH)} ariaLabel="View the soundtrack track list">View Tracks</SettingsButton>
-        </SettingsRow>
-      </SettingsSection>
-      <SettingsSection title="Effects">
-        <SettingsRow title="Effects Volume" description="Set the target effects mix for this browser.">
-          <Slider
-            value={settings.effectsVolume}
-            suffix="%"
-            label="Effects Volume"
-            onChange={(next) => updateSetting('effectsVolume', clamp(next, 0, 100, DEFAULT_APP_SETTINGS.effectsVolume))}
-          />
-          <SettingsButton onClick={() => previewTerrain('water')} ariaLabel="Play a sample effect sound">Test</SettingsButton>
-        </SettingsRow>
-        <SettingsRow title="Interface Sounds" description="Enable or disable menu and control feedback sounds.">
-          <Toggle checked={settings.interfaceSounds} label="Toggle Interface Sounds" onChange={(enabled) => updateSetting('interfaceSounds', enabled)} fillSurface={CHROME_LEAF_FILL_SURFACE} />
-        </SettingsRow>
-      </SettingsSection>
-      <SettingsSection title="Notes">
-        <SettingsRow
-          title="Local Settings"
-          description="Audio settings are saved on this device."
+    <SettingsSection>
+      <SettingsRow title="Master Audio" description="Mute or restore all browser audio for Chess Tactics.">
+        <Toggle checked={settings.masterAudio} label="Toggle Master Audio" onChange={setMasterAudio} fillSurface={CHROME_LEAF_FILL_SURFACE} />
+      </SettingsRow>
+      {/* Background-music on/off lives on the persistent title-bar mute control now
+          (ADR-0044) — it drove the same MUTE_KEY as this row, so the row was a dup.
+          Master Audio above is the all-sound master; this row keeps mix + tracks. */}
+      <SettingsRow title="Music Volume" description="Set the target music mix for this browser.">
+        <Slider
+          value={settings.musicVolume}
+          suffix="%"
+          label="Music Volume"
+          onChange={(next) => updateSetting('musicVolume', clamp(next, 0, 100, DEFAULT_APP_SETTINGS.musicVolume))}
         />
-      </SettingsSection>
-    </>
+        <SettingsButton href={withReturnTo(TRACKS_PATH)} ariaLabel="View the soundtrack track list">View Tracks</SettingsButton>
+      </SettingsRow>
+      <SettingsGroup
+        title="Effects"
+        titleId="settings-effects-title"
+        members={[
+          {
+            id: 'effects-volume',
+            content: (
+              <SettingsRow framed={false} title="Volume" description="Set the target effects mix for this browser.">
+                <Slider
+                  value={settings.effectsVolume}
+                  suffix="%"
+                  label="Effects Volume"
+                  onChange={(next) => updateSetting('effectsVolume', clamp(next, 0, 100, DEFAULT_APP_SETTINGS.effectsVolume))}
+                />
+                <SettingsButton onClick={() => previewTerrain('water')} ariaLabel="Play a sample effect sound">Test</SettingsButton>
+              </SettingsRow>
+            ),
+          },
+          {
+            id: 'interface-sounds',
+            content: (
+              <SettingsRow framed={false} title="Interface Sounds" description="Enable or disable menu and control feedback sounds.">
+                <Toggle checked={settings.interfaceSounds} label="Toggle Interface Sounds" onChange={(enabled) => updateSetting('interfaceSounds', enabled)} fillSurface={CHROME_LEAF_FILL_SURFACE} />
+              </SettingsRow>
+            ),
+          },
+        ]}
+      />
+      <SettingsRow
+        title="Local Settings"
+        description="Audio settings are saved on this device."
+      />
+    </SettingsSection>
   );
 
   // Dedicated soundtrack list, reached from the Music section's "View Tracks" pill.
@@ -574,7 +583,7 @@ export function Settings({
   );
 
   const renderGameplay = () => (
-    <SettingsSection title="Gameplay">
+    <SettingsSection>
       {/* Only the two player palettes are offered. The rest of the catalog is reserved for
           opponents, so the color on the pieces you command is never on the pieces you fight.
           The choice is shown as the accepted battlefield pawn in that set rather than as its
@@ -646,14 +655,14 @@ export function Settings({
 
   const renderCreatorTools = () => (
     <>
-      <SettingsSection title="Workspaces">
+      <SettingsSection>
         {creatorTools.map((tool) => (
           <SettingsRow key={tool.href} title={tool.label} description={tool.description}>
             <SettingsButton tone="primary" href={tool.href} external={tool.external} ariaLabel={`Open ${tool.label}`}>Open</SettingsButton>
           </SettingsRow>
         ))}
       </SettingsSection>
-      <SettingsSection title="About">
+      <SettingsSection>
         <SettingsRow
           title="Build"
           description={buildDetail}
@@ -680,26 +689,23 @@ export function Settings({
   const inner = (
     <>
       <ApparatusRailColumn
+        opens="panel-beside"
         className={embedded ? 'menu-dest-col menu-dest-tabs' : 'settings-frame settings-rail-frame'}
         placement={embedded ? 'open' : 'framed'}
         aria-label="Settings sections"
       >
         {tabs.map((tab, index) => (
-          <ChromeNavButton unit="inner-box"
+          <ApparatusRailTab
             key={tab.id}
+            label={tab.label}
             to={withReturnTo(TAB_PATHS[tab.id])}
-            className={chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab', tab.id === activeTab && 'is-active')}
-            // Position down the rail — drives the shared stone-continuity slice
-            // (--tab-index, see .settings-tab in style.css) so the tabs read as one sheet (ADR-0063).
-            style={{ ['--tab-index' as string]: index }}
-            aria-current={tab.id === activeTab ? 'page' : undefined}
-            onClick={() => setConfirmingReset(false)}
-          >
-            <span className="settings-tab-icon" aria-hidden="true">
-              <img src={asset(tab.icon)} alt="" />
-            </span>
-            <FittedTabLabel>{tab.label}</FittedTabLabel>
-          </ChromeNavButton>
+            // Position down the rail — drives the shared stone-continuity slice so the tabs
+            // read as one sheet (ADR-0063). The primitive owns the seat and the slice now.
+            index={index}
+            active={tab.id === activeTab}
+            iconSrc={asset(tab.icon)}
+            onSelect={() => setConfirmingReset(false)}
+          />
         ))}
       </ApparatusRailColumn>
 

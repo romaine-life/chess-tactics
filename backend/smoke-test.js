@@ -2634,8 +2634,11 @@ async function validateGeneratedFormationRunMigration63() {
       runSaveVersion: 24, phase: 'sectio', deployment: null, battleRuntime: null, aftermath: null,
       sectio: {
         cardOffers: [
+          // One card per tier, so the re-read proves it reaches the whole ladder. The middle seat
+          // is Rook-and-Bishop rather than a lone Rook: the bands are cut on PRICE, and five
+          // material on one square is 60 gold and Common.
           offer('p', 'p', ['pawn'], [{ x: 0, y: 0 }], 1),
-          offer('r', 'r', ['rook'], [{ x: 0, y: 0 }], 5),
+          offer('f-0111-rb', 'rb', ['rook', 'bishop'], [{ x: 0, y: 0 }, { x: 0, y: 1 }], 8),
           offer('bb-vertical', 'bb', ['bishop', 'bishop'], [{ x: 0, y: 0 }, { x: 0, y: 1 }], 6),
         ],
       },
@@ -5691,6 +5694,21 @@ async function main() {
   ) {
     throw new Error(`Unexpected admin official write: ${adminOfficialWrite.statusCode} ${adminOfficialWrite.body}`);
   }
+  // A publish answers with the addresses it just baked. Clients hold installed thumbnail URLs for
+  // the life of a page, so a publish that omits them leaves the publisher's own lists rendering
+  // the pre-publish boards until a full reload.
+  if (
+    adminOfficialWriteBody.thumbnail_ready !== true ||
+    !/^\/api\/media\/[0-9a-f]{64}$/.test(adminOfficialWriteBody.thumbnail_urls?.['off-l-test'] || '')
+  ) {
+    throw new Error(`Official publish must answer with its rebaked thumbnail addresses: ${adminOfficialWrite.body}`);
+  }
+  const publishedOfficialManifest = JSON.parse((await get('/api/official-campaigns/default')).body);
+  if (publishedOfficialManifest.thumbnail_urls['off-l-test'] !== adminOfficialWriteBody.thumbnail_urls['off-l-test']) {
+    throw new Error(
+      `A publish answered a different address than the manifest read: ${adminOfficialWriteBody.thumbnail_urls['off-l-test']} vs ${publishedOfficialManifest.thumbnail_urls['off-l-test']}`,
+    );
+  }
   const missingOfficialRevision = await request(
     'PUT', '/api/official-campaigns/default',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
@@ -6286,11 +6304,15 @@ async function main() {
   if (invalidOfferCountRun.statusCode !== 400 || JSON.parse(invalidOfferCountRun.body).error !== 'invalid_active_run') {
     throw new Error(`Current Run saves must persist their complete Sectio deal: ${invalidOfferCountRun.statusCode} ${invalidOfferCountRun.body}`);
   }
+  // Dealt under the RUN'S rules, like the three it joins. Omitting them deals the fourth card at
+  // the legacy flat-material price into a Run priced by density, which is a market the game
+  // cannot produce and the validator refuses.
   const quartermasterOffer = boardRender.sectioCardOffersAtCursor(
     activeRunDocument.seed,
     activeRunDocument.battleIndex,
     0,
     4,
+    boardRender.runRules(activeRunDocument),
   )[3];
   const quartermasterOpeningRun = {
     ...activeRunDocument,
@@ -6330,7 +6352,9 @@ async function main() {
           cardOffers: [
             activeRunOffers[0],
             activeRunOffers[1],
-            { ...activeRunOffers[2], cardType: 'legatine', cost: 5, effectTargetIndex: null },
+            // Correctly priced on purpose: the 400 below must be the retired ability state and
+            // nothing else, so the offer is left valid in every other respect.
+            { ...activeRunOffers[2], cardType: 'legatine', effectTargetIndex: null },
           ],
         },
       },
@@ -6351,7 +6375,9 @@ async function main() {
       cardOffers: expensiveDefinitions.map((card, index) => ({
         ...card,
         offerId: `sectio-expensive-${index}-${card.id}`,
-        cost: card.value,
+        // The Run's own price, not the card's material. Under density a value-9 card is dearer
+        // still, so what this proves — a Sectio may deal past the purse — only gets sharper.
+        cost: boardRender.runCardCost(card, boardRender.runRules(activeRunDocument)),
       })),
     },
   };
@@ -6438,27 +6464,30 @@ async function main() {
       entrySnapshot: { ...activeRunDocument.sectio.entrySnapshot, goldTenths: 1000 },
     },
   };
-  const multiAdlectioRun = boardRender.performAdlectio(
-    boardRender.performAdlectio(fundedSectioRun, activeRunOffers[0].offerId),
-    activeRunOffers[1].offerId,
-  );
-  const firstAdlectedCard = multiAdlectioRun.cards.find((card) => card.coreId !== 'his-grace');
+  // A Sectio admits ONE card, so the funded visit below buys once and the second attempt is
+  // refused by the model rather than saved. The gold is there to prove the refusal is the rule
+  // and not the price.
+  const adlectioRun = boardRender.performAdlectio(fundedSectioRun, activeRunOffers[0].offerId);
+  if (boardRender.performAdlectio(adlectioRun, activeRunOffers[1].offerId) !== adlectioRun) {
+    throw new Error('A Sectio admitted a second card.');
+  }
+  const firstAdlectedCard = adlectioRun.cards.find((card) => card.coreId !== 'his-grace');
   const firstAdlectedUnitIds = firstAdlectedCard.unitSeats.filter(Boolean);
   const firstAdlectedUnits = firstAdlectedUnitIds.map(
-    (unitId) => multiAdlectioRun.army.find((unit) => unit.id === unitId),
+    (unitId) => adlectioRun.army.find((unit) => unit.id === unitId),
   );
   const expunctioPriceTenths = boardRender.cardExpunctioPriceTenths(firstAdlectedCard, firstAdlectedUnits);
   const savedRun = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ run: multiAdlectioRun, revision: 0 }),
+    JSON.stringify({ run: adlectioRun, revision: 0 }),
   );
   const savedRunBody = JSON.parse(savedRun.body);
   if (
     savedRun.statusCode !== 200
     || savedRunBody.revision !== 1
     || savedRunBody.run.id !== 'run-smoke'
-    || savedRunBody.run.sectio.adlectedCardOfferIds.length !== 2
+    || savedRunBody.run.sectio.adlectedCardOfferIds.length !== 1
   ) {
     throw new Error(`Active Run did not save: ${savedRun.statusCode} ${savedRun.body}`);
   }
@@ -6472,7 +6501,7 @@ async function main() {
   if (
     savedExpunctioRun.statusCode !== 200
     || savedExpunctioRunBody.revision !== 2
-    || savedExpunctioRunBody.run.goldTenths !== multiAdlectioRun.goldTenths - expunctioPriceTenths
+    || savedExpunctioRunBody.run.goldTenths !== adlectioRun.goldTenths - expunctioPriceTenths
     || savedExpunctioRunBody.run.cards.some((card) => card.id === firstAdlectedCard.id)
     || savedExpunctioRunBody.run.army.some((unit) => firstAdlectedUnitIds.includes(unit.id))
     || savedExpunctioRunBody.run.sectio.expunctedCard?.card?.id !== firstAdlectedCard.id
@@ -6490,12 +6519,19 @@ async function main() {
     JSON.stringify({ run: plainSectioRun, revision: 2 }),
   );
   const savedPlainSectioRunBody = JSON.parse(savedPlainSectioRun.body);
+  // Pricing is a Run rule, so an offer's price is what the RUN'S rules charge -- not the card's
+  // material. A default Run is priced by density, where the two differ on almost every card.
   if (
     savedPlainSectioRun.statusCode !== 200
     || savedPlainSectioRunBody.revision !== 3
-    || savedPlainSectioRunBody.run.sectio.cardOffers.some((offer) => offer.cost !== offer.value)
+    || savedPlainSectioRunBody.run.sectio.cardOffers.some((offer) => (
+      offer.cost !== boardRender.runCardCost(offer, boardRender.runRules(savedPlainSectioRunBody.run))
+    ))
   ) {
     throw new Error(`Plain formation Sectio Run did not save: ${savedPlainSectioRun.statusCode} ${savedPlainSectioRun.body}`);
+  }
+  if (savedPlainSectioRunBody.run.rules.pricing !== 'density') {
+    throw new Error(`A default Run prices its market by density: ${savedPlainSectioRun.body}`);
   }
   const mispricedFormationRun = await request(
     'PUT', '/api/active-run',
@@ -6520,6 +6556,10 @@ async function main() {
     ...activeRunDocument,
     phase: 'deployment',
     sectio: null,
+    // Leaving the Sectio for the next Battle retires that Battle's report along with the Sectio
+    // it was reachable from (ADR-0568) -- so a Deployment derived from this fixture drops both,
+    // exactly as leaveSectio does.
+    aftermath: null,
     deployment: {
       battleIndex: 0,
       seed: 1709,
@@ -6828,6 +6868,47 @@ async function main() {
       throw new Error(`A crafted ${craftedPhase.spec.phase} Run must be one this server stores: ${savedCraftedPhase.statusCode} ${savedCraftedPhase.body}`);
     }
     craftedPhaseRevision = savedCraftedPhaseBody.revision;
+  }
+  // A Sectio turned back to the Victory it came from is the one document whose phase does not
+  // determine its own sub-state: the report is being read while the Sectio stands behind it,
+  // and the Battle's runtime was retired on the way past (ADR-0568). It is reached by pressing
+  // a control on a durable Run, so the server has to store it.
+  const reviewedReportRun = {
+    ...boardRender.reviewSectioBattleReport(boardRender.craftRunDocument(
+      boardRender.runCraftSpecFromJson({ phase: 'sectio', battle: 2, seed: 17 }),
+      craftedPhaseWar(),
+    )),
+    id: 'run-crafted-reviewed-report',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+  if (reviewedReportRun.phase !== 'aftermath' || !reviewedReportRun.sectio || reviewedReportRun.battleRuntime !== null) {
+    throw new Error('A reviewed Victory report must stand on its Sectio with no Battle runtime.');
+  }
+  const savedReviewedReport = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ run: reviewedReportRun, revision: craftedPhaseRevision }),
+  );
+  const savedReviewedReportBody = JSON.parse(savedReviewedReport.body);
+  if (savedReviewedReport.statusCode !== 200 || savedReviewedReportBody.run.phase !== 'aftermath') {
+    throw new Error(`A reviewed Victory report must be one this server stores: ${savedReviewedReport.statusCode} ${savedReviewedReport.body}`);
+  }
+  craftedPhaseRevision = savedReviewedReportBody.revision;
+  // The relaxation is exactly that pairing and no wider: a report naming a Battle the Sectio
+  // behind it did not follow is still refused.
+  const mismatchedReport = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      run: {
+        ...reviewedReportRun,
+        aftermath: { ...reviewedReportRun.aftermath, battleIndex: reviewedReportRun.aftermath.battleIndex + 1 },
+      },
+      revision: craftedPhaseRevision,
+    }),
+  );
+  if (mismatchedReport.statusCode !== 400) {
+    throw new Error(`A report naming another Battle must be refused: ${mismatchedReport.statusCode} ${mismatchedReport.body}`);
   }
   const deletedCraftedPhaseRun = await request(
     'DELETE', '/api/active-run',
@@ -7822,6 +7903,13 @@ async function main() {
     )
   ) {
     throw new Error(`First Save did not create the canonical Level: ${workspaceWithNewLevel.body}\nbackend output:\n${output}`);
+  }
+  // The Save itself must hand back the address it baked, and it must be the SAME one the manifest
+  // read produces — a client installs whichever it is given and keeps it for the page's lifetime.
+  if (firstNewEditorSaveBody.thumbnail_url !== workspaceWithNewLevelBody.thumbnail_urls.l2) {
+    throw new Error(
+      `Save answered a different thumbnail address than the workspace manifest: ${firstNewEditorSaveBody.thumbnail_url} vs ${workspaceWithNewLevelBody.thumbnail_urls.l2}`,
+    );
   }
   const anonymousStoredListThumbnail = await get(workspaceWithNewLevelBody.thumbnail_urls.l2);
   const storedListThumbnail = await get(
@@ -10761,6 +10849,7 @@ async function main() {
     officialEditorSave.statusCode !== 200 ||
     officialEditorSaveBody.document.saved_revision !== 2 ||
     officialEditorSaveBody.thumbnail_ready !== true ||
+    !/^\/api\/media\/[0-9a-f]{64}$/.test(officialEditorSaveBody.thumbnail_url || '') ||
     officialEditorSaveBody.workspace_revision !== 2
   ) {
     throw new Error(`Official editor Save failed: ${officialEditorSave.statusCode} ${officialEditorSave.body}`);
@@ -10806,6 +10895,14 @@ async function main() {
     officialAfterEditorSaveBody.portfolio.revision !== 2
   ) {
     throw new Error(`Official editor Save did not promote globally: ${officialAfterEditorSave.body}`);
+  }
+  // A client installs whatever address the Save answered with and holds it for the life of the
+  // page, so that answer must be exactly the one a fresh load would have been given. When they can
+  // disagree, a saved level goes on showing its pre-save board until the page is reloaded.
+  if (officialAfterEditorSaveBody.thumbnail_urls['off-l-test'] !== officialEditorSaveBody.thumbnail_url) {
+    throw new Error(
+      `Official Save answered a different thumbnail address than the manifest: ${officialEditorSaveBody.thumbnail_url} vs ${officialAfterEditorSaveBody.thumbnail_urls['off-l-test']}`,
+    );
   }
   const staleOfficialWorkspaceSave = await request(
     'PUT', '/api/official-campaigns/default',

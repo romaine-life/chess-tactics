@@ -142,6 +142,64 @@ export function savePredrawnBoardRegistrationLocally(
 }
 
 /** Resolve the live-media version and persisted whole-plate registration for a saved board. */
+/**
+ * The largest rectangle of a plate whose pixels are ALL painted, as fractions of its frame.
+ *
+ * A plate's declared world bounds are its raster frame, and a painting with a ragged or
+ * feathered edge does not fill its own frame — Fortress Gate paints 74% of hers. Fitting a
+ * camera box to the frame therefore hands the player world the level never painted, which is
+ * the whole thing the boundary exists to prevent, so the fit has to be measured from alpha.
+ *
+ * Sampled down before scanning: a ragged edge is tens of pixels deep, so the shape survives
+ * while the maximal-rectangle scan stays cheap.
+ */
+export async function largestPaintedPlateRect(
+  src: string,
+): Promise<{ left: number; top: number; right: number; bottom: number } | null> {
+  const image = await loadDecodedImage(src).catch(() => null);
+  if (!image?.naturalWidth || !image.naturalHeight) return null;
+  const scale = Math.min(1, 700 / Math.max(image.naturalWidth, image.naturalHeight));
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) return null;
+  context.drawImage(image, 0, 0, width, height);
+  let pixels: Uint8ClampedArray;
+  try { pixels = context.getImageData(0, 0, width, height).data; } catch { return null; }
+  const opaque = (x: number, y: number): boolean => pixels[(y * width + x) * 4 + 3] > 250;
+
+  // Maximal all-opaque rectangle, by the standard largest-rectangle-in-histogram scan.
+  const heights = new Array<number>(width).fill(0);
+  let best = { area: 0, x0: 0, y0: 0, x1: -1, y1: -1 };
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) heights[x] = opaque(x, y) ? heights[x] + 1 : 0;
+    const stack: { x: number; height: number }[] = [];
+    for (let x = 0; x <= width; x += 1) {
+      const columnHeight = x === width ? 0 : heights[x];
+      let start = x;
+      while (stack.length && stack[stack.length - 1].height >= columnHeight) {
+        const top = stack.pop()!;
+        const area = top.height * (x - top.x);
+        if (area > best.area) {
+          best = { area, x0: top.x, y0: y - top.height + 1, x1: x - 1, y1: y };
+        }
+        start = top.x;
+      }
+      stack.push({ x: start, height: columnHeight });
+    }
+  }
+  if (best.area <= 0) return null;
+  return {
+    left: best.x0 / width,
+    top: best.y0 / height,
+    right: (best.x1 + 1) / width,
+    bottom: (best.y1 + 1) / height,
+  };
+}
+
 export function runtimePredrawnBoardPlate(surface: PredrawnBoardSurface): PredrawnBoardPlate {
   return {
     surface,

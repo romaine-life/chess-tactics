@@ -37,8 +37,11 @@ import { TileSidesViewer } from './TileSidesViewer';
 import { TILE_SIDE_ITEMS, type TileSideItem } from './tileSideCatalog';
 import { ScrollbarLibraryStudio, ScrollbarViewer } from './ScrollbarLibraryStudio';
 import { PagesLibraryStudio, PagesViewer } from './PagesLibraryStudio';
+import { AdlectioMarkInstallControl, AdlectioMarkReviewCatalog, useAdlectioMarkCatalog } from './RunAdlectioMarkReview';
 import { ScreenArtCatalog, ScreenArtViewer, useScreenArtCatalog } from './ScreenArtReviewStudio';
 import { LipsanonMatCatalog, LipsanonMatViewer, useLipsanonMatCatalog } from './LipsanonMatReview';
+import { AthetizeMarkCatalog, AthetizeMarkControls, useAthetizeMark } from './AthetizeMarkCatalog';
+import { RunRailMarkCatalog, RunRailMarkControls, useRunRailMarks } from './RunRailMarkCatalog';
 import { ChromeLabCatalog, ChromeLabViewer, CHROME_LAB_TARGETS, defaultChromeLabTargetId } from './ChromeLab';
 import { RailLab } from './RailLab';
 import { GameLabCatalog, GameLabViewer } from './GameLab';
@@ -89,6 +92,12 @@ import { TitleBarControlContribution, type TitleBarControlSpec } from './shell/T
 import { RunCardPrototypeCatalog, RunCardPrototypeViewer } from './RunCardPrototype';
 import { RunCardGoldTierDividerCatalog, RunCardGoldTierDividerViewer } from './RunCardGoldTierDividerStudio';
 import { RunCardFitCatalog, RunCardFitViewer } from './RunCardFitStudio';
+import {
+  RUN_CARD_POOL_DEFAULT_TEXT_SIZE,
+  RUN_CARD_POOL_MAX_TEXT_SIZE,
+  RUN_CARD_POOL_MIN_TEXT_SIZE,
+  RunCardPoolCatalog,
+} from './RunCardPoolStudio';
 import { RunCardOutlineCatalog, RunCardOutlineViewer } from './RunCardOutlineStudio';
 import { RunCardSizeCatalog, RunCardSizeViewer } from './RunCardSizeStudio';
 import { RunCardPromptCatalog, RunCardPromptViewer } from './RunCardPromptStudio';
@@ -128,7 +137,7 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'deployment' | 'gym' | 'solver' | 'cardlayout' | 'cardsize' | 'carddivider' | 'cardicons' | 'cardfit' | 'cardoutline' | 'cardprompts' | 'screenart' | 'lipsanonmat';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'deployment' | 'gym' | 'solver' | 'cardlayout' | 'cardsize' | 'carddivider' | 'cardicons' | 'cardfit' | 'cardpool' | 'cardoutline' | 'cardprompts' | 'screenart' | 'lipsanonmat' | 'actionmarks' | 'adlectiomark' | 'runrailmarks';
 
 // Every prop KIND present in the catalog, in definition order — DERIVED from PROP_DEFS so a new
 // kind (e.g. 'rock') is a filter facet automatically. Hardcoding ['tree','house'] here silently
@@ -272,7 +281,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => Boolean(value && studioFamilies.some((family) => family.id === value));
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'deployment' || value === 'gym' || value === 'solver' || value === 'cardlayout' || value === 'cardsize' || value === 'carddivider' || value === 'cardicons' || value === 'cardfit' || value === 'cardoutline' || value === 'cardprompts' || value === 'screenart' || value === 'lipsanonmat';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'deployment' || value === 'gym' || value === 'solver' || value === 'cardlayout' || value === 'cardsize' || value === 'carddivider' || value === 'cardicons' || value === 'cardfit' || value === 'cardpool' || value === 'cardoutline' || value === 'cardprompts' || value === 'screenart' || value === 'lipsanonmat' || value === 'actionmarks' || value === 'adlectiomark' || value === 'runrailmarks';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -448,6 +457,14 @@ function preserveCardLayoutRouteParams(params: URLSearchParams, route: TilesetSt
   });
 }
 
+// Card Pool addresses its selected MODEL as ?poolModel=, so a handed-over link opens on the position
+// under discussion rather than on the head of the list. Same shape as the keys above.
+function preserveCardPoolRouteParams(params: URLSearchParams, route: TilesetStudioRouteState): void {
+  if (route.category !== 'cardpool') return;
+  const value = new URLSearchParams(window.location.search).get('poolModel');
+  if (value) params.set('poolModel', value);
+}
+
 function preserveCardIconFittingRouteParams(params: URLSearchParams, route: TilesetStudioRouteState): void {
   if (route.viewerKind !== 'cardicons') return;
   const value = new URLSearchParams(window.location.search).get('iconPair');
@@ -461,6 +478,16 @@ function preserveDeploymentLabRouteParams(params: URLSearchParams, route: Tilese
     const value = current.get(key);
     if (value !== null) params.set(key, value);
   });
+}
+
+// The Main Menu tuner owns which ELEMENT its panel is showing (Buttons / Button label / Button
+// icon / Interaction) and addresses it as ?el=, so a handed-over link opens on the element under
+// review rather than one click short of it. Same shape as the Chrome Lab keys above: the tuner
+// writes the param, this keeps it alive when the Studio rebuilds the query from its own model.
+function preserveMainMenuTunerRouteParams(params: URLSearchParams, route: TilesetStudioRouteState): void {
+  if (route.category !== 'pages' && route.viewerKind !== 'page') return;
+  const value = new URLSearchParams(window.location.search).get('el');
+  if (value) params.set('el', value);
 }
 
 const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
@@ -490,6 +517,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     if (route.category === 'gym' && route.selectedGymLevelId) catalogParams.set('gymlvl', route.selectedGymLevelId);
     preserveChromeLabRouteParams(catalogParams, route);
     preserveDeploymentLabRouteParams(catalogParams, route);
+    preserveMainMenuTunerRouteParams(catalogParams, route);
     if (route.category === 'solver' && route.selectedSolverLevelId) catalogParams.set('slvl', route.selectedSolverLevelId);
     if (route.category === 'cardprompts' && route.selectedRunCardPromptId) catalogParams.set('cardPrompt', route.selectedRunCardPromptId);
     const catalogQuery = catalogParams.toString();
@@ -549,7 +577,9 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   preserveChromeLabRouteParams(params, route);
   preserveCardLayoutRouteParams(params, route);
   preserveCardIconFittingRouteParams(params, route);
+  preserveCardPoolRouteParams(params, route);
   preserveDeploymentLabRouteParams(params, route);
+  preserveMainMenuTunerRouteParams(params, route);
   const nextHref = `${STUDIO_PATH}?${params.toString()}`;
   const currentHref = `${window.location.pathname}${window.location.search}`;
   if (nextHref !== currentHref) {
@@ -617,6 +647,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedLipsanonMatId, setSelectedLipsanonMatId] = useState(initialRoute.selectedLipsanonMatId ?? '');
   const [lipsanonMatSearch, setLipsanonMatSearch] = useState('');
   const lipsanonMat = useLipsanonMatCatalog();
+  const athetizeMark = useAthetizeMark();
+  const runRailMarks = useRunRailMarks();
+  const adlectioMark = useAdlectioMarkCatalog();
+  const [selectedAdlectioMarkId, setSelectedAdlectioMarkId] = useState('');
   const [surfaceSearch, setSurfaceSearch] = useState('');
   const [scrollbarSearch, setScrollbarSearch] = useState('');
   const [selectedScrollbarName, setSelectedScrollbarName] = useState<string | undefined>(undefined);
@@ -643,6 +677,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [gymSearch, setGymSearch] = useState('');
   const [selectedGymLevelId, setSelectedGymLevelId] = useState<string | undefined>(initialRoute.selectedGymLevelId);
   const [solverSearch, setSolverSearch] = useState('');
+  // Card Pool's body size lives here rather than inside the page, because the control for it
+  // belongs in the Controls rail and the rail is rendered as a sibling of the page it governs.
+  const [cardPoolTextSize, setCardPoolTextSize] = useState(RUN_CARD_POOL_DEFAULT_TEXT_SIZE);
   const [selectedSolverLevelId, setSelectedSolverLevelId] = useState<string | undefined>(initialRoute.selectedSolverLevelId);
   const [solverTab, setSolverTab] = useState<'step' | 'run' | 'help' | 'glossary'>(initialRoute.solverTab ?? 'step');
   // The Gym's open surface from the URL (`gymtab=`), read once at mount so a deep link
@@ -1784,6 +1821,16 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       ),
     },
     {
+      id: 'actionmarks', label: 'Action Marks', hint: 'The mark a Run card action wears on the control that performs it. Every candidate is mounted in the real Expunctio button, offered and refused; Install binds the selected one.',
+      main: <AthetizeMarkCatalog state={athetizeMark} />,
+      controls: <AthetizeMarkControls state={athetizeMark} />,
+    },
+    {
+      id: 'runrailmarks', label: 'Run Rail Marks', hint: 'The marks Run preparation’s Current Run and Start New Run tabs wear. Every candidate is mounted on a real rail tab at native size — the seat it ships in, not the title bar’s measure chip. Install binds the selected one.',
+      main: <RunRailMarkCatalog state={runRailMarks} />,
+      controls: <RunRailMarkControls state={runRailMarks} />,
+    },
+    {
       id: 'lipsanonmat', label: 'Lipsanon Mat', hint: 'Candidate surfaces for the lipsanon offers to sit on, mounted over the chosen backdrop with live lipsanon cards. Review only — nothing here is installed.',
       main: (
         <LipsanonMatCatalog
@@ -1809,6 +1856,28 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
           </label>
           <button type="button" className="tileset-view-action" onClick={() => openViewer('lipsanonmat')}>View Selected</button>
+        </>
+      ),
+    },
+    {
+      id: 'adlectiomark', label: 'Adlectio Mark', hint: 'Every candidate for the mark Expunctio prints beside a formation this Sectio visit admitted, mounted in that exact line. Install picks one.',
+      main: (
+        <AdlectioMarkReviewCatalog
+          items={adlectioMark.items}
+          loading={adlectioMark.loading}
+          error={adlectioMark.error}
+          selected={selectedAdlectioMarkId}
+          onSelect={setSelectedAdlectioMarkId}
+        />
+      ),
+      controls: (
+        <>
+          <AdlectioMarkInstallControl
+            candidate={adlectioMark.items.find((item) => item.id === selectedAdlectioMarkId) ?? null}
+            catalog={adlectioMark.catalog}
+            onInstalled={adlectioMark.refresh}
+          />
+          <button type="button" className="tileset-view-action" onClick={adlectioMark.refresh}>Reload candidates</button>
         </>
       ),
     },
@@ -2071,6 +2140,20 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       id: 'cardsize', label: 'Card Size', hint: 'Tune how large the Bona Vacantia grant and the Sectio print their card rows, and the drift and light those cards carry.',
       main: <RunCardSizeCatalog onOpen={() => openViewer('cardsize')} />,
       controls: <button type="button" className="tileset-view-action" data-testid="open-run-card-size" onClick={() => openViewer('cardsize')}>Open Card Size</button>,
+    },
+    {
+      id: 'cardpool', label: 'Card Pool', hint: 'Re-derive the offer catalog live: piece material, footprint rules, the density cost curve, and where the rarity bands land.',
+      main: <RunCardPoolCatalog textSize={cardPoolTextSize} />,
+      controls: (
+        <SliderRow
+          label="Text size"
+          value={cardPoolTextSize}
+          set={setCardPoolTextSize}
+          min={RUN_CARD_POOL_MIN_TEXT_SIZE}
+          max={RUN_CARD_POOL_MAX_TEXT_SIZE}
+          dflt={RUN_CARD_POOL_DEFAULT_TEXT_SIZE}
+        />
+      ),
     },
     {
       id: 'cardfit', label: 'Card Fit', hint: 'Tune how far a small formation grows into the room its card leaves, across every footprint the deck deals.',

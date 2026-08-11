@@ -26,6 +26,9 @@ import { RestartGlyph } from './shared/actionGlyphs';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarControlContribution, TitleBarStatusTip } from './shell/TitleBarControls';
 import { shouldStartFreshSkirmish, type RunBattleTransformSink, type RunBattleUndoAdapter } from '../game/store';
+import { reviewGameOf } from '../game/moveReview';
+import { MoveReviewControls } from './shared/MoveReviewControls';
+import { CHROME_STRUCTURAL_FILL_ROLE } from './shared/chromeSurfacePolicy';
 import { SkirmishStoreProvider, useSkirmish, useSkirmishStoreApi } from '../game/SkirmishStoreContext';
 import {
   loadMatch,
@@ -88,6 +91,7 @@ import {
 } from '../render/PredrawnBoardLayer';
 import { useSkirmishViewStoreApi } from '../game/SkirmishViewStoreContext';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { leafSurfacePhase } from './shared/chromeSurfacePolicy';
 import { InnerChromeBox, ShellViewportSwap } from './shared/ChromeBox';
 import { rememberAdminBattleHref } from '../admin/battleRoute';
 import { formatGold, standingEnemyForceValue, type RunBattleReport } from '../run/model';
@@ -163,11 +167,17 @@ interface RunSkirmishProps {
 
 export type SkirmishProps = StandaloneSkirmishProps | RunSkirmishProps;
 
-export function shouldLoadSkirmishWorldBackground(
-  boardSettled: boolean,
-  predrawnBackgroundActive: boolean,
-): boolean {
-  return boardSettled && !predrawnBackgroundActive;
+/**
+ * A pre-drawn plate does NOT own every environment pixel, so it does not excuse this layer.
+ *
+ * Measured: Hold the Bridge's raster is 1450x816 world px, and screens routinely want more
+ * than that — at 2560x900 the widest legal view needs 1426x501 and the plate cannot reach the
+ * flanks. With no backdrop behind it the only way to hide bare stage was to hold the camera
+ * inside the raster, which cost the whole zoom-out range and cropped the board outright on a
+ * wide-short window (ADR-0574). The wasted request this once avoided is not wasted.
+ */
+export function shouldLoadSkirmishWorldBackground(boardSettled: boolean): boolean {
+  return boardSettled;
 }
 
 /**
@@ -388,6 +398,28 @@ function SkirmishSession(props: SkirmishProps = {}) {
   // nowhere else, so it has to be read while the board is still mounted.
   const turnsElapsed = useSkirmish((s) => s.turnsElapsed);
   const activityId = useSkirmish((s) => s.activityId);
+  // Move review: while the player is reading an earlier half-move, the battlefield shows THAT
+  // board instead of the live one. The match underneath is untouched — its turn, its clock and
+  // its queued premoves all keep running — so this is a projection, exactly like Deployment's,
+  // and it goes through the same passive-position seam rather than reaching into the game.
+  const positions = useSkirmish((s) => s.positions);
+  const reviewIndex = useSkirmish((s) => s.reviewIndex);
+  const seed = useSkirmish((s) => s.seed);
+  const storeLevelId = useSkirmish((s) => s.levelId);
+  const boardViewEpoch = useSkirmish((s) => s.boardViewEpoch);
+  const reviewGame = useMemo(
+    () => reviewGameOf(game, positions, reviewIndex),
+    [game, positions, reviewIndex],
+  );
+  const reviewSurface = useMemo(() => (reviewGame ? {
+    kind: 'review' as const,
+    game: reviewGame,
+    seed,
+    // Deliberately the SAME camera identity the live board computes for itself: stepping
+    // through the score sheet must not reframe, refit or re-fly the camera. The player keeps
+    // the zoom and pan they were reading the position at.
+    viewKey: activityId ?? `${storeLevelId ?? 'free'}:${boardViewEpoch}`,
+  } : undefined), [activityId, boardViewEpoch, reviewGame, seed, storeLevelId]);
   const adminMode = useSkirmish((s) => s.adminMode);
   const armAdminMode = useSkirmish((s) => s.armAdminMode);
   const adminWinBattle = useSkirmish((s) => s.adminWinBattle);
@@ -1259,13 +1291,10 @@ function SkirmishSession(props: SkirmishProps = {}) {
     };
   }, [routeLobby]);
 
-  // A complete pre-drawn plate is the sole source of environment pixels (ADR-0158).
-  // Do not even resolve the ordinary world image into CSS until the chosen board has
-  // settled and proved that it needs that layer; this prevents a hidden wasted request.
-  const screenStyle = shouldLoadSkirmishWorldBackground(
-    boardSettled,
-    screenPredrawnBackgroundActive,
-  )
+  // Do not resolve the ordinary world image into CSS until the chosen board has settled;
+  // that prevents a request for a layer the screen may never mount. A pre-drawn plate no
+  // longer waives it — the plate is finite and the screen is not (ADR-0574).
+  const screenStyle = shouldLoadSkirmishWorldBackground(boardSettled)
     ? {
         '--skirmish-world-bg': `url("${defaultBackgroundSet().world}")`,
       } as CSSProperties
@@ -1361,6 +1390,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
         role="status"
         aria-label="Battle won"
         data-testid="run-battle-result"
+        data-chrome-leaf-surface=""
       >
         <div ref={runBattleVictoryBannerRef} className="run-battle-victory-banner">
           <h2>Victory</h2>
@@ -1383,12 +1413,15 @@ function SkirmishSession(props: SkirmishProps = {}) {
         </div>
       </div>
     ) : (
-      <div className="campaign-result campaign-result--viewport" role="dialog" aria-label="Run Battle result" data-testid="run-battle-result">
+      <div className="campaign-result campaign-result--viewport" role="dialog" aria-label="Run Battle result" data-testid="run-battle-result" data-chrome-leaf-surface="">
         <div className="settings-frame campaign-result-panel">
           <h2>{game.winner === 'draw' ? 'Draw' : 'Defeat'}</h2>
           <p>{routeLevel.name} — {resultDetail ?? objectiveGoal}</p>
+          {/* The phase index is the action's authored place in this row, not its DOM position:
+              a row of identical keys cut from one plank run rather than the same grain stamped
+              five times (ADR-0433/ADR-0063). Conditional actions keep their own seat. */}
           <div className="campaign-result-actions">
-            {game.winner === 'draw' ? <RunBattleUndoButton testId="undo-run-move-result" /> : null}
+            {game.winner === 'draw' ? <RunBattleUndoButton testId="undo-run-move-result" style={leafSurfacePhase(0)} /> : null}
             <RunBattleRetryButton
               testId="retry-run-battle-result"
               costTenths={runBattle.retryCostTenths}
@@ -1396,6 +1429,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
               onRetry={replayLevel}
               unavailableReason={runBattleRetryUnavailableReason}
               className="active"
+              style={leafSurfacePhase(1)}
             />
             <RunDeploymentRerollButton
               testId="reroll-deployment-result"
@@ -1403,11 +1437,13 @@ function SkirmishSession(props: SkirmishProps = {}) {
               canReroll={!unitDeparture && runBattle.canRerollDeployment}
               onReroll={() => { runBattle.onRerollDeployment(); }}
               departing={Boolean(unitDeparture)}
+              style={leafSurfacePhase(2)}
             />
             {game.winner === 'enemy' ? (
               <>
                 <ChromeNavButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+                  style={leafSurfacePhase(3)}
                   data-testid="new-run-after-defeat"
                   to={PLAY_RUN_NEW_SELECTOR_HREF}
                 >
@@ -1415,6 +1451,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
                 </ChromeNavButton>
                 <ChromeNavButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+                  style={leafSurfacePhase(4)}
                   data-testid="main-menu-after-defeat"
                   to="/"
                 >
@@ -1522,7 +1559,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
             hiding, reacquiring, or replaying the board's first-frame lifecycle. */}
           <SkirmishBoard
             interactive={!runDeployment && !unitDeparture && sceneActivated && (!net || (netSeatInteractive && !netRelayFrozen))}
-            surfaceState={presentedDeploymentSurface}
+            surfaceState={presentedDeploymentSurface ?? reviewSurface}
             renderCellOverlay={runDeployment?.renderCellOverlay}
             boardOverlay={runDeployment?.boardOverlay}
             onSecondaryClick={runDeployment?.onBoardSecondaryClick}
@@ -1536,7 +1573,9 @@ function SkirmishSession(props: SkirmishProps = {}) {
             reveal={playableSurfaceReady && sceneRevealed}
             revealTransition="scene"
             activate={!runDeployment && sceneActivated}
-            unitArrivals={runBattleReviewTerminal ? 'settled' : sceneActivated ? 'active' : 'pending'}
+            // A reviewed board is one the units reached long ago. It admits them at their seats
+            // rather than replaying an entrance for every piece a step back brings back to life.
+            unitArrivals={runBattleReviewTerminal || reviewSurface ? 'settled' : sceneActivated ? 'active' : 'pending'}
             unitArrivalTrack={runDeployment?.unitArrivalTrack}
             unitArrivalStartDelta={runDeployment?.unitArrivalStartDelta}
             predrawnReview={predrawnPreview ? {
@@ -1549,6 +1588,36 @@ function SkirmishSession(props: SkirmishProps = {}) {
               <strong>Preparing battlefield…</strong>
               <small>Composing terrain, units, and controls</small>
             </InnerChromeBox>
+          ) : null}
+          {/* A board showing an earlier half-move says so, unmissably, and carries its own way
+              out. The battlefield is read-only while this is up but the MATCH is not paused —
+              the clock, the opponent's think and any queued premove all keep running — so this
+              is what stops a review from being mistaken for a live board that stopped taking
+              input. It is seated inside the battlefield region, never over the position it is
+              describing. */}
+          {reviewSurface ? (
+            // The SEAT owns the placement, not the plate. The plate wears the registered inner
+            // chrome frame, and that frame's own rule sets `position: relative` later in the
+            // stylesheet at equal specificity — the trap ADR-0570 was written about. A plain
+            // box the chrome cannot reach holds the plate out of the battlefield's flow, so it
+            // cannot take a grid row and squash the board it is describing.
+            <div className="skirmish-review-seat">
+              <InnerChromeBox
+                className="skirmish-status-chip skirmish-review-plate"
+                // The plate ESTABLISHES a region — a heading over a row of controls — so it
+                // wears the structural marble, and the transport inside it wears the oak every
+                // trigger wears (ADR-0433).
+                fillRole={CHROME_STRUCTURAL_FILL_ROLE}
+                role="status"
+                data-testid="move-review-plate"
+              >
+                <span className="skirmish-review-plate-heading">
+                  <strong>Reviewing</strong>
+                  <small>The game underneath is still running</small>
+                </span>
+                <MoveReviewControls variant="board" />
+              </InnerChromeBox>
+            </div>
           ) : null}
         </>
       ) : routeLobby ? (
@@ -1647,20 +1716,20 @@ function SkirmishSession(props: SkirmishProps = {}) {
       ) : null}
 
       {isCampaignPlay && routeCampaignId && routeLevel && game.winner && (
-        <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Battle result" data-testid="campaign-result">
+        <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Battle result" data-testid="campaign-result" data-chrome-leaf-surface="">
           <div className="settings-frame campaign-result-panel">
             <h2>{game.winner === 'player' ? 'Victory' : game.winner === 'draw' ? 'Draw' : 'Defeat'}</h2>
             <p>{routeLevel.name} — {resultDetail ?? objectiveGoal}</p>
             <div className="campaign-result-actions">
-              <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} onClick={replayLevel}>
+              <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} style={leafSurfacePhase(0)} onClick={replayLevel}>
                 {game.winner === 'player' ? 'Replay' : 'Retry'}
               </ChromeButton>
               {game.winner === 'player' && nextLevel ? (
-                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} onClick={advanceToNextLevel}>
+                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} style={leafSurfacePhase(1)} onClick={advanceToNextLevel}>
                   Continue
                 </ChromeButton>
               ) : (
-                <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to={playCampaignSelectorHref(routeCampaignId)}>
+                <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} style={leafSurfacePhase(1)} to={playCampaignSelectorHref(routeCampaignId)}>
                   Back to Campaign
                 </ChromeNavButton>
               )}
@@ -1673,17 +1742,17 @@ function SkirmishSession(props: SkirmishProps = {}) {
           the way out (leaving via the app-shell nav was the only prior option). "View board"
           dismisses it to review the final position, leaving the persistent exit chip below. */}
       {net && game.winner && !netResultDismissed && (
-        <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Match result" data-testid="netplay-result">
+        <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Match result" data-testid="netplay-result" data-chrome-leaf-surface="">
           <div className="settings-frame campaign-result-panel">
             <h2>{turnLabel}</h2>
             <p>{netResultDisputed
               ? 'The clients disagree about this terminal position. Leaving concedes the match and closes recovery.'
               : `Multiplayer skirmish — ${resultDetail ?? objectiveGoal}`}</p>
             <div className="campaign-result-actions">
-              <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} data-testid="netplay-view-board" onClick={() => setNetResultDismissed(true)}>
+              <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} style={leafSurfacePhase(0)} data-testid="netplay-view-board" onClick={() => setNetResultDismissed(true)}>
                 View board
               </ChromeButton>
-              <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} data-testid="netplay-return" onClick={returnToLobbies}>
+              <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} style={leafSurfacePhase(1)} data-testid="netplay-return" onClick={returnToLobbies}>
                 {netResultDisputed ? 'Concede and leave' : 'Return to lobbies'}
               </ChromeButton>
             </div>
@@ -1696,6 +1765,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
       {net && game.winner && netResultDismissed && (
         <div
           role="status"
+          data-chrome-leaf-surface=""
           style={{ position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)', zIndex: 40, display: 'flex', alignItems: 'center', gap: 12 }}
         >
           <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate">

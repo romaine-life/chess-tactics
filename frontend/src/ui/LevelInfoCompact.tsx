@@ -25,9 +25,8 @@ import { InnerChromeBox } from './shared/ChromeBox';
 import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
 import { PieceTypeIcon } from './shared/PieceTypeIcon';
 import { installedUiMedia, installedUiMediaIfPresent } from './installedUiMedia';
-import { useStrategikonCardsIcon } from './strategikonNavigation';
+import { STRATEGIKON_CARD_MARK_CLASS, useStrategikonCardsIcon } from './strategikonNavigation';
 import { levelToEditorBoard } from '../core/levelBoard';
-import { assetFrameSrc, isPredrawnBackgroundActive, studioFamilies } from '@chess-tactics/board-render';
 
 const PIECE_ORDER: PieceType[] = ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn', 'rock', 'random-rock'];
 const PIECE_LABEL: Record<PieceType, string> = {
@@ -37,21 +36,24 @@ const ZONE_ORDER: ZoneType[] = ['region', 'player-spawn', 'player-king-spawn', '
 const ZONE_LABEL: Record<ZoneType, string> = {
   region: 'Named regions', 'player-spawn': 'Ally deployment', 'player-king-spawn': 'King deployment', 'enemy-spawn': 'Enemy deployment', 'enemy-threat': 'Threat markers', objective: 'Goal markers', 'falling-rock': 'Rockfall markers', 'pawn-promotion': 'Promotion markers',
 };
-const TERRAIN_LABEL: Record<string, string> = {
-  grass: 'Grass', water: 'Water', bridge: 'Bridge', road: 'Road', stone: 'Stone', rock: 'Rock', cliff: 'Cliff', dirt: 'Dirt', pebble: 'Pebble', sand: 'Sand',
-  void: 'Gap',
-};
-
 /**
  * A row's mark: installed art at the row's own scale, beside the label it belongs to. Every one
  * of these resolves a real game asset — the objective flag, the Run's Battle drum, the card back
  * the player deals, the grass surface the editor paints — rather than a glyph invented for a
  * readout. `aria-hidden` because the label beside it already says the word.
  */
-function RowIcon({ src, className = '' }: { src: string; className?: string }): ReactElement {
+function RowIcon({
+  src,
+  className = '',
+  imgClassName,
+}: {
+  src: string;
+  className?: string;
+  imgClassName?: string;
+}): ReactElement {
   return (
     <span className={`ce-li-icon ${className}`.trim()} aria-hidden="true">
-      <img src={src} alt="" draggable={false} />
+      <img className={imgClassName} src={src} alt="" draggable={false} />
     </span>
   );
 }
@@ -120,16 +122,6 @@ function UnframedLevelInfo({
   ...props
 }: ComponentProps<typeof InnerChromeBox>): ReactElement {
   return <div {...props} className={className}>{children}</div>;
-}
-
-/**
- * The empty grass surface, exactly as the Level Editor paints it. "Tiles" counts squares of
- * board, so its mark is a square of board.
- */
-function grassSurfaceIconSrc(): string {
-  const asset = studioFamilies.find((family) => family.id === 'grass')?.assets[0];
-  if (!asset) throw new Error('the grass terrain family has no installed surface');
-  return assetFrameSrc(asset, 0);
 }
 
 function countMap<K extends string>(keys: K[]): Partial<Record<K, number>> {
@@ -214,12 +206,6 @@ export function levelBattleDealLine(level: Level): string | null {
   return String(dealt);
 }
 
-/** Whole-board AI artwork owns the environment pixels, so its logical terrain cannot be
- * presented as a roster of individually rendered tile types. */
-export function levelShowsTerrainTypeCounts(level: Level): boolean {
-  return !isPredrawnBackgroundActive(levelToEditorBoard(level));
-}
-
 /**
  * A side's own count of a piece, as that many of the piece. The sprites overlap into one file so
  * a dozen pawns still fit the column, and the numeral stays at the column's edge: the file says
@@ -286,6 +272,7 @@ export function LevelInfoCompact({
   className = '',
   titleBar = null,
   deploymentBand = null,
+  deploymentPreview = null,
   framed = true,
 }: {
   level: Level;
@@ -303,6 +290,19 @@ export function LevelInfoCompact({
    */
   deploymentBand?: { shown: boolean; onToggle: () => void } | null;
   /**
+   * When the host can imagine the player's own army onto that board, the Deployment section gains
+   * the control that deals it: Shuffle seats one possible arrangement and re-seats a different one
+   * on every press, and Clear takes the reconnaissance back to the authored map. A readout with no
+   * army to deal — a Level selector, the Campaign editor — leaves this null and the row is absent.
+   */
+  deploymentPreview?: {
+    shown: boolean;
+    placedUnitCount: number;
+    placedCardCount: number;
+    onShuffle: () => void;
+    onClear: () => void;
+  } | null;
+  /**
    * False when the HOST already owns the frame this readout sits in — a divided pane whose rails
    * separate it from its neighbours. A second frame inside that one would draw a box around a
    * column that the pane's own rail has already bounded (ADR-0059).
@@ -312,12 +312,6 @@ export function LevelInfoCompact({
   const cardsIconSrc = useStrategikonCardsIcon();
   const hourglassIconSrc = installedUiMedia('ui-kit-icons-game-wait-png');
   const { cols, rows } = level.board;
-  const total = cols * rows;
-  const filled = level.layers.terrain.filter((tile) => tile.terrain !== 'void').length;
-  const showsTerrainTypeCounts = levelShowsTerrainTypeCounts(level);
-  const terrainMix = showsTerrainTypeCounts
-    ? Object.entries(countMap(level.layers.terrain.map((t) => t.terrain))).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
-    : [];
   const allies = forceCountsForSide(level, 'player');
   const enemies = forceCountsForSide(level, 'enemy');
   const palettes = boardPalettes(level);
@@ -347,20 +341,12 @@ export function LevelInfoCompact({
       data-testid="level-info-compact"
     >
       {titleBar}
+      {/* Size only. A tile census — how many squares are painted, and how many of each terrain —
+          describes a board drawn from individually rendered tiles, and most levels are drawn from
+          whole-board artwork instead, where those counts describe nothing the reader can see. */}
       <section className="ce-li-board">
         <span className="ce-li-title">Board</span>
         <div className="ce-li-stat"><span>Size</span><strong>{cols} × {rows}</strong></div>
-        <div className="ce-li-stat">
-          <span><RowIcon src={grassSurfaceIconSrc()} className="ce-li-tile-icon" />Tiles</span>
-          <strong>{filled} / {total}</strong>
-        </div>
-        {showsTerrainTypeCounts ? (
-          <div className="ce-li-chips">
-            {terrainMix.map(([t, n]) => (
-              <span key={t} className="ce-li-chip"><i className={`ce-li-swatch terrain-${t}`} />{TERRAIN_LABEL[t] ?? t} <b>{n}</b></span>
-            ))}
-          </div>
-        ) : null}
       </section>
 
       <section className="ce-li-forces">
@@ -395,7 +381,7 @@ export function LevelInfoCompact({
         <section className="ce-li-deployment">
           <span className="ce-li-title">Deployment</span>
           <div className="ce-li-stat">
-            <span><RowIcon src={cardsIconSrc} className="ce-li-card-icon" />Cards dealt</span>
+            <span><RowIcon src={cardsIconSrc} className="ce-li-card-icon" imgClassName={STRATEGIKON_CARD_MARK_CLASS} />Cards dealt</span>
             <strong>{dealLine}</strong>
           </div>
           <div className="ce-li-stat">
@@ -422,6 +408,45 @@ export function LevelInfoCompact({
             ) : <span>Zone</span>}
             <strong>{deploymentSquares} square{deploymentSquares === 1 ? '' : 's'}</strong>
           </div>
+          {/* Directly under the band it fills. The two controls are one row because they are one
+              question — what would my army look like standing there — and Clear is only ever the
+              way back from an answer, so it is present and dead until there is one to leave. */}
+          {deploymentPreview ? (
+            <div className="ce-li-stat ce-li-preview-row">
+              <span className="ce-li-preview-controls">
+                <ChromeButton
+                  unit="inner-text-button"
+                  className="app-header-button ce-li-zone-toggle"
+                  data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                  data-testid="level-info-shuffle-preview"
+                  selected={deploymentPreview.shown}
+                  onClick={deploymentPreview.onShuffle}
+                  title={deploymentPreview.shown
+                    ? 'Deal and seat a different possible arrangement'
+                    : 'Deal your collection onto the band, seated at random'}
+                >
+                  Shuffle
+                </ChromeButton>
+                <ChromeButton
+                  unit="inner-text-button"
+                  className="app-header-button ce-li-zone-toggle"
+                  data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                  data-testid="level-info-clear-preview"
+                  disabled={!deploymentPreview.shown}
+                  onClick={deploymentPreview.onClear}
+                  title="Take the board back to the authored map"
+                >
+                  Clear
+                </ChromeButton>
+              </span>
+              <strong>
+                {deploymentPreview.shown
+                  ? `${deploymentPreview.placedCardCount} card${deploymentPreview.placedCardCount === 1 ? '' : 's'}`
+                    + `  ·  ${deploymentPreview.placedUnitCount} unit${deploymentPreview.placedUnitCount === 1 ? '' : 's'}`
+                  : 'Not shown'}
+              </strong>
+            </div>
+          ) : null}
           {/* Only when there is a real count to describe: an unfinished Battle's row says "Not
               set", and a sentence about how many cards come off the collection would be inventing
               a number the Level does not have. */}

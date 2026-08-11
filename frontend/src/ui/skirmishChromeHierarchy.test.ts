@@ -15,6 +15,8 @@ const battleClockChip = readFileSync(new URL('./BattleClockChip.tsx', import.met
 const titleBarControls = readFileSync(new URL('./shell/TitleBarControls.tsx', import.meta.url), 'utf8');
 const portraitPreload = readFileSync(new URL('../art/preload.ts', import.meta.url), 'utf8');
 const runBattleUndoButton = readFileSync(new URL('./RunBattleUndoButton.tsx', import.meta.url), 'utf8');
+const runArmyWorkspace = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
+const chromeUnitRegistry = readFileSync(new URL('./chromeUnitRegistry.ts', import.meta.url), 'utf8');
 
 const buttonBlocks = (source: string): string[] => source.match(/<(?:button|ChromeButton)\b[\s\S]*?<\/(?:button|ChromeButton)>/g) ?? [];
 const navButtonBlocks = (source: string): string[] => source.match(/<(?:NavButton|ChromeNavButton)\b[\s\S]*?<\/(?:NavButton|ChromeNavButton)>/g) ?? [];
@@ -184,6 +186,53 @@ describe('Skirmish chrome hierarchy', () => {
     }
   });
 
+  it('paints every Controls-panel trigger with the leaf material and phases repeated ones', () => {
+    // The material is read off the registry and applied to the panel, so a control the panel
+    // only borrows — a Stepper key, an admin action, a Run lifecycle button — cannot arrive
+    // wearing the structural field, and the same component elsewhere is left alone.
+    expect(chromeUnitRegistry).toContain("material: ChromeUnitMaterial;");
+    expect(chromeUnitRegistry).toContain('export function chromeUnitMaterialSelectors');
+    // ADR-0557 generalized the panel's own rule to one host attribute every adopted surface
+    // carries, so the panel declares adoption instead of the runtime naming it.
+    expect(chromeRuntime).toContain('function leafSurfaceHostCss');
+    expect(chromeRuntime).toMatch(/chromeUnitMaterialSelectors\('leaf'\)/);
+    expect(chromeRuntime).toContain("const CHROME_LEAF_HOST_ATTR = 'data-chrome-leaf-surface'");
+    expect(chromeRuntime).toMatch(/\$\{CHROME_FAMILY_SURFACE_SELECTOR\} \$\{CHROME_LEAF_HOST_SELECTOR\}/);
+    expect(chromeRuntime).toContain('namedChromeFillSurfacePaint(CHROME_LEAF_FILL_SURFACE)');
+    expect(chromeBox).toContain('data-chrome-leaf-surface=""');
+
+    // A box that names its own installed surface is excluded from the role field rather than
+    // out-specified by it, so the two can never trade places on a selector edit. An adopted
+    // host's leaves are excluded the same way — winning that rule on source order alone is
+    // what let #881's third `:not()` blank this panel a day later (ADR-0557).
+    expect(chromeRuntime).toContain(':not(.has-backdrop):not([data-chrome-fill-surface])');
+    expect(chromeRuntime).toContain(':not(${CHROME_LEAF_HOST_INHERITED_SELECTOR})');
+
+    // Repeated collections phase their wood from the index their own data already has.
+    expect(skirmishHud).toContain('HUD_TABS.map((t, index) =>');
+    expect(skirmishHud).toContain('style={leafSurfacePhase(index)}');
+    expect(skirmishHud).toContain('SHORTCUT_KEY_ROWS.flat().map((key, index) =>');
+    expect(skirmishHud).toContain('const surfacePhase = leafSurfacePhase(index);');
+    expect(stepper).toContain('style={leafSurfacePhase(0)}');
+    expect(stepper).toContain('style={leafSurfacePhase(1)}');
+    expect(styleCss).not.toMatch(/\.skirmish-(?:hud-tabs|view-row|grid)[^}]*:nth-child/);
+  });
+
+  it('keeps a unit portrait wearing its installed scene inside the house chrome', () => {
+    // The scene comes from the catalog with the bust, so the ONE portrait renderer resolves it
+    // from the piece; a call site that forgot to pass it is what put roster thumbnails on flat
+    // fill beside profile portraits that had one.
+    expect(portraitEditor).toContain("const resolvedBackdrop = backdrop === undefined ? defaultBackgroundSet().portraits[piece] : backdrop;");
+    expect(skirmishHud).not.toContain('focusedPortraitBackdrop');
+    expect(runArmyWorkspace).not.toContain('backdrop={defaultBackgroundSet()');
+
+    // ...and the guard against raw-CSS surface paint no longer strips it back off.
+    expect(styleCss).toMatch(/\.inner-box:not\(\.has-backdrop\)\s*\{\s*\r?\n\s*background-color: transparent;\s*\r?\n\s*background-image: none;/);
+    const frameBlock = styleCss.match(/\.chrome-family-surface\) \.inner-box \{[\s\S]*?\}/)?.[0] ?? '';
+    expect(frameBlock).toContain('border-image-source');
+    expect(frameBlock).not.toContain('background-image');
+  });
+
   it('maps scenario actions to existing text-button and tool-square units', () => {
     const returnBlock = navButtonUsing('data-testid="skirmish-return-scenario"');
     expectChromeUnit(returnBlock, 'inner-text-button');
@@ -200,7 +249,7 @@ describe('Skirmish chrome hierarchy', () => {
   it('renders paid Run Undo through one shared text-button without offering it on victory', () => {
     expect(skirmishHud).toContain("game.winner !== 'player' && game.winner !== 'enemy'");
     expect(skirmishHud).toContain('<RunBattleUndoButton testId="undo-run-move" />');
-    expect(skirmish).toContain("game.winner === 'draw' ? <RunBattleUndoButton testId=\"undo-run-move-result\" /> : null");
+    expect(skirmish).toContain("game.winner === 'draw' ? <RunBattleUndoButton testId=\"undo-run-move-result\" style={leafSurfacePhase(0)} /> : null");
     expect(runBattleUndoButton).toContain('unit="inner-text-button"');
     expect(runBattleUndoButton).toContain("chromeUnitClassNames('inner-text-button', 'app-header-button'");
     expect(runBattleUndoButton).toContain('valueTenths={RUN_BATTLE_UNDO_COST_TENTHS}');

@@ -15,6 +15,7 @@ import {
   enchiridionSectionFromPath,
 } from './enchiridionRoute';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
+import { useOpenRailTab } from './shared/railOpenIntent';
 import { isPlaySelectorPath, PLAY_SELECTOR_ROOT } from './playHubRoute';
 
 // The Editor is heavier / code-split out of the menu bundle. App's SceneBoundary
@@ -57,8 +58,10 @@ const MENU_TABS: MenuTab[] = new Proxy([], { get: (_target, property) => { const
 // slice (--tab-index) so this rail reads as one sheet however many tabs it has
 // (the menu carries five; the Settings screen four). See .settings-tab in style.css.
 // `active` lights the tab whose destination is currently open in the shell (ADR-0062 family).
-function ModeTab({ tab, index, active }: { tab: MenuTab; index: number; active?: boolean }): ReactElement {
-  return <ApparatusRailTab label={tab.label} to={active ? '/' : tab.href} index={index} active={active} iconSrc={tab.icon} />;
+// `expanded` draws the `›` open mark on the tab whose destination the player has just taken —
+// the same tab a beat earlier, because it follows the address rather than the crossfade.
+function ModeTab({ tab, index, active, expanded }: { tab: MenuTab; index: number; active?: boolean; expanded?: boolean }): ReactElement {
+  return <ApparatusRailTab label={tab.label} to={active ? '/' : tab.href} index={index} active={active} expanded={expanded} iconSrc={tab.icon} />;
 }
 
 // Which menu destinations render INSIDE the persistent shell (their own columns beside the pinned
@@ -91,6 +94,15 @@ function shellDest(path: string): ShellDest | null {
   return null;
 }
 
+// The addresses the mode rail speaks for: every shell destination, plus the home address a
+// second press on the open tab collapses to. An address outside that (a Run taken from the
+// Play destination, a board opened from the Editor) is the menu being LEFT, and the rail
+// keeps wearing what is committed while it fades out. See shared/railOpenIntent.ts.
+const MODE_RAIL_ADDRESSES = {
+  governs: (path: string): boolean => path === '/' || shellDest(path) !== null,
+  select: shellDest,
+};
+
 
 export function MainMenu({
   path = '/',
@@ -107,6 +119,9 @@ export function MainMenu({
   // home route leaves it empty. The rail's zoom-safe placement (ADR-0062) is untouched — the
   // destination just occupies the previously-empty grid track to its right.
   const dest = shellDest(path);
+  // Which tab wears the open mark. `dest` (and everything the shell renders from it) still
+  // waits for the committed address, so the destination's fade is untouched.
+  const openDest = useOpenRailTab(MODE_RAIL_ADDRESSES, dest);
   const enchiridionSection = enchiridionSectionFromPath(path);
   const enchiridionCardFilters = enchiridionCardFiltersFromSearch(search);
   // Only cold startup builds the shell in ordered rungs. During an ordinary return home,
@@ -141,6 +156,7 @@ export function MainMenu({
       >
         <ArtRouteChrome className="settings-shell">
           <ApparatusRailColumn
+            opens="panel-beside"
             className="settings-frame settings-rail-frame"
             placement="framed"
             aria-label="Game modes"
@@ -148,7 +164,17 @@ export function MainMenu({
             {/* Family membership, not string equality: the installed route may be any
                 address within the destination (e.g. the Play record migrating from the
                 skirmish tab to the hub root) and the tab must still light. */}
-            {MENU_TABS.map((tab, index) => <ModeTab key={tab.slug} tab={tab} index={index} active={dest !== null && shellDest(tab.href) === dest} />)}
+            {MENU_TABS.map((tab, index) => (
+              <ModeTab
+                key={tab.slug}
+                tab={tab}
+                index={index}
+                active={dest !== null && shellDest(tab.href) === dest}
+                // A mode that navigates AWAY (shellDest null) opens no panel and never wears
+                // the mark — the null-vs-null match is the case that guard is for.
+                expanded={openDest !== null && shellDest(tab.href) === openDest}
+              />
+            ))}
           </ApparatusRailColumn>
           <MenuDestinationSceneSlot
             className="menu-dest"

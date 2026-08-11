@@ -49,6 +49,7 @@ function fakeState(overrides: {
     objectiveCtx: { kingSide: 'enemy' },
     log: [{ text: 'Skirmish begins.' }],
     clock: null,
+    undoStack: [],
     battleElapsed: { elapsedMs: 4_000, startedAtMs: null },
     game: {
       size: { cols: 8, rows: 8 },
@@ -57,6 +58,36 @@ function fakeState(overrides: {
       winner,
     },
   } as unknown as SkirmishState;
+}
+
+/** One Undo checkpoint over a given state, priced at `goldTenths`. */
+function undoCheckpoint(state: SkirmishState, goldTenths: number): SkirmishState['undoStack'][number] {
+  return {
+    game: { ...state.game, winner: null, turn: 'player' },
+    tick: state.tick,
+    log: [...state.log],
+    resultDetail: null,
+    turnsElapsed: state.turnsElapsed,
+    selectedId: 'p1',
+    focusedId: 'p1',
+    clock: null,
+    run: {
+      runId: 'first',
+      battleIndex: 0,
+      goldTenths,
+      army: [],
+      cards: [],
+      battleRuntime: {
+        battleIndex: 0,
+        initiallyDeployedUnitIds: [],
+        reserveUnitIds: [],
+        reservistPoolUnitIds: [],
+        deployedReservistUnitIds: [],
+        observedDeadUnitIds: [],
+        reinforcementSequence: 0,
+      },
+    },
+  };
 }
 
 let store: Storage;
@@ -88,7 +119,8 @@ describe('match persistence', () => {
       activityId: state.activityId,
       clock: state.clock,
       battleElapsed: state.battleElapsed,
-      undoCheckpoint: null,
+      undoStack: [],
+      positions: [],
       savedAt: expect.any(String),
     });
     expect(Number.isNaN(Date.parse(loaded?.savedAt ?? ''))).toBe(false);
@@ -139,38 +171,47 @@ describe('match persistence', () => {
 
   it('keeps a terminal Run Battle resumable while its paid Undo checkpoint exists', () => {
     const state = fakeState({ winner: 'enemy', activityId: 'run:first:battle:0', turn: 'done' });
-    state.undoCheckpoint = {
-      game: { ...state.game, winner: null, turn: 'player' },
-      tick: state.tick,
-      log: [...state.log],
-      resultDetail: null,
-      turnsElapsed: state.turnsElapsed,
-      selectedId: 'p1',
-      focusedId: 'p1',
-      clock: null,
-      run: {
-        runId: 'first',
-        battleIndex: 0,
-        goldTenths: 20,
-        army: [],
-        cards: [],
-        battleRuntime: {
-          battleIndex: 0,
-          initiallyDeployedUnitIds: [],
-          reserveUnitIds: [],
-          reservistPoolUnitIds: [],
-          deployedReservistUnitIds: [],
-          observedDeadUnitIds: [],
-          reinforcementSequence: 0,
-        },
-      },
-    };
+    state.undoStack = [undoCheckpoint(state, 20)];
 
     persistMatch(state);
     const loaded = loadMatch();
     expect(loaded?.game.winner).toBe('enemy');
-    expect(loaded?.undoCheckpoint?.run.goldTenths).toBe(20);
+    expect(loaded?.undoStack?.at(-1)?.run.goldTenths).toBe(20);
     expect(persistedMatchMatchesActivity(loaded!, 'lvl-1', 'run:first:battle:0')).toBe(true);
+  });
+
+  it('round-trips a whole Battle of Undo history in order', () => {
+    const state = fakeState();
+    state.undoStack = [10, 20, 30].map((gold) => undoCheckpoint(state, gold));
+
+    persistMatch(state);
+    expect(loadMatch()?.undoStack?.map((entry) => entry.run.goldTenths)).toEqual([10, 20, 30]);
+  });
+
+  it('sheds the oldest Undo history rather than failing the whole write on a full quota', () => {
+    // A real quota rejection leaves the PREVIOUS snapshot on disk, so a write that simply
+    // gives up resumes a board several moves stale. The position must land; the depth of
+    // the rewind is what may be traded away for it.
+    const state = fakeState();
+    state.undoStack = [1, 2, 3, 4, 5, 6, 7, 8].map((gold) => undoCheckpoint(state, gold * 10));
+    const real = store.setItem.bind(store);
+    let limit = 3;
+    store.setItem = (key: string, value: string) => {
+      const entries = (JSON.parse(value) as { undoStack?: unknown[] }).undoStack ?? [];
+      if (entries.length > limit) throw new Error('QuotaExceededError');
+      real(key, value);
+    };
+
+    persistMatch(state);
+    // Halving from 8 lands on 4, still over the limit, then 2 — the two most recent moves.
+    expect(loadMatch()?.undoStack?.map((entry) => entry.run.goldTenths)).toEqual([70, 80]);
+
+    // A board that cannot fit even with no history at all leaves the write undone, exactly
+    // as before: there is nothing left to trade.
+    limit = -1;
+    clearMatch();
+    persistMatch(state);
+    expect(loadMatch()).toBeNull();
   });
 
   it('leaves an existing save intact for the module-load placeholder (not started)', () => {
@@ -195,7 +236,7 @@ describe('match persistence', () => {
     store.setItem(KEY, JSON.stringify(old));
 
     expect(loadMatch()?.battleElapsed).toEqual({ elapsedMs: 0, startedAtMs: null });
-    expect(JSON.parse(store.getItem(KEY)!).version).toBe(3);
+    expect(JSON.parse(store.getItem(KEY)!).version).toBe(4);
     expect(JSON.parse(store.getItem(KEY)!).battleElapsed).toEqual({ elapsedMs: 0, startedAtMs: null });
   });
 
@@ -211,8 +252,31 @@ describe('match persistence', () => {
     // A string carried no notation and no ply, so it resumes as exactly what it was:
     // a prose row. Numbering restarts at the first move played after the resume.
     expect(resumed?.log).toEqual([{ text: 'Check!' }, { text: 'Skirmish begins.' }]);
-    expect(resumed?.undoCheckpoint?.log).toEqual([{ text: 'Skirmish begins.' }]);
-    expect(JSON.parse(store.getItem(KEY)!).version).toBe(3);
+    expect(resumed?.undoStack?.[0]?.log).toEqual([{ text: 'Skirmish begins.' }]);
+    expect(JSON.parse(store.getItem(KEY)!).version).toBe(4);
+  });
+
+  it('resumes a version-3 match with its one Undo as a one-deep history', () => {
+    const state = fakeState();
+    state.undoStack = [undoCheckpoint(state, 20)];
+    persistMatch(state);
+    const old = JSON.parse(store.getItem(KEY)!) as Record<string, unknown>;
+    const [only] = old.undoStack as unknown[];
+    store.setItem(KEY, JSON.stringify({ ...old, version: 3, undoStack: undefined, undoCheckpoint: only }));
+
+    // v3 could hold exactly one checkpoint and offered exactly one Undo. That is what a
+    // snapshot written then still means, so it resumes as a history one move deep.
+    expect(loadMatch()?.undoStack?.map((entry) => entry.run.goldTenths)).toEqual([20]);
+    expect(JSON.parse(store.getItem(KEY)!).version).toBe(4);
+    expect(JSON.parse(store.getItem(KEY)!)).not.toHaveProperty('undoCheckpoint');
+  });
+
+  it('resumes a version-3 match that never had an Undo with an empty history', () => {
+    persistMatch(fakeState());
+    const old = JSON.parse(store.getItem(KEY)!) as Record<string, unknown>;
+    store.setItem(KEY, JSON.stringify({ ...old, version: 3, undoStack: undefined, undoCheckpoint: null }));
+
+    expect(loadMatch()?.undoStack).toEqual([]);
   });
 
   it('banks a running elapsed anchor when it persists', () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { shouldLoadSkirmishWorldBackground, skirmishScreenClassName } from './Skirmish';
+import { runWorkspaceOwnsEnvironment } from './RunScreen';
 import { readFileSync } from 'node:fs';
 
 const skirmishSource = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
@@ -8,21 +9,27 @@ const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 
 describe('Skirmish world background ownership', () => {
   it('waits for the actual board choice before requesting ordinary ambience', () => {
-    expect(shouldLoadSkirmishWorldBackground(false, false)).toBe(false);
+    expect(shouldLoadSkirmishWorldBackground(false)).toBe(false);
   });
 
-  it('does not request ordinary ambience behind a complete pre-drawn board', () => {
-    expect(shouldLoadSkirmishWorldBackground(true, true)).toBe(false);
+  /**
+   * A pre-drawn plate used to waive this layer on the premise that it owns every environment
+   * pixel. It does not: the raster is a fixed world rectangle and the screen is not, so with
+   * no backdrop the camera had to be held inside the raster — no zoom-out range anywhere, and
+   * a cropped board on a wide-short window (ADR-0574).
+   */
+  it('requests ordinary ambience behind a pre-drawn board too', () => {
+    expect(shouldLoadSkirmishWorldBackground(true)).toBe(true);
     expect(skirmishShellSource).toContain(
       "className={`skirmish-screen${persistentViewportArtwork ? ' has-persistent-viewport-artwork' : ''} ${className}`.trim()}",
     );
-    expect(styleCss).toMatch(
+    expect(styleCss).not.toMatch(
       /\.skirmish-screen\.is-predrawn-board::before\s*\{[\s\S]*?content:\s*none;/,
     );
   });
 
   it('keeps ordinary ambience for a settled legacy board', () => {
-    expect(shouldLoadSkirmishWorldBackground(true, false)).toBe(true);
+    expect(shouldLoadSkirmishWorldBackground(true)).toBe(true);
   });
 });
 
@@ -41,6 +48,23 @@ describe('Skirmish screen class composition', () => {
   it('applies the pre-drawn rule with no phase class', () => {
     expect(skirmishScreenClassName(undefined, true)).toBe('is-predrawn-board');
     expect(skirmishScreenClassName(undefined, false)).toBe('');
+  });
+
+  it('drops the world backdrop behind a Run workspace that owns every environment pixel', () => {
+    expect(runWorkspaceOwnsEnvironment('victory')).toBe(true);
+    expect(runWorkspaceOwnsEnvironment('aftermath')).toBe(true);
+    expect(styleCss).toMatch(
+      /\.skirmish-screen\.run-workspace-owns-environment::before\s*\{[\s\S]*?content:\s*none;/,
+    );
+  });
+
+  it('keeps the world backdrop for phases whose workspace does not cover it', () => {
+    // Sectio yields .shell-workspace-fill to its retained room scene, so the backdrop is
+    // what remains behind the transparent parts of that scene.
+    for (const phase of ['sectio', 'commendatio', 'deployment', 'battle', 'bona-vacantia'] as const) {
+      expect(runWorkspaceOwnsEnvironment(phase)).toBe(false);
+    }
+    expect(runWorkspaceOwnsEnvironment(undefined)).toBe(false);
   });
 
   it('never lets a construction path opt back into the default world raster', () => {

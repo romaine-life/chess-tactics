@@ -3,6 +3,20 @@ import { useLayoutEffect, useRef, type ReactElement } from 'react';
 const FIT_ITERATIONS = 8;
 const DEFAULT_MIN_FONT_SIZE = 8;
 
+/**
+ * Read ONCE, at import time, when the document is small and nothing is waiting to paint.
+ *
+ * `document.fonts.ready` is not a free property read: it makes the font set settle its state,
+ * which forces a style recalc over the whole document. Reading it inside each label's layout
+ * effect meant every mount paid that recalc against whatever had just been inserted — and a
+ * label mounts alongside destinations like the Enchiridion's 284-card gallery, inside a commit
+ * the browser cannot paint through. It measured ~500ms there, on a call whose only purpose is
+ * "refit after webfonts land". Fonts become ready once per document, not once per label.
+ */
+const FONTS_READY: Promise<unknown> = typeof document !== 'undefined' && document.fonts
+  ? document.fonts.ready
+  : Promise.resolve();
+
 export function FittedTabLabel({ children }: { children: string }): ReactElement {
   const boxRef = useRef<HTMLSpanElement | null>(null);
   const textRef = useRef<HTMLElement | null>(null);
@@ -65,7 +79,7 @@ export function FittedTabLabel({ children }: { children: string }): ReactElement
     window.addEventListener('resize', fit);
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(fit);
     observer?.observe(box);
-    void document.fonts?.ready.then(() => {
+    void FONTS_READY.then(() => {
       if (!cancelled) fit();
     });
 

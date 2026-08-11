@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 const runScreen = readFileSync(new URL('./RunScreen.tsx', import.meta.url), 'utf8');
 const runArmyWorkspace = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
 const runExpunctioWorkspace = readFileSync(new URL('./RunExpunctioWorkspace.tsx', import.meta.url), 'utf8');
+const runAdlectioMark = readFileSync(new URL('./RunAdlectioMark.tsx', import.meta.url), 'utf8');
+const tilePreview = readFileSync(new URL('./TilePreview.tsx', import.meta.url), 'utf8');
 const runTitleBarChips = readFileSync(new URL('./RunTitleBarChips.tsx', import.meta.url), 'utf8');
 const titleBarControls = readFileSync(new URL('./shell/TitleBarControls.tsx', import.meta.url), 'utf8');
 const app = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8');
@@ -24,10 +26,14 @@ const runCardFace = readFileSync(new URL('./RunCardFace.tsx', import.meta.url), 
 const runBattlePreview = readFileSync(new URL('./RunBattlePreview.tsx', import.meta.url), 'utf8');
 const levelInfoCompact = readFileSync(new URL('./LevelInfoCompact.tsx', import.meta.url), 'utf8');
 const chromeDividedGrid = readFileSync(new URL('./shared/ChromeDividedGrid.tsx', import.meta.url), 'utf8');
+const chromeVerbRow = readFileSync(new URL('./shared/ChromeVerbRow.tsx', import.meta.url), 'utf8');
 const runDeploymentCardStack = readFileSync(new URL('./RunDeploymentCardStack.tsx', import.meta.url), 'utf8');
 const runLipsana = readFileSync(new URL('./Lipsana.tsx', import.meta.url), 'utf8');
 const runSelfInspection = readFileSync(new URL('./RunSelfInspection.tsx', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
+const runBattleRetryButton = readFileSync(new URL('./RunBattleRetryButton.tsx', import.meta.url), 'utf8');
+const runBattleUndoButton = readFileSync(new URL('./RunBattleUndoButton.tsx', import.meta.url), 'utf8');
+const runDeploymentRerollButton = readFileSync(new URL('./RunDeploymentRerollButton.tsx', import.meta.url), 'utf8');
 const skirmishShell = readFileSync(new URL('./SkirmishShell.tsx', import.meta.url), 'utf8');
 const runForm = readFileSync(new URL('./RunForm.tsx', import.meta.url), 'utf8');
 const skirmishBoard = readFileSync(new URL('../render/SkirmishBoard.tsx', import.meta.url), 'utf8');
@@ -129,7 +135,9 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).not.toMatch(/if \([^)]*phase === 'deployment'[\s\S]{0,200}return \(/);
     expect(skirmish).toContain('presentedDeploymentSurface');
     expect(skirmish).toContain('preserveBoardPresentation: true');
-    expect(skirmish).toContain("unitArrivals={runBattleReviewTerminal ? 'settled' : sceneActivated ? 'active' : 'pending'}");
+    // A terminal review — and an earlier half-move held up for reading — both keep their
+    // already-arrived position settled rather than replaying an entrance.
+    expect(skirmish).toContain("unitArrivals={runBattleReviewTerminal || reviewSurface ? 'settled' : sceneActivated ? 'active' : 'pending'}");
     expect(skirmish).toContain('revealTransition="scene"');
     expect(skirmishBoard).toContain("data-reveal-transition={revealTransition}");
     expect(skirmishBoard).toContain('data-unit-arrivals={unitArrivals}');
@@ -278,7 +286,41 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('<RunCardPile');
     expect(runCardPile).toContain('<RunCardBack');
     expect(runScreen).toContain('admitted by Adlectio and added to the Chartulary.');
-    expect(runScreen).toContain('All offered cards are in the Chartulary.');
+    // A Sectio admits one card. The count stands over the row for the whole visit and a padlock
+    // is laid on each survivor when the admission is spent; the two together are the whole
+    // statement, so nothing pops up to announce it.
+    expect(runScreen).toContain('They require compensation. Only one may be admitted.');
+    expect(runScreen).toContain('locked={adlectioSpent}');
+    expect(runScreen).toContain('disabled={adlectioSpent || run.goldTenths < offer.cost * GOLD_SCALE}');
+    // The kit's own lock, not a mark drawn for this row -- and through the same installed
+    // `app-ui` role every other mark on this screen resolves, not a second door to it.
+    expect(runScreen).toContain("const RUN_SECTIO_LOCK_ICON_ROLE = 'ui-kit-icons-lock-png';");
+    expect(runScreen).toContain('installedUiMedia(RUN_SECTIO_LOCK_ICON_ROLE)');
+    expect(runCardPile).toContain("data-run-card-pile-lock={sealed ? 'locked' : 'open'}");
+    // A locked offer stops asking: the drift and the gold emanation are settled through the
+    // seat's own registered vars and paused, not deleted, so a card caught mid-drift comes down
+    // onto its seat instead of snapping onto it.
+    expect(runCardPile).toContain('const sealed = covered && locked;');
+    expect(styleCss).toMatch(/\.run-card-pile\.is-locked\s*\{[\s\S]*?--run-card-float-rise:\s*0px;[\s\S]*?--run-card-glow:\s*0;/);
+    expect(styleCss).toMatch(/\.run-card-pile\.is-locked \.run-card-action\s*\{\s*animation-play-state:\s*paused\s*!important;/);
+    // A card you cannot take is not an error to be scolded for reaching toward.
+    expect(styleCss).toMatch(/\.run-card-action:disabled\s*\{[\s\S]*?cursor:\s*default;/);
+    // Supplied for the whole visit and CONCEALED until it locks, exactly as the back beneath it
+    // is: a lock mounted at the moment of locking is fetched then too, and the survivors of an
+    // Adlectio stand unmarked until it arrives.
+    expect(runScreen).toContain('lockMediaUrl={lockMediaUrl}');
+    // And it is PUT ON the card rather than switched on over it: it comes down onto the face and
+    // fades up. At the speed a Run card moves -- the hover RAISE exactly, same duration, same
+    // curve, and the same distance, so the Studio cannot tune the two of them apart.
+    expect(styleCss).toMatch(/\.run-card-pile-lock\s*\{[\s\S]*?opacity:\s*0;[\s\S]*?translate:\s*0 calc\(-1 \* var\(--run-card-hover-raise, 7px\)\);/);
+    expect(styleCss).toMatch(/\.run-card-pile-lock\.is-locked\s*\{[\s\S]*?opacity:\s*1;[\s\S]*?translate:\s*0 0;/);
+    expect(styleCss).toMatch(/\.run-card-pile-lock\s*\{[\s\S]*?transition:[\s\S]*?opacity var\(--run-card-raise-duration\) var\(--run-card-raise-ease\),[\s\S]*?translate var\(--run-card-raise-duration\) var\(--run-card-raise-ease\);/);
+    // The same two variables the hovered card's own raise is declared with -- one speed, named
+    // once, so neither gesture can drift away from the other.
+    expect(styleCss).toMatch(/\.run-card-alive \.run-card-action\s*\{[\s\S]*?translate var\(--run-card-raise-duration\) var\(--run-card-raise-ease\);/);
+    // The settle and the light it takes with it stay on the hover settle's own timing.
+    expect(styleCss).toMatch(/\.run-card-alive\s*\{[\s\S]*?--run-card-float-rise 240ms cubic-bezier\(0\.3, 0\.7, 0\.3, 1\),[\s\S]*?--run-card-glow 240ms cubic-bezier\(0\.3, 0\.7, 0\.3, 1\);/);
+    expect(runScreen).not.toContain('run-sectio-cards-empty');
     expect(runCardFlight).toContain('<RunCard card={flight.offer} mode="reference" />');
     expect(runCard).not.toContain('run-card-purchased-indicator');
   });
@@ -364,6 +406,25 @@ describe('Run chrome hierarchy', () => {
     expect(runExpunctioWorkspace).toContain("if (status === 'expuncted') return 'Athetized this visit';");
     expect(runExpunctioWorkspace).not.toContain("return 'Expunctio';");
     expect(runExpunctioWorkspace).toContain('className="run-expunctio-companion"');
+    // The gallery says which formations this visit admitted, because Reset Sectio takes back
+    // exactly those and nothing else on the tile reveals it.
+    expect(runExpunctioWorkspace).toContain('sectioAdmittedCardIds(run)');
+    // One component owns the line, so the Studio review mounts the real thing (ADR-0059) and the
+    // workspace cannot drift from what the owner judged.
+    expect(runExpunctioWorkspace).toContain('<RunAdlectioMarkLine />');
+    expect(runAdlectioMark).toContain('<span className="run-expunctio-visit-mark">');
+    expect(runAdlectioMark).toContain('Adlected this Sectio');
+    expect(styleCss).toMatch(/\.run-expunctio-visit-mark\s*\{[\s\S]*?color:\s*var\(--skirmish-ink\)/);
+    // No coin and no transaction mark in this line: the fee below it already paints the loss arrow
+    // and says what the card cost, so gold here says only what is already said.
+    expect(runAdlectioMark).not.toContain('RunGoldIcon');
+    expect(runExpunctioWorkspace).not.toContain('<RunGoldTransactionIcon');
+    // A review surface is a Studio category reached by clicking, never a review parameter on a
+    // player route (ADR-0058). Nothing in the Run may read one for this mark.
+    expect(runAdlectioMark).not.toContain('URLSearchParams');
+    expect(runAdlectioMark).not.toContain('Candidate=');
+    expect(tilePreview).toContain("id: 'adlectiomark', label: 'Adlectio Mark'");
+    expect(tilePreview).toContain('<AdlectioMarkReviewCatalog');
     expect(runExpunctioWorkspace).toContain('runCardFramePaintInsetRatios');
     expect(runExpunctioWorkspace).toContain('fillRole="outer"');
     expect(runExpunctioWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
@@ -379,7 +440,9 @@ describe('Run chrome hierarchy', () => {
     expect(skirmish).toContain("primaryClassName: 'skirmish-field'");
     expect(runScreen).toContain('className="run-meta-controls run-deployment-controls run-arrangement-controls"');
     expect(skirmish).toContain('<SkirmishBoard');
-    expect(skirmish).toContain('surfaceState={presentedDeploymentSurface}');
+    // One passive-position seam for the battlefield, with Deployment first in line: a move
+    // review of the live match may offer a board there, and never displaces this one.
+    expect(skirmish).toContain('surfaceState={presentedDeploymentSurface ?? reviewSurface}');
     expect(skirmish).not.toContain('cameraActive=');
     expect(runScreen).toContain('viewKey: runBattleActivityId(prepared.id, prepared.battleIndex)');
     expect(runScreen).toContain('gameForRunDeployment(prepared, level, layout, true)');
@@ -396,6 +459,24 @@ describe('Run chrome hierarchy', () => {
     expect(runDeploymentCardStack).not.toContain('SkirmishBoard');
     expect(runDeploymentCardStack).toContain('Draw automatically');
     expect(runDeploymentCardStack).toContain('data-deployment-center-deck');
+    // The deck empties as it DEALS. It used to count the hand arriving in Controls, two and a half
+    // seconds after the cards left, so it stood at full height and full number while the whole
+    // hand flew out of it and the last card never appeared to take it with it.
+    expect(runDeploymentCardStack).toContain('run.cards.length - departedCount');
+    expect(runDeploymentCardStack).not.toContain('run.cards.length - dealtCount');
+    expect(runScreen).toContain('departedCount={deckDeparted}');
+    expect(runScreen).toContain('onDeckDeparture={setDeckDeparted}');
+    expect(runScreen).not.toContain('dealtCount={dealProgress}');
+    // A pile with nothing in it draws nothing — the floor of one layer is what left a phantom deck
+    // standing on the table after its last card had gone.
+    expect(runDeploymentCardStack).toContain('if (layers < 1) return null;');
+    expect(runDeploymentCardStack).not.toContain('Math.max(1, centerCount)');
+    // Departures ride the deal's own timeline, not a wall clock a throttled tab would drift from.
+    expect(runDeploymentCardStack).toContain('onDeckDeparture(index + 1)');
+    expect(runDeploymentCardStack).not.toContain('scene.after(index * stagger');
+    expect(runDeploymentCardStack).toContain('const expectedAnimationCount = cards.length * 4 + 1');
+    // The swept remainder IS the deck, not a single card standing in for it.
+    expect(runDeploymentCardStack).toContain('<RunDeckPile count={undealtCardCount}');
     expect(runDeploymentCardStack).toContain('data-testid="deployment-deal"');
     expect(runDeploymentCardStack).toContain("deployment?.stage === 'awaiting-deal' || deployment?.stage === 'dealing'");
     expect(runDeploymentCardStack).toContain('data-deployment-discard-flight-card');
@@ -484,16 +565,22 @@ describe('Run chrome hierarchy', () => {
 
     expect(chromeSurfacePolicy).toContain("export const CHROME_LEAF_FILL_SURFACE = 'hybrid-wood-oak'");
     expect(houseSelect).toContain('fillSurface?: string;');
-    expect(houseSelect).toContain('data-chrome-fill-surface={fillSurface}');
+    // One props object for both forks — the framed trigger and the one seated in a divided cell —
+    // so a picker cannot wear the oak in one shape and lose it in the other.
+    expect(houseSelect).toContain("'data-chrome-fill-surface': fillSurface,");
     expect((runArmyWorkspace.match(/fillSurface=\{CHROME_LEAF_FILL_SURFACE\}/g) ?? [])).toHaveLength(3);
     expect(runArmyWorkspace).toContain("['--run-roster-filter-index' as string]: 2");
     expect(styleCss).toMatch(/\.run-roster-filters \.house-select\s*\{[\s\S]*?--chrome-surface-position-y:\s*calc\(var\(--run-roster-filter-index, 0\)/);
 
     expect(metaControls).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
     expect(metaControls).toContain('SECTIO_WORKSPACE_VIEWS.map((candidate, index) =>');
-    expect(metaControls).toContain("['--run-leaf-control-index' as string]: index + 1");
-    expect(metaControls).toContain("['--run-leaf-control-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 3");
-    expect(styleCss).toMatch(/\.run-meta-controls \[data-chrome-fill-surface\]\s*\{[\s\S]*?--chrome-surface-position-y:\s*calc\(var\(--run-leaf-control-index, 0\)/);
+    expect(metaControls).toContain("['--chrome-leaf-surface-index' as string]: index + 1");
+    expect(metaControls).toContain("['--chrome-leaf-surface-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 3");
+    // One derivation turns a renderer's phase index into the surface offset, for every leaf
+    // however it was painted — a named surface here, an adopted host's material rule
+    // elsewhere. A per-surface copy of the same calc is how the two drift apart.
+    expect(styleCss).toMatch(/\[data-chrome-fill-surface\],\s*\r?\n\[data-chrome-leaf-surface\] \[data-chrome-unit\]\s*\{\s*\r?\n\s*--chrome-surface-position-y:\s*calc\(var\(--chrome-leaf-surface-index, 0\) \* -1 \* var\(--chrome-leaf-surface-pitch\)\)/);
+    expect(styleCss).not.toMatch(/\.run-(?:meta-controls|army-profile) \[data-chrome-fill-surface\]/);
 
     expect(runArmyWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
     expect(runExpunctioWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
@@ -503,14 +590,77 @@ describe('Run chrome hierarchy', () => {
     expect(runTitleBarChips).not.toContain('data-chrome-fill-surface=');
     expect(titleBarControls).toContain('data-chrome-fill-surface={fillSurface}');
     expect(runExpunctioWorkspace).toContain('fillRole="outer"');
+    // The aftermath report is a structural box and takes the marble by NAMING the shared policy
+    // role, not by inheriting the scene's leaf adoption (ADR-0433/ADR-0557 — a box wears the
+    // marble, the verbs that close it wear the oak). Unfilled it read its ledger off the vista.
+    expect(runScreen).toMatch(/className="run-aftermath-report"\s*\r?\n\s*columns=\{verbColumns\(verbs\)\}\s*\r?\n\s*fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
     expect(styleCss).not.toMatch(/\.run-(?:roster-filters|meta-controls)[^}]*:nth-child/);
+  });
+
+  /**
+   * ADR-0557. The screens a Battle or a Run ENDS on are one family the player meets in one
+   * moment, so they adopt the leaf material together — a half-adopted family reads as a bug
+   * the first time a Battle is lost. Every one of them declares adoption with the single host
+   * attribute the role field excludes; a per-surface attribute would grow that exclusion list
+   * once per destination, which is what let the Controls panel's own oak go silently.
+   */
+  it('wears the leaf material on every screen a Battle or a Run ends on', () => {
+    for (const testId of ['run-battle-result', 'campaign-result', 'netplay-result']) {
+      // The won board and the lost board are both `run-battle-result`; both must adopt.
+      const adopted = skirmish.match(
+        new RegExp(`data-testid="${testId}"\\s*\\r?\\n?\\s*data-chrome-leaf-surface=""`, 'g'),
+      ) ?? [];
+      expect(adopted.length).toBe(testId === 'run-battle-result' ? 2 : 1);
+    }
+    // The dismissed netplay card leaves its exit behind; it is the same result, still standing.
+    expect(skirmish).toMatch(/role="status"\s*\r?\n\s*data-chrome-leaf-surface=""/);
+
+    // The two Run outcome scenes adopt from the VIEW the viewport already has, so a scene
+    // cannot be added to the family and forget (ADR-0063).
+    expect(runWorkspace).toContain("const RUN_OUTCOME_SCENE_VIEWS: readonly RunViewportSceneView[] = ['aftermath', 'victory']");
+    expect(runWorkspace).toContain("data-chrome-leaf-surface={RUN_OUTCOME_SCENE_VIEWS.includes(scene.view) ? '' : undefined}");
+
+    // A row of result actions is a repeated leaf collection: it phases from the action's
+    // authored seat, never from DOM position. The borrowed Run battle buttons forward the
+    // style for exactly that — annotating them any other way reskins them everywhere.
+    expect(skirmish).toContain('<RunBattleUndoButton testId="undo-run-move-result" style={leafSurfacePhase(0)} />');
+    expect(skirmish).toContain('style={leafSurfacePhase(1)}');
+    expect(skirmish).toContain('style={leafSurfacePhase(2)}');
+    // The result reports' verbs are a repeated leaf collection too, and the row that seats them
+    // phases each one from the index of the verb DATA — the same rule, owned once.
+    expect(chromeVerbRow).toContain('style: leafSurfacePhase(index),');
+    expect(chromeVerbRow).toContain("'data-chrome-fill-surface': CHROME_LEAF_FILL_SURFACE,");
+    expect(runScreen).not.toContain('leafSurfacePhase');
+    for (const button of [runBattleRetryButton, runBattleUndoButton, runDeploymentRerollButton]) {
+      expect(button).toContain('style?: CSSProperties;');
+      expect(button).toContain('style={style}');
+    }
+    expect(styleCss).not.toMatch(/\.(?:campaign-result-actions|run-result-verbs)[^}]*:nth-child/);
+
+    // A result report closes with its own verbs. They used to be a loose pair of framed buttons
+    // under the box — the vista showing through between the report and the thing it is read to
+    // decide, each button drawing a second frame inside the one already there. They are cells of
+    // the box's bottom row now, so nothing is left to hold to its own width beneath it.
+    expect(runScreen).not.toContain('run-victory-finish');
+    expect(runScreen).not.toContain('run-victory-actions');
+    expect(runScreen).not.toContain('run-aftermath-actions');
+    expect(styleCss).not.toContain('.run-victory-actions');
+    expect(styleCss).not.toContain('.run-aftermath-actions');
+    for (const panel of ['run-aftermath', 'run-victory']) {
+      expect(runScreen).toMatch(new RegExp(`className="${panel}-report"[\\s\\S]*?<ChromeVerbRow verbs=\\{verbs\\} className="run-result-verbs"`));
+    }
   });
 
   it('keeps Expunctio card-first and removes only complete held formations', () => {
     expect(runExpunctioWorkspace).toContain('<h2 id="run-expunctio-workspace-title">Expunctio</h2>');
     expect(runExpunctioWorkspace).toContain('Athetize one complete formation.');
     expect(runExpunctioWorkspace).toContain('Individual units cannot be removed from a held card.');
-    expect(runExpunctioWorkspace).toContain('Athetize removes this card and every attached unit as one formation.');
+    // The tile repeats nothing the face, the workspace copy or the action already says: no card
+    // name beside a face that prints one, no per-tile restatement of the Athetize rule, and no
+    // attached-unit count left over from the retired per-unit Alienatio (ADR-0511).
+    expect(runExpunctioWorkspace).not.toContain('attached unit${');
+    expect(runExpunctioWorkspace).not.toContain('runCardName');
+    expect(runExpunctioWorkspace).not.toContain('Athetize removes this card and every attached unit as one formation.');
     expect(runExpunctioWorkspace).toContain('<RunGoldTransactionAmount direction="loss"');
     expect(runExpunctioWorkspace).toContain('onExpunct(card.id)');
     expect(runScreen).toContain('<RunExpunctioWorkspace run={shellRun} onExpunct={expunctCard} />');
@@ -566,7 +716,11 @@ describe('Run chrome hierarchy', () => {
     // A junction caps a rail where it meets the box's own FRAME. Unframed there is no such frame,
     // so a boundary cap caps nothing and sits on the host's chrome as a stray atom.
     expect(chromeDividedGrid).toContain("nodes.filter((node) => node.inlineBoundary === 'internal')");
-    expect(chromeDividedGrid).toContain('const blockBoundaryNodes = framed ? topology : { ...topology, topNodes: [], bottomNodes: [] };');
+    // A vertical rail's frame caps also require a rail to actually ARRIVE at that edge — a grid
+    // whose first or last row spans every column has none, and the cap became an ornament sitting
+    // in a rail with nothing running through it.
+    expect(chromeDividedGrid).toContain('topNodes: framed && !rowSpansAllColumns(rows[0]) ? topology.topNodes : [],');
+    expect(chromeDividedGrid).toContain('bottomNodes: framed && !rowSpansAllColumns(rows[rows.length - 1]) ? topology.bottomNodes : [],');
     expect(styleCss).toMatch(
       /\.chrome-divided-grid\[data-chrome-grid-framed="false"\]\s*\{\s*overflow: hidden;/,
     );
@@ -688,8 +842,12 @@ describe('Run chrome hierarchy', () => {
     expect(levelInfoCompact).toContain('flagSrc={flagIconSrc(palettes.enemy)}');
     expect(levelInfoCompact).toContain("installedUiMedia('ui-kit-icons-game-wait-png')");
     expect(levelInfoCompact).toContain('useStrategikonCardsIcon()');
-    // The tile mark is a tile: the same installed grass surface the Level Editor paints.
-    expect(levelInfoCompact).toMatch(/studioFamilies\.find\(\(family\) => family\.id === 'grass'\)/);
+    // There is no tile mark, because there is no tile census: most levels are drawn from
+    // whole-board artwork, where a count of painted squares and a chip per terrain type describe
+    // nothing the reader can see. Board states its size and stops.
+    expect(levelInfoCompact).not.toMatch(/studioFamilies\.find\(\(family\) => family\.id === 'grass'\)/);
+    expect(levelInfoCompact).not.toContain('ce-li-chips');
+    expect(levelInfoCompact).not.toContain('ce-li-tile-icon');
     // The Battle mark is the Run's registered Battle icon, not a second drawing of a Battle.
     expect(runBattlePreview).toContain('<RunProgressIcon variant="battle"');
 
@@ -764,7 +922,8 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain("import { RunCard } from './RunCard';");
     expect(styleCss).toMatch(/\.run-card-action\s*\{[\s\S]*?aspect-ratio:\s*5 \/ 7;/);
     expect(styleCss).toMatch(/\.run-card-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,[\s\S]*?justify-content:\s*center;/);
-    expect(styleCss).toMatch(/\.run-card-pile > :is\(\.run-card-pile-back, \.run-card-offer\)\s*\{[\s\S]*?grid-column:\s*1;[\s\S]*?grid-row:\s*1;/);
+    // Back, face, and the padlock a spent Sectio lays on a survivor all occupy the ONE seat.
+    expect(styleCss).toMatch(/\.run-card-pile > :is\(\.run-card-pile-back, \.run-card-offer, \.run-card-pile-lock\)\s*\{[\s\S]*?grid-column:\s*1;[\s\S]*?grid-row:\s*1;/);
     // A covered pile paints no part of the card it conceals: the back's opaque
     // generated backdrop otherwise reads as a black edge around every offer.
     expect(styleCss).toMatch(/\.run-card-pile\.is-covered > \.run-card-pile-back\s*\{[\s\S]*?visibility:\s*hidden;/);
@@ -840,6 +999,7 @@ describe('Run chrome hierarchy', () => {
       /data-testid="run-battle-result"[\s\S]*?onClick=\{\(\) => runBattle\.onVictory\(\{[\s\S]*?\}\)\}/,
     )?.[0] ?? '';
 
+    expect(victoryBranch).toContain('data-chrome-leaf-surface=""');
     expect(victoryBranch).toContain('run-battle-victory-overlay');
     expect(victoryBranch).not.toContain('className="campaign-result ');
     expect(victoryBranch).toContain('role="status"');
@@ -874,13 +1034,26 @@ describe('Run chrome hierarchy', () => {
     expect(skirmish).toContain('useLayoutEffect(() => {');
     expect(skirmish).toContain("if (armAdminMode('win-battle')) adminWinBattle()");
     expect(runScreen).toContain('clearCraftedBattleResult({');
-    expect(runScreen).toContain('data-testid="run-aftermath-back"');
+    // Back is a verb of the report box, so its test id is declared with the verb; the row that
+    // seats it is what puts the attribute on the element.
+    expect(runScreen).toContain("testId: 'run-aftermath-back',");
+    expect(chromeVerbRow).toContain("'data-testid': verb.testId,");
     expect(runScreen).toContain("onReviewBattle={() => navigateRunView('battle-review')}");
     expect(runScreen).toContain("onReviewRewards={reviewingWonBattle ? () => navigateRunView('primary') : undefined}");
     expect(runScreen).toContain('loadReviewableRunBattleMatch(');
     expect(skirmish).toContain('? loadReviewableRunBattleMatch(levelId, activityId)');
     expect(runScreen).toContain("? { ...shellRun, phase: 'battle', aftermath: null }");
     expect(runScreen).toContain('clearMatch();');
+    // The won-board snapshot outlives the report's Continue, because the report itself is
+    // reachable from the Sectio it opens; the Sectio's Continue is what retires it (ADR-0568).
+    expect(runScreen).toMatch(/data-testid="continue-run-sectio"[\s\S]{0,400}?clearMatch\(\);/);
+    expect(runScreen).not.toMatch(/replace\(leaveAftermath\(run\)\);\s*\n\s*clearMatch\(\);/);
+    // Back to Victory is seated with Continue, and reopens the report without touching the
+    // Sectio standing behind it.
+    expect(runScreen).toContain('data-testid="review-run-victory"');
+    expect(runScreen).toContain('replace(reviewSectioBattleReport(run));');
+    expect(runScreen).toContain('const battleReport = sectioBattleReport(run);');
+    expect(runScreen).toContain('disabled={!battleReport}');
     expect(runScreen).toContain("data-run-controls-scroll={sectio ? 'scroll' : 'static'}");
     expect(styleCss).toMatch(/\.run-meta-controls\[data-run-controls-scroll="static"\]\s*\{[\s\S]*?overflow-y:\s*hidden;/);
 
@@ -899,10 +1072,24 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('replace(leaveAftermath(run));');
     expect(runScreen).not.toContain('run-aftermath-eyebrow');
     expect(runScreen).not.toContain('Conflict {progress.conflict} · Battle');
-    expect(styleCss).toMatch(/\.run-aftermath-workspace\s*\{[\s\S]*?container-type:\s*size;/);
-    expect(styleCss).toMatch(/\.run-aftermath-workspace-content\s*\{[\s\S]*?grid-template-rows:\s*minmax\(0, 1fr\) auto minmax\(0, 1fr\);/);
-    expect(styleCss).toMatch(/\.run-aftermath-head,[\s\S]*?\.run-aftermath-report,[\s\S]*?\.run-aftermath-actions\s*\{[\s\S]*?translate:\s*0 -5cqh;/);
-    expect(styleCss).toMatch(/\.run-aftermath-report\s*\{[\s\S]*?grid-row:\s*2;/);
+    // A Battle's Aftermath and a War's Victory are the same moment at two scales, so ONE set of
+    // rules composes both and the optical placement cannot drift apart between them (ADR-0456).
+    expect(styleCss).toMatch(/\.run-aftermath-workspace,\s*\.run-victory-workspace\s*\{[\s\S]*?container-type:\s*size;/);
+    expect(styleCss).toMatch(/\.run-aftermath-workspace-content,\s*\.run-victory-workspace-content\s*\{[\s\S]*?grid-template-rows:\s*minmax\(0, 1fr\) auto minmax\(0, 1fr\);/);
+    expect(styleCss).toMatch(/\.run-aftermath-head,\s*\.run-victory-head,\s*\.run-aftermath-report,\s*\.run-victory-report\s*\{[\s\S]*?translate:\s*0 -5cqh;/);
+    // The report is the whole slab now — its verbs are its bottom row — so both take the same
+    // grid row and the same zero padding, because a divided box's rails run its full inner width.
+    expect(styleCss).toMatch(/\.run-aftermath-report,\s*\.run-victory-report\s*\{\s*\r?\n\s*grid-row:\s*2;\s*\r?\n\s*padding:\s*0;/);
+    // Only the display heading may stand on the artwork; every factual line moved into the
+    // report box, because Victory's backdrop is a bright daylight sky.
+    expect(runScreen).toMatch(/<ChromeDividedGridRow spans="all" className="run-victory-record">[\s\S]*?run\.war\.description[\s\S]*?<\/ChromeDividedGridRow>/);
+    expect(runScreen).not.toMatch(/<h2>\{run\.war\.name\}<\/h2>/);
+    // Both report boxes name the structural marble. Naming no fill drops a box onto the inner
+    // role's TINT — a translucent field rather than an installed material, and unapproved paint
+    // no gate catches, because it arrives from the generated role CSS and not from style.css.
+    expect(runScreen).toMatch(/className="run-victory-report"\s*\r?\n\s*columns=\{verbColumns\(verbs\)\}\s*\r?\n\s*fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
+    // The aftermath report's own fill is pinned above, against the wrapping this file already
+    // expects. Asserting it a second time here only pinned a line break.
     expect(styleCss).toMatch(/\.run-screen\.has-lipsana \.run-aftermath-workspace-content\s*\{[\s\S]*?padding-block-start:\s*0;/);
 
     // The reward is reported in aftermath; restating it in Sectio remains retired.
@@ -916,9 +1103,24 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('canUndoRunBattleMove(latest, checkpoint)');
     expect(runScreen).toContain('const restored = undoRunBattleMove(latest, checkpoint);');
     expect(skirmish).toContain('setRunBattleUndoAdapter(runBattle?.undoAdapter ?? null)');
-    expect(gameStore).toContain('const undoCheckpoint = capturePlayerMoveUndo();');
+    expect(gameStore).toContain('const captured = capturePlayerMoveUndo();');
     expect(gameStore).toContain("log: extendLog(checkpoint.log, [logNote('Move undone — 10 gold paid.')])");
     expect(gameStore).toContain('commitPlayerMove(p, mv, type, true);');
-    expect(matchPersistence).toContain('undoCheckpoint: state.undoCheckpoint ?? null');
+    expect(matchPersistence).toContain('undoStack: state.undoStack ?? []');
+  });
+
+  it('keeps one checkpoint per played move and prices every step of the walk back', () => {
+    // The history is a stack the Battle grows a move at a time, and Undo pops it rather than
+    // emptying it, so the whole Battle is reachable a decision at a time (ADR-0556).
+    expect(gameStore).toContain('const undoStack = captured ? [...s.undoStack, captured] : [];');
+    expect(gameStore).toContain('const checkpoint = s.undoStack[s.undoStack.length - 1];');
+    expect(gameStore).toContain('undoStack: s.undoStack.slice(0, -1).map((older) => ({');
+    expect(gameStore).toContain('run: adapter.chargeEarlier(older.run),');
+    expect(runScreen).toContain('chargeEarlier: (checkpoint) => chargeRunBattleUndoCheckpoint(checkpoint),');
+    // The board store holds the history; only the Run names a price for it, so the store's
+    // view of run/model stays type-only and no gold arithmetic leaks into the board.
+    expect(gameStore).toContain(
+      "import type { RunBattleNotice, RunBattleUndoCheckpoint } from '../run/model';",
+    );
   });
 });

@@ -2,7 +2,7 @@ import { useEffect, useRef, type CSSProperties, type ReactElement, type ReactNod
 import { currentLiveMediaCatalog, liveMediaForSlot } from '@chess-tactics/board-render';
 import { KitScroll } from './KitScroll';
 import { HouseSelect } from './shared/HouseSelect';
-import { ChromeDivider, ShellControlsPanel, ShellWorkspace } from './shared/ChromeBox';
+import { ShellControlsPanel, ShellWorkspace } from './shared/ChromeBox';
 import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
 import type { LevelEditorLayerKey } from './levelEditorRoute';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
@@ -132,8 +132,10 @@ export function LevelEditorControlsPanel({
             />
           </CyclePicker>
       )}
-    >
-
+      // The break under the action dock belongs to the PANEL: the rail ends where the panel's
+      // own frame is, and only the panel knows where that is. Handing it the fixed section is
+      // what asks for it — there is nothing here to place, and so nothing to place wrongly.
+      fixed={(
         <section className="skirmish-card le-actions-dock" aria-label="Editor actions">
           <h2>Actions</h2>
           <div className="le-seg le-seg-icons le-action-toolbar" role="toolbar" aria-label="Editor tools and history">
@@ -160,11 +162,8 @@ export function LevelEditorControlsPanel({
           {brushIconReviewStatus ? <div className="le-statusline" role="status">{brushIconReviewStatus}</div> : null}
           {extraActions ? <div className="le-action-primary-row">{playAction}{extraActions}</div> : playAction}
         </section>
-
-        <div className="le-control-divider-host" aria-hidden="true">
-          <ChromeDivider role="outer" />
-        </div>
-
+      )}
+    >
         <KitScroll className={scrollClass}>
           {children}
         </KitScroll>

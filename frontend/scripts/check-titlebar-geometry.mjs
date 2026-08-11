@@ -66,8 +66,16 @@ try {
     const divider = document.querySelector('.app-titlebar-persistent-divider');
     const outerDivider = document.querySelector('.app-shell-outer-divider');
     const contributed = [...document.querySelectorAll('.app-titlebar-contributed-controls > .titlebar-control')];
-    const persistent = [...document.querySelectorAll('.header-account-cluster .titlebar-control')];
-    const controls = [...contributed, ...persistent];
+    // The invariant cluster is ONE divided box now, so the lane holds it as a single member: its
+    // frame is what must clear the divider and the viewport edge by the canonical gap. The seats
+    // inside it are measured against each other and against the box, never against the lane —
+    // their edges are the box's rails, which is the whole point of the object.
+    const cluster = document.querySelector('.header-account-cluster');
+    const seats = [...document.querySelectorAll('.header-account-cluster .titlebar-control')];
+    const clusterRails = [...document.querySelectorAll('.header-account-cluster .chrome-divided-grid__vertical-rail')];
+    const framedSeats = [...document.querySelectorAll('.header-account-cluster [data-chrome-unit]')]
+      .map((element) => element.getAttribute('aria-label') ?? element.className);
+    const controls = [...contributed, cluster];
     controls.forEach((element, paintIndex) => {
       element.dataset.titlebarPaintProbeIndex = String(paintIndex);
     });
@@ -92,11 +100,31 @@ try {
         paintIndex: Number(element.dataset.titlebarPaintProbeIndex),
         ...rect(element),
       })),
-      persistent: persistent.map((element) => ({
-        label: element.getAttribute('aria-label') ?? element.title,
-        paintIndex: Number(element.dataset.titlebarPaintProbeIndex),
-        ...rect(element),
-      })),
+      cluster: {
+        id: 'account-cluster-box',
+        paintIndex: Number(cluster.dataset.titlebarPaintProbeIndex),
+        ...rect(cluster),
+      },
+      seats: seats.map((element) => {
+        const box = rect(element);
+        // What the compartment actually SHOWS. A rail is drawn on the grid line and straddles
+        // it, so it covers half its width from the cell on either side; the cell's own rect
+        // says nothing about that. Measuring the cell is what let the middle seat ship 3.5px
+        // narrower than the two beside it while every rect read a tidy 38.
+        let left = box.left;
+        let right = box.right;
+        for (const rail of clusterRails.map(rect)) {
+          if (rail.right > box.left && rail.right < box.right) left = Math.max(left, rail.right);
+          if (rail.left < box.right && rail.left > box.left) right = Math.min(right, rail.left);
+        }
+        return {
+          label: element.getAttribute('aria-label') ?? element.title,
+          ...box,
+          openingWidth: right - left,
+          openingHeight: box.height,
+        };
+      }),
+      framedSeats,
     };
   });
 
@@ -106,7 +134,7 @@ try {
       failures.push(`${relation}: expected ${expected}px, received ${actual}px`);
     }
   };
-  const controls = [...geometry.contributed, ...geometry.persistent];
+  const controls = [...geometry.contributed, geometry.cluster];
   near(geometry.brandHome.top, geometry.brandMark.top, 'brand home top to shield');
   near(geometry.brandHome.right, geometry.brandMark.right, 'brand home right to shield');
   near(geometry.brandHome.bottom, geometry.brandMark.bottom, 'brand home bottom to shield');
@@ -230,8 +258,30 @@ try {
   if (geometry.contributed.length) {
     near(geometry.divider.left - geometry.contributed.at(-1).right, geometry.expectedGap, 'contributed control to divider');
   }
-  near(geometry.persistent[0].left - geometry.divider.right, geometry.expectedGap, 'divider to persistent control');
-  near(geometry.bar.right - geometry.persistent.at(-1).right, geometry.expectedGap, 'last control to viewport edge');
+  near(geometry.cluster.left - geometry.divider.right, geometry.expectedGap, 'divider to cluster box');
+  near(geometry.bar.right - geometry.cluster.right, geometry.expectedGap, 'cluster box to viewport edge');
+
+  // Inside the box the seats answer to the box, not to the lane: every one shares the box's top
+  // and bottom, and none of them carries a chrome unit of its own — a registered unit is what
+  // brings a frame, and a frame in here draws a second edge a few pixels inside the box's.
+  if (geometry.framedSeats.length) {
+    failures.push(`cluster seats must not register their own chrome frame: ${geometry.framedSeats.join(', ')}`);
+  }
+  if (!geometry.seats.length) {
+    failures.push('the invariant cluster box rendered no seats');
+  }
+  for (const seat of geometry.seats) {
+    near(seat.top, geometry.seats[0].top, `cluster seat "${seat.label}" top alignment`);
+    near(seat.bottom, geometry.seats[0].bottom, `cluster seat "${seat.label}" bottom alignment`);
+    if (seat.left < geometry.cluster.left - tolerance || seat.right > geometry.cluster.right + tolerance) {
+      failures.push(`cluster seat "${seat.label}" escapes the box it is a compartment of`);
+    }
+    // The compartment is what the eye compares, and every one of them is the same SQUARE. A cell
+    // with a rail on both sides shows less of itself than one with a rail on one side, so equal
+    // tracks give unequal compartments — measure the opening, never the cell.
+    near(seat.openingWidth, seat.openingHeight, `cluster seat "${seat.label}" opening is square`);
+    near(seat.openingWidth, geometry.seats[0].openingWidth, `cluster seat "${seat.label}" opening width`);
+  }
 
   const summary = {
     viewport: `${width}x${height}`,
@@ -255,8 +305,10 @@ try {
     contributedToDivider: geometry.contributed.length
       ? geometry.divider.left - geometry.contributed.at(-1).right
       : null,
-    dividerToPersistent: geometry.persistent[0].left - geometry.divider.right,
-    trailingEdge: geometry.bar.right - geometry.persistent.at(-1).right,
+    dividerToCluster: geometry.cluster.left - geometry.divider.right,
+    trailingEdge: geometry.bar.right - geometry.cluster.right,
+    clusterBox: geometry.cluster,
+    clusterSeats: geometry.seats,
   };
 
   if (failures.length) {

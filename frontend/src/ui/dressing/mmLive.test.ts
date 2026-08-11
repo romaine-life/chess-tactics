@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { MM_LIVE } from './mmLive';
+import { MM_LIVE, MM_LABEL_LIVE, cssLen } from './mmLive';
 
 // ADR-0057 rot guard: MM_LIVE hand-mirrors literals baked into style.css (the tuner can't
 // read CSS source at runtime). This test re-derives each value from the stylesheet, so the
@@ -19,6 +19,22 @@ function firstBlock(selector: string): string {
   const open = css.indexOf('{', start);
   const close = css.indexOf('}', open); // style.css rules are flat — no nesting
   return css.slice(open + 1, close);
+}
+
+/** Every `selector {` rule body, in source order — for selectors that carry more than one rule. */
+function blocksFor(selector: string): string[] {
+  const out: string[] = [];
+  let from = 0;
+  for (;;) {
+    const start = css.indexOf(`${selector} {`, from);
+    if (start < 0) break;
+    const open = css.indexOf('{', start);
+    const close = css.indexOf('}', open);
+    out.push(css.slice(open + 1, close));
+    from = close;
+  }
+  expect(out.length, `style.css should contain a "${selector} {" rule`).toBeGreaterThan(0);
+  return out;
 }
 
 describe('MM_LIVE mirrors the baked menu/settings-rail chrome in style.css', () => {
@@ -62,6 +78,55 @@ describe('MM_LIVE mirrors the baked menu/settings-rail chrome in style.css', () 
 
   it('textX: the label nudge', () => {
     expect(firstBlock('.settings-tab > span:not(.settings-tab-icon)')).toContain(`translateX(${MM_LIVE.textX}px)`);
+  });
+
+  it('label shadow: the .settings-tab strong rule (the tab label + settings row title share it)', () => {
+    // firstBlock finds the FIRST `.settings-tab strong {` — the grouped
+    // `.settings-row h4, .settings-tab strong` colour/shadow rule. The later same-named rule
+    // (font-size / letter-spacing / text-transform) carries no shadow.
+    const { shadowX, shadowY, shadowBlur, shadowColor } = MM_LABEL_LIVE;
+    expect(firstBlock('.settings-tab strong'))
+      .toContain(`text-shadow: ${cssLen(shadowX)} ${cssLen(shadowY)} ${cssLen(shadowBlur)} ${shadowColor}`);
+  });
+
+  it('label stroke: one token, and every rule that wears the outline reads it', () => {
+    // Width and ink live on --menu-label-stroke-*, so the rail tabs, the destination slabs and the
+    // Campaign rail's padding gutter cannot drift apart. MM_LABEL_LIVE mirrors the token.
+    expect(MM_LABEL_LIVE.outline).toBe('stroke');
+    expect(css).toContain(`--menu-label-stroke-w: ${MM_LABEL_LIVE.strokeW}px`);
+    expect(css).toContain(`--menu-label-stroke-ink: ${MM_LABEL_LIVE.strokeColor}`);
+
+    const OUTLINE = '-webkit-text-stroke: var(--menu-label-stroke-w) var(--menu-label-stroke-ink)';
+    const stroked = blocksFor('.settings-tab strong').filter((b) => b.includes('-webkit-text-stroke'));
+    expect(stroked, 'exactly one .settings-tab strong rule should carry the outline').toHaveLength(1);
+    expect(stroked[0]).toContain(OUTLINE);
+    // Without this the stroke eats inward from the glyph outline and thins the shipped weight.
+    expect(stroked[0]).toContain('paint-order: stroke fill');
+
+    // The Run choice slabs behind PLAY wear the same one, read from the same token.
+    const dest = firstBlock('.play-choice-row h4');
+    expect(dest).toContain(OUTLINE);
+    expect(dest).toContain('paint-order: stroke fill');
+  });
+
+  it('label stroke: the label boxes do not clip it away', () => {
+    // A stroke paints outside the text box and the ink starts flush against that box's left edge,
+    // so `overflow: hidden` here shears the outline off the first letter of every word — the exact
+    // defect this pairing exists to prevent. A one-line label does not clip at all; a two-line one
+    // must, or a long campaign name runs out of its tab, so it buys room with an apron instead.
+    expect(firstBlock('.settings-tab-label')).toContain('overflow: visible');
+    expect(firstBlock('.settings-tab-label strong')).toContain('overflow: visible');
+    // The apron belongs to the shared copy block and to its children TOGETHER. It lived on the
+    // Campaign rail's label alone once and was defeated anyway: the copy block above it is the
+    // outer clipper and had no room of its own, so the Editor's War and Levels tabs still lost the
+    // left of every word. Both halves, or neither works.
+    const copy = firstBlock('.apparatus-tab-copy');
+    expect(copy).toContain('overflow: hidden');
+    expect(copy).toContain('padding-inline-start: var(--tab-label-stroke-apron)');
+    expect(copy).toContain('margin-inline-start: calc(-1 * var(--tab-label-stroke-apron))');
+    const line = firstBlock('.apparatus-tab-copy > strong');
+    expect(line).toContain('padding-inline-start: var(--tab-label-stroke-apron)');
+    expect(line).toContain('margin-inline-start: calc(-1 * var(--tab-label-stroke-apron))');
   });
 
   it('gap: a representative value inside the rail clamp()', () => {

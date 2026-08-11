@@ -1,6 +1,6 @@
 import type { Campaign, Level } from '../core/level';
 import type { PersistedMatch } from '../game/matchPersistence';
-import { ATARAXIA_BY_TIER, formatGold, runBattleActivityId, type RunDocument } from '../run/model';
+import { ATARAXIA_BY_TIER, formatCardCount, formatGold, runBattleActivityId, runHeldCardCount, type RunDocument } from '../run/model';
 import { playContinueSelectorHref, type PlayContinueChoice } from './playHubRoute';
 import { playSkirmishLevelHref } from './skirmishMaps';
 import { playModeEntryEnabled } from './playModeAvailability';
@@ -27,7 +27,9 @@ function parsedTime(value: string | undefined): number {
   return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
 }
 
-function runPhase(run: RunDocument): string {
+/** Where a Run stands, in one line. Continue reads it as Progress; Run adoption reads it to
+ *  tell two live Runs apart, which is the same sentence and must not be written twice. */
+export function runPhaseLabel(run: RunDocument): string {
   return run.phase === 'battle'
     ? `Battle ${run.battleIndex + 1} of ${run.war.battles.length}`
     : run.phase === 'aftermath'
@@ -57,7 +59,7 @@ export function continueInventory(
   const activities = new Map<PlayContinueChoice, ContinueActivity>();
 
   if (run && playModeEntryEnabled('run')) {
-    const phase = runPhase(run);
+    const phase = runPhaseLabel(run);
     activities.set('run', {
       mode: 'run',
       summary: `${run.war.name} · ${phase}`,
@@ -67,7 +69,7 @@ export function continueInventory(
       facts: [
         { label: 'War', value: run.war.name },
         { label: 'Progress', value: phase },
-        { label: 'Army', value: `${run.army.length} units` },
+        { label: 'Army', value: formatCardCount(runHeldCardCount(run)) },
         { label: 'Gold', value: formatGold(run.goldTenths) },
         { label: 'Ataraxia', value: ATARAXIA_BY_TIER[run.ataraxiaTier].label },
       ],

@@ -1,5 +1,12 @@
 import { TILE_STEP_X, TILE_STEP_Y } from '@chess-tactics/board-render';
-import { snapToTier, stepTier, zoomTierRange } from '../../game/zoomTiers';
+import {
+  coverageTier,
+  snapToTier,
+  stepTier,
+  tierForZoom,
+  zoomForTier,
+  zoomTierRange,
+} from '../../game/zoomTiers';
 import {
   useLayoutEffect,
   useRef,
@@ -25,6 +32,18 @@ export interface ViewPanePoint {
 export interface ViewPaneViewportSize {
   width: number;
   height: number;
+}
+
+/**
+ * The rectangle coverage is enforced on, in the pane's own local units.
+ *
+ * It is usually the stage itself, but a full-bleed board deliberately paints past its
+ * measured stage and is cut only by an ancestor's clip, so the two differ there and the
+ * offset says where the visible rectangle sits relative to the stage centre.
+ */
+export interface ViewPaneCoverViewport extends ViewPaneViewportSize {
+  offsetX?: number;
+  offsetY?: number;
 }
 
 export function clientDeltaToLocal(
@@ -79,13 +98,53 @@ interface PanHalfPlane {
   threshold: number;
 }
 
-function viewportCorners(viewport: ViewPaneViewportSize): ViewPanePoint[] {
+function viewportCorners(viewport: ViewPaneCoverViewport): ViewPanePoint[] {
+  const offsetX = viewport.offsetX ?? 0;
+  const offsetY = viewport.offsetY ?? 0;
   return [
-    { x: -viewport.width / 2, y: -viewport.height / 2 },
-    { x: viewport.width / 2, y: -viewport.height / 2 },
-    { x: viewport.width / 2, y: viewport.height / 2 },
-    { x: -viewport.width / 2, y: viewport.height / 2 },
+    { x: offsetX - viewport.width / 2, y: offsetY - viewport.height / 2 },
+    { x: offsetX + viewport.width / 2, y: offsetY - viewport.height / 2 },
+    { x: offsetX + viewport.width / 2, y: offsetY + viewport.height / 2 },
+    { x: offsetX - viewport.width / 2, y: offsetY + viewport.height / 2 },
   ];
+}
+
+/**
+ * The rectangle a viewer can actually SEE this pane's art in, in the pane's local units.
+ *
+ * The stage is the MEASURED drawable viewport, and for a framed viewer it is also the clip,
+ * so the two agree. The Play board deliberately does not clip at its stage — it floats past
+ * it and is cut only further up (see `style.css`, "Full-bleed board") — so there the two
+ * differ and the wider one is what a player sees.
+ *
+ * But "wider" stops at the board's own ALLOCATION, not at the window. The screen rectangle
+ * includes the strips under the opaque title bar and the Controls rail, and a camera made to
+ * keep those inside the painting is buying coverage for pixels nobody can see, at the price
+ * of the pixels they can — the rail is on the right, which is exactly where the board was
+ * being cut. `[data-shell-viewport-primary]` is that allocation, and the shell already marks
+ * it, so this asks the DOM rather than hard-coding a chrome inset that could drift.
+ */
+export function coverageViewportForStage(stage: HTMLElement): ViewPaneCoverViewport {
+  const local = { width: stage.clientWidth, height: stage.clientHeight };
+  const stageRect = stage.getBoundingClientRect();
+  // The whole composition may be uniformly scaled; pan and zoom are in local units, so the
+  // region has to come back through that same scale before it can be compared with them.
+  const scale = stageRect.width > 0 && local.width > 0 ? stageRect.width / local.width : 1;
+  let clip = stage.closest<HTMLElement>('[data-shell-viewport-primary]')?.getBoundingClientRect()
+    ?? null;
+  for (let node: HTMLElement | null = stage; node && !clip; node = node.parentElement) {
+    const style = getComputedStyle(node);
+    if (style.overflowX !== 'visible' || style.overflowY !== 'visible') {
+      clip = node.getBoundingClientRect();
+    }
+  }
+  if (!clip || scale <= 0) return local;
+  return {
+    width: clip.width / scale,
+    height: clip.height / scale,
+    offsetX: (clip.left + clip.width / 2 - (stageRect.left + stageRect.width / 2)) / scale,
+    offsetY: (clip.top + clip.height / 2 - (stageRect.top + stageRect.height / 2)) / scale,
+  };
 }
 
 /**
@@ -97,7 +156,7 @@ function feasiblePanRegion({
   polygon,
   zoom,
 }: {
-  viewport: ViewPaneViewportSize;
+  viewport: ViewPaneCoverViewport;
   polygon: readonly ViewPanePoint[];
   zoom: number;
 }): ViewPanePoint[] {
@@ -211,7 +270,7 @@ function viewportCoveredAtPan({
   zoom,
   pan,
 }: {
-  viewport: { width: number; height: number };
+  viewport: ViewPaneCoverViewport;
   polygon: readonly ViewPanePoint[];
   zoom: number;
   pan: ViewPanePoint;
@@ -235,7 +294,7 @@ export function constrainPanToCoverViewport({
   from,
   to,
 }: {
-  viewport: { width: number; height: number };
+  viewport: ViewPaneCoverViewport;
   polygon: readonly ViewPanePoint[];
   zoom: number;
   from: ViewPanePoint;
@@ -283,19 +342,6 @@ export function exceedsViewPanePanThreshold(deltaX: number, deltaY: number): boo
  * the stable floor. Pan is reclamped separately when zoom changes.
  */
 /**
- * The zoomed-OUT limit a level offers, as a tier.
- *
- * This used to binary-search for the smallest zoom at which the board art still
- * COVERED the viewport, and clamp the camera up to meet it. That asked the wrong
- * question: a level whose art stops at its own edge could not be zoomed out to see
- * itself, the answer was a per-window float nobody chose, and it is where an
- * opening zoom like 121% came from.
- *
- * The question now is whether the level FITS. Zooming out ends with the whole board
- * visible and never further, and the answer is a rung on the global ladder rather
- * than a number derived per window.
- */
-/**
  * A board cell's on-screen footprint at zoom 1, which is what the closest tier is
  * expressed in: the ladder stops zooming in once about two cells fill the frame.
  */
@@ -311,13 +357,37 @@ function closestTierFor(viewport: { width: number; height: number } | null): num
   }).inner;
 }
 
+function polygonBoundingBox(polygon: readonly ViewPanePoint[]): { width: number; height: number } {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const point of polygon) {
+    minX = Math.min(minX, point.x);
+    minY = Math.min(minY, point.y);
+    maxX = Math.max(maxX, point.x);
+    maxY = Math.max(maxY, point.y);
+  }
+  return { width: maxX - minX, height: maxY - minY };
+}
+
+/**
+ * The SAFETY floor: the furthest-out rung at which the visible rectangle is still entirely
+ * inside the level's camera boundary, so no zoom reaches world the level never promised to
+ * paint (ADR-0301).
+ *
+ * The answer is a rung on the global ladder rather than the per-window float this once
+ * binary-searched for — that float is where an opening zoom like 121% came from, and
+ * quantising it is what fixed that. What the ladder must NOT do is answer the opposite
+ * question; see `zoomTierRange` for the usefulness limit this composes with.
+ */
 export function minimumZoomToCoverViewport({
   viewport,
   polygon,
   minZoom,
   maxZoom,
 }: {
-  viewport: { width: number; height: number };
+  viewport: ViewPaneCoverViewport;
   polygon: readonly ViewPanePoint[];
   minZoom: number;
   maxZoom: number;
@@ -330,21 +400,42 @@ export function minimumZoomToCoverViewport({
     || !Number.isFinite(viewport.height)
     || polygon.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y))
   ) return snapToTier(Math.min(maxZoom, Math.max(0.01, minZoom)));
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const point of polygon) {
-    minX = Math.min(minX, point.x);
-    minY = Math.min(minY, point.y);
-    maxX = Math.max(maxX, point.x);
-    maxY = Math.max(maxY, point.y);
+  // The bounding box is exact for a rectangular boundary and OPTIMISTIC for anything else:
+  // an accepted-art polygon clipped to a corner covers less than the box around it, and a
+  // rung chosen from the box would leave that corner uncovered. Step in until a legal pan
+  // actually exists, so the returned rung is honest for a boundary of any convex shape.
+  let zoom = coverageTier({ viewport, boundary: polygonBoundingBox(polygon) });
+  for (let step = 0; step < 64; step += 1) {
+    if (feasiblePanRegion({ viewport, polygon, zoom }).length) break;
+    const next = zoomForTier(tierForZoom(zoom) + 1);
+    if (next > COVER_SEARCH_MAX_ZOOM) break;
+    zoom = next;
   }
-  return zoomTierRange({
-    viewport,
-    levelBox: { width: maxX - minX, height: maxY - minY },
-    cell: BOARD_CELL_SIZE,
-  }).outer;
+  return zoom;
+}
+
+/**
+ * How far out this pane may go: zooming out stops where the view reaches the edge of the box.
+ *
+ * That is the whole rule. There is deliberately no second behaviour, no artwork override and
+ * no condition on how the box came to exist — every level has one, it is the furthest a
+ * player may see, and an author moves it by dragging it. A camera whose limit depends on
+ * which of several rules a level qualifies for cannot be reasoned about from the screen, and
+ * the owner has to reconstruct the implementation to understand a zoom control (ADR-0574).
+ */
+export function boardZoomFloor({
+  viewport,
+  coverPolygon,
+  minZoom,
+  maxZoom,
+}: {
+  viewport: ViewPaneCoverViewport;
+  coverPolygon?: readonly ViewPanePoint[];
+  minZoom: number;
+  maxZoom: number;
+}): number {
+  if (!coverPolygon) return minZoom;
+  return minimumZoomToCoverViewport({ viewport, polygon: coverPolygon, minZoom, maxZoom });
 }
 
 export function ViewPane({
@@ -356,7 +447,7 @@ export function ViewPane({
   maxZoom,
   onZoomChange,
   onPanChange,
-  coverPolygon,
+  coverPolygon,
   onMinimumZoomChange,
   onViewportSizeChange,
   onViewInteraction,
@@ -373,8 +464,13 @@ export function ViewPane({
   maxZoom: number;
   onZoomChange: (zoom: number) => void;
   onPanChange: (pan: { x: number; y: number }) => void;
-  /** Convex content boundary that must continue covering the entire viewport. */
+  /**
+   * Convex content boundary that must continue covering the entire visible rectangle.
+   * Omitted when coverage is unconditional — a viewport-locked backdrop paints wherever
+   * the camera goes, so there is nothing for a boundary to protect.
+   */
   coverPolygon?: readonly ViewPanePoint[];
+  /** The level's own extent, so zooming out ends with the whole of it visible. */
   /** Reports the viewport-derived floor so external steppers clamp identically to the wheel. */
   onMinimumZoomChange?: (zoom: number) => void;
   /** Reports the live drawable viewport used by projection-aware editor actions. */
@@ -384,9 +480,11 @@ export function ViewPane({
   onAssetClick?: (assetId: string) => void;
   /**
    * A secondary press that released without panning. The drag stays pan-only (ADR-0128); a
-   * press that never moved carried no navigation, so a viewport owner may claim it for a
-   * NON-DESTRUCTIVE mode change. Never bind content mutation here — the threshold that tells
-   * this apart from a pan is exactly what ADR-0128 refused to put in front of an erase.
+   * press that never moved carried no navigation, so a viewport owner may claim it for a mode
+   * change, or for taking back the player's own uncommitted intent — the formation still on the
+   * cursor, the premove chain still queued (ADR-0550). Never bind authored content or a
+   * committed move here: the threshold that tells this apart from a pan is exactly what
+   * ADR-0128 refused to put in front of an erase.
    */
   onSecondaryClick?: () => void;
   /** Play fills its live board allocation; fixed previews retain the canonical aspect. */
@@ -409,8 +507,12 @@ export function ViewPane({
   } | null>(null);
   const automaticFloorZoomRef = useRef<number | null>(null);
   const lastViewportSizeRef = useRef<ViewPaneViewportSize | null>(null);
+  const coverViewportRef = useRef<ViewPaneCoverViewport | null>(null);
   const didDragRef = useRef(false);
   const [resolvedMinZoom, setResolvedMinZoom] = useState(minZoom);
+  // Pan is clamped against the same visible rectangle the floor is derived from, so a drag
+  // cannot walk out of a boundary the zoom limit is busy keeping the camera inside.
+  const [coverViewport, setCoverViewport] = useState<ViewPaneCoverViewport | null>(null);
   // The zoomed-IN limit is the ladder's closest tier, not a fixed cap. An authored
   // per-level limit still applies when it is tighter; nothing else narrows it.
   const resolvedMaxZoom = Math.max(
@@ -434,30 +536,50 @@ export function ViewPane({
         lastViewportSizeRef.current = viewport;
         onViewportSizeChange?.(viewport);
       }
-      // The zoom FLOOR stays on the pane. Deriving it from the column would price the wider
-      // contract into how far out a level can be seen, and a tightly authored camera box would
-      // simply lose zoom range — the column is an opportunistic upgrade, never a toll.
-      const next = coverPolygon
-        ? minimumZoomToCoverViewport({
-            viewport,
-            polygon: coverPolygon,
-            minZoom,
-            maxZoom: Math.max(maxZoom, COVER_SEARCH_MAX_ZOOM),
-          })
-        : minZoom;
+      // The zoom FLOOR is asked of the rectangle art is VISIBLE in, which for a full-bleed
+      // board is wider than the stage. Asking the stage instead leaves the bleed answerable
+      // to no boundary at all, and every pixel of it a player can see is one the level never
+      // had to paint. A wider window therefore costs zoom range rather than showing black —
+      // that is the trade, and it is the one the boundary exists to make.
+      const cover = coverageViewportForStage(stage);
+      const previousCover = coverViewportRef.current;
+      if (
+        !previousCover
+        || previousCover.width !== cover.width
+        || previousCover.height !== cover.height
+        || previousCover.offsetX !== cover.offsetX
+        || previousCover.offsetY !== cover.offsetY
+      ) {
+        coverViewportRef.current = cover;
+        setCoverViewport(cover);
+      }
+      const next = boardZoomFloor({
+        viewport: cover,
+        coverPolygon,
+        minZoom,
+        maxZoom: Math.max(maxZoom, COVER_SEARCH_MAX_ZOOM),
+      });
       setResolvedMinZoom((current) => Math.abs(current - next) < 1e-9 ? current : next);
     };
     updateMinimum();
     const observer = new ResizeObserver(updateMinimum);
     observer.observe(stage);
+    // A full-bleed board's clip is an ancestor that can resize without the stage changing at
+    // all — a rail opening beside it moves the visible rectangle and therefore the floor.
+    for (let node = stage.parentElement; node; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      if (style.overflowX !== 'visible' || style.overflowY !== 'visible') {
+        observer.observe(node);
+        break;
+      }
+    }
     return () => observer.disconnect();
   }, [coverPolygon, maxZoom, minZoom, onViewportSizeChange]);
 
   useLayoutEffect(() => {
-    const stage = stageRef.current;
-    if (!stage || !coverPolygon) return;
+    if (!coverViewport || !coverPolygon) return;
     const constrained = constrainPanToCoverViewport({
-      viewport: { width: stage.clientWidth, height: stage.clientHeight },
+      viewport: coverViewport,
       polygon: coverPolygon,
       zoom,
       from: pan,
@@ -466,7 +588,7 @@ export function ViewPane({
     if (Math.abs(constrained.x - pan.x) >= 1e-7 || Math.abs(constrained.y - pan.y) >= 1e-7) {
       onPanChange(constrained);
     }
-  }, [coverPolygon, onPanChange, pan, zoom]);
+  }, [coverPolygon, coverViewport, onPanChange, pan, zoom]);
 
   useLayoutEffect(() => {
     onMinimumZoomChange?.(resolvedMinZoom);
@@ -549,10 +671,9 @@ export function ViewPane({
         drag.renderedHeight,
       ),
     };
-    const stage = stageRef.current;
-    onPanChange(stage && coverPolygon
+    onPanChange(coverViewport && coverPolygon
       ? constrainPanToCoverViewport({
-          viewport: { width: stage.clientWidth, height: stage.clientHeight },
+          viewport: coverViewport,
           polygon: coverPolygon,
           zoom,
           from: pan,
@@ -603,10 +724,9 @@ export function ViewPane({
     onViewInteraction?.();
     const direction = event.deltaY < 0 ? 1 : -1;
     const nextZoom = stepTier(zoom, direction, { inner: resolvedMaxZoom, outer: resolvedMinZoom });
-    const stage = stageRef.current;
-    if (stage && coverPolygon) {
+    if (coverViewport && coverPolygon) {
       onPanChange(constrainPanToCoverViewport({
-        viewport: { width: stage.clientWidth, height: stage.clientHeight },
+        viewport: coverViewport,
         polygon: coverPolygon,
         zoom: nextZoom,
         from: pan,

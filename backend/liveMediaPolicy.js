@@ -7,6 +7,37 @@ const PREDRAWN_BOARD_SLOT = /^boards\/([a-z0-9][a-z0-9._-]{0,119})\/plate\.png$/
 const PREDRAWN_BOARD_COMPONENT = 'predrawn-board-plate';
 const PREDRAWN_BOARD_PROOF_SCHEMA = 'predrawn-board-canonical-level-proof-v1';
 const PREDRAWN_BOARD_PROOF_RENDERER = 'LevelEditor/PredrawnBoardLayer';
+// ADR-0560: the five main-menu marks, and the kit gear slot the rest of the app draws its
+// gear from, are fitted to one ink HEIGHT so the whole rail carries the same padding above
+// and below every mark. That fit RESAMPLES — the generator draws a 64x64 canvas whose ink is
+// whatever height it happened to draw, and the packer scales that ink until it is exactly 52
+// tall — so this records spatial resampling truthfully instead of claiming a native 1x the
+// bytes do not have (ADR-0076).
+//
+// Unlike ADR-0332's eight lipsana, this family is expected to be REGENERATED as the marks are
+// iterated on, so the contract pins the SHAPE — the slot, the canvas, the ink height, the exact
+// transform, and an archived source — rather than exact output hashes. Pinning hashes would
+// make every new mark a backend edit, which is how a gate stops being run.
+const MAIN_MENU_MARK_FITTED_EXCEPTION_SCHEMA = 'main-menu-mark-fitted-production-exception-v1';
+const MAIN_MENU_MARK_FITTED_TRANSFORM = 'ink-crop-lanczos-fit-height-52-even-quantize-48-center-64';
+// The list is every mark drawn into a FITTED RAIL SEAT, which is why it is not confined to the
+// main menu's own five. The seat scales the whole 64x64 canvas to a fixed size and lets the
+// asset's transparent padding decide how big the mark reads, so any two marks stacked in one
+// rail must share an ink height or one of them silently reads a different size. That is a
+// property of the seat, not of the screen: the gear is here because the Battle HUD, Settings
+// and `.icon-gear` all draw it, and the Editor's War and Levels marks are here because they
+// stack in the Editor rail beside campaign-editor.png, which is already fitted to 52.
+const MAIN_MENU_MARK_FITTED_SLOTS = Object.freeze([
+  'ui/main-menu/icons-carved/solo-skirmish.png',
+  'ui/main-menu/icons-carved/campaign-editor.png',
+  'ui/main-menu/icons-carved/lobbies.png',
+  'ui/main-menu/icons-carved/enchiridion.png',
+  'ui/main-menu/icons-carved/settings.png',
+  'ui/kit/icons/gear.png',
+  'ui/kit/icons/war.png',
+  'ui/kit/icons/levels.png',
+]);
+
 const LIPSANON_ICON_COMPONENT = 'run-lipsanon-icon';
 const LIPSANON_ICON_SLOT = /^ui\/run\/lipsana\/([a-z][a-z0-9-]{0,79})\.png$/;
 const LIPSANON_RESIZED_PRODUCTION_EXCEPTION_SCHEMA = 'run-lipsanon-resized-production-exception-v1';
@@ -118,6 +149,10 @@ const RUN_SECTIO_WRAP_SLOT = /^ui\/run\/sectio-wrap\/([a-z][a-z0-9-]{0,79})\.png
 // runtime needs is where the card row sits inside the painted canvas.
 const RUN_SECTIO_WRAP_KINDS = Object.freeze(['seat', 'band', 'slots', 'screen']);
 const RUN_PROGRESS_ICON_COMPONENT = 'run-progress-icon';
+// The mark of one Run card ACTION, drawn on the control that performs it rather
+// than on a screen. Trimmed to its own ink like the position marks, because it
+// shares a row with a label instead of sitting in a padded 64x64 frame.
+const RUN_ACTION_ICON_COMPONENT = 'run-action-icon';
 // Each state and property is registered under the word the game says (ADR-0374): the slot,
 // the stored value and the name a player reads are one vocabulary.
 const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
@@ -135,6 +170,10 @@ const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
   'ui/kit/icons/run/ataraxia-mark.png': Object.freeze({ component: RUN_PROGRESS_ICON_COMPONENT, variant: 'ataraxia' }),
   'ui/kit/icons/run/conflict.png': Object.freeze({ component: RUN_PROGRESS_ICON_COMPONENT, variant: 'conflict' }),
   'ui/kit/icons/run/battle.png': Object.freeze({ component: RUN_PROGRESS_ICON_COMPONENT, variant: 'battle' }),
+  // Athetize: the card-level act inside Expunctio (ADR-0443). It joins the action
+  // family the board verbs are drawn in rather than the Run-position marks, because
+  // what it names is a button's effect, not a place in the War.
+  'ui/kit/icons/game/athetize.png': Object.freeze({ component: RUN_ACTION_ICON_COMPONENT, variant: 'athetize' }),
 });
 const CARD_TYPE_ROW_TEXTURE_COMPONENT = 'card-type-row-texture';
 const CARD_TYPE_ROW_TEXTURE_GROUP_ID = 'card-type-row-textures-pixen-v1';
@@ -810,6 +849,188 @@ function titleBarMarkMediaIssue(row, projectedRuntime = null) {
 }
 
 /**
+ * The Adlectio mark: the glyph Expunctio prints beside a formation the current Sectio visit
+ * admitted (ADR-0553). It is the same shape of thing as a title-bar mark and carries the same
+ * contract — a small mark drawn into a seat with `contain`, so transparent margin on the canvas
+ * comes straight off the drawn glyph — which is why it states its trimmed-ness at acceptance
+ * rather than leaving the seat to compensate.
+ *
+ * It gets its own component name rather than borrowing the title bar's, because the two seats are
+ * different sizes and a mark accepted for one must not silently satisfy the other.
+ */
+/**
+ * Run preparation's rail-tab marks: the glyphs the Current Run and Start New Run tabs wear
+ * (ADR-0558 made those tabs the shared ApparatusRailTab, and a rail tab carries a mark).
+ *
+ * Their contract is the OPPOSITE of a title-bar mark's, which is why they cannot borrow that
+ * validator. A title-bar mark is drawn into a square seat with `contain`, so it must be trimmed
+ * to its own ink or it silently draws small. A rail mark is drawn on the kit's fixed 64x64 icon
+ * canvas at a 40px slot, where the reserved transparent margin IS the optical centring
+ * (ADR-0026) — trimming one would make it draw LARGER than the kit icons beside it. So this
+ * requires the canonical canvas and a stated ink box strictly inside it, rather than filling it.
+ */
+const RUN_RAIL_MARK_COMPONENT = 'run-rail-mark';
+const RUN_RAIL_MARK_CANVAS = 64;
+/**
+ * The band the drawn glyph must land in. The kit's own authored marks fill 62-84% of the 64px
+ * canvas; a generated mark commonly comes back nearer the edge, and that is fine — the seat
+ * compensates with a stated ink fraction (see .settings-tab's --settings-tab-icon-bleed-size).
+ * What the band exists to reject is the two failures the seat CANNOT compensate: a glyph that
+ * fills the canvas edge to edge, which then collides with the tab frame, and one so small it
+ * reads as a different size class from its neighbours.
+ */
+const RUN_RAIL_MARK_INK_MIN = 0.62;
+const RUN_RAIL_MARK_INK_MAX = 0.95;
+const RUN_RAIL_MARK_SLOTS = new Map([
+  ['ui/kit/icons/run/current.png', 'current'],
+  ['ui/kit/icons/run/new.png', 'new'],
+]);
+
+function runRailMarkSlot(slot) {
+  return RUN_RAIL_MARK_SLOTS.get(String(slot || '')) ?? null;
+}
+
+function runRailMarkReviewSurface(url, slot) {
+  return Boolean(runRailMarkSlot(slot))
+    && url instanceof URL
+    && url.pathname === '/studio'
+    && url.searchParams.get('cat') === 'runrailmarks';
+}
+
+function runRailMarkMediaIssue(row, projectedRuntime = null) {
+  const variant = runRailMarkSlot(row.slot);
+  if (!variant) return 'Run rail marks require a registered semantic slot';
+  if (row.domain !== 'ui-kit') return 'Run rail marks require the ui-kit domain';
+  if (row.media_type !== 'image/png') return 'Run rail marks require image/png';
+  if (Number(row.width) !== RUN_RAIL_MARK_CANVAS || Number(row.height) !== RUN_RAIL_MARK_CANVAS) {
+    return `Run rail marks require the canonical ${RUN_RAIL_MARK_CANVAS}x${RUN_RAIL_MARK_CANVAS} kit icon canvas`;
+  }
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'Run rail marks require metadata.runtime';
+  const allowed = new Set(['component', 'variant', 'altText', 'nativeRole']);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `Run rail mark runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== RUN_RAIL_MARK_COMPONENT) {
+    return `Run rail mark metadata.runtime.component must be ${RUN_RAIL_MARK_COMPONENT}`;
+  }
+  if (runtime.nativeRole !== RUN_RAIL_MARK_COMPONENT) {
+    return `Run rail mark metadata.runtime.nativeRole must be ${RUN_RAIL_MARK_COMPONENT}`;
+  }
+  if (runtime.variant !== variant) {
+    return `Run rail mark metadata.runtime.variant must be ${variant} for ${row.slot}`;
+  }
+  // The tab's label owns the accessible name, so the mark states none.
+  if (runtime.altText !== '') {
+    return 'Run rail mark metadata.runtime.altText must be empty because the tab label owns its accessible name';
+  }
+  // Margin is a claim about the BYTES, stated where the row's other byte claims live.
+  const native = isObjectRecord(row.native_evidence) ? row.native_evidence : {};
+  const inkBox = isObjectRecord(native.inkBox) ? native.inkBox : null;
+  if (!inkBox) return 'Run rail marks must state nativeEvidence.inkBox, the measured ink box of these bytes';
+  const longest = Math.max(Number(inkBox.width), Number(inkBox.height));
+  if (!Number.isFinite(longest) || longest <= 0) return 'Run rail mark nativeEvidence.inkBox is not a measured box';
+  const fraction = longest / RUN_RAIL_MARK_CANVAS;
+  if (fraction > RUN_RAIL_MARK_INK_MAX) {
+    return 'Run rail marks must reserve canvas margin: ink fills more than 95% of the canvas';
+  }
+  if (fraction < RUN_RAIL_MARK_INK_MIN) {
+    return 'Run rail marks must carry the kit optical mass: ink fills less than 62% of the canvas';
+  }
+  return null;
+}
+
+const ADLECTIO_MARK_COMPONENT = 'adlectio-mark';
+const ADLECTIO_MARK_SLOT = 'ui/run/sectio/adlectio-mark.png';
+
+/** Whether this slot is the mark Expunctio prints for a formation admitted this visit. */
+function adlectioMarkSlot(slot) {
+  return String(slot || '') === ADLECTIO_MARK_SLOT;
+}
+
+function mainMenuMarkSlot(slot) {
+  return MAIN_MENU_MARK_FITTED_SLOTS.includes(String(slot || '')) ? String(slot) : null;
+}
+
+/**
+ * The typed completeness validator that lifts the main-menu marks out of `ui-kit`'s
+ * bridge-only default (ADR-0560).
+ *
+ * What the rail actually depends on is geometry, not a runtime component: the seat draws the
+ * WHOLE 64x64 canvas at a fixed size and lets the asset's own transparent padding decide how
+ * big the mark reads and where it sits. So a mark that ships on another canvas, or with its
+ * ink at another height, silently mis-sizes one row of a five-row column with nothing pointing
+ * at the cause — which is exactly the state this ADR was opened to fix. The declared shape is
+ * checked here, the pixels are enforced by `frontend/scripts/pack-menu-icons.mjs`, and the
+ * owner proves them on the rail at `/studio?menuIconReview=1`.
+ *
+ * The kit gear slot is a member because the Battle HUD's Controls tab, the Settings General
+ * section and `.icon-gear` all draw the gear from it — one mark, one contract, wherever it is
+ * painted.
+ */
+function mainMenuMarkMediaIssue(row, projectedRuntime = null) {
+  if (!mainMenuMarkSlot(row.slot)) return 'A main-menu mark requires one of its registered semantic slots';
+  if (row.domain !== 'ui-kit') return 'A main-menu mark requires the ui-kit domain';
+  if (row.media_type !== 'image/png') return 'A main-menu mark requires image/png';
+  if (Number(row.width) !== 64 || Number(row.height) !== 64) {
+    return 'A main-menu mark requires the canonical 64x64 icon canvas (ADR-0026)';
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  if (Number(metadata.canvas) !== 64) return 'A main-menu mark requires metadata.canvas 64';
+  if (Number(metadata.inkHeight) !== 52) {
+    return 'A main-menu mark requires metadata.inkHeight 52, the one height the whole rail is fitted to';
+  }
+  if (metadata.evenInkDimensions !== true) {
+    return 'A main-menu mark requires metadata.evenInkDimensions true, so its ink centres exactly on an even canvas';
+  }
+
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (runtime !== null && !isObjectRecord(runtime)) return 'A main-menu mark runtime projection must be an object';
+  return null;
+}
+
+/**
+ * The typed completeness validator that lifts the Adlectio mark out of `ui-kit`'s bridge-only
+ * default. Deliberately no fixed dimensions: the candidates are hands, cards and coins, which are
+ * not one shape, and forcing a square would reintroduce the padding the ink-box rule rejects.
+ */
+function adlectioMarkMediaIssue(row, projectedRuntime = null) {
+  if (!adlectioMarkSlot(row.slot)) return 'The Adlectio mark requires its registered semantic slot';
+  if (row.domain !== 'ui-kit') return 'The Adlectio mark requires the ui-kit domain';
+  if (row.media_type !== 'image/png') return 'The Adlectio mark requires image/png';
+  if (!Number(row.width) || !Number(row.height)) return 'The Adlectio mark requires decoded raster dimensions';
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'The Adlectio mark requires metadata.runtime';
+  const allowed = new Set(['component', 'variant', 'altText', 'nativeRole']);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `Adlectio mark runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== ADLECTIO_MARK_COMPONENT) {
+    return `Adlectio mark metadata.runtime.component must be ${ADLECTIO_MARK_COMPONENT}`;
+  }
+  if (runtime.nativeRole !== ADLECTIO_MARK_COMPONENT) {
+    return `Adlectio mark metadata.runtime.nativeRole must be ${ADLECTIO_MARK_COMPONENT}`;
+  }
+  // The words beside it say "Adlected this visit"; an alt string here would be read out twice.
+  if (runtime.altText !== '') {
+    return 'Adlectio mark metadata.runtime.altText must be empty because the line owns its accessible name';
+  }
+  const native = isObjectRecord(row.native_evidence) ? row.native_evidence : {};
+  const inkBox = isObjectRecord(native.inkBox) ? native.inkBox : null;
+  if (!inkBox) return 'The Adlectio mark must state nativeEvidence.inkBox, the measured ink box of these bytes';
+  if (Number(inkBox.width) !== Number(row.width) || Number(inkBox.height) !== Number(row.height)) {
+    return 'The Adlectio mark must be trimmed to its own ink: the measured ink box must fill the canvas';
+  }
+  return null;
+}
+
+/**
  * The card-price coin is the exact transparent 112px extraction of the shared
  * card coin. The surrounding component owns both the live value and accessible
  * currency label; the raster owns only the blank struck-metal body.
@@ -1138,9 +1359,11 @@ function gameConditionIconMediaIssue(row, projectedRuntime = null) {
   if (row.domain !== 'ui-kit') return 'game condition icons require the ui-kit domain';
   if (row.role !== 'icon') return 'game condition icons require the icon role';
   if (row.media_type !== 'image/png') return 'game condition icons require image/png';
-  // Run-position marks sit unframed in a row and ship trimmed to their own ink;
-  // the established unit-ability and card-property icons keep their full frame.
-  const trimmed = contract.component === RUN_PROGRESS_ICON_COMPONENT;
+  // Run-position and action marks sit unframed beside a label and ship trimmed to
+  // their own ink; the established unit-ability and card-property icons keep their
+  // full frame.
+  const trimmed = contract.component === RUN_PROGRESS_ICON_COMPONENT
+    || contract.component === RUN_ACTION_ICON_COMPONENT;
   const rasterIssue = trimmed
     ? trimmedIconRasterIssue(row, 'Run position icons')
     : (Number(row.width) !== 64 || Number(row.height) !== 64
@@ -1935,6 +2158,37 @@ function nativeMediaEvidenceIssue(row) {
     ) return 'ADR-0520 resampled card-art evidence must authorize these bytes and its exact transform';
     return null;
   }
+  if (evidence.schema === MAIN_MENU_MARK_FITTED_EXCEPTION_SCHEMA) {
+    if (!MAIN_MENU_MARK_FITTED_SLOTS.includes(String(row.slot || ''))) {
+      return 'ADR-0560 fitted mark evidence is restricted to the main-menu mark slots';
+    }
+    if (
+      // The set was installed while this decision was numbered 0556; main took that number
+      // (and 0557-0559) first, so the ADR is 0560. Accepted rows cannot be patched, so both
+      // names are honoured and the stored ones stay truthful about when they were written —
+      // the same accommodation ADR-0520 records for its own renumber.
+      !['ADR-0560', 'ADR-0556'].includes(evidence.decision)
+      || evidence.status !== 'owner-approved-production-exception'
+      || evidence.native1x !== false
+      || evidence.spatialResampling !== true
+    ) return 'ADR-0560 fitted mark evidence is incomplete';
+    if (
+      Number(row.width) !== 64 || Number(row.height) !== 64
+      || Number(evidence.outputWidth) !== 64 || Number(evidence.outputHeight) !== 64
+      || Number(evidence.inkHeight) !== 52
+    ) return 'ADR-0560 fitted mark evidence must declare a 64x64 canvas holding exactly 52px of ink';
+    if (
+      !Number.isFinite(Number(evidence.sourceWidth)) || Number(evidence.sourceWidth) <= 0
+      || !Number.isFinite(Number(evidence.sourceHeight)) || Number(evidence.sourceHeight) <= 0
+    ) return 'ADR-0560 fitted mark evidence must name the generator canvas it was fitted from';
+    if (
+      !normalizedSha(evidence.outputSha256)
+      || normalizedSha(evidence.outputSha256) !== normalizedSha(row.blob_sha256)
+      || !normalizedSha(evidence.sourceSha256)
+      || evidence.transform !== MAIN_MENU_MARK_FITTED_TRANSFORM
+    ) return 'ADR-0560 fitted mark evidence must authorize these bytes and name its exact transform';
+    return null;
+  }
   if (evidence.native1x !== true) return 'nativeEvidence.native1x must be true';
   if (evidence.spatialResampling !== false) return 'nativeEvidence.spatialResampling must be false';
   if (row.width !== null || row.height !== null) {
@@ -1990,6 +2244,11 @@ module.exports = {
   LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA,
   LIPSANON_ICON_COMPONENT,
   LIPSANON_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
+  MAIN_MENU_MARK_FITTED_EXCEPTION_SCHEMA,
+  MAIN_MENU_MARK_FITTED_TRANSFORM,
+  MAIN_MENU_MARK_FITTED_SLOTS,
+  mainMenuMarkSlot,
+  mainMenuMarkMediaIssue,
   RUN_CARD_COST_COIN_COMPONENT,
   RUN_CARD_COST_CROWN_COMPONENT,
   RUN_CARD_COST_CROWN_SLOT,
@@ -2031,6 +2290,9 @@ module.exports = {
   levelEditorBrushIconOwnerProofIssue,
   levelEditorBrushIconSlot,
   nativeMediaEvidenceIssue,
+  runRailMarkMediaIssue,
+  runRailMarkSlot,
+  runRailMarkReviewSurface,
   predrawnBoardAlignmentIssue,
   predrawnBoardMediaIssue,
   predrawnBoardOwnerProofIssue,
@@ -2057,6 +2319,10 @@ module.exports = {
   titleBarMarkReviewSurface,
   titleBarMarkSlot,
   titleBarMarkMediaIssue,
+  ADLECTIO_MARK_COMPONENT,
+  ADLECTIO_MARK_SLOT,
+  adlectioMarkSlot,
+  adlectioMarkMediaIssue,
   runSectioWrapMediaIssue,
   workspaceBackgroundSlotId,
   workspaceBackgroundMediaIssue,

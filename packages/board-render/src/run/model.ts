@@ -6,7 +6,7 @@ import {
   type War,
 } from '../core/level';
 import { migrateLevelDocument } from '../core/levelMigration';
-import type { PieceType, Vec } from '../core/types';
+import type { PieceType, PromotionPieceType, Vec } from '../core/types';
 import {
   LIPSANON_BY_ID,
   RUN_LIPSANA,
@@ -28,7 +28,7 @@ export {
 };
 
 /** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
-export const CURRENT_RUN_SAVE_VERSION = 36;
+export const CURRENT_RUN_SAVE_VERSION = 38;
 export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
 
 export class UnsupportedRunSaveError extends Error {
@@ -57,6 +57,8 @@ const RUN_SAVE_VERSION_OPENING_CARD_GRANT_SOURCE = 31;
 const RUN_SAVE_VERSION_AUTHORED_DEAL_SOURCE = 33;
 const RUN_SAVE_VERSION_KING_CHOICE_SOURCE = 34;
 const RUN_SAVE_VERSION_COMMENDATIO_SOURCE = 35;
+const RUN_SAVE_VERSION_DEDITIO_SOURCE = 36;
+const RUN_SAVE_VERSION_RUN_RULES_SOURCE = 37;
 const RUN_SAVE_VERSION_RARITY_BANDS_SOURCE = 32;
 /**
  * How much gold one point of material value is worth (ADR-0547).
@@ -81,7 +83,7 @@ export const RUN_BATTLE_RETRY_COST_TENTHS = 3 * GOLD_SCALE;
 export const RUN_DEPLOYMENT_REROLL_COST_TENTHS = GOLD_SCALE;
 export const RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS = 5 * GOLD_SCALE;
 export const RUN_SECTIO_CARD_OFFER_COUNT = 3;
-export const RUN_SECTIO_CARD_PILE_SIZE = 20;
+
 
 /** How often each rarity reaches the market. These are quotas, not roll odds: a pile holds
  * exactly this composition every time, so what a Battle can buy is the same number rather than
@@ -115,6 +117,120 @@ export const RUN_SECTIO_EARLY_CARD_MAX_VALUE = 6;
 export const RUN_SECTIO_EARLY_CARD_BATTLE_COUNT = 2;
 export const INSTALLED_ATARAXIA_MAX_TIER = 0;
 export type AtaraxiaTier = 0;
+
+/**
+ * The rules a Run is created under and then bound to for its whole life.
+ *
+ * These change which cards the market can deal and what the player may do with one at placement,
+ * so they cannot be a client preference: a Run dealt from the two-by-two pool has to keep dealing
+ * from it across reload, resume and every later Battle. Immutable once the Run exists, like
+ * Ataraxia beside it.
+ *
+ * The default is the mode the game steers players toward. The others exist to be played with.
+ */
+export type RunRules = Readonly<{
+  /**
+   * Longest side, in cells, of a formation the market may offer. Two is the shipped game: the
+   * single, the domino, the L and the square. Four opens the straight runs and the tetrominoes.
+   */
+  cardSpan: 2 | 4;
+  /**
+   * How a card is priced.
+   *
+   * `material` charges a card its material and nothing else, which is what the game has always
+   * done. `density` charges material WEIGHTED by concentration -- it does not price concentration
+   * on its own, which would make one Pawn and four Pawns cost the same. The same material in
+   * fewer cells costs more, because board space is the scarce thing and a Queen on one square is
+   * not two Knights on two.
+   */
+  pricing: 'material' | 'density';
+  /**
+   * Whether the player may turn a formation when placing it. With it on, one card covers all four
+   * quarter turns and facing is decided at the board; with it off, facing is whatever the card was
+   * dealt with. This does not change which cards exist -- only what may be done with one.
+   */
+  mayRotate: boolean;
+  /**
+   * Which ladder sorts the catalog into Common, Uncommon and Rare — see `RUN_RARITY_RULES`.
+   *
+   * `price-shifts` is the game: a flat cut on the printed price, then the shifts it declares.
+   * `material-bands` is what the market ran on before ADR-0568, kept selectable because the
+   * difference between the two is the whole argument and a rule you cannot play is a rule nobody
+   * can judge. It leaves six Common identities against sixteen pile seats under a two-by-two
+   * market, so a Sectio row deals the same card twice; that is what it is FOR.
+   */
+  rarity: RunRarityRuleId;
+}>;
+
+export const RUN_CARD_SPANS: readonly (2 | 4)[] = Object.freeze([2, 4]);
+
+/**
+ * What a new Run is created under unless the player chooses otherwise: the two-by-two catalog,
+ * turnable at placement, priced by material weighted by density.
+ *
+ * Density is the default because board space is the scarce thing a formation game is played on:
+ * the same material in fewer cells is worth more, and a market that cannot say so prices a Queen
+ * on one square the same as two Knights on two. Flat material remains a mode, not the baseline.
+ *
+ * Two consequences to know rather than discover.
+ *
+ * The SHIPPED rarity rule is still the material band, and at a span of two that leaves six
+ * distinct commons against sixteen pile seats -- so a pile fills those seats by repeating commons
+ * rather than by shrinking. The mode is playable and the repetition is visible; it resolves when
+ * the rarity rule moves, which is the open piece.
+ *
+ * The early-market ceiling is a VALUE ceiling (`runSectioCardMaxValue`), so under density an offer
+ * at the ceiling may cost more than the ceiling reads. It still cannot outrun the opening purse:
+ * the dearest card the six-value band admits is a lone Rook at six gold against a starting eight.
+ */
+export const DEFAULT_RUN_RULES: RunRules = Object.freeze({ cardSpan: 2, mayRotate: true, pricing: 'density', rarity: 'price-shifts' });
+
+/**
+ * What a Run written before rules existed was already playing: the wide catalog, turnable. NOT the
+ * new default -- a Run mid-flight was dealt from the wide pool and is holding cards from it, and
+ * narrowing its market now would leave it with formations its own market could no longer offer.
+ */
+// Rarity is NOT part of what a pre-rules Run was playing: it was global and derived, so it has
+// always followed the code rather than the document. A legacy Run therefore meets the current
+// ladder, exactly as it always has.
+export const LEGACY_RUN_RULES: RunRules = Object.freeze({ cardSpan: 4, mayRotate: true, pricing: 'material', rarity: 'price-shifts' });
+
+/** The longest side of a formation, blind to which way round it was authored. */
+export function formationSpan(formation: readonly RunCardFormationCell[] | undefined): number {
+  if (!formation || formation.length === 0) return 1;
+  const width = Math.max(...formation.map((cell) => cell.x)) - Math.min(...formation.map((cell) => cell.x)) + 1;
+  const height = Math.max(...formation.map((cell) => cell.y)) - Math.min(...formation.map((cell) => cell.y)) + 1;
+  return Math.max(width, height);
+}
+
+/** A Run's rules, defaulting a document written before they existed to the game it was playing. */
+export function runRules(run: Pick<RunDocument, 'rules'> | { rules?: RunRules }): RunRules {
+  return run.rules ?? LEGACY_RUN_RULES;
+}
+
+/**
+ * What a card costs a Run playing under `rules`, in whole gold.
+ *
+ * The density curve is the studio's, at the game's scale rather than the studio's readable one:
+ * the x10 there existed so prices read as 5 and 155 instead of 0.5 and 15.5, and gold here is
+ * whole (ADR-0547). Same curve, same exponent, one tenth the scale.
+ *
+ * Floored at one, because a card the market gives away is not an offer.
+ */
+export function runCardCost(
+  card: Pick<RunCoreCard, 'value' | 'formation' | 'pieces'>,
+  rules: RunRules,
+): number {
+  if (rules.pricing === 'material') return card.value;
+  const volume = card.formation?.length ?? card.pieces.length ?? 1;
+  const density = volume === 0 ? 0 : card.value / volume;
+  return Math.max(1, Math.round(card.value * (density / 3) ** 0.5));
+}
+
+/** Whether a card may be dealt to a Run playing under `rules`. */
+export function cardAllowedByRules(card: Pick<RunCoreCard, 'formation'>, rules: RunRules): boolean {
+  return formationSpan(card.formation) <= rules.cardSpan;
+}
 
 /**
  * Each tier's presentation. `numeral` is the rung itself and `label` is that rung
@@ -191,7 +307,16 @@ export type ManubiumId =
   | 'discovered-check'
   | 'double-check'
   | 'en-passant'
-  | 'smothered-mate';
+  | 'smothered-mate'
+  | 'promotion-mate'
+  | 'underpromotion-mate'
+  | 'humble-mate'
+  | 'long-capture'
+  | 'long-check'
+  | 'knight-fork';
+
+/** What a Pawn may become instead of a Queen. The Queen is the ordinary case, so she is not here. */
+export type UnderpromotionPieceType = Exclude<PromotionPieceType, 'queen'>;
 
 export interface ManubiumDefinition {
   readonly id: ManubiumId;
@@ -217,6 +342,101 @@ export interface ManubiumDefinition {
 export const RUN_ADVANTAGEOUS_CAPTURE_TENTHS_PER_POINT = 2;
 
 /**
+ * What a mating underpromotion pays, by the piece the Pawn chose instead of a Queen.
+ *
+ * The ladder is rarity, and the chess behind it is exact. A Rook or a Bishop can never mate
+ * where a Queen would not: on the same square the Queen attacks every square the Rook does and
+ * every square the Bishop does, so any mate they deliver she delivers too. Choosing one of them
+ * is style, not necessity — the player saw a lesser piece finish the job and took it.
+ *
+ * Only the KNIGHT can mate where the Queen cannot, because the Knight's move is the one thing
+ * she does not have. That is the underpromotion every puzzle book prints, and the only one a
+ * position can genuinely require.
+ *
+ * So the Rook sits just above an ordinary promotion mate — once the mate is there, taking a Rook
+ * instead of a Queen costs the player nothing, and the Battle is over either way, so it is paid
+ * as the flourish it is. The Bishop is dearer because a Bishop mate needs a far narrower shape
+ * than a Rook mate: one colour of diagonal, and every other flight square answered by other men.
+ * The Knight is paid alongside the Bishop rather than above it, because what the two ask of a
+ * position is nothing alike and ranking them against each other would be inventing a difference.
+ */
+export const RUN_UNDERPROMOTION_MATE_TENTHS: Readonly<Record<UnderpromotionPieceType, number>> = Object.freeze({
+  rook: 6 * GOLD_SCALE,
+  bishop: 8 * GOLD_SCALE,
+  knight: 8 * GOLD_SCALE,
+});
+
+/**
+ * What a humble mate pays for each point the mating unit falls short of a Queen.
+ *
+ * A Queen is 9, so a Queen's mate comes out at exactly nothing and "anything but a Queen" is
+ * what the arithmetic SAYS rather than a clause bolted onto it. Every other unit is paid for
+ * the distance: a Rook 12, a Bishop or Knight 18, a Pawn 24.
+ *
+ * Three a point rather than the two an advantageous capture and Deditio pay, because this is
+ * counted once per Battle at most while those are counted many times — but still in the low
+ * band, and for the same reason. Every Battle ends in checkmate (ADR-0543), so unlike every
+ * other Manubium this one is nearly always available; a Rook mate is the ordinary way a Battle
+ * finishes, and paying 12 for it is the Run noticing something you were going to do anyway. The
+ * gradient is where the teaching is: it is worth looking for the Knight's mate instead.
+ */
+export const RUN_HUMBLE_MATE_TENTHS_PER_POINT = 3;
+
+/**
+ * How far a deed must reach before the Run calls it long: eight squares.
+ *
+ * Eight because that is the width of a standard chessboard — a move that crosses it end to end
+ * is the reach every player already has a feel for, even though no board in this game is that
+ * shape. Counted the way a player counts along a line rather than as a sum of both axes, so a
+ * Rook eight along a rank and a Bishop eight along a diagonal are the same eight.
+ *
+ * A board smaller than nine in both dimensions can never offer it, and no arrangement is made
+ * for that: a Battle on a small board simply has no long moves in it, which is true and needs
+ * no clause.
+ */
+export const RUN_LONG_REACH_SQUARES = 8;
+
+/**
+ * What each further rung of a Knight's fork is worth.
+ *
+ * The price ACCELERATES: the second prong adds one of these, the third adds two, the fourth
+ * adds three, and so on, so the run of prices is 5, 15, 30, 50, 75 for two, three, four, five
+ * and six prongs. A flat rate per prong would say a Knight hitting four things is twice a Knight
+ * hitting two, and it is nothing of the sort — the second prong is a fork, and every prong after
+ * it is a square the enemy cannot answer, which is why the marginal one is worth more than the
+ * one before it.
+ *
+ * Five rather than ten so the plain two-prong fork lands UNDER the royal fork it is often a
+ * lesser version of; three prongs then passes it, which is the right order.
+ */
+export const RUN_KNIGHT_FORK_TENTHS_PER_RUNG = 5;
+
+/**
+ * What a Knight's fork of `targets` prongs pays. Nothing for fewer than two: one prong is not a
+ * fork, it is just an attack.
+ *
+ * A prong is something the enemy cannot answer — their King, which must move, or an undefended
+ * unit their one move cannot save alongside another (ADR-0566). Counting is the board seam's
+ * job; this only prices the count.
+ */
+export function knightForkGoldTenths(targets: number): number {
+  const prongs = Math.max(0, Math.floor(targets) - 1);
+  return (prongs * (prongs + 1) / 2) * RUN_KNIGHT_FORK_TENTHS_PER_RUNG;
+}
+
+/**
+ * What a mate delivered by `piece` pays — nothing at all for a Queen.
+ *
+ * The King's zero on the piece scale is a sentinel for "never bought" and would otherwise read
+ * as the humblest unit on the board, paying the most. It cannot arise, since a King may not
+ * give check at all, but the scale is not asked to be lucky about it.
+ */
+export function humbleMateGoldTenths(piece: RunArmyPieceType): number {
+  if (piece === 'king') return 0;
+  return Math.max(0, PIECE_VALUE.queen - PIECE_VALUE[piece]) * RUN_HUMBLE_MATE_TENTHS_PER_POINT;
+}
+
+/**
  * Every Manubium, cheapest first, which is also roughly rarest-last-to-first: the ladder
  * runs from what a competent player does several times a Battle to what they may never do.
  *
@@ -233,15 +453,43 @@ export const RUN_MANUBIAE: readonly ManubiumDefinition[] = Object.freeze([
     priceNote: '2 gold for each point of material won',
   },
   {
+    id: 'knight-fork',
+    name: "Knight's fork",
+    earnedBy: 'Strike two or more things at once with a Knight that the enemy cannot answer, from the square it just moved to: their King, which must move, or an UNDEFENDED unit, which their one move cannot save alongside another. Each further prong is worth more than the last. A defended unit is no prong, because they simply take the Knight back. The fork has to hold: taking the Knight must cost the enemy more than the Knight is worth.',
+    goldTenths: null,
+    // Written from the rate rather than beside it, so the sentence cannot drift from the gold.
+    priceNote: `${knightForkGoldTenths(2)} for two prongs, ${knightForkGoldTenths(3)} for three, ${knightForkGoldTenths(4)} for four, ${knightForkGoldTenths(5)} for five`,
+  },
+  {
     id: 'royal-fork',
     name: 'Royal fork',
     earnedBy: 'Attack the enemy King and a Rook or Queen with one unit, from the square it just moved to. The fork has to hold: taking that unit must cost the enemy more than the unit is worth.',
     goldTenths: GOLD_SCALE,
   },
   {
+    id: 'long-capture',
+    name: 'Long capture',
+    earnedBy: 'Take an enemy unit eight or more squares from where the unit taking it set out — the width of a whole chessboard, crossed in one move. Any unit may earn it.',
+    goldTenths: GOLD_SCALE,
+  },
+  {
+    id: 'humble-mate',
+    name: 'Humble mate',
+    earnedBy: 'Deliver the checkmate with anything but a Queen. The less the mating unit is worth the more it pays, so a Pawn pays most of all. When two units mate at once it is the lesser of them that is paid for.',
+    goldTenths: null,
+    // Written from the rate rather than beside it, so the sentence cannot drift from the gold.
+    priceNote: `${humbleMateGoldTenths('rook')} for a Rook, ${humbleMateGoldTenths('knight')} for a Bishop or Knight, ${humbleMateGoldTenths('pawn')} for a Pawn`,
+  },
+  {
     id: 'discovered-check',
     name: 'Discovered check',
     earnedBy: 'Move one unit out of the way so that a different unit behind it gives check.',
+    goldTenths: 2 * GOLD_SCALE,
+  },
+  {
+    id: 'long-check',
+    name: 'Long check',
+    earnedBy: 'Give check from eight or more squares away, counted along the line the check runs. Any unit may earn it, and it need not be the unit you moved — a line you opened counts from wherever the unit behind it stands.',
     goldTenths: 2 * GOLD_SCALE,
   },
   {
@@ -262,6 +510,21 @@ export const RUN_MANUBIAE: readonly ManubiumDefinition[] = Object.freeze([
     earnedBy: 'Checkmate with a Knight while the enemy King is hemmed in on every side by its own men.',
     goldTenths: 5 * GOLD_SCALE,
   },
+  {
+    id: 'promotion-mate',
+    name: 'Promotion mate',
+    earnedBy: 'Walk a Pawn all the way to a promotion square and have the piece it becomes give checkmate on arrival.',
+    goldTenths: 5 * GOLD_SCALE,
+  },
+  {
+    id: 'underpromotion-mate',
+    name: 'Underpromotion mate',
+    earnedBy: 'The same, with the Pawn refusing the Queen. A Knight is the only piece that can mate where a Queen could not, so it is paid the most, alongside the Bishop. This pays in place of the promotion mate, not on top of it.',
+    goldTenths: null,
+    // Written from the rates rather than beside them, so the sentence a player reads cannot
+    // drift from the gold they are actually paid.
+    priceNote: `${RUN_UNDERPROMOTION_MATE_TENTHS.rook} for a Rook, ${RUN_UNDERPROMOTION_MATE_TENTHS.bishop} for a Bishop or Knight`,
+  },
 ] as const);
 
 export const RUN_MANUBIUM_BY_ID: Readonly<Record<ManubiumId, ManubiumDefinition>> = Object.freeze(
@@ -275,7 +538,15 @@ export const RUN_MANUBIUM_BY_ID: Readonly<Record<ManubiumId, ManubiumDefinition>
  */
 export type ManubiumAward =
   | { readonly id: 'advantageous-capture'; readonly marginPoints: number }
-  | { readonly id: Exclude<ManubiumId, 'advantageous-capture'> };
+  | { readonly id: 'underpromotion-mate'; readonly piece: UnderpromotionPieceType }
+  | { readonly id: 'humble-mate'; readonly piece: RunArmyPieceType }
+  | { readonly id: 'knight-fork'; readonly targets: number }
+  | {
+    readonly id: Exclude<
+      ManubiumId,
+      'advantageous-capture' | 'underpromotion-mate' | 'humble-mate' | 'knight-fork'
+    >;
+  };
 
 /**
  * What a unit is worth when Manubiae compares two of them — what it STARTED as, never what
@@ -304,6 +575,9 @@ export function manubiumGoldTenths(award: ManubiumAward): number {
   if (award.id === 'advantageous-capture') {
     return Math.max(0, Math.round(award.marginPoints)) * RUN_ADVANTAGEOUS_CAPTURE_TENTHS_PER_POINT;
   }
+  if (award.id === 'underpromotion-mate') return RUN_UNDERPROMOTION_MATE_TENTHS[award.piece] ?? 0;
+  if (award.id === 'humble-mate') return humbleMateGoldTenths(award.piece);
+  if (award.id === 'knight-fork') return knightForkGoldTenths(award.targets);
   return RUN_MANUBIUM_BY_ID[award.id].goldTenths ?? 0;
 }
 
@@ -701,6 +975,8 @@ export interface RunDocument {
   id: string;
   seed: number;
   ataraxiaTier: AtaraxiaTier;
+  /** The rules this Run was created under. Immutable for its life; see RunRules. */
+  rules: RunRules;
   /** One Run-wide contract selected before creation; it never changes in-flight. */
   deploymentMode: RunDeploymentMode;
   updatedAt: string;
@@ -797,10 +1073,16 @@ function cardCompositionArtId(
   return `${cardFootprintId(formation)}-${cardComposition(pieces)}`;
 }
 
-/** The value bands rarity reads before footprint adjusts it. Four is the most material a card
- * can carry and still be the cheap, always-available tier. */
-export const RUN_CARD_COMMON_MAX_VALUE = 4;
-export const RUN_CARD_UNCOMMON_MAX_VALUE = 6;
+/**
+ * The price cuts the tier ladder is drawn on, in the gold a card face prints.
+ *
+ * Rarity used to be drawn on raw MATERIAL, which stopped tracking what a card is worth the moment
+ * pricing began weighting material by how few squares it occupies: a Queen alone and a Queen with a
+ * Pawn carry nine and ten material and cost 160 and 130, and a ladder reading the material called
+ * them the same rung. The cuts are on price for the same reason the price formula exists.
+ */
+export const RUN_CARD_RARITY_COMMON_MAX_GOLD = 70;
+export const RUN_CARD_RARITY_UNCOMMON_MAX_GOLD = 100;
 
 /** Rotation-canonical footprint, blind to which piece sits in which seat. Card identity already
  * collapses quarter turns, so the shapes a rarity rule names have to collapse them too. */
@@ -827,11 +1109,67 @@ function rotationalFootprintId(formation: readonly RunCardFormationCell[]): stri
     .sort()[0];
 }
 
+/** The card a rarity rule is asked about. Formation, because a shift may read the shape. */
+export type RunCardRarityInput = Readonly<{
+  pieces: readonly AdlectablePieceType[];
+  formation: readonly RunCardFormationCell[];
+}>;
+
+/**
+ * ONE DECLARED MOVE OF A SET OF CARDS BETWEEN TIERS.
+ *
+ * A rarity rule is a flat formula plus the exceptions to it, and the exceptions are the part that
+ * carries the design. Written as extra clauses inside the function they become invisible: the rule
+ * this replaces was a material band with two untitled adjustments fused into it, and when the
+ * two-by-two shape rule deleted every card one of them acted on, that adjustment went silently
+ * inert and took the Common tier down from 29 identities to 6 with nothing anywhere saying so.
+ *
+ * So a shift is DATA. It has a name, it says why it exists, and `runRarityShiftAudit` reports how
+ * many cards it actually moved — a shift that moves none is dead, and says so out loud instead of
+ * waiting to be discovered in a Sectio row dealing the same card twice.
+ *
+ * `from` is the difference between the two things you can say. Naming it is a MOVE: these cards
+ * come out of that tier, and if they are not in it the shift declines and the audit counts the
+ * skip. Omitting it is an INTRODUCTION: put these in this tier from wherever they sit.
+ */
+export type RunRarityShift = Readonly<{
+  id: string;
+  name: string;
+  why: string;
+  from?: RunCardRarity;
+  /** Where the cards land: a named tier, or a signed step along the ladder, clamped at both ends.
+   * A shift moves a card at most once, so a step never cascades into the next shift's answer. */
+  to?: RunCardRarity;
+  step?: -1 | 1;
+  holds: (card: RunCardRarityInput) => boolean;
+}>;
+
+/** A whole rarity rule: where the flat cuts fall, and the shifts that follow them. */
+export type RunRarityRule = Readonly<{
+  id: RunRarityRuleId;
+  label: string;
+  /** What the flat cut reads. `price` is the gold the card face prints; `material` is raw points. */
+  cut: 'price' | 'material';
+  commonMax: number;
+  uncommonMax: number;
+  shifts: readonly RunRarityShift[];
+}>;
+
+export type RunRarityRuleId = 'price-shifts' | 'material-bands';
+
+export const RUN_RARITY_RULE_IDS: readonly RunRarityRuleId[] = Object.freeze(['price-shifts', 'material-bands']);
+
+const MINOR_PIECES: ReadonlySet<AdlectablePieceType> = new Set(['bishop', 'knight']);
+
 /**
  * The five four-cell footprints that waste the deployment band, each written here in the form it
- * takes lying in that band. Every one of them is a bar with the fourth seat pushed off the line,
- * so the shape cannot be tucked against a neighbour the way a square, a straight run, or a corner
- * can. Both Z chiralities are separate card identities, and both are listed.
+ * takes lying in that band. Every one of them is a bar with the fourth seat pushed off the line, so
+ * the shape cannot be tucked against a neighbour the way a square, a straight run, or a corner can.
+ * Both Z chiralities are separate card identities, and both are listed.
+ *
+ * Every one is also THREE CELLS LONG, which is why the demotion reading this set moves nothing under
+ * a two-by-two shape rule. That is not a footnote — it is the failure this whole mechanism exists to
+ * make visible, and the audit says so out loud on the rule that still carries it.
  */
 const AWKWARD_CARD_FOOTPRINTS: ReadonlySet<string> = new Set(([
   [[0, 0], [1, 0], [1, 1], [2, 1]], // ##. / .##  Z
@@ -841,43 +1179,150 @@ const AWKWARD_CARD_FOOTPRINTS: ReadonlySet<string> = new Set(([
   [[0, 0], [1, 0], [2, 0], [0, 1]], // ### / #..  L
 ] as const).map((cells) => rotationalFootprintId(cells.map(([x, y]) => ({ x, y })))));
 
+/**
+ * The shifts the shipped ladder declares, applied in this order.
+ *
+ * Two shifts the material rule carried are NOT here, and their absence is a decision rather than an
+ * omission. The five awkward footprints were demoted because material overstated a shape that packs
+ * badly — but a price weighted by density already charges them less for exactly that, so the
+ * demotion had nothing left to correct. And a Bishop was promoted because material understated the
+ * pair; that survives below, as the cluster rule, which reaches the Knight pair on the same
+ * argument instead of singling out one piece.
+ */
+export const RUN_RARITY_RULES: Readonly<Record<RunRarityRuleId, RunRarityRule>> = Object.freeze({
+  'price-shifts': Object.freeze({
+    id: 'price-shifts',
+    label: 'Priced',
+    cut: 'price',
+    commonMax: RUN_CARD_RARITY_COMMON_MAX_GOLD,
+    uncommonMax: RUN_CARD_RARITY_UNCOMMON_MAX_GOLD,
+    shifts: Object.freeze([
+      Object.freeze({
+        id: 'minor-cluster',
+        name: 'A card of nothing but minors is Rare',
+        why: 'Price reads a card as material over squares, and two or three minors in a tight '
+          + 'cluster price as ordinary. What they are worth is not their material: the player places '
+          + 'every formation by hand (ADR-0526), so a card of two Bishops IS the opposite-colour '
+          + 'pair, and a card of three minors is a whole minor piece battery arriving already '
+          + 'assembled. No cut on price can see that, which is what a shift is for.',
+        to: 'rare',
+        holds: (card: RunCardRarityInput) => card.pieces.length >= 2
+          && card.pieces.every((piece: AdlectablePieceType) => MINOR_PIECES.has(piece)),
+      }),
+    ]),
+  }),
+  'material-bands': Object.freeze({
+    id: 'material-bands',
+    label: 'By material',
+    cut: 'material',
+    commonMax: 4,
+    uncommonMax: 6,
+    shifts: Object.freeze([
+      Object.freeze({
+        id: 'awkward-footprint',
+        name: 'A shape that wastes the band drops a tier',
+        why: 'Each of the five is a bar with its fourth seat pushed off the line, so it cannot be '
+          + 'tucked against a neighbour and its material overstates what it is worth on a board. '
+          + 'This is what stocked the Common tier under this rule -- and every one of those shapes '
+          + 'is three cells long, so a two-by-two market leaves it holding nothing.',
+        step: -1 as const,
+        holds: (card: RunCardRarityInput) => AWKWARD_CARD_FOOTPRINTS.has(rotationalFootprintId(card.formation)),
+      }),
+      Object.freeze({
+        id: 'bishop-step',
+        name: 'A card carrying a Bishop climbs a tier',
+        why: 'Material understates a Bishop, because free placement (ADR-0526) lets the player '
+          + 'choose the square each one lands on, so any two Bishops they own become the '
+          + 'opposite-colour pair whichever cards those arrived on.',
+        step: 1 as const,
+        holds: (card: RunCardRarityInput) => card.pieces.includes('bishop'),
+      }),
+    ]),
+  }),
+});
+
+/** What a new Run uses unless the player chooses otherwise at Run start. */
+export const DEFAULT_RUN_RARITY_RULE: RunRarityRuleId = 'price-shifts';
+
 /** One step along the rarity ladder, clamped at both ends. */
 function stepRarity(rarity: RunCardRarity, steps: number): RunCardRarity {
   const index = RUN_CARD_RARITIES.indexOf(rarity) + steps;
   return RUN_CARD_RARITIES[Math.max(0, Math.min(RUN_CARD_RARITIES.length - 1, index))];
 }
 
-/**
- * Rarity is the market's ramp control, and it reads three things.
- *
- * Material value sets the band: Common through four, Uncommon at five and six, Rare above that.
- *
- * Footprint then adjusts it. The five awkward shapes pack badly enough that their material
- * overstates what they are worth on a board, so each drops one tier -- which is what puts genuinely
- * high-value cards in the Common pool without letting the Common pool hand out clean material.
- *
- * A Bishop then costs a band back, because material understates it. The player places every
- * formation by hand (ADR-0526), so they choose the square each Bishop lands on: any two Bishops
- * they own become the opposite-colour pair. The pair is assembled in the deployment band out of
- * whatever cards it came from, and every Bishop card is half of it. Card-local parity is therefore
- * not read at all -- it decides what one card's own two Bishops cover, never whether the player
- * ends the Run holding the pair, which is the thing rarity is pricing.
- *
- * The two adjustments cancel on an awkward shape carrying a Bishop, and that is the intended
- * reading rather than a coincidence: a Bishop is worth exactly the band a wasteful shape costs.
- */
+/** The tier the flat cut gives a card, before any shift. */
+export function runCardRarityBand(
+  card: RunCardRarityInput,
+  rule: RunRarityRule = RUN_RARITY_RULES[DEFAULT_RUN_RARITY_RULE],
+): RunCardRarity {
+  const value = card.pieces.reduce((total, piece) => total + PIECE_VALUE[piece], 0);
+  // Priced on the canonical curve rather than the asking Run's own pricing rule: a Run that pays
+  // flat material still meets the same ladder, because the tier says what a card IS and the price
+  // rule says what this Run is charged for it.
+  const read = rule.cut === 'material'
+    ? value
+    : runCardCost({ value, formation: [...card.formation], pieces: [...card.pieces] }, DEFAULT_RUN_RULES) * GOLD_SCALE;
+  if (read <= rule.commonMax) return 'common';
+  return read <= rule.uncommonMax ? 'uncommon' : 'rare';
+}
+
+/** The flat cut, then every shift that holds, in declared order. */
 export function runCardRarity(
   pieces: readonly AdlectablePieceType[],
   formation: readonly RunCardFormationCell[],
+  ruleId: RunRarityRuleId = DEFAULT_RUN_RARITY_RULE,
 ): RunCardRarity {
-  const value = pieces.reduce((total, piece) => total + PIECE_VALUE[piece], 0);
-  const band: RunCardRarity = value <= RUN_CARD_COMMON_MAX_VALUE
-    ? 'common'
-    : value <= RUN_CARD_UNCOMMON_MAX_VALUE ? 'uncommon' : 'rare';
-  const shaped = AWKWARD_CARD_FOOTPRINTS.has(rotationalFootprintId(formation))
-    ? stepRarity(band, -1)
-    : band;
-  return pieces.includes('bishop') ? stepRarity(shaped, 1) : shaped;
+  const rule = RUN_RARITY_RULES[ruleId] ?? RUN_RARITY_RULES[DEFAULT_RUN_RARITY_RULE];
+  const card: RunCardRarityInput = { pieces, formation };
+  let band = runCardRarityBand(card, rule);
+  for (const shift of rule.shifts) {
+    if (shift.from !== undefined && band !== shift.from) continue;
+    if (!shift.holds(card)) continue;
+    band = shift.step !== undefined ? stepRarity(band, shift.step) : shift.to ?? band;
+  }
+  return band;
+}
+
+/** The tier a card carries for a Run playing `rules`, which is what its market deals it at. */
+export function runCardRarityFor(
+  card: Pick<RunCoreCard, 'pieces' | 'formation'>,
+  rules: RunRules,
+): RunCardRarity {
+  return runCardRarity(card.pieces, card.formation ?? [], rules.rarity);
+}
+
+export type RunRarityShiftReport = Readonly<{
+  shift: RunRarityShift;
+  /** Cards this shift actually moved. Empty means the shift is DEAD. */
+  moved: readonly string[];
+  /** Cards it holds but declined, because they were not in the tier its `from` names. */
+  declined: readonly string[];
+}>;
+
+/**
+ * What each shift is doing to the cards a Run under `rules` can actually be dealt.
+ *
+ * This is the readout that would have caught the footprint demotion the day it stopped working, so
+ * it is not a debugging aid — it is the thing that makes a shift safe to declare.
+ */
+export function runRarityShiftAudit(rules: RunRules = DEFAULT_RUN_RULES): RunRarityShiftReport[] {
+  const rule = RUN_RARITY_RULES[rules.rarity] ?? RUN_RARITY_RULES[DEFAULT_RUN_RARITY_RULE];
+  const market = RUN_CARD_DECK.filter((card) => cardAllowedByRules(card, rules));
+  const reports = rule.shifts.map((shift) => ({ shift, moved: [] as string[], declined: [] as string[] }));
+  for (const card of market) {
+    const input: RunCardRarityInput = { pieces: card.pieces, formation: card.formation ?? [] };
+    let band = runCardRarityBand(input, rule);
+    for (const report of reports) {
+      const { shift } = report;
+      if (!shift.holds(input)) continue;
+      if (shift.from !== undefined && band !== shift.from) { report.declined.push(card.id); continue; }
+      const landed = shift.step !== undefined ? stepRarity(band, shift.step) : shift.to ?? band;
+      if (landed === band) continue;
+      band = landed;
+      report.moved.push(card.id);
+    }
+  }
+  return reports;
 }
 
 const formationCard = (
@@ -1268,6 +1713,7 @@ export function createRunCardOffer(
   card: RunCoreCard,
   battleIndex: number,
   slotIndex: number,
+  rules: RunRules = LEGACY_RUN_RULES,
 ): RunCardOffer {
   void run.seed;
   return {
@@ -1275,7 +1721,10 @@ export function createRunCardOffer(
     pieces: [...card.pieces],
     formation: card.formation?.map((cell) => ({ ...cell })),
     offerId: `sectio-${battleIndex}-${slotIndex}-${card.id}`,
-    cost: card.value,
+    cost: runCardCost(card, rules),
+    // The tier the OFFERING Run reads, not the catalog's default one, so a Run started on the
+    // material ladder sees its own tiers on the cards it is dealt and in the frames they wear.
+    rarity: runCardRarityFor(card, rules),
   };
 }
 
@@ -1324,33 +1773,103 @@ export function runSectioCardMaxValue(battleIndex: number): number {
     : Number.POSITIVE_INFINITY;
 }
 
+/** How many distinct identities each tier holds, for a Run playing `rules` under a cost ceiling.
+ *
+ * Cached on the market's identity: the deck is frozen, so an answer for one market never changes,
+ * and the pile size derived from it is asked for on every dealt row. */
+const sectioTierSizeCache = new Map<string, Record<RunCardRarity, number>>();
+
+function marketKey(maxValue: number, rules: RunRules): string {
+  return `${maxValue}:${rules.cardSpan}:${rules.pricing}:${rules.rarity}`;
+}
+
+function sectioTierSizes(maxValue: number, rules: RunRules): Record<RunCardRarity, number> {
+  const key = marketKey(maxValue, rules);
+  const cached = sectioTierSizeCache.get(key);
+  if (cached) return cached;
+  const sizes: Record<RunCardRarity, number> = { common: 0, uncommon: 0, rare: 0 };
+  for (const card of RUN_CARD_DECK) {
+    if (card.value > maxValue || !cardAllowedByRules(card, rules)) continue;
+    sizes[runCardRarityFor(card, rules)] += 1;
+  }
+  sectioTierSizeCache.set(key, sizes);
+  return sizes;
+}
+
 /**
- * How many pile seats each rarity owns under a cost ceiling. A ceiling that empties a tier hands
- * that tier's share to the ones still standing. The live six-gold ceiling empties nothing: cheap
- * Bishop cards are Rare on material a first Battle can afford, so the opening market keeps its
- * whole ladder and only its prices are held down.
- * Seats are handed out by largest remainder, so a pile is always exactly its declared size.
+ * How many pile seats each rarity owns at a given pile size. A tier the market leaves empty hands
+ * its share to the tiers still standing, and seats go by largest remainder, so a pile is always
+ * exactly its declared size.
  */
-export function sectioPileRarityQuota(
-  maxValue = Number.POSITIVE_INFINITY,
+export function apportionPileSeats(
+  tierSizes: Readonly<Record<RunCardRarity, number>>,
+  pileSize: number,
 ): Record<RunCardRarity, number> {
   const quota: Record<RunCardRarity, number> = { common: 0, uncommon: 0, rare: 0 };
-  const present = RUN_CARD_RARITIES.filter((rarity) => RUN_CARD_DECK
-    .some((card) => card.value <= maxValue && card.rarity === rarity));
+  // A tier the market leaves empty is not "present": its seats re-apportion to the tiers that can
+  // actually fill them, exactly as a cost ceiling emptying a tier already does.
+  const present = RUN_CARD_RARITIES.filter((rarity) => tierSizes[rarity] > 0);
   const declared = present.reduce((total, rarity) => total + RUN_CARD_RARITY_PERCENT[rarity], 0);
   if (!declared) return quota;
   const remainders = present.map((rarity) => {
-    const exact = RUN_SECTIO_CARD_PILE_SIZE * RUN_CARD_RARITY_PERCENT[rarity] / declared;
+    const exact = pileSize * RUN_CARD_RARITY_PERCENT[rarity] / declared;
     quota[rarity] = Math.floor(exact);
     return { rarity, remainder: exact - Math.floor(exact) };
   });
-  let seats = RUN_SECTIO_CARD_PILE_SIZE - present.reduce((total, rarity) => total + quota[rarity], 0);
+  let seats = pileSize - present.reduce((total, rarity) => total + quota[rarity], 0);
   for (const { rarity } of [...remainders].sort((left, right) => right.remainder - left.remainder)) {
     if (seats <= 0) break;
     quota[rarity] += 1;
     seats -= 1;
   }
   return quota;
+}
+
+/** The largest pile no tier has to repeat an identity to fill. Exported taking bare tier sizes so
+ * the Card Pool studio sizes a PROPOSED market by the same rule the game sizes its own. */
+export function pileSizeForTiers(tierSizes: Readonly<Record<RunCardRarity, number>>): number {
+  const total = RUN_CARD_RARITIES.reduce((sum, rarity) => sum + tierSizes[rarity], 0);
+  for (let size = Math.min(RUN_SECTIO_CARD_PILE_MAX, total); size > 0; size -= 1) {
+    const quota = apportionPileSeats(tierSizes, size);
+    if (RUN_CARD_RARITIES.every((rarity) => quota[rarity] <= tierSizes[rarity])) return size;
+  }
+  return 0;
+}
+
+export function sectioPileRarityQuota(
+  maxValue = Number.POSITIVE_INFINITY,
+  rules: RunRules = LEGACY_RUN_RULES,
+  pileSize = sectioPileSize(maxValue, rules),
+): Record<RunCardRarity, number> {
+  return apportionPileSeats(sectioTierSizes(maxValue, rules), pileSize);
+}
+
+/**
+ * HOW BIG A PILE IS: the largest one every tier can fill without dealing the same card twice.
+ *
+ * Derived, never written down. A pile's seats are shares of its size, and a tier holds however many
+ * identities the rarity rule swept into it — two numbers with no relation, so any size chosen by
+ * hand is a size that will one day exceed a tier and start repeating. That is the whole of the
+ * duplicate this market shipped with: twenty seats were fixed while the tier under them fell to six.
+ *
+ * Bounded above by `RUN_SECTIO_CARD_PILE_MAX`, which is the only judgement here — enough that a
+ * whole Run's walk of offers fits inside ONE pile, so a Run never crosses a pile boundary and
+ * repetition stops being rare and becomes unreachable.
+ */
+export const RUN_SECTIO_CARD_PILE_MAX = 40;
+
+const sectioPileSizeCache = new Map<string, number>();
+
+export function sectioPileSize(
+  maxValue = Number.POSITIVE_INFINITY,
+  rules: RunRules = LEGACY_RUN_RULES,
+): number {
+  const key = marketKey(maxValue, rules);
+  const cached = sectioPileSizeCache.get(key);
+  if (cached !== undefined) return cached;
+  const answer = pileSizeForTiers(sectioTierSizes(maxValue, rules));
+  sectioPileSizeCache.set(key, answer);
+  return answer;
 }
 
 /**
@@ -1362,17 +1881,20 @@ export function sectioCardPile(
   seed: number,
   pileIndex: number,
   maxValue = Number.POSITIVE_INFINITY,
+  rules: RunRules = LEGACY_RUN_RULES,
 ): RunCoreCard[] {
   const epoch = Math.max(0, Math.floor(pileIndex));
-  const quota = sectioPileRarityQuota(maxValue);
+  const quota = sectioPileRarityQuota(maxValue, rules);
   const seats = RUN_CARD_RARITIES.flatMap((rarity) => {
-    const pool = RUN_CARD_DECK.filter((card) => card.value <= maxValue && card.rarity === rarity);
-    const drawn: RunCoreCard[] = [];
-    // A tier smaller than its quota repeats identities rather than shrinking the pile; no live
-    // ceiling reaches that, but a pile is defined by its size and must not silently lose seats.
-    for (let pass = 0; pool.length && drawn.length < quota[rarity]; pass += 1) {
-      drawn.push(...shuffled(pool, mixSeed(seed, `sectio-pile:${rarity}:${pass}`, epoch))
-        .slice(0, quota[rarity] - drawn.length));
+    const pool = RUN_CARD_DECK.filter((card) => (
+      card.value <= maxValue && runCardRarityFor(card, rules) === rarity && cardAllowedByRules(card, rules)
+    ));
+    // One shuffle, one slice. `sectioPileSize` is defined as the largest size no tier has to
+    // repeat to fill, so a second pass over the pool cannot be reached -- and if it ever could,
+    // the size derivation is wrong and should be fixed rather than papered over here.
+    const drawn = shuffled(pool, mixSeed(seed, `sectio-pile:${rarity}:0`, epoch)).slice(0, quota[rarity]);
+    if (drawn.length < quota[rarity]) {
+      throw new Error(`Sectio pile wants ${quota[rarity]} ${rarity} cards and the market holds ${pool.length}.`);
     }
     return drawn;
   });
@@ -1396,9 +1918,18 @@ export function openingCardGrantPool(): RunCoreCard[] {
 }
 
 /** The Run's opening card offers: distinct identities drawn from the band, fixed by seed. */
-/** The Kings the opening screen deals: three of the fifteen, shuffled by the Run's own seed. */
-export function openingKingOffers(seed: number): string[] {
-  return shuffled([...RUN_STARTER_CARDS], mixSeed(seed, 'vacantia-opening-kings', 0))
+/**
+ * The Kings the opening screen deals, shuffled by the Run's own seed.
+ *
+ * The Run's rules bind the King as firmly as the market. A Run playing the two-by-two catalog
+ * cannot open by handing the player a three-long or Z-shaped starter -- it would break the rule
+ * on the very first card, before the market has offered anything, and that formation then sits in
+ * the army for the whole Run.
+ */
+export function openingKingOffers(seed: number, rules: RunRules = LEGACY_RUN_RULES): string[] {
+  const eligible = RUN_STARTER_CARDS.filter((card) => cardAllowedByRules(card, rules));
+  if (!eligible.length) throw new Error('No King fits this Run’s formation rules.');
+  return shuffled([...eligible], mixSeed(seed, 'vacantia-opening-kings', 0))
     .slice(0, RUN_OPENING_CARD_OFFER_COUNT)
     .map((card) => card.id);
 }
@@ -1420,22 +1951,27 @@ export function sectioCardOffersAtCursor(
   battleIndex: number,
   cursor: number,
   offerCount: number,
+  rules: RunRules = LEGACY_RUN_RULES,
 ): RunCardOffer[] {
   const start = Math.max(0, Math.floor(cursor));
   const maxValue = runSectioCardMaxValue(battleIndex);
+  // Every pile under one ceiling is the same size, so the cursor still divides. The size itself is
+  // derived from the tiers rather than fixed, which is what keeps a pile from outgrowing them.
+  const pileSize = sectioPileSize(maxValue, rules);
+  if (pileSize <= 0) throw new Error('Sectio has no card this market can deal.');
   const piles = new Map<number, RunCoreCard[]>();
   return Array.from({ length: offerCount }, (_, slotIndex) => {
     const absoluteIndex = start + slotIndex;
-    const pileIndex = Math.floor(absoluteIndex / RUN_SECTIO_CARD_PILE_SIZE);
-    const pileCursor = absoluteIndex % RUN_SECTIO_CARD_PILE_SIZE;
+    const pileIndex = Math.floor(absoluteIndex / pileSize);
+    const pileCursor = absoluteIndex % pileSize;
     let pile = piles.get(pileIndex);
     if (!pile) {
-      pile = sectioCardPile(seed, pileIndex, maxValue);
+      pile = sectioCardPile(seed, pileIndex, maxValue, rules);
       piles.set(pileIndex, pile);
     }
     const card = pile[pileCursor];
     if (!card) throw new Error(`Sectio pile has no card at cursor ${absoluteIndex}.`);
-    return createRunCardOffer({ seed }, card, battleIndex, absoluteIndex);
+    return createRunCardOffer({ seed }, card, battleIndex, absoluteIndex, rules);
   });
 }
 
@@ -1524,6 +2060,8 @@ export interface RunCreateOptions {
   kingId?: RunStarterCardId;
   /** Open on the King choice rather than starting one. Only the player-facing entry sets this. */
   chooseKing?: boolean;
+  /** The rules to bind this Run to. Defaults to DEFAULT_RUN_RULES. */
+  rules?: RunRules;
 }
 
 export function createRun(
@@ -1558,6 +2096,7 @@ export function createRun(
     id: freshRunId(),
     seed: seed >>> 0,
     ataraxiaTier,
+    rules: options?.rules ?? DEFAULT_RUN_RULES,
     deploymentMode: 'arranged',
     updatedAt: createdAt,
     war,
@@ -1591,7 +2130,7 @@ export function createRun(
     army: [],
     cards: [],
     nextArmyUnitNumberByType: initialArmyNumberState(),
-    commendatio: { kingOffers: openingKingOffers(seed) },
+    commendatio: { kingOffers: openingKingOffers(seed, options?.rules ?? DEFAULT_RUN_RULES) },
   };
 }
 
@@ -1653,7 +2192,12 @@ function repairRunCardOffers(value: unknown): RunCardOffer[] {
       pieces: [...core.pieces],
       formation: core.formation?.map((cell) => ({ ...cell })),
       offerId: offer.offerId,
-      cost: core.value,
+      // Keep the price the offer was DEALT at. A repair reconstructs a row the Run has already
+      // been quoted, and re-deriving the cost here would silently re-price a live market -- which
+      // was invisible while every Run priced by material and every re-derivation agreed.
+      cost: typeof offer.cost === 'number' && Number.isFinite(offer.cost) && offer.cost >= 0
+        ? offer.cost
+        : core.value,
     }];
   });
 }
@@ -1791,6 +2335,39 @@ function normalizedArmyIdentity(run: RunDocument): {
   return { army, sectio, nextArmyUnitNumberByType, changed };
 }
 
+/**
+ * The phases a Battle's own report outlives the report screen for.
+ *
+ * A won Battle is not finished when Continue is pressed: the Conflict's Bona Vacantia and the
+ * Sectio are where its gold is actually spent, and the player reading a card's price is exactly
+ * the player who wants to check what the fight paid. So the report stays with them, and the
+ * Sectio can hand them back to the Victory screen they came from (ADR-0568). Leaving for the
+ * next Deployment is what ends the Battle, and retires it.
+ */
+export function runPhaseKeepsBattleReport(phase: RunPhase): boolean {
+  return phase === 'aftermath' || phase === 'bona-vacantia' || phase === 'sectio';
+}
+
+/** The Battle a non-aftermath screen's retained report must belong to, or null when none may. */
+function retainedBattleReportIndex(run: RunDocument): number | null {
+  if (run.phase === 'sectio') return run.sectio?.afterBattleIndex ?? null;
+  if (run.phase === 'bona-vacantia') {
+    return run.vacantia?.kind === 'post-battle' ? run.vacantia.afterBattleIndex : null;
+  }
+  return null;
+}
+
+/**
+ * The Victory report the Sectio may hand the player back to, or null when it has none.
+ *
+ * A Sectio crafted or migrated before the report was retained simply has nothing to go back to;
+ * that is an absent review, not a broken one.
+ */
+export function sectioBattleReport(run: RunDocument): RunAftermathState | null {
+  if (run.phase !== 'sectio' || !run.sectio || !run.aftermath) return null;
+  return run.aftermath.battleIndex === run.sectio.afterBattleIndex ? run.aftermath : null;
+}
+
 export function normalizeRunDocument(run: RunDocument): RunDocument {
   const raw = run as Omit<RunDocument, 'phase'> & {
     phase: RunPhase | 'draft';
@@ -1861,10 +2438,20 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   if (next.vacantia && !Array.isArray(next.vacantia.cardOffers)) {
     next = { ...next, vacantia: { ...next.vacantia, cardOffers: [] } };
   }
-  // The aftermath report belongs to the Battle it closed, so it is not carried into any
-  // later phase. Repair an incomplete current save rather than leaking the report forward.
-  if (next.aftermath === undefined || (next.phase !== 'aftermath' && next.aftermath !== null)) {
-    next = { ...next, aftermath: next.phase === 'aftermath' ? next.aftermath ?? null : null };
+  // The aftermath report belongs to the Battle it closed, and is kept for exactly as long as
+  // that Battle's own result is still on screen: the report, the Conflict's Bona Vacantia, and
+  // the Sectio the Battle's gold is spent in are one moment, so the Sectio can hand the player
+  // back to the Victory it came from (ADR-0568). Leaving for the next Deployment retires it.
+  // Repair an incomplete or forward-leaked current save rather than trusting the stored field.
+  if (next.aftermath === undefined || (!runPhaseKeepsBattleReport(next.phase) && next.aftermath !== null)) {
+    next = { ...next, aftermath: runPhaseKeepsBattleReport(next.phase) ? next.aftermath ?? null : null };
+  }
+  // A retained report only ever describes the Battle the screen holding it followed. One that
+  // names a different Battle is a document that leaked a report forward, so it is dropped
+  // rather than shown against the wrong fight.
+  if (next.aftermath && next.phase !== 'aftermath'
+    && next.aftermath.battleIndex !== retainedBattleReportIndex(next)) {
+    next = { ...next, aftermath: null };
   }
   // A report whose standing count is missing or nonsense surrendered nothing, which is the
   // reading that keeps Continue banking the total this screen already showed.
@@ -2916,6 +3503,12 @@ export function migrateRunSaveDocument(value: unknown): RunDocument {
   if (stored.runSaveVersion === RUN_SAVE_VERSION_COMMENDATIO_SOURCE) {
     stored = migrateRunToDeditio(stored);
   }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_DEDITIO_SOURCE) {
+    stored = migrateRunToRunRules(stored);
+  }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_RUN_RULES_SOURCE) {
+    stored = migrateRunToCardPricing(stored);
+  }
   return normalizeRunDocument(stored as unknown as RunDocument);
 }
 
@@ -2956,11 +3549,36 @@ function migrateRunToCommendatio(stored: Record<string, unknown>): Record<string
  * paid a Deditio, and Continue must bank exactly the total the screen has been showing. Every
  * Battle from here on reads its own count off the board.
  */
+/**
+ * Runs predate the rules that now bind them, so they take the game they were actually playing:
+ * the wide catalog, turnable at placement. NOT the new default -- a Run mid-flight has already
+ * been dealt cards from the wide pool and has them in hand, and narrowing its market now would
+ * leave it holding formations its own market can no longer offer.
+ */
+function migrateRunToRunRules(stored: Record<string, unknown>): Record<string, unknown> {
+  return { ...stored, runSaveVersion: RUN_SAVE_VERSION_RUN_RULES_SOURCE, rules: { ...LEGACY_RUN_RULES } };
+}
+
+/**
+ * Pricing joins the Run's rules. Every Run written before it was paying material, and its offers
+ * were priced that way when they were dealt -- so it keeps material, not the new option.
+ */
+function migrateRunToCardPricing(stored: Record<string, unknown>): Record<string, unknown> {
+  const rules = stored.rules && typeof stored.rules === 'object' && !Array.isArray(stored.rules)
+    ? stored.rules as Record<string, unknown>
+    : { ...LEGACY_RUN_RULES };
+  return {
+    ...stored,
+    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    rules: { ...rules, pricing: 'material' },
+  };
+}
+
 function migrateRunToDeditio(stored: Record<string, unknown>): Record<string, unknown> {
   const aftermath = stored.aftermath && typeof stored.aftermath === 'object' && !Array.isArray(stored.aftermath)
     ? { ...stored.aftermath as Record<string, unknown>, standingEnemyValue: 0 }
     : stored.aftermath;
-  return { ...stored, runSaveVersion: CURRENT_RUN_SAVE_VERSION, aftermath };
+  return { ...stored, runSaveVersion: RUN_SAVE_VERSION_DEDITIO_SOURCE, aftermath };
 }
 
 export function addArmyPieces(
@@ -3325,6 +3943,29 @@ export function undoRunBattleMove(
 }
 
 /**
+ * Charge a checkpoint older than one just restored for the Undo that restoring it cost.
+ *
+ * A checkpoint records the purse the Battle held before its move, so it is a photograph of a
+ * moment, not a running balance. Undoing back to it restores that photograph -- including
+ * gold that has since been spent undoing everything in between, which would make the whole
+ * walk back through a Battle cost the single gold of its last step. Every earlier checkpoint
+ * therefore pays the price the moment it is passed over, and the purse it will restore stays
+ * the one the player would really be holding there.
+ *
+ * The floor is the empty purse rather than a debt: a checkpoint too poor to buy its own Undo
+ * is unreachable, and `canUndoRunBattleMove` already says so from the price alone. Letting it
+ * go negative would say the same thing by making the checkpoint malformed instead.
+ */
+export function chargeRunBattleUndoCheckpoint(
+  checkpoint: RunBattleUndoCheckpoint,
+): RunBattleUndoCheckpoint {
+  return {
+    ...checkpoint,
+    goldTenths: Math.max(0, checkpoint.goldTenths - RUN_BATTLE_UNDO_COST_TENTHS),
+  };
+}
+
+/**
  * One thing the Run did to a live Battle, said in the words the Battle will use.
  *
  * The Run reaches into a running Battle to pay bounties and land Reservists -- changes the
@@ -3607,10 +4248,32 @@ export function closeBattle(run: RunDocument, report: RunBattleReport): RunDocum
   });
 }
 
-/** Leave the aftermath report; whatever follows the Battle opens now. */
+/**
+ * Leave the aftermath report; whatever follows the Battle opens now.
+ *
+ * A report REACHED BACK TO from the Sectio it already opened leaves for that same Sectio, exactly
+ * as it stands: the gold was banked, the offers were drawn and something may already have been
+ * bought there. Re-running the transition would bank the reward twice and deal a second row of
+ * cards, so the review's way out is a return and never a repeat (ADR-0568).
+ */
 export function leaveAftermath(run: RunDocument): RunDocument {
   if (run.phase !== 'aftermath' || !run.aftermath) return run;
+  if (run.sectio && run.sectio.afterBattleIndex === run.aftermath.battleIndex) {
+    return touch({ ...run, phase: 'sectio' });
+  }
   return openSectio(run, run.aftermath.survivingUnitIds, run.aftermath.standingEnemyValue);
+}
+
+/**
+ * Reopen the Victory report of the Battle this Sectio followed, without disturbing the Sectio.
+ *
+ * This is a REVIEW and not a rewind: the Run stays exactly as the Sectio left it — gold banked,
+ * cards admitted, offers locked — and Continue puts the player back where they pressed Back.
+ * Reversing the document into a fought Battle would be the wrong repair for the same reason
+ * ADR-0455 gave when the report gained its own Back to the board.
+ */
+export function reviewSectioBattleReport(run: RunDocument): RunDocument {
+  return sectioBattleReport(run) ? touch({ ...run, phase: 'aftermath' }) : run;
 }
 
 /**
@@ -3634,12 +4297,14 @@ export function openSectio(
   if (finalBattle) {
     return touch({ ...run, phase: 'victory', sectio: null, deployment: null, battleRuntime: null, aftermath: null });
   }
+  // The report is CARRIED rather than retired: the Bona Vacantia and Sectio this opens are where
+  // the Battle's gold is spent, so the player can turn back to what the fight paid while they are
+  // deciding what to spend it on (ADR-0568). Leaving the Sectio for the next Deployment ends it.
   const banked: RunDocument = {
     ...run,
     goldTenths: run.goldTenths + victoryGoldTenths + rifleTenths + speedGoldTenths + deditioTenths,
     deployment: null,
     battleRuntime: null,
-    aftermath: null,
   };
   // A loot Battle closes a Conflict, so the next one opens here -- before the Sectio, so the
   // player inherits the lipsanon and then decides what to spend on. The Battle's gold is
@@ -3678,6 +4343,7 @@ function openPostBattleSectio(run: RunDocument, victoryGoldTenths: number): RunD
     next.battleIndex,
     next.sectioCardCursor,
     cardCount,
+    runRules(next),
   );
   next = { ...next, sectioCardCursor: next.sectioCardCursor + cardCount };
   let paidLipsanonOffer: LipsanonId | null = null;
@@ -3719,11 +4385,33 @@ function openPostBattleSectio(run: RunDocument, victoryGoldTenths: number): RunD
   };
 }
 
+/**
+ * How many cards one Sectio admits. A visit is a CHOICE between the faces it dealt, not a
+ * shopping list drawn against whatever gold the Run happens to be carrying: an army that can
+ * buy the whole row outgrows its War in a Sectio or two, and every Battle after that is priced
+ * for someone else. One is also what the visit's other two transactions already allow --
+ * Expunctio strikes one card, the After-Hours Key sells one lipsanon -- so the card row stops
+ * being the surface that behaves differently.
+ *
+ * Reset Sectio restores the whole visit, which is what keeps the single admission a decision
+ * rather than a misclick.
+ */
+export const SECTIO_ADLECTIO_LIMIT = 1;
+
+/**
+ * Whether this Sectio's admission has been spent. The unbought offers stay on the table and
+ * stay readable; they simply cannot be taken until Reset returns the visit to its entry.
+ */
+export function sectioAdlectioSpent(run: RunDocument): boolean {
+  return (run.sectio?.adlectedCardOfferIds.length ?? 0) >= SECTIO_ADLECTIO_LIMIT;
+}
+
 export function performAdlectio(run: RunDocument, offerId: string): RunDocument {
   const offer = run.sectio?.cardOffers.find((candidate) => candidate.offerId === offerId);
   if (
     run.phase !== 'sectio'
     || !run.sectio
+    || sectioAdlectioSpent(run)
     || run.sectio.adlectedCardOfferIds.includes(offerId)
     || !offer
   ) return run;
@@ -3821,6 +4509,32 @@ export function resetSectio(run: RunDocument): RunDocument {
   });
 }
 
+/**
+ * The cards THIS Sectio visit admitted: held (or already struck) now, absent from the snapshot the
+ * visit was entered with. Reset Sectio takes back exactly these, so a surface that lists held cards
+ * can say which ones the visit is still holding provisionally instead of leaving the player to
+ * remember what was just bought. The struck card is included because it too was admitted this
+ * visit — Expunctio shows that record alongside the cards still held.
+ *
+ * The entry snapshot is the authority rather than `acquiredAfterBattleIndex`, which numbers the
+ * Sectio a card came from and cannot separate this visit's Adlectiones from what the visit opened
+ * holding once a Run is crafted or migrated. An absent snapshot yields nothing: no Run holds zero
+ * cards, so an empty one means the visit has no record to compare against, not that everything is
+ * new.
+ */
+export function sectioAdmittedCardIds(run: RunDocument): ReadonlySet<string> {
+  if (run.phase !== 'sectio' || !run.sectio) return new Set();
+  const entryCards = run.sectio.entrySnapshot?.cards ?? [];
+  if (entryCards.length === 0) return new Set();
+  const entryCardIds = new Set(entryCards.map((card) => card.id));
+  const struck = run.sectio.expunctedCard ? [run.sectio.expunctedCard.card] : [];
+  return new Set(
+    [...run.cards, ...struck]
+      .filter((card) => !entryCardIds.has(card.id))
+      .map((card) => card.id),
+  );
+}
+
 export function sectioHasChanges(run: RunDocument): boolean {
   if (run.phase !== 'sectio' || !run.sectio?.entrySnapshot) return false;
   const snapshot = run.sectio.entrySnapshot;
@@ -3852,7 +4566,7 @@ export function takeVacantiaLipsanon(run: RunDocument, lipsanon: LipsanonId): Ru
   if (acquired === run) return run;
   const vacantia = run.vacantia;
   const opened = vacantia.kind === 'opening'
-    ? { ...acquired, phase: 'deployment' as const, vacantia: null, sectio: null }
+    ? { ...acquired, phase: 'deployment' as const, vacantia: null, sectio: null, aftermath: null }
     : openPostBattleSectio(acquired, vacantia.victoryGoldTenths);
   return touch(opened);
 }
@@ -3957,6 +4671,8 @@ export function leaveSectio(run: RunDocument): RunDocument {
     deployment: null,
     battleRuntime: null,
     sectio: null,
+    // The Battle whose report this was is over the moment the next one is being deployed for.
+    aftermath: null,
   });
 }
 
@@ -3966,6 +4682,35 @@ export function leaveSectio(run: RunDocument): RunDocument {
  */
 export function formatGold(goldTenths: number): string {
   return String(Math.round(goldTenths));
+}
+
+/** How large an army is, said once. This counts UNITS — individual pieces, the King among
+ *  them — not the formation cards that seat them. It belongs on the Army ledger, where each
+ *  unit is its own row you can name, inspect and lose. For "how big is this Run", the honest
+ *  measure is cards: see runHeldCardCount below. */
+export function formatArmySize(units: number): string {
+  return `${units} unit${units === 1 ? '' : 's'}`;
+}
+
+export function formatCardCount(cards: number): string {
+  return `${cards} card${cards === 1 ? '' : 's'}`;
+}
+
+/**
+ * How many cards this Run can actually field.
+ *
+ * The card — not the unit — is what Deployment deals: `resolveDeploymentCapacity` walks the deal
+ * in card order and admits each card WHOLE or not at all, so a formation that overruns the
+ * level's band takes none of its units onto the board. That makes a unit count the wrong measure
+ * of a Run's size at a glance, and this the right one.
+ *
+ * A card whose every unit has fallen keeps its seats as nulls rather than leaving the
+ * Chartulary, and deals nothing. It is not counted here — only Expunctio removes a card, and a
+ * hollow one is not a force.
+ */
+export function runHeldCardCount(run: Pick<RunDocument, 'cards' | 'army'>): number {
+  const alive = new Set(run.army.map((unit) => unit.id));
+  return run.cards.filter((card) => runCardUnitIds(card).some((unitId) => alive.has(unitId))).length;
 }
 
 /** What a card of `value` points costs, in gold — the price on its coin. */

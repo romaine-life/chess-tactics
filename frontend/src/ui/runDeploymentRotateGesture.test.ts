@@ -31,7 +31,10 @@ describe('Run Deployment secondary-click turn', () => {
 
   it('carries the gesture from the shared viewport to the Deployment board', () => {
     expect(skirmishBoard).toContain('onSecondaryClick?: () => void;');
-    expect(skirmishBoard).toContain('onSecondaryClick={onSecondaryClick}');
+    expect(skirmishBoard).toContain('onSecondaryClick={secondaryClick}');
+    // Deployment carries a formation on the cursor, so it OWNS the button while it is arranging;
+    // the board's own premove take-back (ADR-0550) is only the fallback.
+    expect(skirmishBoard).toContain('const secondaryClick = onSecondaryClick ?? takeBackPremoves;');
     expect(skirmish).toContain('onBoardSecondaryClick?: () => void;');
     expect(skirmish).toContain('onSecondaryClick={runDeployment?.onBoardSecondaryClick}');
   });
@@ -297,7 +300,7 @@ describe('Run Deployment hand', () => {
     expect(buttons.length).toBeGreaterThan(0);
     expect(filled).toHaveLength(buttons.length);
     // Each carries its own index into the surface, so no two neighbours sample the same grain.
-    const indices = [...panel.matchAll(/'--run-leaf-control-index' as string\]: (\d+)/g)]
+    const indices = [...panel.matchAll(/'--chrome-leaf-surface-index' as string\]: (\d+)/g)]
       .map(([, value]) => Number(value));
     expect(indices).toHaveLength(buttons.length);
     expect(new Set(indices).size).toBe(indices.length);

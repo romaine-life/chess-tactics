@@ -1941,6 +1941,14 @@ h1 {
   --main-menu-content-inset-inline: calc(var(--main-menu-frame-inset) + var(--main-menu-rail-pad-inline));
   --main-menu-tab-column-w: 322px;
   --main-menu-tab-column-gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
+  /* The menu language's label outline, in ONE place: the rail tabs wear it, and so do the
+     destination slabs a click behind them (Play's Run cards, the Editor's level list) — they sit
+     on the same wood in the same shell, so plain text there reads as a mismatch, not hierarchy.
+     Everything that clips a label has to make room for it; see .settings-tab-label. Small utility
+     buttons (Reset, Open) deliberately do NOT take it — 5px closes their smaller text solid.
+     MM_LABEL_LIVE mirrors both values and mmLive.test.ts derives them back out of here. */
+  --menu-label-stroke-w: 5px;
+  --menu-label-stroke-ink: #02070b;
   /* Spatial-role tokens (ADR-0031) — COMFORTABLE density is the default; in-game
      surfaces override these to the tight end (see .skirmish-screen). inset = padding
      on all sides; stack = vertical gap; inline = horizontal gap; gutter = section gaps. */
@@ -1966,6 +1974,16 @@ h1 {
      width, ui/shell/layoutViewport.ts) so browser zoom magnifies them instead of
      re-flowing; identical to plain vw at 100% zoom. */
   --app-header-h: clamp(84px, calc(var(--layout-vw, 100vw) * .05), 88px);
+  /* Kit frame art is drawn with a 1px fully transparent margin on each edge of its 24px
+     slice, so a rail lands its ink one raster line inside the box it was asked to fill.
+     Where that line falls between two surfaces, neither paints it and the screen behind
+     shows through as a hairline. The app-shell title divider's inner margin is covered from
+     BELOW — the Controls panel already does it with --app-shell-divider-fill-overlap, and
+     this is the same apron for the shell workspace's surface fill. (The Controls panel's
+     own outer margin is answered on the chrome side instead, by outsetting its frame; see
+     chromeFamilyRuntime.) Kept a plain length: overflow-clip-margin, which has to let the
+     apron past the workspace hosts, drops calc() and max() values whole. */
+  --shell-workspace-paint-apron: 1px;
   /* motion — duration + easing tokens (ADR-0043, revised by ADR-0046). Map MOTION ROLES
      onto these; don't hand-pick ms per element. Just TWO durations, by design:
        fast = instant feedback (hover / toggle / focus / filter swap),
@@ -4360,9 +4378,19 @@ h1 {
   z-index: -1;
 }
 
-/* A complete pre-drawn raster owns every environment pixel. Remove the ordinary
-   battlefield backdrop layer altogether instead of retaining an invisible decoded image. */
-.skirmish-screen.is-predrawn-board::before {
+/* A pre-drawn raster does NOT own every environment pixel — measured, Hold the Bridge's is
+   1450x816 world px against screens that routinely want more, and the scene layer paints
+   nothing beyond it. Deleting the backdrop left bare stage behind the painting, so the only
+   way to hide it was to hold the camera inside the raster: zero zoom-out range at almost every
+   window size, and a board cropped outright on a wide-short one. The backdrop costs one
+   already-decoded gradient and buys the camera its range back (ADR-0574). */
+
+/* Same call for a Run phase whose workspace paints an opaque installed raster across the
+   whole environment column (RunScreen sets the class). The battlefield backdrop reaches no
+   pixel there — measured, it showed only in the seams the workspace paint apron now closes —
+   so it is a decoded image nothing can see. A phase that yields its fill to a retained scene
+   (Sectio's room) still needs it, and keeps it. */
+.skirmish-screen.run-workspace-owns-environment::before {
   content: none;
 }
 
@@ -5741,6 +5769,14 @@ body.loading-bootstrap .app-startup-status {
   z-index: 40000;
 }
 
+/* Deliberately NO `position` and no inset here. The callout's placement rides its inline
+   `transform`, translating from its own static position — the anchor seated on the promotion
+   square — so it lands identically whether the box computes to static, relative or absolute.
+   It used to say `position: absolute` and place itself with `right`/`left`/`top`, which the
+   registered inner frame silently took away: any inner box carrying a surface fill is given
+   `position: relative` further down this file, so those insets became nudges from a flow
+   position 296 BOARD units wide, and the callout swung further right the more the player
+   zoomed in — straight under the Controls panel (ADR-0570). */
 .skirmish-promotion-picker {
   color: #eff9ff;
   display: grid;
@@ -5748,7 +5784,6 @@ body.loading-bootstrap .app-startup-status {
   inline-size: 296px;
   padding: 8px;
   pointer-events: auto;
-  position: absolute;
 }
 
 .skirmish-promotion-options [data-chrome-fill-surface] {
@@ -5926,6 +5961,21 @@ body.loading-bootstrap .app-startup-status {
   pointer-events: none;
   position: absolute;
   z-index: 0;
+}
+
+/* ADR-0433: a repeated leaf collection never restarts its wood at the same origin on
+   every item. The renderer owns a monotonic phase index and this one derivation turns
+   it into the surface offset, so no consumer computes a ladder from DOM position
+   (forbidden by ADR-0063). It serves both ways a leaf gets painted: an explicitly named
+   surface, and the registry-driven material rule of any surface that has adopted the
+   hierarchy — the Controls panel and every result screen (ADR-0557). */
+:root {
+  --chrome-leaf-surface-pitch: calc(46px + var(--ds-inline-tight));
+}
+
+[data-chrome-fill-surface],
+[data-chrome-leaf-surface] [data-chrome-unit] {
+  --chrome-surface-position-y: calc(var(--chrome-leaf-surface-index, 0) * -1 * var(--chrome-leaf-surface-pitch));
 }
 
 :is(.level-editor-screen, .skirmish-screen) .le-outer-panel > .le-outer-panel-fill {
@@ -6426,28 +6476,16 @@ body.loading-bootstrap .app-startup-status {
   min-width: var(--le-inner-square);
   width: var(--le-inner-square);
 }
+/* The default-facing menu is the same divided pad as the compass, floated under its trigger. It
+   paints no panel of its own — the pad's installed frame IS the menu's chrome (ADR-0570) — so all
+   that is left here is where it hangs. The float stays on this wrapper rather than moving onto the
+   pad: a divided grid positions itself relative for its own rail layer, and the registry's inner-box
+   rule restates that at a specificity a class on the box cannot reliably beat. */
 .le-direction-menu {
-  background: rgba(3, 10, 17, .97);
-  border: 1px solid rgba(93, 160, 211, .42);
-  border-radius: 6px;
-  box-shadow: 0 10px 22px rgba(0, 0, 0, .46), inset 0 0 0 1px rgba(221, 237, 255, .05);
-  display: grid;
-  gap: 4px;
-  grid-template-columns: repeat(3, 32px);
-  grid-template-rows: repeat(3, 32px);
-  padding: 6px;
   position: absolute;
   right: 0;
   top: calc(100% + 4px);
   z-index: 80;
-}
-.le-direction-cell { border-radius: 4px; font-size: var(--ds-text-xs); height: 32px; width: 32px; }
-.le-direction-cell.is-empty {
-  background: rgba(2, 8, 13, .24);
-  border-color: rgba(67, 127, 179, .16);
-  cursor: default;
-  opacity: .55;
-  pointer-events: none;
 }
 .le-board-warning { color: #f0bd55; font-size: var(--ds-text-sm); line-height: 1.3; margin: 0; text-shadow: 0 0 8px rgba(240, 189, 85, .22); }
 
@@ -6492,6 +6530,26 @@ body.loading-bootstrap .app-startup-status {
   display: flex;
   min-width: 0;
 }
+/* A picker SEATED in a cell of a divided box: the cell's edges are the box's rails, so it takes no
+   frame of its own and fills the whole area between them. It names no registered unit — the
+   `inner-dropdown` unit IS the 9-slice frame — and paints nothing but the wood its host names, so
+   the declarations here are geometry only. See HouseSelect's `seated`. */
+.house-select-seated {
+  block-size: 100%;
+  gap: var(--ds-inline);
+  inline-size: 100%;
+  min-block-size: var(--run-prep-plate-h, 30px);
+  padding: 0 var(--ds-inset);
+}
+.house-select-seated-label {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.house-select-seated > .stepper-glyph {
+  flex: 0 0 auto;
+}
 .house-select-trigger:disabled {
   cursor: default;
   opacity: .55;
@@ -6516,52 +6574,23 @@ body.loading-bootstrap .app-startup-status {
   position: fixed;
   z-index: 2200;
 }
+/* The menu is a divided grid: its options are rows, its scrollbar sits in the framed gutter the
+   grid rules off, and every rail between options is the grid's own. The apron that used to be
+   hand-computed here is the grid's --chrome-divided-grid-inline-apron-start. */
 .house-select-menu-box {
-  display: block;
   max-height: var(--house-select-menu-max-height, 260px);
   min-height: 0;
   min-width: 0;
-  overflow: visible;
   width: 100%;
 }
-.house-select-menu-scroll {
-  --house-select-clip-apron-left: calc(var(--le-chrome-inner-rail-w, 7px) + max(var(--le-inner-atom-left-overhang, 0px), var(--le-inner-divider-atom-left-overhang, 0px)));
-  --house-select-clip-apron-right: calc(var(--le-chrome-inner-rail-w, 7px) + max(var(--le-inner-atom-right-overhang, 0px), var(--le-inner-divider-atom-right-overhang, 0px)));
-  margin-inline:
-    calc(-1 * var(--house-select-clip-apron-left))
-    calc(-1 * var(--house-select-clip-apron-right));
-  max-height: calc(var(--house-select-menu-max-height, 260px) - (var(--le-chrome-inner-rail-w, 7px) * 2));
-  min-height: 0;
+.house-select-menu-box > .chrome-divided-grid__scroll {
+  block-size: auto;
+  max-block-size: calc(var(--house-select-menu-max-height, 260px) - (var(--le-chrome-inner-rail-w, 7px) * 2));
+  min-block-size: 0;
 }
-.house-select-menu-scroll > .kit-scroll-content {
-  box-sizing: border-box;
+.house-select-menu-box > .chrome-divided-grid__scroll > .kit-scroll-content {
   height: auto;
   max-height: inherit;
-  overflow-x: hidden;
-  padding-inline: var(--house-select-clip-apron-left) var(--house-select-clip-apron-right);
-}
-.house-select-menu-scroll > .kit-scroll-rail {
-  bottom: 0;
-  right: calc(var(--house-select-clip-apron-right) - var(--le-chrome-inner-rail-w, 7px));
-  top: 0;
-  z-index: 5;
-}
-.house-select-menu-options {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  padding: 0;
-}
-.house-select-menu-options > .chrome-divider[data-chrome-divider-role="inner"],
-.house-select-option-group-items > .chrome-divider[data-chrome-divider-role="inner"] {
-  --kit-divider-gap: 0px;
-  --kit-divider-reach: var(--le-chrome-inner-rail-w, 7px);
-}
-.house-select-option-group,
-.house-select-option-group-items {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
 }
 .house-select-option-group-label {
   background: rgba(4, 15, 24, .78);
@@ -6584,14 +6613,19 @@ body.loading-bootstrap .app-startup-status {
   font: 800 var(--ds-text-xs)/1 var(--ds-font-sans, system-ui, sans-serif);
   min-height: 30px;
   min-width: 0;
-  overflow: hidden;
-  padding: 7px 26px 7px 9px;
+  padding: 7px 12px 7px 9px;
   text-align: left;
-  text-overflow: ellipsis;
   text-shadow: 0 2px 0 #010407;
   text-transform: uppercase;
-  white-space: nowrap;
   width: 100%;
+}
+/* The option row is a grid cell of the menu, so the truncation lives on the label rather than on
+   the row: text-overflow needs a block container, and an anonymous grid item is not one. */
+.house-select-option-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .house-select-option.is-active,
 .house-select-option:hover:not(:disabled) {
@@ -7308,6 +7342,34 @@ body.loading-bootstrap .app-startup-status {
   z-index: 2;
 }
 
+/* One divided row's share of the verticals, for a box that also carries a spanning row and so
+   cannot rule a single line down the whole of itself. It overlays its OWN row only; consecutive
+   rows' segments stack into the same continuous line, and the four-way junctions on the row
+   boundaries between them are already placed by the boundary layer. */
+.chrome-divided-grid__row {
+  position: relative;
+}
+
+/* A per-row segment does NOT bleed past its row. The box-level rail bleeds because it is one line
+   meeting the frame at both ends; a segment's ends are seams with the next segment, and the
+   junction atom the boundary layer places sits exactly there and covers them. Left bleeding, the
+   last divided row's overhang carried on into the row below it — which is how a stub of rail
+   appeared inside the spanning verb after the rail itself had correctly stopped. */
+.chrome-divided-grid__row-rails > .chrome-divided-grid__vertical-rail {
+  margin-block: 0 !important;
+}
+
+.chrome-divided-grid__row-rails {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: var(--chrome-divided-grid-columns);
+  grid-template-rows: minmax(0, 1fr);
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
 .chrome-divided-grid__scroll {
   block-size: 100%;
   margin-inline-start: calc(-1 * var(--chrome-divided-grid-inline-apron-start));
@@ -7338,6 +7400,13 @@ body.loading-bootstrap .app-startup-status {
   box-sizing: border-box;
   display: grid;
   min-inline-size: 0;
+}
+
+/* A semantic group of rows generates no box of its own, so the rows inside it stay grid items of
+   the grid and the rails between them stay that grid's — laid and capped by one topology. A group
+   that boxed its rows would have to cap rails against a frame it does not own. */
+.chrome-divided-grid__row-group {
+  display: contents;
 }
 
 .chrome-divided-grid__row-boundary {
@@ -7399,6 +7468,64 @@ body.loading-bootstrap .app-startup-status {
   --chrome-divided-grid-junction-y:
     var(--chrome-divided-grid-boundary-node-offset);
   align-self: end;
+}
+
+/* A pad of equal compartments — the facing compass, the default-facing menu (ADR-0570). Every
+   size comes from the grid, which derives its tracks and each seat's inset from this one opening
+   on both axes; a consumer that stated its own would be restating a rule it cannot see the whole
+   of. The default is exactly what a framed tool square gives its glyph — the square minus its own
+   two inner rails — so a seat and a framed control present the same square to the same letter. */
+.chrome-seat-grid {
+  --chrome-seat-opening:
+    calc(var(--le-inner-square, 38px) - 2 * var(--le-chrome-inner-rail-w, 7px));
+  /* A pad is exactly as wide as its compartments. Left to stretch, it filled the control column
+     and the rails stopped a third of the way across it, because a rail spans the DECLARED tracks
+     and there is nothing to divide past the last one. */
+  inline-size: max-content;
+  justify-self: start;
+}
+
+/* A seat of a divided box paints NOTHING: the box's installed frame is its outer edge and the
+   box's rail is the edge it shares with the seat beside it. The four reset declarations below
+   REMOVE the shell's native button chrome and put nothing in its place — the same reset
+   .section-box-member-verb and .titlebar-control--seat make — so check-ui-surface-contract.mjs
+   carries them as an approved frameless reset, keyed on the bare selector, which is why no
+   comment sits directly above it. The leaf oak still arrives, named on the seat itself. */
+.chrome-seat-grid__row {
+  box-sizing: border-box;
+}
+
+.chrome-seat {
+  appearance: none;
+  -webkit-appearance: none;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  box-sizing: border-box;
+  color: inherit;
+  display: grid;
+  font: inherit;
+  min-block-size: 0;
+  min-inline-size: 0;
+  /* Zeroed so the ONLY inset a seat carries is the half-rail the grid gives it. The shell's base
+     button padding is 9px 10px, which ate two thirds of a compartment's height and left the
+     letters in a 24x6 slot. */
+  padding: 0;
+  place-items: center;
+  text-shadow: inherit;
+}
+
+/* The focus ring goes INSIDE the compartment. The shell's +2px offset puts it on the rails this
+   seat shares with its neighbours, so tabbing to one key outlined the edges of the keys around it. */
+.chrome-seat:focus-visible {
+  outline-offset: -2px;
+}
+
+/* A compartment with nothing in it — the direction menu's hollow centre. It is a real cell, so
+   the box's own field shows through it; what it is not is pressable. */
+.chrome-seat--empty {
+  pointer-events: none;
 }
 
 .le-pal-group { margin: 0 0 4px; }
@@ -7559,14 +7686,24 @@ body.loading-bootstrap .app-startup-status {
   isolation: isolate;
   min-height: 0;
   min-width: 0;
-  overflow: hidden;
+  /* `clip` rather than `hidden` so the paint apron below can pass. Content is unaffected:
+     .shell-workspace-content clips it, and neither box has ever scrolled here. */
+  overflow: clip;
+  overflow-clip-margin: var(--shell-workspace-paint-apron, 0px);
   padding: 0;
   position: absolute;
   text-align: left;
   z-index: 2;
 }
+/* The title divider lays its last raster row over the top of the workspace and leaves it
+   transparent (see --shell-workspace-paint-apron), so the surface fill has to reach up under
+   it exactly as the Controls panel's fill already does — otherwise that row belongs to
+   neither and the screen behind shows through as a hairline. Only the fill takes the apron:
+   it is a repeating texture, so the row costs it a one-pixel phase and nothing else. The
+   background artwork keeps the workspace box exactly, because its cover fit is pixelated and
+   re-scaling a whole vista to gain one row is a far worse trade than the row. */
 .shell-workspace-fill {
-  inset: 0;
+  inset: calc(-1 * var(--shell-workspace-paint-apron, 0px)) 0 0 0;
 }
 .shell-workspace-background-artwork {
   inset: 0;
@@ -9308,6 +9445,161 @@ body.loading-bootstrap .app-startup-status {
   letter-spacing: .02em;
 }
 
+/* ---- Move review ---------------------------------------------------------
+   Reading the game back. The position being reviewed is marked on its own row, so the
+   score sheet says where the board is without the player having to read the plate and
+   count. The mark is the row's OWN rail grown to full height — geometry and ink, not a
+   second surface painted over it. */
+.skirmish-log-card li.is-showing > span {
+  height: 22px;
+  margin-top: 0;
+  width: 4px;
+}
+
+.skirmish-log-card li.is-showing em {
+  color: #fff;
+  text-shadow: 0 0 10px rgba(120, 200, 255, .45);
+}
+
+.skirmish-log-card li > button.skirmish-log-move {
+  /* A move row that has a recorded board is pressable — it takes the same
+     [number][notation] columns as the plain row it replaces, so a navigable score sheet and
+     a static one line up to the pixel and the list does not visibly change shape when a
+     match has no history to offer. */
+  align-items: start;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: 9px;
+  grid-column: 2 / -1;
+  grid-template-columns: 32px minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  text-align: inherit;
+}
+
+.skirmish-log-card li > button.skirmish-log-move:hover em,
+.skirmish-log-card li > button.skirmish-log-move:focus-visible em {
+  color: #fff;
+}
+
+.skirmish-log-card li > button.skirmish-log-move:focus-visible {
+  outline: 2px solid var(--skirmish-blue);
+  outline-offset: 2px;
+}
+
+/* The transport row. One rule for both homes — under the Event Log and on the board
+   plate — because they are the same control and must not drift apart. */
+.move-review-controls {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline-tight, 6px);
+  min-width: 0;
+}
+
+.move-review-keys {
+  display: flex;
+  gap: var(--ds-inline-tight, 6px);
+  min-width: 0;
+}
+
+/* In the Controls column the keys take their own line with the move name (and the way back
+   to live) under them. A row of four keys and a move name long enough to read do not both
+   fit that column, and the name is the half that must never be the one clipped — it is what
+   says WHICH move is on screen. */
+.move-review-controls.is-panel {
+  display: grid;
+  gap: var(--ds-space-1, 6px);
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-block-end: var(--ds-space-2, 10px);
+}
+
+.move-review-controls.is-panel .move-review-keys {
+  grid-column: 1 / -1;
+}
+
+/* The unit locks the square; this only centres the mark in it. A square that leaves its
+   glyph to default block layout hangs it on a text baseline (ADR-0571). */
+.move-review-key {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+}
+
+.move-review-glyph {
+  display: block;
+  height: 14px;
+  margin-inline: auto;
+  width: 14px;
+}
+
+/* The readout names the exact half-move on screen ("7… Rxb2"), so it is the widest
+   cell and the one that may shrink; the keys never do. */
+.move-review-readout {
+  color: var(--skirmish-muted);
+  flex: 1 1 auto;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: var(--ds-text-sm, .9rem);
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.move-review-controls.is-reviewing .move-review-readout { color: #fff; }
+
+/* The battlefield's own review plate, seated inside the field region — never over the
+   position it describes, and never able to slide under the Controls panel, because it is
+   placed against the field box rather than the viewport.
+   The SEAT holds the placement so the plate can wear the registered chrome frame without
+   that frame's `position: relative` taking the placement back (ADR-0570). Out of flow, so
+   it cannot take a grid row from the board it is describing; pointer-transparent across
+   its full width, so only the plate itself is in the way of the board underneath. */
+.skirmish-review-seat {
+  bottom: var(--ds-space-3, 16px);
+  display: flex;
+  justify-content: center;
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  z-index: 30;
+}
+
+.skirmish-review-seat > * { pointer-events: auto; }
+
+/* Unlike its status-chip siblings the plate stacks a heading over a control row, so it
+   takes its own height rather than the bar's one control height. */
+.skirmish-review-plate {
+  block-size: auto;
+  flex-direction: column;
+  gap: var(--ds-space-1, 6px);
+  padding-block: var(--ds-space-2, 10px);
+}
+
+.skirmish-review-plate-heading {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline, 10px);
+}
+
+.skirmish-review-plate-heading strong {
+  color: #ffe9a8;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: var(--ds-text-sm, .9rem);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.skirmish-review-plate-heading small {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-xs, .78rem);
+}
+
 .skirmish-icon {
   background-position: center;
   background-repeat: no-repeat;
@@ -10415,7 +10707,6 @@ body { font-size: 17px; }
 }
 .scene-boundary.is-preparing {
   opacity: 0;
-  pointer-events: none;
 }
 .scene-boundary[data-scene-visual-role="outgoing"] {
   opacity: 1;
@@ -10433,25 +10724,34 @@ body { font-size: 17px; }
 }
 .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active] {
   opacity: 0;
-  pointer-events: none;
-}
-/* Children that opt back into the pointer (e.g. .strategikon-slot > *) must not
-   punch through the preparing silence — a parent's pointer-events: none does not
-   bind children that declare their own. */
-.scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active] > * {
-  pointer-events: none;
 }
 .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > * {
   opacity: 0;
-  pointer-events: none;
 }
 .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > [data-scene-transition-target][data-scene-transition-mode="contents"] > * {
   opacity: 0;
-  pointer-events: none;
 }
 .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-content > *,
 .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-status {
   opacity: 0;
+}
+/* Preparing silences the pointer only while it also means UNSEEN. Once the entrance begins, the
+   destination is on screen, so it takes the click that lands on it — the fade is the only thing
+   still in progress (ADR-0572). Before that, `inert` alone is not enough: children that opt back
+   into the pointer (e.g. .strategikon-slot > *) are not bound by an ancestor's silence, which is
+   why each descendant level is named.
+
+   Scoped by `.scene-director:not(.is-entering)` rather than overridden with `pointer-events: auto`
+   during the entrance: `auto` would blanket-revive decorative layers that declare their own `none`,
+   handing them 350ms of click-stealing on every navigation. Withdrawing the rule leaves every
+   child with the value it actually declared. */
+.scene-director:not(.is-entering) .scene-boundary.is-preparing,
+.scene-director:not(.is-entering) .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active],
+.scene-director:not(.is-entering) .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active] > *,
+.scene-director:not(.is-entering) .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > *,
+.scene-director:not(.is-entering) .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > [data-scene-transition-target][data-scene-transition-mode="contents"] > *,
+.scene-director:not(.is-entering) .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-content > *,
+.scene-director:not(.is-entering) .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-status {
   pointer-events: none;
 }
 .scene-director.is-entering [data-scene-transition-target][data-scene-transition-active] {
@@ -10627,16 +10927,9 @@ body { font-size: 17px; }
   white-space: nowrap;
 }
 
-/* Force composition for the selected level — the allies/enemies counts read off
-   the level's board, so they live with the level, not the global title bar.
-   The line is seated on its own inner box so its marks have a surface to read against instead of
-   whatever the night sky is showing. It runs the column's full width like the board frame and the
-   facts box: the column is a stack of boxes sharing one pair of edges, and a box that hugged its
-   own content broke that line. */
-.ce-force-readout-box {
-  padding: 6px 10px;
-}
-
+/* Force composition for the selected level — the allies/enemies counts read off the level's
+   board, so they live with the level, not the global title bar. It takes no box of its own: it
+   is a ROW of the preview column's one divided box, whose marble is already under it. */
 .ce-force-readout {
   align-items: center;
   display: flex;
@@ -10735,34 +11028,6 @@ body { font-size: 17px; }
   font-weight: 400;
 }
 
-.ce-li-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 2px;
-}
-
-.ce-li-chip {
-  align-items: center;
-  background: transparent;
-  border: 6px solid transparent;
-  border-image: var(--media-ui-kit-field-input-png) 14 fill / 6px stretch;
-  color: var(--ce-slate);
-  display: inline-flex;
-  font-size: var(--ds-text-xs);
-  gap: 5px;
-  padding: 2px 6px;
-}
-
-.ce-li-chip b { color: var(--ce-ink); font-weight: 400; }
-
-.ce-li-swatch {
-  display: inline-block;
-  height: 9px;
-  outline: 1px solid rgba(0, 0, 0, .5);
-  width: 9px;
-}
-
 .ce-li-rosters {
   display: grid;
   gap: 12px;
@@ -10823,27 +11088,6 @@ body { font-size: 17px; }
   max-block-size: 100%;
   max-inline-size: 100%;
   object-fit: contain;
-}
-
-/* Board art is pixel art; a mark cut from it keeps its pixels rather than being smoothed into
-   mush at icon scale. The kit's own icons are authored at their seat size and need no such say. */
-.ce-li-tile-icon > img { image-rendering: pixelated; }
-
-/* A surface tile ships in the whole 96x180 TILE frame, whose diamond is one band across the
-   equator at 68/180. Contained in a square seat that band shrinks to a sliver, so the frame is
-   sized by height and hung with its equator on the seat's centre line, overflowing the seat
-   instead of shrinking inside it. The seat keeps its 1.6em for layout, so the row does not grow. */
-.ce-li-tile-icon { overflow: visible; position: relative; }
-
-.ce-li-tile-icon > img {
-  block-size: 3.4em;
-  inline-size: auto;
-  inset-block-start: 50%;
-  inset-inline-start: 50%;
-  max-block-size: none;
-  max-inline-size: none;
-  position: absolute;
-  translate: -50% -37.8%;
 }
 
 /* The label rows are flex; a label that carries a mark becomes a flex line of its own so the
@@ -10910,17 +11154,15 @@ body { font-size: 17px; }
   filter: brightness(1.45) saturate(1.3);
 }
 
-.terrain-grass { background: #6a9b3f; }
-.terrain-water { background: #3a78c8; }
-.terrain-bridge { background: #b08750; }
-.terrain-road { background: #9a8b6a; }
-.terrain-stone { background: #8aa0ab; }
-.terrain-rock { background: #7c8a96; }
-.terrain-cliff { background: #5b6b76; }
-.terrain-dirt { background: #7d6a4a; }
-.terrain-pebble { background: #9aa6ad; }
-.terrain-sand { background: #c8b87e; }
-.terrain-void { background: #1f2430; }
+/* Shuffle and Clear are one control group on the row's label side, where the Zone row's single
+   button stands — so the two rows share a left edge and the readout stays a ledger of label and
+   value rather than a column of loose buttons. */
+.ce-li-preview-controls {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--ds-inline-tight);
+}
+
 /* ===== end Compact Level Info ===== */
 
 /* The selected-level live preview uses the canonical 4:3 board window shared with Play's
@@ -10931,13 +11173,6 @@ body { font-size: 17px; }
   container-type: inline-size;
 }
 
-.ce-preview-frame {
-  position: relative;
-  flex: none;
-  block-size: auto;
-  inline-size: 100%;
-  min-height: 0;
-}
 /* Position the world viewport in the canonical inner role's content box. The registered rail
    remains visible around it while the board covers the complete interior; transparent board
    corners reveal the level world, never a transparency checkerboard (ADR-0067). */
@@ -10977,22 +11212,6 @@ body { font-size: 17px; }
 
 .ce-preview-actions .ce-link-button {
   min-width: 0;
-}
-
-.ce-preview-actions.has-assign .ce-assign-field {
-  grid-column: 1 / -1;
-}
-
-/* This field held a native <select> with its own kit frame, an OS-drawn menu, and a
-   hand-painted option list. It is the house dropdown now, which brings its own registered
-   frame, chevron, menu and fill — so the field states nothing but where it sits. */
-.ce-assign-field {
-  display: grid;
-  min-width: 0;
-}
-
-.ce-link-button-ghost {
-  border-image-source: var(--media-ui-kit-button-neutral-png);
 }
 
 .ce-footer {
@@ -11119,14 +11338,16 @@ body { font-size: 17px; }
 /* ── Background music mute control ───────────────────────────────────────── */
 /* Persistent mute control — the trailing cluster's media member (ADR-0044). The vanilla
    BGM player (bgm.js) re-homes its own button into the title bar's .cluster-bgm-slot, so
-   this is no longer floating chrome docked bottom-right: it's an icon-only cluster button
-   sized to match the gear/avatar on the kit mode-button 9-slice frame (ADR-0002/0036), on
-   every route. The active frame marks "playing"; the icon dims when muted / silent. */
+   this is no longer floating chrome docked bottom-right: it's the leading compartment of
+   the cluster's divided box, the same square as the gear and the avatar, on every route.
+   The icon carries the whole state — see the three steps below. */
 .cluster-bgm-slot {
-  /* Boxless wrapper: when bgm hides the control (no soundtrack configured) or hasn't
-     re-homed it yet, the slot adds no width and no cluster gap; with the control present
-     it joins the .header-account-cluster flex row directly as its leading member. */
-  display: contents;
+  /* A REAL compartment, not a boxless wrapper. The seat is one of the columns the box
+     declares, so it has to exist from the first frame — before bgm.js re-homes its button
+     into it — or the members after it would each sit one column to the left until it lands.
+     The button inside fills it, via .titlebar-control--seat. */
+  display: block;
+  min-inline-size: 0;
 }
 
 .bgm-control {
@@ -11141,16 +11362,24 @@ body { font-size: 17px; }
 
 .bgm-control.is-playing,
 .bgm-control.is-othertab {
-  /* Playing = kit active-frame swap (no glow halo), per main's bgm rework. is-othertab is
-     a follower tab: same lit frame (music IS playing, elsewhere), but its icon stays
-     dimmed via is-muted, so it reads as "on, not here" — distinct from the base-frame
-     muted state it used to be pixel-identical to. */
   color: #f4fbff;
 }
 
+/* THREE states on one axis, because a compartment of the cluster box has no frame of its own
+   to light. This used to be two axes — a kit active-frame swap for "music is playing
+   somewhere" and a dimmed icon for "this tab is silent" — and the follower state read them
+   both at once. The seat has one frame, shared with the gear and the avatar, so the icon
+   carries all of it: bright = playing here, half-lit = playing in another tab, flat grey =
+   nothing is playing. Collapsing the middle step back into `is-muted` would make a follower
+   tab pixel-identical to silence again, which is the distinction ADR-0044 added. */
 .bgm-control.is-muted .bgm-control-icon {
   opacity: 0.4;
   filter: grayscale(0.7);
+}
+
+.bgm-control.is-othertab .bgm-control-icon {
+  opacity: 0.72;
+  filter: grayscale(0.25);
 }
 
 .tile-preview-page {
@@ -16706,59 +16935,38 @@ button.tileset-relationship-cell {
   color: #5f748a;
 }
 
-.unit-facing-compass {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(3, 1fr);
-  gap: 4px;
-  width: 138px;
-  aspect-ratio: 1;
-}
-
+/* The 8-way facing pad is ONE divided box (ADR-0570), so it states no tracks, no gap, no width
+   and no compartment size: the seat grid lays all of it from the shared opening. What is left
+   here is the type. */
 .unit-facing-cell {
-  min-height: 0;
-  min-width: 0;
-  padding: 0;
-  display: grid;
-  place-items: center;
+  color: #aebfd2;
+  cursor: pointer;
   font-size: 17px;
+  font-weight: 700;
   line-height: 1;
 }
 
-.unit-facing-center {
-  display: grid;
-  place-items: center;
-}
-
-.unit-facing-cell {
-  color: #aebfd2;
-  background: rgba(2, 8, 13, 0.45);
-  border: 1px solid rgba(67, 127, 179, 0.32);
-  border-radius: 5px;
-  cursor: pointer;
-  font-weight: 700;
+/* A compartment has no frame of its own to light, so the current facing is carried by its GLYPH.
+   Nothing is lost: the lit background this used to declare was painted over by the installed leaf
+   surface long before the frame went, and the brighter letter was already the only difference the
+   eye could find. */
+.unit-facing-cell.is-active {
+  color: #f3fbff;
 }
 
 .unit-facing-cell:hover:not(:disabled) {
-  border-color: rgba(67, 127, 179, 0.6);
   color: #d7e6f5;
-}
-
-.unit-facing-cell.is-active {
-  color: #f3fbff;
-  background: rgba(25, 94, 132, 0.95);
-  border-color: rgba(67, 127, 179, 0.6);
 }
 
 .unit-facing-cell.is-unavailable,
 .unit-facing-cell:disabled {
-  opacity: 0.4;
   cursor: default;
+  opacity: 0.4;
 }
 
 .unit-facing-rotate {
-  font-size: 19px;
   color: #9ec7ff;
+  font-size: 19px;
 }
 
 .unit-scene-empty {
@@ -17934,6 +18142,30 @@ button.tileset-relationship-cell {
   min-inline-size: var(--titlebar-control-size, 52px);
 }
 
+/* A seat FILLS its compartment of the cluster's divided box, edge to edge, instead of being a
+   52px square standing inside one. The reset below is written two classes deep on purpose: the
+   shell's `button.active` base is (0,1,1) and would otherwise repaint a lit seat with its own
+   gradient and shadow, which is exactly the raw surface the box's installed frame exists to
+   own. Those four declarations REMOVE the shell's native button chrome and paint nothing, so
+   check-ui-surface-contract.mjs carries them as an approved frameless reset — keyed on the bare
+   selector, which is why no comment sits directly above it.
+
+   The focus ring goes INSIDE the compartment too: the shell's +2px offset would land it on the
+   rail this seat shares with its neighbour, so tabbing to the gear would outline the account
+   seat's edge as well. */
+.titlebar-control--seat:focus-visible {
+  outline-offset: -2px;
+}
+
+.titlebar-control.titlebar-control--seat {
+  background: none;
+  block-size: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  inline-size: 100%;
+}
+
 .titlebar-control-glyph {
   block-size: var(--titlebar-control-icon-size, 26px);
   image-rendering: pixelated;
@@ -17982,6 +18214,19 @@ button.tileset-relationship-cell {
   --titlebar-rule-h: var(--le-chrome-outer-rail-w, 12px);
   --ds-titlebar-inset: var(--ds-space-2);
   --titlebar-control-size: 52px;
+  /* The visible OPENING of one compartment of the divided box the trailing cluster is, on both
+     axes. It is exactly the opening a framed title-bar control gives its glyph, so a seat and a
+     framed button present the same square to the same icon — all that changed is that the three
+     seats share one frame and one rail instead of stamping three frames and putting a strip of
+     bar between them. */
+  --titlebar-control-seat:
+    calc(var(--titlebar-control-size, 52px) - 2 * var(--le-chrome-inner-rail-w, 7px));
+  /* What a rail takes off the compartment on each side it touches. A rail is drawn ON the grid
+     line, so it straddles it and covers half its width from each neighbour — which is why a
+     column track is the opening PLUS this for every internal side it has, and why a seat pads
+     itself by the same amount so its glyph centres in what can actually be seen. Without it the
+     middle seat came out 3.5px narrower than the two beside it. */
+  --titlebar-seat-rail-half: calc(var(--le-chrome-inner-rail-w, 7px) / 2);
   /* Horizontal relationships use the design-system spacing scale. This one token
      governs action-to-divider, divider-to-cluster, and control-to-control spacing. */
   --titlebar-control-gap: var(--ds-space-2);
@@ -18257,12 +18502,24 @@ button.tileset-relationship-cell {
   text-shadow: 0 2px 0 #02070b;
 }
 
+/* Every rail-tab label wears the menu outline (`.settings-tab strong`), and a -webkit-text-stroke
+   paints OUTSIDE the text box, so any box that clips a label shears the outline off its first
+   letter. This copy block clips — it has to, or a long campaign name would run out of its tab —
+   so it makes room instead: the apron widens the clip box by the stroke's reach and the matching
+   padding puts the text back exactly where it sat.
+   It is stated HERE, on the shared copy block, not on one rail. The apron existed on
+   `.ce-campaign-tab`'s label alone and was defeated anyway, because THIS box is the outer clipper
+   and had no room of its own — so the editor's War and Levels tabs still lost the left of every
+   word while the main menu's labels, which do not clip at all, looked right. */
 .apparatus-tab-copy {
+  --tab-label-stroke-apron: var(--menu-label-stroke-w, 5px);
   align-content: center;
   display: grid;
   gap: 2px;
+  margin-inline-start: calc(-1 * var(--tab-label-stroke-apron));
   min-inline-size: 0;
   overflow: hidden;
+  padding-inline-start: var(--tab-label-stroke-apron);
 }
 
 .apparatus-tab-copy > strong,
@@ -18273,8 +18530,26 @@ button.tileset-relationship-cell {
   white-space: nowrap;
 }
 
+/* The other half of the apron: the line clips its own text for the ellipsis, so it needs the
+   stroke's room inside its own box as well as inside the block above it. */
 .apparatus-tab-copy > strong {
   font-size: var(--ds-text-md);
+  margin-inline-start: calc(-1 * var(--tab-label-stroke-apron));
+  padding-inline-start: var(--tab-label-stroke-apron);
+}
+
+
+.apparatus-tab-copy > small {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .55));
+  font-size: var(--ds-text-2xs);
+}
+
+/* A tab that exists but cannot be taken keeps its seat and its slice of the stone; only its
+   interaction goes (ADR-0289's visible-but-disabled language). `is-locked` sits beside it in
+   .ce-campaign-tab below and says the harder thing: not now vs not for you. */
+.settings-tab.is-disabled {
+  cursor: default;
+  opacity: .55;
 }
 
 .apparatus-tab-copy > small {
@@ -18310,17 +18585,39 @@ button.tileset-relationship-cell {
 }
 
 /* --- Trailing-edge "settings + user" cluster ----------------------------------
-   The signed-in chrome at the top-right: an icon-only Settings gear + the avatar
-   account button, framed identically so the pair reads as one matched unit
-   (Material-3 "few trailing items"; the avatar opens the account menu below). */
+   The chrome at the top-right — music, an icon-only Settings gear, the account control —
+   as ONE divided box rather than three framed squares in a row. Its outer height is still
+   the canonical control size; the frame that used to be stamped around each member is now
+   drawn once around all of them, and the doubled edge between two members (rail, bar, rail)
+   is one of the box's own rails. Every rail and junction cap comes from the box's grid lines
+   (ADR-0242); nothing here places one. */
 .header-account-cluster {
-  /* ONE spacing source for the cluster's two edges: the inter-button gap AND the gap that
-     frames the whole cluster against the bar. Both read this so they can never drift apart. */
-  --cluster-gap: var(--titlebar-control-gap, var(--ds-space-2));
-  align-items: center;
-  display: flex;
-  gap: var(--cluster-gap);
-  justify-content: flex-end;
+  align-self: center;
+}
+
+/* The seats' row IS the box's content, so the box's outer size derives from the compartment
+   size plus its own frame — no title-bar box states a height of its own. Nothing divides the
+   row, so the compartment's visible HEIGHT is the opening exactly. */
+.header-account-cluster-seats {
+  block-size: var(--titlebar-control-seat);
+}
+
+/* A cell reaches to the grid LINE, and the rail drawn on that line covers half its width on
+   this side of it. So a cell that has a neighbour is a half-rail wider than the opening it
+   shows, and it gives that half-rail back as padding — otherwise its content centres in the
+   cell rather than in what can be seen, and the glyph sits off-centre by half of half a rail.
+   First and last have no neighbour on their outer side, where the box's own frame is the edge
+   and takes nothing from the content box.
+
+   Position, because that IS the question: which grid lines this cell touches. The same index
+   builds the column tracks in HeaderAccountCluster, and verify:titlebar measures the openings
+   the two produce together, so they cannot drift apart unnoticed. */
+.header-account-cluster-seats > :not(:first-child) {
+  padding-inline-start: var(--titlebar-seat-rail-half);
+}
+
+.header-account-cluster-seats > :not(:last-child) {
+  padding-inline-end: var(--titlebar-seat-rail-half);
 }
 
 /* Title-bar icon-only controls get their geometry from .titlebar-control--icon. This
@@ -18337,34 +18634,36 @@ button.tileset-relationship-cell {
   object-fit: cover;
 }
 
+/* No avatar image: the initial sits straight on the seat's leaf wood (ADR-0433) rather
+   than on a bespoke dark plate, so a signed-in account with no Gravatar reads as the same
+   material as the rest of the cluster. */
 .account-avatar-fallback {
   align-items: center;
-  background: #07111a;
   color: var(--cobalt-bright);
   display: grid;
   font-family: "Advance Wars 2 GBA", "VT323", ui-monospace, monospace;
   place-items: center;
 }
 
+/* The account seat's compartment. It stays an element of its own — the menu below is
+   positioned off it and the outside-click handler needs a root — so it fills the cell and the
+   avatar trigger inside fills it in turn. */
 .account-menu-root {
   align-items: center;
+  block-size: 100%;
   display: flex;
-  flex: 0 0 var(--titlebar-control-size, 52px);
-  gap: 10px;
-  inline-size: var(--titlebar-control-size, 52px);
+  inline-size: 100%;
+  min-inline-size: 0;
   position: relative;
-}
-
-.account-sign-in-button {
-  flex: 0 0 var(--titlebar-control-size, 52px);
 }
 
 /* Keep the trailing cluster stable while a restarting backend cannot yet answer
    the authoritative account probe. No sign-in affordance is shown until a real
-   signed-out response arrives. */
+   signed-out response arrives — the compartment stays, empty, so the box keeps its
+   columns and the seats beside it never move. */
 .account-auth-pending {
-  flex: 0 0 var(--titlebar-control-size, 52px);
-  inline-size: var(--titlebar-control-size, 52px);
+  block-size: 100%;
+  inline-size: 100%;
 }
 
 /* Account menu — small kit panel-framed popover anchored under the avatar. A
@@ -18574,6 +18873,14 @@ button.tileset-relationship-cell {
   display: grid;
   gap: var(--settings-rail-tab-gap);
   min-block-size: 0;
+  /* .settings-screen keeps unused canvas click-through, so every panel on it must opt back
+     in (see .settings-frame / .menu-dest-col above). A rail is a column of BUTTONS — there
+     is no rail that should be click-through — so the primitive owns the opt-in rather than
+     each consumer remembering to also wear .settings-frame or .menu-dest-col. Run
+     preparation is why: converting it to this primitive (ADR-0558) dropped the
+     .menu-dest-col its hand-assembled column had carried, and Current Run / Start New Run
+     rendered pixel-perfect, hovered as buttons, and swallowed every click. */
+  pointer-events: auto;
 }
 
 .apparatus-rail-column[data-apparatus-rail-placement="open"] {
@@ -18586,6 +18893,22 @@ button.tileset-relationship-cell {
 .apparatus-rail-column[data-apparatus-rail-placement="framed"] {
   padding-block: var(--main-menu-rail-pad-block);
   padding-inline: var(--main-menu-rail-pad-inline) 0;
+}
+
+/* This frame clips, and a tab's corner ornaments paint OUTSIDE the tab, so without an apron it
+   bites 7px off every tab on the side the column ends. Same two-sided apron the scrollports carry:
+   the negative margin pushes the CLIP edge out past the track, the matching padding pulls the
+   content column back to exactly where it was, so no tab moves or resizes. Both classes are named
+   to out-specify the placement rule above, which owns the rail's ordinary inset.
+   verify-atom-clipping.mjs is what found this and is what proves it stays fixed. */
+.apparatus-rail-column.apparatus-rail-column.settings-rail-frame,
+.apparatus-rail-column.apparatus-rail-column.settings-main-frame {
+  --rail-atom-apron-right: var(--le-inner-atom-right-overhang, 0px);
+  --rail-atom-apron-bottom: var(--le-inner-atom-bottom-overhang, 0px);
+  margin-block-end: calc(-1 * var(--rail-atom-apron-bottom));
+  margin-inline-end: calc(-1 * var(--rail-atom-apron-right));
+  padding-block-end: calc(var(--main-menu-rail-pad-block) + var(--rail-atom-apron-bottom));
+  padding-inline-end: var(--rail-atom-apron-right);
 }
 
 .settings-rail-frame {
@@ -18667,10 +18990,16 @@ button.tileset-relationship-cell {
   gap: var(--settings-rail-tab-gap);
 }
 .menu-dest-action {
-  inline-size: var(--col-action-w);
+  /* Clips, and the rows inside paint their corner ornaments past their own edges — so the column
+     took 7px off every row's right. Apron: negative margin pushes the CLIP edge out, matching
+     padding pulls the content back, nothing moves. See verify-atom-clipping.mjs. */
+  --dest-atom-apron-right: var(--le-inner-atom-right-overhang, 0px);
+  inline-size: calc(var(--col-action-w) + var(--dest-atom-apron-right));
   display: flex;
   flex-direction: column;
+  margin-inline-end: calc(-1 * var(--dest-atom-apron-right));
   overflow: hidden;
+  padding-inline-end: var(--dest-atom-apron-right);
 }
 
 /* Unified Play selector (ADR-0074). Column 2 is one owner: the fixed mode entries stay
@@ -18732,6 +19061,7 @@ button.tileset-relationship-cell {
   padding-block-end: var(--ds-gutter);
 }
 
+
 /* A selected campaign level adds the authored preview as the next destination column.
    On narrower desktop viewports, fit that master/detail pair inside the action column's
    original width instead of drawing the preview beyond the right edge. The compact list
@@ -18776,6 +19106,16 @@ button.tileset-relationship-cell {
      at every seat size (73% of 64/44/40), because these are raster marks. */
   --settings-tab-icon-bleed-size: 47px;
   align-items: center;
+  /* Centre the icon+label ROW in whatever content box the button actually has.
+     Both rail heights were computed against a 2px border — "border(4) + 2·padding + icon
+     slot(40)" — but the panel-line border-image resolves to 7px a side, so the real content
+     box is 30px against a 40px row track. The row overflowed the full 10px DOWNWARD from its
+     start edge, seating every mark and label 5px below its button's centre line: the menu's
+     marks sat 10.6px under the frame and 0.6px above it. Centring the track spreads that
+     overflow evenly instead, which is what the fixed heights always meant. Deliberately not
+     re-derived padding: the border-image width is the thing that moved once already, and a
+     hand-computed inset would go stale the next time it does. */
+  align-content: center;
   appearance: none;
   /* Rendered as a <button> since ADR-0052: buttons don't inherit font (UA default) and
      get the arrow cursor — restore the exact look/feel the anchor version had. */
@@ -18799,6 +19139,10 @@ button.tileset-relationship-cell {
      bounded it falsely). MM_LIVE.btnH mirrors this literal (mmLive.test.ts guards the two, ADR-0057). */
   min-height: 88px;
   padding: 22px; /* even inset — icon sits with equal margin on every side (was 17px/22px) */
+  /* The containing block for the trailing open mark, which is out of flow so that gaining it
+     cannot move the icon or the label. Nothing else inside a tab positions against the tab: the
+     enlarged mark image anchors to .settings-tab-icon, which is relative in its own right. */
+  position: relative;
   /* NON-fixed stone (was `repeat fixed`). background-attachment: fixed routes painting
      through Chromium's viewport-fixed-background path, which intermittently fails to
      repaint when a nearby element composites/decomposites — the Settings menu crossfade
@@ -18854,13 +19198,43 @@ button.tileset-relationship-cell {
   transform: translateX(16px); /* label nudge — baked from the Main Menu tuner, shared with Settings */
 }
 
+/* The `›` open mark: "this is the tab whose panel is expanded" (ADR-0561). Taken OUT OF FLOW, so
+   a tab that gains the mark keeps the exact geometry it had without one — no track to reserve, no
+   label box to re-measure, nothing for FittedTabLabel to refit. It cannot be a grid item: an
+   explicitly placed one does not stack under the auto-placed label, it EVICTS it (auto-placement
+   skips an occupied cell), which dropped the label of every marked tab onto a second row. The
+   containing block is the tab's padding box, so the inset is the tab's own inline padding and the
+   mark lands flush with the trailing edge of the content the label sits in. It keeps the rule
+   above's transparent background and overrides only the LABEL nudge, which belongs to the label's
+   optical column and would drag the mark off the trailing edge. Same lettering and stroke as the
+   label beside it — it is the same menu type, not a separate icon. */
+.settings-tab > span.settings-tab-open-mark {
+  color: #f3fbff;
+  font-size: var(--ds-text-xl);
+  inset-block-start: 50%;
+  inset-inline-end: 22px; /* mirrors .settings-tab's padding */
+  line-height: 1;
+  pointer-events: none;
+  position: absolute;
+  -webkit-text-stroke: var(--menu-label-stroke-w) var(--menu-label-stroke-ink);
+  paint-order: stroke fill;
+  transform: translateY(-50%);
+}
+
+/* The label does NOT clip: the tab label wears an outline (see .settings-tab strong below), and a
+   stroke paints outside the text box. The glyph ink starts flush against this box's left edge —
+   zero slack — so `overflow: hidden` here amputated the outline down the left of every word while
+   the right side survived on the box's spare width. FittedTabLabel already shrinks the text to
+   fit, so the clip was only ever the fallback behind that; a label that still overran at its 8px
+   floor now spills instead of being cut. Do not put `hidden` back without also removing the
+   outline — mmLive.test.ts fails if you do. */
 .settings-tab-label {
   align-content: center;
   block-size: var(--settings-tab-icon-slot);
   inline-size: 100%;
   justify-items: start;
   max-inline-size: 100%;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .settings-tab-label strong {
@@ -18868,7 +19242,7 @@ button.tileset-relationship-cell {
   display: block;
   inline-size: 100%;
   max-block-size: 100%;
-  overflow: hidden;
+  overflow: visible;
   text-wrap: balance;
 }
 
@@ -18924,9 +19298,13 @@ button.tileset-relationship-cell {
 .main-menu-mode-tab .settings-tab-icon img {
   position: absolute;
   left: 50%;
-  /* 61px tab - 44px icon = 17px: exact centring is 8.5px. Resolve the
-     half-pixel upward so the raster icon paints on whole logical pixels. */
-  top: calc(50% - .5px);
+  /* 61px tab - 44px icon = 17px, so exact centring is 8.5px and lands the icon box on a
+     half pixel. This used to resolve that half pixel UPWARD to keep the raster on whole
+     logical pixels — which bought nothing (44/64 is already a fractional scale, so the
+     art is resampled either way) and cost the thing the eye actually reads: it made the
+     gap above the mark 6px and the gap below it 7px, on every button in the rail. The
+     half pixel stays where it belongs and the mark sits on the button's centre line. */
+  top: 50%;
   transform: translate(calc(-50% + 0px), -50%);
 }
 
@@ -18939,6 +19317,28 @@ button.tileset-relationship-cell {
   font-size: var(--ds-text-lg);
   letter-spacing: 0.02em;
   text-transform: uppercase;
+  /* Outline, auditioned in the Pages tuner (Studio → Pages → Main Menu → Button label) and baked
+     at 5px. A -webkit-text-stroke is centred on the glyph outline, so half of it grows INWARD;
+     `paint-order: stroke fill` repaints the fill over it so the stems keep the weight the font
+     draws, and only the counters tighten. The label boxes above must not clip (a stroke paints
+     outside the text box) — the Campaign rail keeps its ellipsis and makes room a different way.
+     Width and ink live on --menu-label-stroke-*, shared with the destination slabs. */
+  -webkit-text-stroke: var(--menu-label-stroke-w) var(--menu-label-stroke-ink);
+  paint-order: stroke fill;
+}
+
+/* The Run choice slabs a click behind PLAY take the same outline. They are the menu's own
+   navigation — same wood, same font, same size as the rail labels — so plain text on them read as
+   a mismatch rather than as hierarchy.
+   Deliberately NOT `.menu-dest-action .settings-row h4`, which would also catch the Editor
+   destination's battle rows: that screen seats interactive rows beside non-interactive ones in
+   identical chrome (NAME, DESCRIPTION, ELIGIBLE FOR RUN), so outlining only the clickable half
+   splits the screen into two title treatments — a worse mismatch than the one being fixed. If the
+   Editor list should wear it, its plain rows have to come along, and that is a decision about that
+   screen, not a side effect of this rule. */
+.play-choice-row h4 {
+  -webkit-text-stroke: var(--menu-label-stroke-w) var(--menu-label-stroke-ink);
+  paint-order: stroke fill;
 }
 
 .settings-main-frame {
@@ -19014,9 +19414,25 @@ button.tileset-relationship-cell {
 /* The settings panel's scroll viewport always occupies the main frame's second (1fr)
    row so the ADR-0030 rail spans the scrollable height, below any pinned header. */
 .settings-scroll {
+  /* A junction atom is seated ON a box's frame and paints outward past it, so the scrollport that
+     clips this column cuts the outer half off — the same two-sided apron the Level Editor's
+     scrollport and the HouseSelect menu already carry. Widen the CLIP box by the overhang and push
+     the content back in by exactly the same amount: the content line does not move, and the atom
+     has room to finish. The frame atom and the divider atom can differ, so take whichever reaches
+     further. */
+  --settings-clip-apron-left: max(var(--le-inner-atom-left-overhang, 0px), var(--le-inner-divider-atom-left-overhang, 0px));
+  --settings-clip-apron-right: max(var(--le-inner-atom-right-overhang, 0px), var(--le-inner-divider-atom-right-overhang, 0px));
+  --settings-clip-apron-top: var(--le-inner-atom-top-overhang, 0px);
+  --settings-clip-apron-bottom: var(--le-inner-atom-bottom-overhang, 0px);
   --kit-scroll-gutter-size: 24px;
-  block-size: 100%;
+  block-size: calc(100% + var(--settings-clip-apron-top) + var(--settings-clip-apron-bottom));
   grid-row: 2;
+  margin-block:
+    calc(-1 * var(--settings-clip-apron-top))
+    calc(-1 * var(--settings-clip-apron-bottom));
+  margin-inline:
+    calc(-1 * var(--settings-clip-apron-left))
+    calc(-1 * var(--settings-clip-apron-right));
   min-height: 0;
 }
 .settings-scroll > .kit-scroll-content {
@@ -19026,10 +19442,16 @@ button.tileset-relationship-cell {
      off --kit-scroll-gutter so an idle pane gives that region back (ADR-0536). */
   box-sizing: border-box;
   inline-size: calc(100% - var(--kit-scroll-gutter));
-  padding-inline-end: 0;
+  padding-block: var(--settings-clip-apron-top) var(--settings-clip-apron-bottom);
+  padding-inline: var(--settings-clip-apron-left) var(--settings-clip-apron-right);
 }
+/* The rail rides the CONTENT line, not the widened clip box — on both axes. The apron pushes this
+   scrollport's edges out past the content so an atom can finish painting, and the rail is absolutely
+   positioned against the scrollport, so without this it starts wherever the apron starts: 8px above
+   the first box's top surface, which is exactly how far the block apron reaches. */
 .settings-scroll > .kit-scroll-rail {
-  inset-inline-end: 2px;
+  inset-block: var(--settings-clip-apron-top) var(--settings-clip-apron-bottom);
+  inset-inline-end: calc(2px + var(--settings-clip-apron-right));
 }
 .settings-scroll .settings-row-control {
   flex: 1 1 auto;
@@ -19078,8 +19500,13 @@ button.tileset-relationship-cell {
    8px-radius border around each section's rows; removed so only the per-row atom
    frame shows.) */
 .settings-section-rows {
+  /* Named because a surfaced row's texture pitch is built from it: the sheet has to step by
+     exactly what the layout steps by, so the two may not be stated twice. (Run's choice list
+     used to be the caller; it is a rail of ApparatusRailTabs now and steps by the rail's own
+     --settings-tab-surface-pitch instead. ADR-0558.) */
+  --settings-section-rows-gap: 10px;
   display: grid;
-  gap: 10px;
+  gap: var(--settings-section-rows-gap);
 }
 
 .settings-row {
@@ -19099,6 +19526,54 @@ button.tileset-relationship-cell {
 
 .settings-row-tall {
   min-height: 80px;
+}
+
+/* A row that is a MEMBER of a SettingsGroup rather than a slab of its own. The group's box is
+   already the frame and already wears the marble, so the member carries only the row layout —
+   and the kit's inner rail between members is what tells them apart. */
+/* A row that declared itself one thing across every column IS one cell: its content spans the
+   whole width. Stated on the grid's own class, not on the section box, because it is the other
+   half of what `spans="all"` means — the rail breaks there AND the content fills the row. */
+.chrome-divided-grid__row--spanning > * {
+  grid-column: 1 / -1;
+}
+
+/* The rail between members runs the full inner width, so the body takes no inline padding and each
+   member carries its own — which also lands a member's title on the same line as the group's name
+   above it, instead of one indent in from it. */
+.settings-group > .section-box-body {
+  gap: 0;
+  padding: 0 0 var(--ds-space-2);
+}
+
+.settings-group .settings-row-member {
+  padding-block: var(--ds-space-3);
+  padding-inline: var(--ds-inset);
+}
+
+/* The War's Battles are members of one Battles box, so each battle row drops its own frame the
+   same way a settings member does; the list's gap is what separates them. */
+.war-battles-box > .section-box-body {
+  padding: 0 var(--ds-inset) var(--ds-inset);
+}
+
+.war-battles-box .action-list-row-member {
+  padding-inline: 0;
+}
+
+/* The group's name heads the rows it holds, so it takes the row heading's own treatment one step
+   up rather than reading smaller and plainer than the members it names. */
+.settings-group .section-box-title,
+.war-battles-box .section-box-title {
+  color: #f6fbff;
+  font-size: var(--ds-text-xl);
+  text-shadow: 0 2px 0 #02070b;
+  text-transform: uppercase;
+}
+
+.settings-group > .section-box-head,
+.war-battles-box > .section-box-head {
+  padding-block-end: 0;
 }
 
 /* A control too wide to sit beside its copy — a picker of five board swatches — takes its own
@@ -19402,8 +19877,18 @@ button.tileset-relationship-cell {
      list inside. That way an idle rail returns the whole 24px and the tabs finish on the
      same line as the pinned New Level / Import / Save verbs beneath them (ADR-0536). */
   --kit-scroll-gutter-size: 24px;
+  /* The tabs inside paint corner ornaments past their own edges, and a scrollport clips, so
+     without an apron this took 8px off their left and 7px off their right. Widen the clip box,
+     push the content back by the same amount; nothing moves. See verify-atom-clipping.mjs. */
+  --ce-rail-apron-left: var(--le-inner-atom-left-overhang, 0px);
+  --ce-rail-apron-right: var(--le-inner-atom-right-overhang, 0px);
   block-size: 100%;
+  margin-inline: calc(-1 * var(--ce-rail-apron-left)) calc(-1 * var(--ce-rail-apron-right));
   min-height: 0;
+}
+.ce-editor-rail .ce-rail-scroll > .kit-scroll-content {
+  box-sizing: border-box;
+  padding-inline: var(--ce-rail-apron-left) var(--ce-rail-apron-right);
 }
 .ce-editor-rail .ce-rail-list {
   align-content: start;
@@ -19431,23 +19916,18 @@ button.tileset-relationship-cell {
   cursor: default;
   filter: grayscale(.35) brightness(.86);
 }
-.ce-campaign-tab-copy {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-.ce-campaign-tab-copy strong {
-  font-size: var(--ds-text-md);
-  letter-spacing: .02em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.ce-campaign-tab-copy small {
-  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .55));
-  font-size: var(--ds-text-2xs);
-}
+/* This label carries a user-authored campaign name, so unlike the fitted rail labels it must keep
+   `overflow: hidden` for its ellipsis — it cannot take the same relief. It still inherits the tab
+   label's outline, so it makes room INSIDE the clip instead: padding opens a stroke-width gutter
+   the ink can occupy, and the matching negative margin puts the text back where it sat, so the
+   only thing that changed is that the outline is no longer sheared off the first letter.
+   (The copy block itself is the shared .apparatus-tab-copy since ADR-0558 — the Campaign Editor
+   tab is the primitive now, so only its own uppercase treatment is stated here.) */
+/* The stroke apron that used to live here is on `.apparatus-tab-copy` now, where the box that
+   actually clips can carry it — every rail with a two-line label needs the room, not just this
+   one, and scoping it here left the room unreachable behind the parent's own clip.
+   Uppercase and tracking come from the shared `.settings-tab strong`, so nothing rail-specific
+   remains for the Campaign Editor's label. */
 /* Neutralise the shared label nudge for the trailing badge so it stays in its grid cell. */
 .ce-campaign-tab > span.ce-tab-trail { transform: none; }
 .ce-tab-trail {
@@ -19455,14 +19935,9 @@ button.tileset-relationship-cell {
   display: inline-flex;
   justify-content: center;
 }
-.ce-tab-draft-status {
-  color: var(--ce-gold-bright);
-  font-size: var(--ds-text-xl);
-  font-weight: 900;
-  line-height: 1;
-  min-inline-size: 20px;
-  text-shadow: 0 0 8px rgba(240, 189, 85, .28);
-}
+/* No draft badge. The save mark that used to ride the Levels tab said "unsaved drafts exist",
+   which is the editor's ordinary state and not news — so it was always lit. The lock and the
+   ownership marks above are still real trailing badges. */
 
 /* Pinned rail footer — creation (New Level / New Campaign), then workspace verbs. */
 .ce-rail-actions {
@@ -19494,9 +19969,11 @@ button.tileset-relationship-cell {
   gap: clamp(14px, calc(var(--layout-vw, 100vw) * .013), 22px);
 }
 
-/* ── Preview column (col 4, top-right): the selected level's head · map preview · level info ·
-   verbs, stacked in its own fixed-width column. Only mounted when a level is selected
-   (CampaignEditor gates it), so there's never an empty frame or placeholder art here. ── */
+/* ── Preview column (col 4, top-right): ONE divided box — the selected level's name · forces ·
+   map · level info · verbs — in its own fixed-width column. Only mounted when a level is
+   selected (CampaignEditor gates it), so there's never an empty frame or placeholder art here.
+   Every separation inside it is a rail the box lays from its own grid lines; nothing here draws
+   a rule, and nothing shows the page through between the parts. ── */
 .menu-dest-preview {
   display: flex;
   flex-direction: column;
@@ -19514,29 +19991,109 @@ button.tileset-relationship-cell {
   gap: 8px;
   min-width: 0;
 }
-/* Two-line head: the level name gets its OWN line (full width, no truncation), with the
-   ally/enemy force counts on a second line beneath it. The shared head rule's horizontal padding
-   is dropped here: the counts are a framed box now, and that inset held it 8px inside the board
-   frame and facts box under it, so the column's three boxes did not share an edge. */
-.ce-preview-col .ce-selected-head {
-  align-items: stretch;
-  flex-direction: column;
-  gap: 4px;
-  padding-inline: 0;
+/* The box is the column's whole content, sized by what it holds. Stretching it to the column and
+   packing its rows from the top is what left a slab of empty marble under the last row.
+   NO padding: the map is a compartment that reaches the frame, and every rail has to reach it
+   too. The rows that carry text take the inset instead. */
+.ce-preview-box {
+  /* The height a verb takes in this column, sized so its PAINTED plate matches the editor's
+     framed buttons — Delete War, Save, Start Run — standing beside it.
+     A framed button is a 40px box whose own 9-slice eats ~10px a side, so ~26px of it is oak.
+     A cell has no frame of its own (the box's rail is its edge), so at 40px it painted 37px of
+     oak and read half again as heavy as every button on the screen. 30px is the same plate.
+     Stated here because `--le-inner-control-compact-h` is scoped to the Level Editor screen and
+     does not reach the menu shell's columns. */
+  --ce-preview-verb-h: 30px;
+  flex: 0 0 auto;
+  min-inline-size: 0;
+  padding: 0;
 }
-.ce-preview-col .ce-selected-head h2 {
+
+.ce-preview-box > .chrome-divided-grid__rows {
+  display: grid;
+  min-block-size: 0;
+}
+
+/* A row that is one thing across the box is ONE column, whatever the verb row below it split
+   the box into. Without this it inherits the box's tracks and huddles into the first of them. */
+.ce-preview-name,
+.ce-preview-forces,
+.ce-preview-board,
+.ce-preview-facts,
+.ce-preview-field {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ce-preview-name,
+.ce-preview-forces,
+.ce-preview-facts,
+.ce-preview-field {
+  padding: var(--ds-inset);
+}
+
+/* The box's own name — the same eyebrow the floating heading wore, now with the box behind it.
+   It wraps rather than truncating: the column is narrow and a Battle's name is the one thing
+   here that says WHICH level this is. */
+.ce-preview-name h2 {
+  color: var(--ce-eyebrow);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-2xs);
+  font-weight: 400;
+  letter-spacing: .14em;
+  line-height: 1.55;
+  margin: 0;
   overflow: visible;
   text-overflow: clip;
+  text-shadow: 0 2px 0 #010508, 0 0 10px rgba(0, 0, 0, .75);
+  text-transform: uppercase;
   white-space: normal;
 }
+
 .ce-preview-col .ce-force-readout { justify-content: flex-start; }
-/* Level info fills the column's otherwise-empty lower half. One column (this column is narrow);
-   LevelInfoCompact declares the registered inner-box role, which owns its frame and fill. */
+
+/* The map is a COMPARTMENT: it reaches the box's frame on both sides and its rails above and
+   below, the way a level row's thumbnail reaches its box. Hence no inset, and the clip so a
+   board wider than the column cannot push past the frame. */
+.ce-preview-board {
+  min-inline-size: 0;
+  overflow: hidden;
+}
+
+/* The readout is a row of the box now, so it carries neither frame, fill nor padding of its own —
+   the row above supplies the inset and the box supplies the marble. One column: this is narrow. */
 .ce-preview-col .ce-level-info {
-  flex: 1 1 auto;
   grid-template-columns: 1fr;
   height: auto;
   min-height: 0;
+  overflow: visible;
+  padding: 0;
+}
+
+/* Each verb IS its compartment — pressable edge to edge, so the box's frame and its column line
+   are this control's edges and there is no second frame a few pixels inside them. The row takes
+   no inset; the verb's own padding is the whole cell's.
+
+   It is still a VERB in the editor's chrome family, so it keeps the height and the label size
+   `.ce-link-button` gave it. The section verb's symmetric `--ds-inset` sizes a row by its text,
+   which here made the plate taller than every other verb on the screen while shrinking the word
+   on it — so this out-specifies that padding rather than inheriting it. */
+.ce-preview-verbs .ce-preview-verb {
+  display: grid;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xs);
+  min-block-size: var(--ce-preview-verb-h);
+  padding: 0 var(--ds-inset);
+  text-transform: uppercase;
+}
+
+.ce-preview-verb:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.ce-preview-verb:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: -2px;
 }
 
 /* A selectable level row (a role=button div over the shared .settings-row).
@@ -19572,6 +20129,53 @@ button.tileset-relationship-cell {
   padding: 0;
 }
 
+/* A member row hands the box TWO CELLS. The preview cell is the box's first column — its width is
+   the column, declared where the box declares its columns — and the body cell carries only the
+   copy and the verbs, because the rail between them is the box's own column line now.
+   86px at the board's 4:3 window is 115; its twin is levelRowPreviewWidth() in
+   shared/EditorLevelRow.tsx, which sizes the thumbnail to fill it. */
+/* Both cells name their column outright. The framed row places its panes by `grid-area`, and a
+   named area that its parent no longer defines does not fall back to "first free cell" — it drops
+   the cell into auto-placement and shuffles the row. */
+/* The section IS the button. The grid row itself is the control, so the box's own frame is this
+   thing's edge and there is no second rail a few pixels inside it. These declarations only remove
+   the shell's native button paint. The row wears the installed oak and the box draws the frame,
+   and check-ui-surface-contract.mjs registers exactly that reset. */
+.ce-editor-level-thumb.ce-editor-level-cell-preview {
+  align-self: stretch;
+  block-size: 86px;
+  display: block;
+  grid-area: auto;
+  grid-column: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+}
+
+.section-box-member-verb {
+  align-items: center;
+  /* A button is shrink-to-fit even as a grid, so the section would be as wide as its label. */
+  inline-size: 100%;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  justify-items: center;
+  min-block-size: 0;
+  padding: var(--ds-inset);
+  text-shadow: inherit;
+}
+
+.settings-row.ce-editor-level-row.ce-editor-level-cell-body {
+  block-size: 86px;
+  grid-column: 2;
+  grid-template-areas: "copy actions";
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-block-size: 86px;
+}
+
 /* Draft cards keep navigation and management controls as sibling buttons. This transparent
    grid item owns the thumbnail/copy hit area without wrapping their block markup or the action
    buttons, so the whole visible card still feels clickable without nested interactions. */
@@ -19596,10 +20200,8 @@ button.tileset-relationship-cell {
   outline-offset: -2px;
 }
 
-.settings-row.ce-editor-level-row.is-read-only {
-  grid-template-areas: "thumb rule copy";
-  grid-template-columns: var(--ce-level-row-preview-inline) auto minmax(0, 1fr);
-}
+/* Nothing restates the row's tracks for a read-only row: the box owns the preview/copy split as a
+   column line, and the body cell's own "copy actions" grid simply has no actions to place. */
 
 /* The preview pane. LevelThumbnail owns the board's 4:3 window and is handed the width that
    fills this box's content height (LEVEL_ROW_PREVIEW_WIDTH), so the compartment is exactly the
@@ -19620,11 +20222,38 @@ button.tileset-relationship-cell {
   display: block;
 }
 
-/* Divider host contract (see `.kit-divider`): the reach is supplied by the registered inner
-   role; the host only says the rule sits flush between its two panes. */
-.ce-editor-level-row > .action-list-leading-rule {
-  --kit-divider-gap: 0px;
-  grid-area: rule;
+/* A framed row is its own ONE-ROW divided box: the rail between the preview and the copy is that
+   box's column line, so the box places it and caps both ends against its own frame. It used to be
+   a rule this row drew for itself, which could only cap as though it met a frame — true here, and
+   the reason the same markup was wrong for an unframed member. */
+.ce-editor-level-row-box {
+  --ce-level-row-preview-inline: 96px;
+  block-size: 86px;
+  cursor: pointer;
+}
+
+.ce-editor-level-row-box > .chrome-divided-grid__rows,
+.ce-editor-level-row-box .ce-editor-level-row-cells {
+  block-size: 100%;
+  min-block-size: 0;
+}
+
+/* The cells are shared with the unframed member, where the row IS 86px. Inside a frame they fill
+   the content box the frame leaves instead of restating its height — so the selectors have to
+   outrank the member's own, which state that height in three classes. */
+.ce-editor-level-row-box .ce-editor-level-thumb.ce-editor-level-cell-preview,
+.ce-editor-level-row-box .settings-row.ce-editor-level-row.ce-editor-level-cell-body {
+  block-size: 100%;
+  min-block-size: 0;
+}
+
+/* The whole row opens the level, verbs excepted. The grid row is the positioned ancestor, so the
+   overlay covers preview and copy together rather than only the cell it is declared in. */
+.ce-editor-level-row-box .ce-editor-level-primary {
+  grid-column: auto;
+  grid-row: auto;
+  inset: 0;
+  position: absolute;
 }
 
 .ce-editor-level-row.is-disabled .ce-editor-level-thumb {
@@ -19694,6 +20323,10 @@ button.tileset-relationship-cell {
 
 .ce-editor-level-row.is-selected { box-shadow: inset 0 0 0 2px rgba(101, 184, 255, .78); }
 .ce-editor-level-row:not(.is-selected):hover { filter: brightness(1.06); }
+/* The framed box carries `ce-editor-level-row` itself, so the two rules above light ITS frame and
+   nothing new paints. The body cell carries the class too and must not brighten a second time
+   under the box that is already brightening. */
+.ce-editor-level-row-box .ce-editor-level-cell-body:hover { filter: none; }
 
 /* Inline draft rename stays inside the shared row and reuses the canonical kit field + icon
    buttons. The form itself is invisible layout; every perceived surface remains kit-backed. */
@@ -19751,7 +20384,10 @@ button.tileset-relationship-cell {
   grid-column: 1;
   grid-row: 2;
   min-block-size: 0;
-  overflow: hidden;
+  /* Hosts a .shell-workspace, so it must pass that surface's paint apron rather than
+     clipping it back to the grid column and reopening the seam against the chrome. */
+  overflow: clip;
+  overflow-clip-margin: var(--shell-workspace-paint-apron, 0px);
   position: relative;
 }
 
@@ -19787,7 +20423,7 @@ button.tileset-relationship-cell {
 
 /* The primary Sectio workspaces normally paint the shell's standard fill. When the
    retained viewport artwork is installed, that fill must yield so the shared scene
-   remains visible beneath Sectio, View Battle, and Expunctio alike. */
+   remains visible beneath Sectio, Exploratio, and Expunctio alike. */
 .run-screen.has-persistent-viewport-artwork .run-phase-primary > .run-workspace .shell-workspace-fill {
   visibility: hidden;
 }
@@ -19978,9 +20614,17 @@ button.tileset-relationship-cell {
 
 /* One continuous ledger down the pane's right column: the facts, then the note as its last
    section. Nothing between them is a frame — the pane's rail is the column's left edge. */
+/* The readout's sections are sized by their own content and the COLUMN scrolls; the rows must
+   say so explicitly. Left `auto`, grid's maximize-tracks step can only grow a row as far as the
+   free space allows, so a column taller than its viewport is handed rows BETWEEN min-content and
+   max-content — every section then quietly renders past the bottom of the row it was given, and
+   the last of them (Time) printed straight through the note underneath it while the column
+   reported nothing to scroll. `max-content` takes the row's full height as its base size, which
+   is what leaves a real overflow for the installed scrollbar to carry. */
 .run-battle-preview-intelligence {
   align-content: start;
   display: grid;
+  grid-auto-rows: max-content;
   min-block-size: 0;
   min-inline-size: 0;
   overflow: auto;
@@ -20185,7 +20829,7 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
-.run-card-pile > :is(.run-card-pile-back, .run-card-offer) {
+.run-card-pile > :is(.run-card-pile-back, .run-card-offer, .run-card-pile-lock) {
   grid-column: 1;
   grid-row: 1;
 }
@@ -20237,16 +20881,66 @@ button.tileset-relationship-cell {
   cursor: default;
 }
 
-/* A card is printed art, never a faded control: an unaffordable or already-purchased
-   offer stays fully opaque. Overrides the global `button:disabled` fade. */
+/* A card is printed art, never a faded control: an unaffordable or locked offer stays fully
+   opaque. Overrides the global `button:disabled` fade.
+
+   The pointer stays quiet for the same reason. A card you cannot take is not an error to be
+   scolded for reaching toward -- the price is printed on it and the lock is laid on it, and
+   `not-allowed`'s barred circle adds a rebuke on top of a state the card has already said
+   plainly. It takes the ordinary arrow instead: this is not a control right now. */
 .run-card-action:disabled {
-  cursor: not-allowed;
+  cursor: default;
   opacity: 1;
 }
 
-.run-sectio-cards-empty {
+/* The padlock laid on an offer the visit's one admission has closed (ADR-0551). It sits in the
+   pile's own registered seat, over the middle of the printed face, and is drawn from the kit's
+   64x64 lock at a fraction of the card so it reads as an object placed on the card rather than
+   as a badge stuck to the corner of a control. Nearest-neighbour, like every other pixel mark
+   the Run prints. Inert: the disabled offer beneath it stays the thing under the pointer.
+
+   Present but hidden while the offer is open, rather than mounted at the moment of locking: a
+   lock mounted then is also FETCHED then, and the survivors of an Adlectio stand there unmarked
+   until it arrives.
+
+   And it is PUT ON the card rather than switched on over it. Appearing at full strength on its
+   final centre gives a padlock no arrival at all -- it is simply somewhere it had not been, which
+   is the one thing a heavy object never does.
+
+   It comes down at the speed a Run card moves: the hover RAISE, exactly -- same duration, same
+   curve, and the same distance, since the descent IS the tuned hover raise read backwards. A card
+   lifting under the pointer and a lock being set onto one are one move in two directions, and
+   binding them means the Studio cannot tune the two of them apart. A visit entered already spent
+   mounts locked and plays nothing: nothing has just happened there. */
+.run-card-pile-lock {
+  opacity: 0;
+  transition:
+    opacity var(--run-card-raise-duration) var(--run-card-raise-ease),
+    translate var(--run-card-raise-duration) var(--run-card-raise-ease);
+  translate: 0 calc(-1 * var(--run-card-hover-raise, 7px));
+}
+
+.run-card-pile-lock.is-locked {
+  opacity: 1;
+  translate: 0 0;
+}
+
+.run-card-pile-lock {
+  align-self: center;
+  /* A share of the CARD, not a fixed size: the row's cards are sized by their host, and a lock
+     that stayed put while they grew would drift from an object on the card to a badge on it. */
+  inline-size: 26%;
   justify-self: center;
-  padding: var(--ds-space-3) var(--ds-space-4);
+  line-height: 0;
+  pointer-events: none;
+  /* Above the offer's own z-index: 1. The face it is laid on is opaque. */
+  z-index: 2;
+}
+
+.run-card-pile-lock > img {
+  display: block;
+  image-rendering: pixelated;
+  inline-size: 100%;
 }
 
 /* Adlected cards travel above every clipped Sectio and shell layer into the real
@@ -20294,6 +20988,15 @@ button.tileset-relationship-cell {
    the ADR-0032/0059 contract, which this is not. Nothing here paints a surface or touches the
    printed face. */
 
+/* How fast a Run card MOVES when something happens to it, named once because two gestures have
+   to agree. A hovered card is picked up off the table over this; a padlock is set down onto a
+   locked one over the same, across the same distance -- the tuned hover raise -- so the two are
+   one move in opposite directions rather than two speeds a screen has to reconcile. */
+:root {
+  --run-card-raise-duration: 200ms;
+  --run-card-raise-ease: cubic-bezier(0.2, 0.75, 0.3, 1);
+}
+
 /* Registered so the amplitude itself can be TRANSITIONED. That is what lets a hovered card
    settle: the drift keeps running on its own clock while its rise eases to zero, so the card
    comes to rest at exactly translate 0 -- its seat on the table -- from wherever in the cycle
@@ -20303,6 +21006,18 @@ button.tileset-relationship-cell {
   syntax: '<length>';
   inherits: true;
   initial-value: 8px;
+}
+
+/* The emanation's STEADY LEVEL, registered on the same principle so it too can be transitioned:
+   a locked card has to go dark, and a light that cuts out while the card is still gliding down
+   onto its seat is a second event laid over the first. Every use already reads it as
+   `var(--run-card-glow, 1)`, so an initial value of 1 is exactly the fallback they were getting.
+   The Studio's Card Size instrument writes it as a plain number, which is what the syntax below
+   accepts. */
+@property --run-card-glow {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
 }
 
 /* The emanation's PULSE DEPTH, on the same principle. A hovered card has to stop moving, and a
@@ -20412,7 +21127,12 @@ button.tileset-relationship-cell {
     var(--run-card-float-timing, linear)
     var(--run-card-float-delay, 0s)
     infinite !important;
-  transition: --run-card-float-rise 240ms cubic-bezier(0.3, 0.7, 0.3, 1);
+  /* The steady light rides the settle: a hovered card never changes it, and a locked one has to
+     lose it over exactly the beat it comes to rest, or the card is still moving after it has
+     gone dark. */
+  transition:
+    --run-card-float-rise 240ms cubic-bezier(0.3, 0.7, 0.3, 1),
+    --run-card-glow 240ms cubic-bezier(0.3, 0.7, 0.3, 1);
   /* Promoted deliberately: a composited layer is rasterized once and MOVED by the compositor,
      so whole-pixel drift never resamples this pixel art. */
   will-change: translate;
@@ -20438,7 +21158,7 @@ button.tileset-relationship-cell {
     --run-card-flare 220ms ease,
     --run-card-glow-pulse 240ms cubic-bezier(0.3, 0.7, 0.3, 1),
     --run-card-lift 220ms ease,
-    translate 200ms cubic-bezier(0.2, 0.75, 0.3, 1);
+    translate var(--run-card-raise-duration) var(--run-card-raise-ease);
 }
 
 /* The two cases that hold ONE steady light rather than a breathing one, at the emanation's
@@ -20490,6 +21210,29 @@ button.tileset-relationship-cell {
   translate: 0 calc(-1 * var(--run-card-hover-raise, 7px));
 }
 
+/* A LOCKED offer stops asking (ADR-0551). The life is a card asking to be picked up -- it drifts
+   and it throws gold light -- and a Sectio that has spent its admission is not asking for
+   anything, so both end when the padlock lands.
+
+   Settled through the same registered vars and the same pause a hovered card uses, rather than by
+   taking the animation away: the rise eases to nothing, so a card caught mid-drift comes DOWN
+   onto its seat instead of snapping onto it.
+
+   It is the hover's own settle, on the hover's own timing: the rise and the steady light ease out
+   over the beat a hovered card takes to come to rest, because that is the speed a Run card moves
+   at. The lock coming down over it is the hover RAISE, same duration, same curve, same distance.
+   Nothing here invents a pace of its own. */
+.run-card-pile.is-locked {
+  --run-card-float-rise: 0px;
+  --run-card-glow: 0;
+  --run-card-glow-pulse: 0;
+}
+
+.run-card-pile.is-locked,
+.run-card-pile.is-locked .run-card-action {
+  animation-play-state: paused !important;
+}
+
 /* The explicit in-game reduced-motion choice stills the drift; the steady-light rule above keeps
    the cards lit where they sit. */
 :root.reduce-motion .run-card-alive {
@@ -20520,11 +21263,21 @@ button.tileset-relationship-cell {
   justify-content: center;
 }
 
-.run-gold-icon img {
+.run-gold-icon img,
+.run-adlectio-mark-icon img {
   block-size: 100%;
   image-rendering: pixelated;
   inline-size: 100%;
   object-fit: contain;
+}
+
+/* The mark for a record this Sectio visit admitted, drawn beside the coin it cost. Same seat rules
+   as the coin; the size belongs to whichever line mounts it, because this mark has no measure row
+   of its own. */
+.run-adlectio-mark-icon {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
 }
 
 .run-gold-icon.is-unavailable {
@@ -20694,6 +21447,51 @@ button.tileset-relationship-cell {
   object-fit: contain;
 }
 
+/* The card mark is the only mark in these rails that is a PAINTING rather than native
+   pixel art: the player's 1060x1484 card back, drawn at a ~22px seat. Every mark beside
+   it is a 64px sprite whose placed pixels `image-rendering: pixelated` protects, but
+   point-sampling a 48x reduction keeps roughly one source pixel in 2300 and returns
+   speckle rather than a card — so this one mark asks the compositor to filter. The class
+   is declared once in strategikonNavigation.ts and worn by every seat it occupies.
+
+   The class is doubled on purpose. Each seat sets `image-rendering: pixelated` on a bare
+   `img` inside its own class (0,1,1), which outranks a single class (0,1,0) — the mark
+   wore this class and still computed `pixelated`. Doubling makes it 0,2,0, so the mark
+   carries its treatment into any seat without that seat having to know about it, and
+   without depending on which rule the stylesheet happens to state last. */
+.strategikon-card-mark.strategikon-card-mark {
+  image-rendering: auto;
+}
+
+/* A Run card ACTION's mark, seated on the control that performs it (Athetize is the
+   founding member). Same reserved-seat contract as the measures above: the seat holds
+   its geometry before the art decision exists, so installing one never shifts the
+   label beside it. The host button already supplies the row and its gap. */
+.run-action-icon {
+  align-items: center;
+  aspect-ratio: 1;
+  /* The seat is DERIVED from the control it rides, not asserted: it fills that
+     control's content box and is held off the drawn frame by one space step on the
+     block axis. The inline axis already clears the frame by the host's own --ds-inset,
+     so stating the block step is what makes the mark sit symmetrically inside the
+     frame instead of flush against it (ADR-0055). Text gets away with a zero block
+     inset because a line box carries its own leading; a raster is ink to its edge and
+     does not. A host whose own height is indefinite names --run-action-seat instead. */
+  block-size: var(--run-action-seat, calc(100% - var(--ds-space-1) * 2));
+  display: inline-flex;
+  flex: none;
+  justify-content: center;
+}
+
+/* The mark ships trimmed to its own ink, so a square seat plus contain draws it at
+   one size with no per-icon compensating transform. */
+.run-action-icon img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: contain;
+}
+
 /* A measure is one icon and its number — Ataraxia tier, gold, Conflict, Battle are
    all the same kind of fact and read as one row. Each one is FRAMED, like every
    other element in the bar, and the frame is earned rather than decorative: the box
@@ -20772,15 +21570,19 @@ button.tileset-relationship-cell {
   margin-inline-end: var(--ds-inline-tight);
 }
 
-/* The report box is the aftermath screen's visual anchor. Equal flexible tracks
+/* The report box is the outcome screen's visual anchor. Equal flexible tracks
    first establish its geometric centre; the complete heading/report/action composition
    then moves by one twentieth of the actual workspace height so the report lands on the
-   45% optical centre without measuring or centring the combined stack (ADR-0456). */
-.run-aftermath-workspace {
+   45% optical centre without measuring or centring the combined stack (ADR-0456).
+   A Battle's Aftermath and a War's Victory are the same moment at two scales, so one set of
+   rules composes both rather than two that drift apart. */
+.run-aftermath-workspace,
+.run-victory-workspace {
   container-type: size;
 }
 
-.run-aftermath-workspace-content {
+.run-aftermath-workspace-content,
+.run-victory-workspace-content {
   align-items: center;
   grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: var(--ds-gutter);
@@ -20789,14 +21591,18 @@ button.tileset-relationship-cell {
 }
 
 .run-aftermath-head,
+.run-victory-head,
 .run-aftermath-report,
-.run-aftermath-actions {
+.run-victory-report {
   translate: 0 -5cqh;
 }
 
-/* The heading stands directly on the artwork with nothing behind it, so it carries its
-   own shadow the way the Sectio's scene copy does. */
-.run-aftermath-head {
+/* The heading stands directly on the artwork with nothing behind it, so it carries its own
+   shadow the way the Sectio's scene copy does. It is the ONLY line that may: it is display
+   type at a size that survives any backdrop, and everything factual belongs in the report
+   below. Victory's sky is bright daylight, and a block of white copy read off clouds there. */
+.run-aftermath-head,
+.run-victory-head {
   align-self: end;
   display: grid;
   gap: var(--ds-space-3);
@@ -20804,7 +21610,8 @@ button.tileset-relationship-cell {
   text-shadow: 0 2px 6px rgba(2, 7, 12, .9);
 }
 
-.run-aftermath-title {
+.run-aftermath-title,
+.run-victory-title {
   font: var(--ds-weight-regular) var(--ds-text-display)/1 var(--ds-font-display);
   letter-spacing: var(--ds-tracking-wide);
   text-transform: uppercase;
@@ -20817,27 +21624,81 @@ button.tileset-relationship-cell {
 
 /* The report is a fixed measure rather than the full content line: a ledger of four
    short rows stretched edge to edge would put its labels and its numbers on opposite
-   sides of the screen. */
-.run-aftermath-report {
+   sides of the screen. Victory's report is prose rather than a ledger, so it takes a
+   wider measure — the same reason read the other way. */
+/* Both reports close with their own verbs, so the box takes no padding: its rails run the full
+   inner width and each ROW carries its inset instead. */
+.run-aftermath-report,
+.run-victory-report {
   grid-row: 2;
+  padding: 0;
+}
+
+.run-aftermath-report {
   inline-size: min(100%, 420px);
 }
 
-.run-aftermath-actions {
-  align-self: start;
-  display: flex;
-  gap: var(--ds-inline-tight);
-  grid-row: 3;
+.run-victory-report {
+  inline-size: min(100%, 560px);
+}
+
+/* A row that is one thing across the box is ONE column, whatever the verb row below it split
+   the box into. Without this it inherits the box's tracks and huddles into the first of them. */
+.run-aftermath-record,
+.run-victory-record {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* The record the War is remembered by. Its own rows carry the spacing, because the kit
+   frame's inner padding is sized for dense panel content. */
+.run-victory-record {
+  display: grid;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-4);
+}
+
+.run-victory-war {
+  font: var(--ds-weight-regular) var(--ds-text-lg)/1.1 var(--ds-font-display);
+  margin: 0;
+}
+
+.run-victory-ataraxia {
+  color: var(--ds-ink-2);
+  margin: 0;
+}
+
+.run-victory-description {
+  margin: 0;
+}
+
+.run-victory-summary {
   justify-content: center;
 }
 
-/* The kit frame's own inner padding is sized for dense panel content; a ledger read at
-   arm's length needs its rows further off the border than that. */
+/* A verb of a result report IS its compartment, so it carries only type and measure — the frame
+   around it, the rail beside it and the plank under it are the box's. Sized as the framed text
+   button each one replaced, so the screen is read at the same scale it always was. */
+.run-result-verbs .run-result-verb {
+  display: grid;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-sm);
+  min-block-size: 46px;
+  padding: 0 var(--ds-inset);
+  text-transform: uppercase;
+}
+
+.run-result-verb:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: -2px;
+}
+
+/* The ledger is a ROW of the report box now, so it carries its own inset off the frame — the
+   box's padding is 0 there, because its rails run the full inner width. */
 .run-aftermath-ledger {
   display: grid;
   gap: var(--ds-space-4);
   margin: 0;
-  padding: var(--ds-space-2) var(--ds-space-3);
+  padding: var(--ds-inset);
 }
 
 /* Label left, number right, on one row — the shape a ledger is read in. The pair is
@@ -21763,6 +22624,102 @@ button.tileset-relationship-cell {
 
 .run-progress-icon-review-grid small {
   color: var(--skirmish-muted);
+}
+
+/* Main-menu mark review: each candidate SET is mounted as a whole rail through the same
+   primitive the menu paints, laid out side by side so the sets can be read against each
+   other and against what is installed. Layout only — the rail brings its own column
+   width, gap, surface and seat, and the review never restyles the thing it is judging
+   (a review that re-sizes the seat proves nothing about the seat). */
+.menu-icon-review-screen {
+  block-size: 100%;
+  box-sizing: border-box;
+  grid-template-columns: minmax(0, 1fr);
+  overflow: auto;
+  padding: var(--ds-inset);
+}
+
+.menu-icon-review-panel {
+  grid-column: 1;
+  grid-row: 2;
+  margin-inline: auto;
+  /* Four 322px rails plus their gaps. The panel is sized to hold the comparison, not
+     to a house width — a panel that clips the fourth set hides the set. */
+  max-inline-size: 1480px;
+  overflow: auto;
+  inline-size: 100%;
+}
+
+.menu-icon-review-panel > .le-outer-panel-content {
+  display: grid;
+  gap: var(--ds-inline);
+}
+
+.menu-icon-review-sets {
+  align-items: start;
+  display: flex;
+  gap: var(--ds-inline);
+  /* One row, always. A wrapped set is a set that can no longer be compared against the
+     one it wrapped away from, which is the entire job of this page; a narrow window
+     scrolls the row instead of breaking it. */
+  overflow-x: auto;
+}
+
+.menu-icon-review-set {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  justify-items: start;
+}
+
+.menu-icon-review-set > h2,
+.menu-icon-review-set > p {
+  margin: 0;
+}
+
+/* Reserve two lines for the set name whether or not it needs them. A one-line title next
+   to a wrapped one starts its rail a line higher, and two rails at different heights
+   cannot be read against each other — which is the only thing this page does. */
+.menu-icon-review-set > h2 {
+  align-content: end;
+  min-block-size: 2.4em;
+}
+
+.menu-icon-review-set > p {
+  color: var(--skirmish-muted);
+}
+
+.menu-icon-review-missing {
+  color: var(--skirmish-muted);
+  margin: 0;
+}
+
+/* Studio > Action Marks: each catalog card carries the candidate in the SAME button the
+   Expunctio row paints, in both states that control has — offered, and refused. Layout
+   only; the buttons bring their own kit frame and the catalog never restyles the seat it
+   is judging. */
+.athetize-mark-buttons {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  inline-size: 100%;
+  justify-items: stretch;
+}
+
+.athetize-mark-card-image {
+  block-size: auto;
+  padding: var(--ds-inset);
+}
+
+/* A catalog card is narrower than the workspace row this control normally fills, so its
+   label truncates instead of spilling past the card. The MARK is what is being judged
+   here, and it keeps its seat at full size either way. */
+.athetize-mark-buttons button {
+  min-inline-size: 0;
+}
+
+.athetize-mark-buttons button > span:not(.run-action-icon) {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Sectio wrap-art candidate rows: generated art is review-mounted around the
@@ -22910,6 +23867,14 @@ button.tileset-relationship-cell {
   inline-size: 100%;
 }
 
+/* The swept remainder carries the deck's own pile, so its top card must take the flight box
+   exactly the way the top card takes the deck box — the JS gives this element the deck's rect,
+   and anything short of filling it would make the pile change size at the handover. */
+.run-deployment-deal-flight.is-remainder > .run-deployment-center-card {
+  block-size: 100%;
+  inline-size: 100%;
+}
+
 .run-deployment-stack-card {
   block-size: 100%;
   inset: 0;
@@ -22999,26 +23964,33 @@ button.tileset-relationship-cell {
   grid-column: 1 / -1;
 }
 
-/* Account/browser Run adoption is a decision made with two buttons, not a
-   framed record of its own. The Run section already supplies the surrounding
-   structure, so the conflict copy and actions sit directly in that flow. */
-.run-adoption-conflict {
-  display: grid;
-  gap: var(--ds-stack);
-  padding: var(--ds-space-2) var(--ds-space-2) 0;
+/* Account/browser Run adoption is a decision made with two buttons, not a framed record of its
+   own. It is answered inside the Current Run detail column now (ADR-0557), which already
+   supplies the head, the body inset and the row that closes each side — so the copy carries no
+   padding of its own and each Keep is a row of the detail card. It used to stand in the
+   choice column, in the seat the Current Run row occupies, and paid its own inset for that.
+
+   The conflict IS that card: it adds nothing to `.play-detail-card` but its name, because the
+   question is the card's contents and never a second field inside it. */
+
+/* One line of situation over the two candidates — the question, not the comparison. The
+   comparison is the two labelled row lists under it. */
+.run-adoption-conflict-lede {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+  margin: 0;
 }
 
-.run-adoption-conflict-copy {
-  display: grid;
-  gap: var(--ds-inline-tight);
-}
+/* Each candidate names itself with the SAME head the card's own title uses — no second
+   heading treatment — so the two sides read as headed lists rather than two paragraphs that
+   happen to sit near two buttons. It is a semantic GROUP of the card's rows and generates no
+   layout: boxed, each side would draw a frame inside the card's and have to cap the rails
+   between its own rows against it. `display: contents` is the row group's own. */
 
-.run-adoption-conflict :is(h3, p) {
+.run-adoption-conflict p {
   margin: 0;
 }
 
 .run-meta-controls {
-  --run-leaf-control-surface-pitch: calc(46px + var(--ds-inline-tight));
   align-content: start;
   display: flex;
   flex: 1 1 auto;
@@ -23046,8 +24018,25 @@ button.tileset-relationship-cell {
   inline-size: 100%;
 }
 
-.run-meta-controls [data-chrome-fill-surface] {
-  --chrome-surface-position-y: calc(var(--run-leaf-control-index, 0) * -1 * var(--run-leaf-control-surface-pitch));
+/* The Sectio rail's controls read as a column of destinations, so each one's mark takes a fixed
+   seat at its leading edge and every label starts on the same line. The seat is square and holds
+   its size whatever the glyph's own aspect, which is what stops a wide mark from pushing one
+   button's word further in than its neighbours'. The buttons themselves are already inline flex
+   rows with their own gap (.app-header-button), so nothing here re-states that. */
+.run-control-mark {
+  align-items: center;
+  block-size: 22px;
+  display: inline-flex;
+  flex: none;
+  inline-size: 22px;
+  justify-content: center;
+}
+
+.run-control-mark > img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: contain;
 }
 
 .run-meta-abandon {
@@ -23303,20 +24292,12 @@ button.tileset-relationship-cell {
   display: block;
 }
 
-.run-army-profile {
-  --run-leaf-control-surface-pitch: calc(46px + var(--ds-inline-tight));
-}
-
 .run-army-profile-content {
   block-size: 100%;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-block-size: 0;
   overflow: hidden;
-}
-
-.run-army-profile [data-chrome-fill-surface] {
-  --chrome-surface-position-y: calc(var(--run-leaf-control-index, 0) * -1 * var(--run-leaf-control-surface-pitch));
 }
 
 .run-army-profile-scroll {
@@ -23526,9 +24507,24 @@ button.tileset-relationship-cell {
 /* The divided grid's rail layer is a lifted OVERLAY, not a row of the box. The lift above sets
    every non-fill child to `position: relative` so content clears the fill; applied to this layer
    it drops the rails into the flow, where they take a whole grid row and push the rows layer off
-   the bottom of the box. It is already above the fill by z-index, so it stays absolute. */
+   the bottom of the box. It stays absolute, and it keeps its own layer: the lift's `z-index: 1`
+   tied it with the rows layer, which then won on DOM order and painted the seats' wood straight
+   over every vertical rail. */
 .inner-chrome-box.has-chrome-surface-fill > .chrome-divided-grid__fixed-rails {
   position: absolute;
+  z-index: 2;
+}
+
+/* The rows layer takes the lift's POSITION and refuses its LAYER, which is the other half of the
+   same bug. `position: relative` alone already clears the fill; naming a z-index as well makes this
+   a stacking context, and the row boundaries inside it carry the junction atoms at z-index 3
+   precisely so they land on top of the vertical rails at 2 — trapped under a level-1 parent, every
+   four-way crossing is buried under the rail it is supposed to cap. The grid's own rule says this
+   in as many words; the lift out-specified it. Paired with the scroll layer exactly as the grid's
+   own rule pairs them, because a scrolling box puts that layer in the rows layer's place. */
+.inner-chrome-box.has-chrome-surface-fill > .chrome-divided-grid__rows,
+.inner-chrome-box.has-chrome-surface-fill > .chrome-divided-grid__scroll {
+  z-index: auto;
 }
 
 .run-expunctio-card,
@@ -23556,18 +24552,38 @@ button.tileset-relationship-cell {
   padding-block: var(--run-expunctio-card-paint-start-inset) var(--run-expunctio-card-paint-end-inset);
 }
 
+/* One short line of state, seated level with the card's own title plate rather than floating in
+   the middle of the empty column the stripped-back tile leaves behind. */
 .run-expunctio-copy {
-  align-content: center;
+  align-content: start;
   display: grid;
   gap: var(--ds-space-1);
   min-inline-size: 0;
   grid-area: copy;
 }
 
-.run-expunctio-copy > :is(small, span),
-.run-expunctio-price > small {
+.run-expunctio-price > small,
+.run-expunctio-visit-mark {
   color: var(--skirmish-muted);
   font: var(--ds-weight-regular) var(--ds-text-md)/1.35 var(--ds-font-display);
+}
+
+/* The only words the companion says about the record itself: this visit admitted the card, and
+   Reset Sectio would take it back. It carries the tile's own ink rather than the muted register
+   the supporting labels use, because it reports state instead of labelling a field, and it wears
+   the installed coin the same way every other Run measure wears its mark. */
+.run-expunctio-visit-mark {
+  align-items: center;
+  color: var(--skirmish-ink);
+  display: inline-flex;
+  gap: var(--ds-space-1);
+}
+
+/* 30px: every hand-and-card candidate turned to mush below it. */
+.run-adlectio-mark-icon.run-expunctio-visit-mark-icon {
+  block-size: 30px;
+  flex: none;
+  inline-size: 30px;
 }
 
 .run-expunctio-price {
@@ -24158,7 +25174,17 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
+/* The catalog is ~284 faces and only a handful are ever on screen. Without this the browser
+   lays out and paints every one of them the moment the gallery mounts, in a single stretch it
+   cannot paint through — the app froze for about a second, rain and waterfalls included.
+   `content-visibility: auto` lets it skip the work for anything off screen and do it when the
+   card is scrolled to instead. `auto` on the intrinsic size means a card that HAS been rendered
+   is remembered at its real size, so the scrollbar does not jump; the two lengths are only the
+   first guess for one that has never been on screen (the grid's column cap, and a face's
+   measured height at that width). */
 .enchiridion-card-gallery-item {
+  contain-intrinsic-size: auto 232px auto 305px;
+  content-visibility: auto;
   min-inline-size: 0;
 }
 
@@ -24504,10 +25530,13 @@ button.tileset-relationship-cell {
   pointer-events: none;
 }
 
-/* ui/kit/icons/design-index.png — ink 40x40 at (12,12) on a 64x64 canvas. */
+/* ui/main-menu/icons-carved/enchiridion.png — ink 48x52 at (8,6) on a 64x64 canvas. The
+   Strategikon's Enchiridion tab draws whatever the Enchiridion DESTINATION draws
+   (menuModeIcon), so it moved off the shared design-index kit glyph when that destination
+   gained a mark of its own family (ADR-0560). 6/64 below the ink, 52/64 across it. */
 [data-strategikon-section="enchiridion"] img {
-  --titlebar-mark-ink-below: .1875;
-  --titlebar-mark-ink-fill: .625;
+  --titlebar-mark-ink-below: .09375;
+  --titlebar-mark-ink-fill: .8125;
 }
 
 /* ui/kit/icons/unit-studio.png — ink 26x40 at (19,12) on a 64x64 canvas. */
@@ -24997,6 +26026,22 @@ button.tileset-relationship-cell {
 }
 .stepper-chevron-right {
   transform: scaleX(-1);
+}
+/* A disclosure control says which way its content is about to move: down while closed (it
+   opens below the control), up while open (it folds back up). Same shared mark turned a
+   quarter, mirrored the way -right already is -- never a second chevron implementation.
+
+   These are NOT re-centred, and that was checked rather than assumed: captured at 8x on the live
+   route and the ink's bounding box read off the pixels, a turned chevron lands 1.5 device pixels
+   (0.19 CSS px) off the centre of its glyph box — below what the rasterizer can place at 1x, and
+   not worth a magic number. When a turned chevron LOOKS off-centre, it is its host that is not
+   centring the glyph: `.stepper-glyph` is an inline-block, so a host that leaves it on the text
+   baseline hangs it high. See `.run-rules-toggle`, where that was 2.5px. */
+.stepper-chevron-down {
+  transform: rotate(-90deg);
+}
+.stepper-chevron-up {
+  transform: rotate(90deg);
 }
 
 .settings-stepper output {
@@ -25639,6 +26684,12 @@ button.tileset-relationship-cell {
     --settings-tab-icon-bleed-size: 29px;
   }
   .settings-tab > span:not(.settings-tab-icon) { transform: none; }  /* was translateX(37px) */
+  /* Follows this band's tighter tab padding, and restates its own centring — the label reset
+     directly above matches the mark too and would otherwise drop it off the tab's centre line. */
+  .settings-tab > span.settings-tab-open-mark {
+    inset-inline-end: 12px;
+    transform: translateY(-50%);
+  }
   .settings-tab strong { font-size: var(--ds-text-md, 1rem); }
 
   /* Content panel — specificity-matched (0,2,0) so it beats the baked 931px + transform. */
@@ -26067,8 +27118,6 @@ button.tileset-relationship-cell {
    contract after the feature rules also prevents a local raw-CSS background or
    one-pixel border from silently winning over the installed Chrome family. */
 :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .inner-box {
-  background-color: transparent;
-  background-image: none;
   border-color: transparent;
   border-radius: 0;
   border-style: solid;
@@ -26080,6 +27129,16 @@ button.tileset-relationship-cell {
   box-shadow: none;
   box-sizing: border-box;
   image-rendering: pixelated;
+}
+
+/* The field is stripped separately from the frame, because the guard above is aimed at a
+   raw-CSS background — not at a box whose own INSTALLED image is the point of it. A unit
+   portrait's painted scene arrives from the drawable catalog and is part of the portrait,
+   so stripping it left every framed bust (the roster thumbnails, the Selected Unit seat)
+   on flat fill while the same unit's unframed portrait kept its scene. */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .inner-box:not(.has-backdrop) {
+  background-color: transparent;
+  background-image: none;
 }
 
 :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .inner-box:is(.active, .is-active, [aria-pressed="true"]) {
@@ -26112,16 +27171,6 @@ button.tileset-relationship-cell {
 
 :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .list-row {
   min-block-size: var(--le-inner-row-h, var(--le-inner-control-h, 38px));
-}
-
-/* The compass is a grid of canonical tool squares; its container follows the
-   inherited square token instead of squeezing those controls into a local 138px
-   diagram. */
-.level-editor-screen .unit-facing-compass {
-  aspect-ratio: auto;
-  grid-template-columns: repeat(3, var(--le-inner-square, 38px));
-  grid-template-rows: repeat(3, var(--le-inner-square, 38px));
-  width: calc(var(--le-inner-square, 38px) * 3 + 8px);
 }
 
 /* Owner-operated, level-driven source image for pre-drawn whole-board generation. The dark
@@ -26735,6 +27784,43 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   position: relative;
 }
 
+/* Studio → Card Layout. The gallery had no rule of its own, so every card took the panel's whole
+   width: one card per screen, and the Zoom slider — which sets --run-card-gallery-zoom on this
+   grid — drove nothing, because only the card-back study ever read that variable. Zoom is what
+   sizes a card here, so 100% is the width a Sectio deals one and the grid reflows around it. */
+.run-card-prototype-study-grid {
+  --run-card-gallery-card: calc(196px * var(--run-card-gallery-zoom, 1));
+  align-content: start;
+  display: grid;
+  gap: var(--ds-space-4);
+  grid-auto-rows: max-content;
+  grid-template-columns: repeat(auto-fill, var(--run-card-gallery-card));
+  justify-content: start;
+}
+
+.run-card-prototype-study {
+  display: grid;
+  gap: var(--ds-space-2);
+  inline-size: var(--run-card-gallery-card);
+  justify-items: center;
+}
+
+/* The readings the coin fill is actually judged on, pinned above the identity gallery. The
+   catalog opens on fifteen Kings and a King is struck with a mark rather than a price
+   (ADR-0530), so without this the first screenful of a price-tuning surface carries no price.
+   Separated by rhythm rather than by a rule of its own: spacing encodes the grouping
+   (ADR-0056), and a hand-painted divider here would be unregistered chrome. */
+.run-card-prototype-readings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-4);
+  margin-block-end: calc(var(--ds-space-4) * 2);
+}
+
+.run-card-prototype-readings > .run-card-prototype-study {
+  inline-size: var(--run-card-gallery-card, 196px);
+}
+
 .run-card-face-layer {
   display: block;
   inset: 0;
@@ -26836,10 +27922,14 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   transform: translateY(calc(var(--run-card-text-ink-centre, .0667) * 1em));
 }
 
+/* Tracking only. The size is `--run-card-cost-size`, which runCardCostSizeCqw already reduced
+   to fit the coin face WITH this tracking priced in — a second flat shrink here stacked on that
+   one and, because the two won at different lengths, made a three-digit price a third smaller
+   than a two-digit one. The padding gives back the trailing letter-space so the reading stays
+   centred in its seat. */
 .run-card-prototype-cost.is-multi-digit {
-  font-size: calc(var(--run-card-cost-size, 6.2cqw) * .76);
-  letter-spacing: -.35cqw;
-  padding-inline-end: .35cqw;
+  letter-spacing: var(--run-card-cost-tracking, -.35cqw);
+  padding-inline-end: calc(var(--run-card-cost-tracking, -.35cqw) * -1);
 }
 
 /* A priceless card is struck with its mark, centred on the coin the numeral would read on
@@ -27362,32 +28452,32 @@ button.run-card-formation-cell {
   text-wrap: wrap;
 }
 
-.run-ataraxia-selector {
+/* Every section of Run preparation is one BOX rather than a heading over loose controls, so its
+   own frame is the outer spacing and the rows inside it carry none. See SectionBox. */
+.section-box {
   display: grid;
-  gap: var(--ds-inline-tight);
 }
 
-.run-ataraxia-selector h3,
-.run-ataraxia-selector p {
+.run-rules-cell h4,
+.run-rules-cell p {
   margin: 0;
 }
 
-.run-ataraxia-selector h3 {
-  padding-inline: 8px;
-}
-
-.run-ataraxia-select {
+.run-ataraxia-select,
+.run-rules-select {
   inline-size: 100%;
 }
 
-.run-ataraxia-option-copy {
+.run-ataraxia-option-copy,
+.run-rules-option-copy {
   display: grid;
   gap: 4px;
   min-inline-size: 0;
   inline-size: 100%;
 }
 
-.run-ataraxia-option-copy > span {
+.run-ataraxia-option-copy > span,
+.run-rules-option-copy > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -27397,7 +28487,8 @@ button.run-card-formation-cell {
   display: none;
 }
 
-.house-select-option .run-ataraxia-option-copy {
+.house-select-option .run-ataraxia-option-copy,
+.house-select-option .run-rules-option-copy {
   padding-block: 2px;
 }
 
@@ -27408,26 +28499,9 @@ button.run-card-formation-cell {
   white-space: normal;
 }
 
-.run-ataraxia-effect {
+.run-rules-effect {
   color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
   font-size: var(--ds-text-xs);
-}
-
-.play-choice-row {
-  appearance: none;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  text-align: start;
-}
-
-.play-choice-row:not(.is-selected):not(.is-disabled):hover {
-  filter: brightness(1.06);
-}
-
-.play-choice-row.is-disabled {
-  cursor: default;
-  opacity: .55;
 }
 
 .play-detail-body {
@@ -27448,8 +28522,66 @@ button.run-card-formation-cell {
   gap: var(--ds-stack);
 }
 
+/* One card per detail column: the facts (or the adoption question) and the verb that completes
+   them share a single structural stone field, so nothing in the column reads as text floating on
+   the live vista.
+
+   The card closes with its own verb, so it takes NO padding and no gap: its rails run the full
+   inner width and each ROW carries its inset instead. Padded, the verb was a plaque floating in
+   the middle of the field with a margin of marble on all four sides and a second frame a few
+   pixels inside the card's own. */
+.play-detail-card {
+  --play-detail-verb-h: 40px;
+  padding: 0;
+}
+
+/* A row that is one thing across the card is ONE column, whatever the verb row below it split
+   the card into. Without this it inherits the card's tracks and huddles into the first of them.
+   The rails run the full inner width, so each row carries the inset the card no longer does. */
+.play-detail-lede,
+.play-detail-head,
 .play-detail-facts {
+  grid-template-columns: minmax(0, 1fr);
   padding: var(--ds-inset);
+}
+
+/* A title that earns its place lives INSIDE the card, as a row of it — the same eyebrow the
+   level preview's own name row wears, on the same terms. It borrowed the campaign editor's
+   panel head before, which draws a hairline gradient rule under itself; inside a divided box
+   that rule sat a few pixels above the kit's own rail and said the same thing twice in raw CSS.
+   The rail IS the division now, so the head is type and nothing else. */
+.play-detail-head h2 {
+  color: var(--ce-eyebrow);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-2xs);
+  font-weight: 400;
+  letter-spacing: .14em;
+  line-height: 1.55;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+/* The verb IS its row — pressable edge to edge, so the card's frame is this control's edge and
+   there is no second frame a few pixels inside it. It keeps the height `.ce-link-button` gave
+   the plaque it replaces, so the card reads at the same scale it always did; only the width
+   changes, from a plate parked in the field to a band across the whole of it. */
+.play-detail-verbs .play-detail-verb {
+  display: grid;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xs);
+  min-block-size: var(--play-detail-verb-h);
+  padding: 0 var(--ds-inset);
+  text-transform: uppercase;
+}
+
+.play-detail-verb:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.play-detail-verb:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: -2px;
 }
 
 .play-detail-facts dl {
@@ -27476,12 +28608,142 @@ button.run-card-formation-cell {
   text-align: end;
 }
 
-/* Replacement disclosure seated above Start Run — the popup-free abandon confirm.
-   Sits between the detail body and the actions row, so the column's own gap spaces it. */
-.run-replace-note {
+/* ── Start New Run is ONE box ─────────────────────────────────────────────────────────────────
+   Ataraxia, the replacement warning, the verb and Options were four separate slabs with the live
+   vista showing through the gaps, which drew one control as four unrelated things. They are cells
+   of a single box now and the gaps are that box's own rails — laid and capped by its topology, so
+   nothing here draws a rule. See the mount in PlayMenu. */
+.run-prep-box {
+  /* The plate a CELL paints when it is the control. A framed button is a 38px box whose 9-slice
+     eats a rail's width a side, so about 24px of it is oak; a cell has no frame — the box's rails
+     are its edges — so at 38px it would paint the whole 38 and read half again as heavy as every
+     framed control on the screen. Stated here because `--le-inner-square` and its siblings are
+     scoped to the Level Editor screen and do not reach the menu shell's columns. */
+  --run-prep-plate-h: 30px;
+  /* ONE WOOD height through the whole box. The square key that opens Options is the only FRAMED
+     control here, and a frame is measured in what it eats: at a 30px box its 9-slice rails take 7px
+     a side and leave 16px of oak, against the 30px a frameless plate paints — so matching the boxes
+     makes the key read half the size of the bars above it. The key's box is therefore one plate
+     PLUS its own two rails, which is the same trade `.ce-preview-box` records from the other
+     direction (there a frameless cell was shrunk to the oak a framed button paints).
+     Stated on `--le-inner-square` because that is the token the registered unit already reads; it
+     is scoped to the Level Editor's screen and never reached the menu shell, where the unit fell
+     back to 38px. */
+  --le-inner-square: calc(var(--run-prep-plate-h) + 2 * var(--le-chrome-inner-rail-w, 7px));
+  /* ONE seat for every name cell, whether it carries a key or not. Sized to hold the key: a cell
+     that holds nothing but a line of text would otherwise be 18px shorter than the one beside it,
+     and the two titles would sit at different heights in what is meant to be the same treatment. */
+  --run-prep-name-h: calc(var(--run-prep-plate-h) + 2 * var(--ds-inset));
+  /* Sized by what it holds. Stretching it to the column and packing the cells from the top is
+     what leaves a slab of empty marble under the last one. */
+  flex: 0 0 auto;
+  min-inline-size: 0;
+  /* NO padding: a rail has to reach the frame on both sides, and box padding would hold every one
+     of them short of it. Each cell takes the inset instead. */
+  padding: 0;
+}
+
+.run-prep-box > .chrome-divided-grid__rows {
+  display: grid;
+  min-block-size: 0;
+}
+
+/* A cell that CARRIES something — a name, a sentence — takes the inset and wears the box's marble. */
+.run-prep-cell {
+  gap: var(--ds-inline-tight);
   padding: var(--ds-inset);
 }
 
+/* A cell that IS something — a verb, a picker — takes no inset at all: its control fills the whole
+   area between the rails, and the wood reaches them. That is the difference between a control
+   INSERTED into the box and one merely standing inside it. */
+.run-prep-plate {
+  min-block-size: var(--run-prep-plate-h);
+  padding: 0;
+}
+
+.run-prep-name {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: minmax(0, 1fr);
+  justify-content: space-between;
+  min-block-size: var(--run-prep-name-h);
+  /* The inset is measured to the OAK, not to the frame around it. The key's 9-slice rails live
+     inside it, so the key seats itself one rail shallower on every side its frame meets — which is
+     three of them, the fourth being the leading edge where the title's text sits and text has no
+     frame to discount. Its wood then stops exactly as far from this cell's trailing edge as the
+     title's letters start from the leading one, and the seat still comes out at one plate plus the
+     inset: a 44px key with 9px above and below is the same 62px as a line of text with 16px. */
+  padding-block: calc(var(--ds-inset) - var(--le-chrome-inner-rail-w, 7px));
+  padding-inline-end: calc(var(--ds-inset) - var(--le-chrome-inner-rail-w, 7px));
+}
+
+.run-prep-cell-name {
+  font-size: var(--ds-text-md);
+}
+
+/* Armed, the verb splits into two compartments of one row. The row takes no inset — each verb's
+   own padding is its whole cell's — and the line between them is the BOX's column line, so it
+   crosses the row boundaries above and below as capped tees rather than a rule drawn between two
+   buttons with nothing to terminate against. */
+.run-prep-verbs {
+  min-block-size: var(--run-prep-plate-h);
+  padding: 0;
+}
+
+/* The verb IS the cell (section-box-member-verb owns the frameless reset); this sizes the plate and
+   gives its label the same display treatment every other verb cell in the menu shell wears. */
+.run-prep-verb {
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xs);
+  min-block-size: var(--run-prep-plate-h);
+  padding: 0 var(--ds-inset);
+  text-transform: uppercase;
+}
+
+.run-prep-verb:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.run-prep-verb:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: -2px;
+}
+
+/* The disclosure is a registered tool square; this rule only seats it at the end of the name row.
+   It keeps its own frame — it is a control standing ON the marble cell, not filling one.
+   The mark is CENTRED in it rather than sitting on a text baseline: the glyph is an inline-block,
+   so in the square's default block layout it hung 2.5px high of centre. */
+.run-rules-toggle {
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+}
+
+/* Options' cells are there whether the choices are painted or not, so opening the section moves
+   nothing above or below it. `visibility` rather than `hidden`/`display:none` is what reserves the
+   space: the choices stay laid out, so what is held is exactly what they need and cannot drift from
+   a number written here. It also keeps them out of the tab order and the accessibility tree while
+   closed. The RAILS stay drawn either way — they belong to the box, and closed the section shows
+   the compartments its choices are about to fill. */
+.run-rules-cell[data-open="false"] {
+  visibility: hidden;
+}
+
+/* Closed, the section is reserved SPACE rather than compartments, so the box's rails stop at the
+   Options name row: a rail divides two things, and there is nothing down there yet to divide. The
+   boundary the grid lays immediately before each closed cell goes with that cell's paint — matched
+   by adjacency rather than by a class the row carries, so the grid stays the only thing that
+   decides WHERE a rail is and this only says when one is showing. */
+.run-prep-box .chrome-divided-grid__row-boundary:has(+ .run-rules-cell[data-open="false"]) {
+  visibility: hidden;
+}
+
+/* Replacement warning seated above Start Run — the popup-free abandon confirm. */
 .run-replace-note h3 {
   font-size: var(--ds-text-2xs);
   margin: 0 0 var(--ds-inline-tight);
@@ -27933,6 +29195,60 @@ button.run-card-formation-cell {
   text-align: center;
 }
 
+/* A named group of controls elsewhere in the app — Settings groups, the War editor's Battles —
+   is a box whose name row heads it (SectionBox). Where that row is a disclosure it is deliberately
+   NOT a registered unit: a second frame inside this one would draw a control sitting IN the box
+   rather than the box being the control, so it fills the accepted InnerChromeBox, takes that box's
+   whole content padding as its own inset (the pressable area therefore reaches the frame on every
+   side), strips the shell's native button paint, and paints nothing of its own.
+   check-ui-surface-contract.mjs registers exactly that reset. A section without a disclosure
+   renders the same row as a div, which needs the layout and inherits the reset harmlessly.
+   Start New Run is NOT one of these: it is a single box of cells, and the one disclosure in it is
+   a square key rather than a pressable slab — a cell has no frame to be the button. See
+   `.run-prep-box`. */
+.run-rules-cell h4 {
+  font-size: var(--ds-text-xs);
+  opacity: .78;
+}
+
+.section-box-head {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: inherit;
+  display: flex;
+  font: inherit;
+  gap: var(--ds-inline-tight);
+  justify-content: space-between;
+  min-block-size: 0;
+  padding: var(--ds-inset);
+  text-align: start;
+  text-shadow: inherit;
+}
+
+button.section-box-head {
+  cursor: pointer;
+}
+
+/* The box's own name — and, where the row is a trigger, the label of the control it is. Sized as
+   the section heading each of these boxes replaced. */
+.section-box-title {
+  font-size: var(--ds-text-md);
+}
+
+.section-box [hidden] {
+  display: none;
+}
+
+/* The controls sit under the name row that already inset itself, so they take the same inset on
+   the three remaining sides and none at the top. */
+.section-box-body {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  padding: 0 var(--ds-inset) var(--ds-inset);
+}
 /* Unit Roster — the shipped roster at 1:1, for comparative judgement.
    No zoom control by design: these sprites are authored at their delivery size,
    so magnifying them would hide the thing being inspected. */

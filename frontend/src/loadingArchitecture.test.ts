@@ -71,7 +71,15 @@ describe('professional loading architecture guards', () => {
     const app = read('./ui/App.tsx');
     const director = read('./ui/shell/sceneDirector.ts');
     expect(app).toContain('const sceneLayers = overlapsCompleteScenes');
-    expect(app).toContain('key: sceneLayerKey(scene.current)');
+    // The OUTGOING layer keeps the exact key it carried while it was the settled single layer.
+    // It was `sceneLayerKey(scene.current)` with no epoch at all, so beginning a replacement
+    // changed the key of the layer holding the VISIBLE screen and React rebuilt it: the
+    // battlefield blinked away, showed its own "Preparing battlefield…" card under the Victory
+    // heading, came back, and only then crossfaded (ADR-0558). `committedEpoch`, never
+    // `retryEpoch` — the live epoch belongs to the destination and advances while the committed
+    // scene stands painted behind a failure.
+    expect(app).toContain('key: `${sceneLayerKey(scene.current)}#${scene.committedEpoch}`');
+    expect(app).not.toContain('key: sceneLayerKey(scene.current),');
     // A prepared layer's mount identity is its scene, plus the retry epoch — and ONLY the retry
     // epoch. Retry re-drove the director around the very instance still holding the failure, so
     // the screen re-reported it and the retry did nothing at all; rebuilding is the fix, and
@@ -79,6 +87,9 @@ describe('professional loading architecture guards', () => {
     expect(app).toContain('key: `${sceneLayerKey(scene.destination!)}#${scene.retryEpoch}`');
     expect(director).toContain('retryEpoch: state.retryEpoch + 1');
     expect(director).not.toContain('retryEpoch: state.generation');
+    // The committed epoch moves only where a destination is promoted to current.
+    expect(director).toContain('committedEpoch: state.retryEpoch');
+    expect(director).not.toContain('committedEpoch: state.committedEpoch + 1');
     expect(app).toContain('sceneLayers.map((layer)');
     expect(app).toContain('key={layer.key}');
     expect(app).not.toContain('key={`incoming:');
@@ -266,7 +277,13 @@ describe('professional loading architecture guards', () => {
     // whole destination has entered (ADR-0369).
     expect(app).toContain('|| scene.startupStage >= 0');
     expect(app).toContain('|| !scene.startupActive;');
-    expect(app).toContain('key: `${sceneLayerKey(mountedScene)}#${scene.retryEpoch}`');
+    // Which epoch the single layer carries follows from WHICH scene it is mounting: a preparing
+    // destination is keyed by the retry that built it, while the committed scene keeps the epoch
+    // it was committed with. Keying the committed scene by a retry it had no part in rebuilt it
+    // mid-exit — the same defect as the overlap key above (ADR-0558).
+    expect(app).toContain(
+      'key: `${sceneLayerKey(mountedScene)}#${mountedScene === scene.destination ? scene.retryEpoch : scene.committedEpoch}`',
+    );
     expect(titleBar).toContain('screenName={config.screenName}');
     expect(titleBar).toContain('transitionStatus={transitionStatus}');
     expect(titleBar).toContain('config.centerSlot ? <div className="app-shell-titlebar-center"');
@@ -371,7 +388,11 @@ describe('professional loading architecture guards', () => {
 
   it('uses persistent derivatives for canonical list thumbnails', () => {
     const source = read('./render/LevelThumbnail.tsx');
-    expect(source).toContain('levelThumbnailUrl(level.id)');
+    // Subscribed, not sampled: a Save installs the derivative it just baked, and a mounted row
+    // that only read the map at hydration would hold the pre-save picture until a full reload.
+    expect(source).toContain('useLevelThumbnailUrl(level.id)');
+    expect(source).toContain('useSyncExternalStore(');
+    expect(source).toContain('subscribeLevelThumbnailUrls');
     expect(source).toContain('const canonicalDerivative = !authoringPreview');
     expect(source).not.toContain('const canonicalLevel =');
     expect(source).not.toContain('/assets/level-list-thumb/');
@@ -391,6 +412,31 @@ describe('professional loading architecture guards', () => {
 
   it('does not preload the complete Studio tileset from every Studio route', () => {
     expect(read('./ui/TilePreview.tsx')).not.toMatch(/allStudioAssets\.flatMap[\s\S]{0,300}new Image\(/);
+  });
+
+  it('lets a VISIBLE scene take the click that lands on it (ADR-0572)', () => {
+    const boundary = read('./ui/shell/SceneBoundary.tsx');
+    const styles = read('./style.css');
+    const skirmish = read('./ui/Skirmish.tsx');
+    // Reachability tracks visibility, not commit. `preparing` spans the whole entrance, so gating
+    // the DOM on it left the destination fully opaque and dead for the last ~120ms of every
+    // navigation — a press on Publish produced no dialog, no status line and no request.
+    expect(boundary).toContain('const unreachable = preparing && !revealing && !preserveHost;');
+    expect(boundary).toContain('inert={unreachable ? true : undefined}');
+    expect(boundary).toContain('aria-hidden={unreachable || undefined}');
+    expect(boundary).not.toContain('inert={preparing && !preserveHost ? true : undefined}');
+    // The host-preserving region lifts on the same signal, not one commit later.
+    expect(boundary).toContain('if (!preparing || revealing || !preserveHost || !transitionRegion');
+    // The pointer silence is WITHDRAWN during the entrance, never overridden with `auto`: an
+    // override would revive decorative children that declare their own `none` for 350ms.
+    expect(styles).toMatch(/\.scene-boundary\.is-preparing \{\s*opacity: 0;\s*\}/);
+    expect(styles).toContain('.scene-director:not(.is-entering) .scene-boundary.is-preparing,');
+    expect(styles).not.toMatch(/\.scene-director\.is-entering [^{]*\{[^}]*pointer-events: auto/);
+    // ADR-0421 is untouched: activation — functional time, motion, entered actions — still waits
+    // for commit, and the screens that must refuse early input keep saying so themselves.
+    expect(boundary).toContain('<SceneActivationContext.Provider value={!preparing || preserveHost}>');
+    expect(skirmish).toContain('const sceneActivated = useSceneActivation()');
+    expect(skirmish).toContain('&& sceneActivated && (!net || (netSeatInteractive && !netRelayFrozen))');
   });
 
   it('makes incomplete player surfaces inert as well as visually hidden', () => {

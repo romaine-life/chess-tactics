@@ -11,6 +11,7 @@ const livePlay = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8'
 const ataraxiaSelector = readFileSync(new URL('./AtaraxiaSelector.tsx', import.meta.url), 'utf8');
 const authoredSceneSlots = readFileSync(new URL('./shell/AuthoredSceneSlot.tsx', import.meta.url), 'utf8');
 const playModeAvailability = readFileSync(new URL('./playModeAvailability.ts', import.meta.url), 'utf8');
+const runStore = readFileSync(new URL('../run/store.ts', import.meta.url), 'utf8');
 
 describe('unified Play menu contract (ADR-0074)', () => {
   it('has one top-level Play entry and no retired picker destinations', () => {
@@ -33,7 +34,13 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('const primaryRunLandingSettled =');
     expect(playMenu).toContain('&& primaryRunLandingSettled');
     expect(playMenu).not.toContain('play-hub-neutral');
-    expect(style).toContain('.play-choice-row:not(.is-selected):not(.is-disabled):hover');
+    // Run's destinations are rail tabs, so their hover, seat, gap and stone slice are the
+    // primitive's — no Run-specific row class remains in the markup (ADR-0558). One dead
+    // `.play-choice-row h4` rule survives in style.css from a same-day main change that gave
+    // those slabs the rail label's outline by hand; the tabs inherit that outline structurally
+    // now, so the rule selects nothing. Removing it renumbers the surface-debt baseline's
+    // occurrence keys across ~100 lines, which is its own reviewed change, not merge cleanup.
+    expect(playMenu).not.toContain('play-choice-row');
     expect(style).not.toContain('.run-choice-row');
   });
 
@@ -77,7 +84,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('const selected = inventory.activities[0] ?? null;');
     expect(playMenu).toContain('data-testid="continue-detail"');
     expect(playMenu).toContain('className="play-detail-facts"');
-    expect(playMenu).toContain('to={selected.playHref}><span>Continue</span>');
+    expect(playMenu).toContain("? [{ id: 'continue', label: 'Continue', to: selected.playHref }]");
     expect(playMenu).toContain('<ContinuePanel inventory={resumeInventory} />');
     expect(style).toContain('.continue-resume {');
     // No fourth column for Continue, so the action column must not narrow for one.
@@ -89,40 +96,177 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // Any other Continue address is stale by construction and canonicalizes onto the one.
     expect(playMenu).toContain('if (path !== canonicalHref) navigateApp(canonicalHref, { replace: true, scroll: false });');
     // An empty Continue says so once instead of listing modes.
+    // And no eyebrow over the column's one group — it named the column after the only thing in it
+    // and drew a hairline across the live vista to do it (ADR-0556). The section keeps the label.
+    expect(playMenu).not.toContain('<h3 className="settings-section-title">Continue</h3>');
+    expect(playMenu).toContain('<section className="settings-section" aria-label="Continue">');
     expect(playMenu).toContain('data-testid="continue-empty"');
     expect(playMenu).toContain('<h4>Nothing to continue</h4>');
   });
 
   it('makes Run preparation the ordinary Play surface while retaining direct Continue', () => {
-    expect(playMenu).toContain('data-testid="run-choice-current"');
-    expect(playMenu).toMatch(/<ChromeNavButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-choice-current"/);
+    // Both destinations are the shared rail tab, which carries the family's oak itself — the
+    // fill is stamped once by ApparatusRailColumn rather than per call site (ADR-0558).
+    expect(playMenu).toContain('testId="run-choice-current"');
+    expect(playMenu).toMatch(/<ApparatusRailTab[\s\S]*?label="Current Run"/);
     expect(playMenu).toContain('to={PLAY_RUN_CURRENT_SELECTOR_HREF}');
-    expect(playMenu).toContain('<h4>Current Run</h4>');
-    expect(playMenu).toContain("'settings-row play-choice-row'");
+    expect(playMenu).not.toContain('play-choice-row');
+    expect(playMenu).toContain('<ApparatusRailColumn opens="panel-beside" className="play-run-choice-rail"');
     expect(playMenu).toContain('data-testid="run-detail-current"');
-    expect(playMenu).toContain('to="/run"><span>Play</span></ChromeNavButton>');
-    // Every leaf control on the Run surface carries the oak leaf material (ADR-0433).
-    // The Current Run detail's Play sits where Start Run sits on the sibling tab; a bare
-    // one there frames the live vista instead of a button.
-    expect(playMenu).toMatch(/<ChromeNavButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*to="\/run">/);
+    // The verb is DECLARED, not marked up: a call site that could write its own control could
+    // wrap it in a box of its own, which is exactly how it came to sit inside the card's frame
+    // instead of being one of its rows (ChromeVerbRow).
+    expect(playMenu).toContain("const RUN_PLAY_VERBS: readonly ChromeVerb[] = [{ id: 'play', label: 'Play', to: '/run' }];");
+    expect(playMenu).not.toContain('to="/run"><span>Play</span></ChromeNavButton>');
+    // Facts and verb share ONE structural field — no bare text and no loose plaque on the live
+    // vista. The card is teal because it establishes a region; the verb row inside it is the only
+    // oak (ADR-0433, stamped by ChromeVerbRow itself), and it still follows the facts it completes
+    // (ADR-0475). No heading over it either — same reason the sibling column has none, the rail
+    // tab already said it.
+    //
+    // Every one of these cards is a DIVIDED box that closes with its own verb. A verb parked in a
+    // padded field drew a second frame a few pixels inside the card's own, with marble showing on
+    // all four sides of it; as a row it reaches the frame on both sides and the rail above it is
+    // the box's, laid and capped from its grid lines (ADR-0059).
+    expect(playMenu).not.toMatch(/<InnerChromeBox className="play-detail-card"/);
+    // `.ce-preview-actions` — a padded row of framed buttons under a card — is gone from this file
+    // entirely. It survived in the Start New Run column while that column was a stack of separate
+    // fields; that column is one divided box now and its verbs close it as cells like every other.
+    expect(playMenu).not.toContain('className="ce-preview-actions');
+    expect(playMenu).not.toMatch(/className="play-detail-card[\s\S]*?ce-preview-actions[\s\S]*?<\/DividedInnerChromeBox>/);
+    expect(playMenu.match(/<DividedInnerChromeBox\s+className="play-detail-card/g)).toHaveLength(3);
+    expect(playMenu.match(/cellClassName="play-detail-verb"/g)).toHaveLength(3);
+    expect(playMenu).toMatch(/className="play-detail-card" columns=\{verbColumns\(RUN_PLAY_VERBS\)\}[\s\S]*?<ChromeVerbRow verbs=\{RUN_PLAY_VERBS\} className="play-detail-verbs"[\s\S]*?<\/DividedInnerChromeBox>/);
+    expect(playMenu).not.toMatch(/<div className="ce-selected-head"><h2>Current Run<\/h2><\/div>/);
+    // Nothing at all stands outside a card in these columns: a title either says something the
+    // rows do not — and then it goes INSIDE the field — or it is discarded. No head is left
+    // sitting on the live vista above a box.
+    expect(playMenu).not.toContain('<h2>Two active Runs</h2>');
+    expect(playMenu).toMatch(/className="play-detail-head">\s*<h2>\{selected\.title\}<\/h2>/);
+    // The head is a ROW of the card, so it is type alone: `.ce-selected-head` draws its own
+    // hairline rule, which inside a divided box repeats the kit's rail a few pixels below it
+    // in raw CSS. No detail card borrows that head.
+    expect(playMenu).not.toContain('ce-selected-head');
+    expect(style).toContain('.play-detail-head h2 {');
+    // The card takes no inset of its own: its rails run the full inner width and each row pays
+    // one. Padding here is what put the margin of marble around the verb.
+    expect(style).toMatch(/\.play-detail-card \{[^}]*padding: 0;/);
+    expect(style).toMatch(/\.play-detail-lede,\s*\r?\n\.play-detail-head,\s*\r?\n\.play-detail-facts \{[^}]*padding: var\(--ds-inset\);/);
+    // The verb keeps the height the framed plaque it replaces had — only its width changes.
+    expect(style).toContain('--play-detail-verb-h: 40px;');
+    expect(style).toMatch(/\.play-detail-verbs \.play-detail-verb \{[^}]*min-block-size: var\(--play-detail-verb-h\);/);
     expect(playMenu).not.toContain('run-current-summary');
     expect(playMenu).not.toContain('>Continue Run<');
     // The Current Run row is an availability surface, not an existence surface: with
     // no active Run it stays in place disabled (like Continue's "Nothing to continue"
     // rows), keeping the resume point spatially learnable.
     expect(playMenu).toContain('disabled={!presentedRun}');
-    expect(playMenu).toContain("'No active Run'");
+    // An ENABLED row is its name alone — the Battle position and Ataraxia it used to restate
+    // are the detail column's first two facts (ADR-0556). The empty state keeps its sentence,
+    // because nothing else on the surface says why the row cannot be taken (ADR-0334).
+    expect(playMenu).toContain("detail={presentedRun ? undefined : 'No active Run'}");
+    expect(playMenu).not.toContain('<p>Choose Ataraxia</p>');
   });
 
-  it('presents Run adoption as an unboxed decision group', () => {
-    expect(playMenu).toContain('className="run-adoption-conflict"');
+  it('cuts the Run destinations from one plank instead of stamping one crop twice (ADR-0034/ADR-0063)', () => {
+    // A leaf's installed oak is locally attached, so a row with no offset restarts the sheet
+    // at 0. Two rows like that paint the identical crop — the repeated-texture look. Each row
+    // instead samples the slice one plank running down the list would give it, the same
+    // recovery the rail tabs use for the `fixed` attachment Chromium forced us to drop.
+    // The plank is the RAIL's now: one pitch, one derivation, shared with every other rail in
+    // the app. Run states only which seat each destination holds (ADR-0558).
+    expect(style).toMatch(/--settings-tab-surface-pitch:\s*calc\(61px \+ var\(--settings-rail-tab-gap, 37px\)\);/);
+    expect(style).not.toContain('--play-choice-row-surface-pitch');
+    // The pitch is only a constant because BOTH row states are one line — the empty state's
+    // sentence is the row's end value, not a second line that would shift the plank when a Run
+    // starts or ends. The seat is the main-menu button's, so the rows read as its siblings.
+    // Seat and gap are not Run's to state: it mounts the same tab in the same column type as
+    // every other rail, so the two stacks cannot disagree by construction (ADR-0558).
+    expect(playMenu).not.toContain('--settings-section-rows-gap');
+    // And no eyebrow over the one group in the column — it named the column after the only thing
+    // in it, and cost the first row its alignment with the first main-menu button (ADR-0556).
+    expect(playMenu).not.toContain('<h3 className="settings-section-title">Run</h3>');
+    expect(playMenu).toContain('aria-label="Run"');
+    // The pitch may not restate the list gap — it has to step by exactly what layout steps by.
+    expect(style).toMatch(/\.settings-section-rows\s*\{[\s\S]*?--settings-section-rows-gap:\s*10px;[\s\S]*?gap:\s*var\(--settings-section-rows-gap\);/);
+    // Seats are owned by the panel, never counted off the DOM: a :nth-child ladder re-cuts the
+    // plank the moment a "Loading Runs…" or "Runs unavailable" row joins the list.
+    expect(playMenu).not.toMatch(/index=\{\s*\w+\.indexOf/);
+    expect(playMenu).toContain('const PLAY_CHOICE_ROW_SEATS = { current: 0, new: 1 } as const;');
+    expect(playMenu).toContain('index={PLAY_CHOICE_ROW_SEATS.current}');
+    expect(playMenu).toContain('index={PLAY_CHOICE_ROW_SEATS.new}');
+  });
+
+  it('presents Run adoption as two labelled candidates, not one run-on sentence', () => {
+    const runAdoption = readFileSync(new URL('./runAdoption.ts', import.meta.url), 'utf8');
+    expect(playMenu).toContain('run-adoption-conflict"');
     expect(playMenu).toContain('data-testid="run-adoption-conflict"');
+    // The old statement named each side's War in one sentence and stopped there. Both sides are
+    // almost always the same War, so it asked which Run to keep while saying nothing that told
+    // them apart. It is one line of situation now, over two labelled row lists.
+    expect(playMenu).not.toContain('Choose which one the account keeps.');
+    expect(playMenu).not.toContain('run-adoption-conflict-copy');
+    expect(playMenu).toContain('Two Runs are active. Keep one; the other is discarded.');
+    expect(playMenu).toContain("label: 'This browser'");
+    expect(playMenu).toContain("label: 'Your account'");
+    // A candidate is a semantic GROUP of the card's rows, never a box of its own: boxed, each
+    // side drew a frame inside the card's and had to cap its own rails against it. The group
+    // generates no layout, so it needs — and must not have — a rule of its own.
+    expect(playMenu).toMatch(/<ChromeDividedGridRowGroup\s+className="run-adoption-candidate"/);
+    expect(playMenu).not.toMatch(/<section className="run-adoption-candidate"/);
+    expect(style).not.toContain('.run-adoption-candidate {');
+    expect(style).not.toContain('.run-adoption-conflict {');
+    // Both verbs begin with Keep: they are the same kind of answer, and "Adopt" beside "Keep"
+    // read as two different kinds of action.
+    expect(playMenu).toContain("verb: 'Keep browser Run'");
+    expect(playMenu).toContain("verb: 'Keep account Run'");
+    expect(playMenu).not.toContain('<span>Adopt browser Run</span>');
+    // A fact identical on both sides does not tell them apart, so the War is stated only when the
+    // two disagree; where each Run STANDS and which one you last played always are. Ataraxia is
+    // absent entirely — one tier exists, so the row could only repeat itself on both sides.
+    expect(runAdoption).toContain("if (run.war.name !== other.war.name) facts.push({ label: 'War', value: run.war.name });");
+    expect(runAdoption).not.toContain('ATARAXIA_BY_TIER');
+    // The row counts CARDS. Deployment deals the Chartulary a whole card at a time, so a unit
+    // count states a force the Run may never field (resolveDeploymentCapacity).
+    expect(runAdoption).toContain("facts.push({ label: 'Army', value: formatCardCount(runHeldCardCount(run)) });");
+    expect(playMenu).not.toContain('formatArmySize');
+    expect(readFileSync(new URL('./playContinue.ts', import.meta.url), 'utf8'))
+      .toContain("{ label: 'Army', value: formatCardCount(runHeldCardCount(run)) },");
+    expect(runAdoption).toContain("facts.push({ label: 'Progress', value: runPhaseLabel(run) });");
+    expect(runAdoption).toContain("facts.push({ label: 'Last played', value: relativeTimeLabel(run.updatedAt, now) });");
+    // Progress and "how long ago" are each written ONCE in the app: Continue's own resume card
+    // says the same two things, and a second copy here would drift from it (ADR-0059).
+    expect(runAdoption).toContain("import { runPhaseLabel } from './playContinue';");
+    expect(runAdoption).toContain("import { relativeTimeLabel } from './relativeTime';");
+    expect(readFileSync(new URL('./levelEditorSessionPresentation.ts', import.meta.url), 'utf8'))
+      .toContain('export const levelEditorSessionTimeLabel = relativeTimeLabel;');
     expect(playMenu).not.toContain('<InnerChromeBox className="play-level-card" role="alert">');
-    expect(style).toContain('.run-adoption-conflict {');
-    // Unboxed does not mean unmaterialed: the two decision buttons are leaf controls over
-    // the live vista, so they carry the same oak as every other Run leaf (ADR-0433).
-    expect(playMenu).toMatch(/<ChromeButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-keep-account"/);
-    expect(playMenu).toMatch(/<ChromeButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-adopt-browser"/);
+    // The conflict IS the detail card — it adds nothing but its name, because the question is
+    // the card's contents and never a second field nested inside it.
+    expect(playMenu).toContain('className="play-detail-card run-adoption-conflict"');
+    // The question is answered BEHIND Current Run, never in its seat: a card standing where the
+    // row belongs removed an expected control from a player who was only going to start a new
+    // Run (ADR-0557). So the row's presence cannot depend on the conflict, and the conflict is
+    // rendered inside the detail column the row opens.
+    expect(playMenu).not.toContain('!presentation.adoptionConflict &&');
+    expect(playMenu).toContain("{choice === 'current' && presentation.adoptionConflict ? (");
+    expect(playMenu).toMatch(/choice === 'current' && presentation\.adoptionConflict[\s\S]*?data-testid="run-adoption-conflict"/);
+    // And it is stated ONCE. `adoptionConflict` is the state; a companion string in the shared
+    // error channel repeated it in the choice column, beside a Start New Run the conflict has
+    // never gated. Both conflict branches leave that channel clear (ADR-0557).
+    expect(runStore).not.toContain('This browser and account each have an active Run.');
+    expect(runStore).not.toContain('Choose which active Run this account should keep.');
+    expect(runStore.match(/adoptionConflict: \{ browserRun, accountRun \}/g)).toHaveLength(2);
+    // Each candidate ends in its OWN verb, so the two sides are rendered from one description
+    // rather than hand-written twice — and that one leaf carries the oak every Run leaf carries
+    // (ADR-0433, stamped by ChromeVerbRow). The identities the rest of the suite drives are the
+    // candidates' own. The verb is that candidate's closing ROW of the card, not a button placed
+    // inside a box of its own.
+    expect(playMenu).toMatch(/const adoptionVerbs = [\s\S]*?id: candidate\.testId,[\s\S]*?testId: candidate\.testId,/);
+    expect(playMenu).toMatch(/<ChromeVerbRow\s+verbs=\{adoptionVerbs\(candidate\)\}/);
+    expect(playMenu).not.toMatch(/<ChromeButton[\s\S]*?data-testid=\{candidate\.testId\}/);
+    expect(playMenu).toContain("testId: 'run-keep-account'");
+    expect(playMenu).toContain("testId: 'run-adopt-browser'");
   });
 
   it('keeps new-Run setup in the right detail column with one scrollable Ataraxia dropdown', () => {
@@ -130,15 +274,20 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).not.toContain('Carry one persistent army');
     expect(playMenu).not.toContain('<h3>{run.war.name}</h3>');
     expect(playMenu).not.toContain("run.war.description || 'Active War'");
-    expect(playMenu).toContain('data-testid="run-choice-new"');
-    expect(playMenu).toMatch(/<ChromeNavButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-choice-new"/);
+    expect(playMenu).toContain('testId="run-choice-new"');
+    expect(playMenu).toMatch(/<ApparatusRailTab[\s\S]*?label="Start New Run"/);
     expect(playMenu).toContain('to={PLAY_RUN_NEW_SELECTOR_HREF}');
     expect(playMenu).toContain('data-testid="run-detail-new"');
+    // No heading over it. The rail tab that opened the column already says Start New Run and the
+    // verb at the bottom says it again, so a title there only spends a row repeating the press
+    // that got you here. The aside's own label keeps the name for the landmark.
+    expect(playMenu).not.toMatch(/<div className="ce-selected-head"><h2>Start New Run<\/h2><\/div>/);
+    expect(playMenu).toMatch(/aria-label="Start New Run" data-testid="run-detail-new"/);
     expect(playMenu).toContain('<RunDetailContentSceneSlot');
     expect(authoredSceneSlots).toContain('region="run-detail" mode="contents"');
     expect(playMenu).not.toContain("sceneTransitionTargetAttributes('run-detail'");
-    expect(playMenu).toMatch(/choice === 'new'[\s\S]*?<AtaraxiaSelector/);
-    expect(playMenu).toMatch(/<AtaraxiaSelector[\s\S]*?fillSurface=\{CHROME_LEAF_FILL_SURFACE\}/);
+    expect(playMenu).toMatch(/choice === 'new'[\s\S]*?ataraxiaPrepCells\(\{/);
+    expect(playMenu).toMatch(/ataraxiaPrepCells\(\{[\s\S]*?fillSurface: CHROME_LEAF_FILL_SURFACE,/);
     expect(ataraxiaSelector).toContain('fillSurface={fillSurface}');
     expect(ataraxiaSelector).toContain('<HouseSelect');
     expect(ataraxiaSelector).toContain('disabled: locked');
@@ -147,15 +296,68 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // baseline's label, so renumbering the ladder cannot leave a stale sentence here.
     expect(ataraxiaSelector).toContain('Complete ${ATARAXIA_BY_TIER[(tier - 1) as AtaraxiaTier].label} to unlock');
     expect(ataraxiaSelector).not.toContain("'Complete Ataraxia 0 to unlock'");
-    expect(ataraxiaSelector).toContain('<p className="run-ataraxia-effect">{ATARAXIA_BY_TIER[value].effect}</p>');
     expect(ataraxiaSelector).not.toContain('role="radiogroup"');
+    // Ataraxia is the first CELL of the one box, not a box of its own and not a bare heading over a
+    // loose picker: it draws no frame, states its name, and inserts the dropdown under it. The
+    // tier's `effect` is not restated — the picker already shows the selected tier, and the
+    // baseline's effect is "Standard rules.", a line spent saying the default is the default.
+    expect(ataraxiaSelector).not.toContain('SectionBox');
+    expect(ataraxiaSelector).toContain('<span className="run-prep-cell-name" id="run-ataraxia-title">Ataraxia</span>');
+    // The picker FILLS its cell rather than standing framed inside it (see the box's own test).
+    expect(ataraxiaSelector).toMatch(/className="run-prep-plate">[\s\S]*?<HouseSelect\s+seated/);
+    expect(ataraxiaSelector).not.toContain('run-ataraxia-effect');
+    expect(ataraxiaSelector).not.toContain('ATARAXIA_BY_TIER[value].effect');
+    expect(style).not.toContain('.run-ataraxia-effect');
     const detailBodyRule = style.match(/\.play-detail-body\s*\{([^}]*)\}/)?.[1] ?? '';
     expect(detailBodyRule).toContain('flex: 0 0 auto');
     expect(detailBodyRule).not.toContain('flex: 1 1 auto');
   });
 
+  it('prepares a Run in ONE box whose rails stand where the gaps between slabs were', () => {
+    // Ataraxia, the replacement warning, the verb and Options were four separate boxes with the
+    // live vista showing through between them, which drew one control as four unrelated things.
+    // They are cells of a single divided box now, so every separation is a rail the box lays and
+    // caps from its own grid lines — nothing in this column draws a rule of its own.
+    expect(playMenu).toMatch(/<DividedInnerChromeBox[\s\S]*?className="run-prep-box"/);
+    expect(playMenu).toMatch(/className="run-prep-box"[\s\S]*?fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
+    expect(playMenu).toMatch(/run-prep-box[\s\S]*?ataraxiaPrepCells\(\{/);
+    expect(playMenu).toContain('{runRulesCells}');
+    // A cell that CARRIES something takes the inset and wears the marble; a cell that IS something
+    // takes none, so its control fills the whole area between the rails and the wood reaches them.
+    // That is the difference between a control INSERTED into the box and one standing inside it.
+    expect(style).toMatch(/\.run-prep-plate \{[\s\S]*?padding: 0;/);
+    expect(style).toMatch(/\.run-prep-verb \{[\s\S]*?min-block-size: var\(--run-prep-plate-h\);/);
+    // ONE WOOD height through the whole box, measured in oak rather than in boxes. The square key
+    // that opens Options is the only FRAMED control here, and at a plate-sized BOX its 9-slice
+    // rails leave 16px of oak against a plate's 30 — so it read half the size of the bars above it.
+    // Its box is one plate PLUS its own two rails. Stated on `--le-inner-square` because that is
+    // the token the registered unit already reads; scoped to the Level Editor's screen, it never
+    // reached the menu shell, where the unit fell back to 38px.
+    expect(style).toMatch(/--le-inner-square: calc\(var\(--run-prep-plate-h\) \+ 2 \* var\(--le-chrome-inner-rail-w, 7px\)\);/);
+    // ONE seat for every name cell, whether it carries that key or only a line of text. Ataraxia
+    // holds only text, so without this it stood shorter than Options and the two titles sat at
+    // different heights in what is meant to be the same treatment. The inset is measured to the
+    // OAK, so the key seats itself one rail shallower and the seat comes out the same either way.
+    expect(style).toMatch(/--run-prep-name-h: calc\(var\(--run-prep-plate-h\) \+ 2 \* var\(--ds-inset\)\);/);
+    expect(style).toMatch(/\.run-prep-name \{[\s\S]*?min-block-size: var\(--run-prep-name-h\);/);
+    // Every side the key's FRAME meets, which is three of them — the fourth is the leading edge
+    // where the title's text sits, and text has no frame to discount. Measured live: the key's oak
+    // stops 23px from the box's trailing frame and the title's letters start 23px from its leading
+    // one. Left off the inline axis, the key's wood sat 7px deeper than the title's ink.
+    expect(style).toMatch(/\.run-prep-name \{[\s\S]*?padding-block: calc\(var\(--ds-inset\) - var\(--le-chrome-inner-rail-w, 7px\)\);/);
+    expect(style).toMatch(/\.run-prep-name \{[\s\S]*?padding-inline-end: calc\(var\(--ds-inset\) - var\(--le-chrome-inner-rail-w, 7px\)\);/);
+    // The box takes no padding of its own: a rail has to reach the frame on both sides, and box
+    // padding would hold every one of them short of it. Each cell carries the inset instead.
+    expect(style).toMatch(/\.run-prep-box \{[\s\S]*?padding: 0;/);
+    expect(style).toMatch(/\.run-prep-cell \{[\s\S]*?padding: var\(--ds-inset\);/);
+  });
+
   it('resolves Play rail icons from installed drawable membership, not retired path-shaped app-ui roles', () => {
-    expect(playMenu).toContain("drawableAssets('menu-mode')");
+    // Through the SHARED menuModeIcon resolver, not a private copy of it. Play carried a
+    // byte-identical duplicate of that lookup, which is the drift menuModeIcon.ts documents:
+    // two surfaces offering one destination under two marks, with nothing to contradict them.
+    expect(playMenu).toContain("import { menuModeIcon } from './menuModeIcon'");
+    expect(playMenu).not.toContain("drawableAssets('menu-mode')");
     expect(playMenu).toContain("installedUiMedia('ui-kit-icons-design-index-png')");
     expect(playMenu).not.toContain('ui-main-menu-icons-carved-solo-skirmish-png');
     expect(playMenu).not.toContain('ui-main-menu-icons-carved-level-editor-png');
@@ -227,8 +429,15 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('if (starting || syncing || !eligible.length) return;');
     expect(playMenu).toContain('if (run) await abandon();');
     expect(playMenu).toMatch(/await abandon\(\);[\s\S]*?replace\(createRun\([\s\S]*?navigateApp\('\/run'\)/);
-    expect(playMenu).toContain("<span>{starting ? 'Starting…' : 'Start Run'}</span>");
-    expect(playMenu).toMatch(/<ChromeButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-start"/);
+    expect(playMenu).toContain("label: starting ? 'Starting…' : 'Start Run',");
+    // The verb IS the cell: the box's own frame and rail are its edges, so it draws no frame and
+    // the wood fills the whole compartment. It is ChromeVerbRow's cell rather than a private copy
+    // of one — this branch hand-rolled the row first and the shared primitive landed the same day,
+    // which makes a parallel implementation the defect ADR-0059 names.
+    expect(playMenu).toContain('<ChromeVerbRow verbs={runVerbs} className="run-prep-verbs" cellClassName="run-prep-verb" />');
+    expect(playMenu).toContain("testId: 'run-start',");
+    expect(playMenu).not.toMatch(/<ChromeButton[^>]*data-testid="run-start"/);
+    expect(playMenu).not.toContain('className="section-box-member-verb run-prep-verb"');
   });
 
   it('freezes the confirmed Play presentation until the outgoing scene retires', () => {
@@ -245,16 +454,171 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // arms an explicit Keep Run / Abandon and Start pair in the same actions row.
     expect(playMenu).not.toContain('useConfirm');
     expect(playMenu).toContain('data-testid="run-replace-warning"');
-    expect(playMenu).toMatch(/<InnerChromeBox[^>]*fillSurface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-replace-warning"/);
+    // Bare marble: a cell of the one box, with no oak and no frame of its own. Nothing in it takes
+    // a click, and the oak is what says a surface does (ADR-0433) — its neighbours above and below
+    // both insert a wooden control, and this one inserts nothing.
+    expect(playMenu).toMatch(/<ChromeDividedGridRow[\s\S]{0,200}?className="run-prep-cell run-replace-note"[\s\S]{0,120}?data-testid="run-replace-warning"/);
+    expect(playMenu).not.toMatch(/<InnerChromeBox[^>]*data-testid="run-replace-warning"/);
     expect(playMenu).toContain('This cannot be undone.');
     expect(playMenu).toContain('if (presentedRun) { setArmed(true); return; }');
-    expect(playMenu).toContain('data-testid="run-keep"');
-    expect(playMenu).toContain('data-testid="run-abandon-and-start"');
-    expect(playMenu).toMatch(/<ChromeButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-keep"/);
-    expect(playMenu).toMatch(/<ChromeButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-abandon-and-start"/);
-    // Danger tone rides the ce-family's registered variant over the shared oak surface.
-    expect(playMenu).toContain("'ce-asset-button', 'is-danger'");
-    expect(playMenu).toContain('keepRunButtonRef.current?.focus();');
+    expect(playMenu).toContain("testId: 'run-keep',");
+    expect(playMenu).toContain("testId: 'run-abandon-and-start',");
+    // The one verb SPLITS: each answer is its own compartment of the same row, divided by the
+    // BOX's column line — so that line crosses the row boundaries above and below as capped tees
+    // rather than being a rule drawn between two buttons with nothing to terminate against. The
+    // verbs decide the tracks through `verbColumns`, so the count is never restated here: two
+    // while the question is open, one otherwise, and every other cell spans.
+    expect(playMenu).toContain('columns={verbColumns(runVerbs)}');
+    expect(playMenu).toMatch(/const runVerbs: readonly ChromeVerb\[\] = presentedRun && armed/);
+    expect(playMenu).toMatch(/testId: 'run-keep',[\s\S]{0,400}?testId: 'run-abandon-and-start',/);
+    expect(style).toMatch(/\.run-prep-verbs \{[\s\S]*?padding: 0;/);
+    // Found by its test id rather than a ref: a verb is DECLARED to ChromeVerbRow rather than
+    // rendered here, which is the point of that primitive and not worth threading a ref through.
+    expect(playMenu).toMatch(/document\.querySelector<HTMLElement>\('\[data-testid="run-keep"\]'\)\?\.focus\(\);/);
     expect(style).toContain('.run-replace-note');
+  });
+});
+
+describe('Run rule options are a departure from the defaults, not a step in setup', () => {
+  const source = readFileSync(new URL('./RunRulesSelector.tsx', import.meta.url), 'utf8');
+  const prepSection = readFileSync(new URL('./shared/SectionBox.tsx', import.meta.url), 'utf8');
+
+  it('starts closed, so a normal Run never has to answer it', () => {
+    expect(source).toContain('const [open, setOpen] = useState(false)');
+    expect(source).toContain("const hidden = { 'data-open': open ? 'true' : 'false' } as const;");
+    // The SectionBox disclosure — the shape this section used to be — still hides its body outright
+    // for every named group that legitimately grows when opened (Settings, the War's Battles).
+    expect(prepSection).toContain('hidden={disclosure ? !disclosure.open : undefined}');
+  });
+
+  it('holds the space its choices need whether they are showing or not', () => {
+    // A disclosure that GROWS the box moves the box's own bottom edge and re-seats every rail above
+    // it — a lot of the screen moving for a control almost nobody presses. Reserved, opening it
+    // fills a space that was already there and nothing else moves at all.
+    // The space is held by keeping the choices LAID OUT and hiding only their paint, so what is
+    // reserved is exactly what they need and cannot drift from a number written in the stylesheet.
+    // `visibility: hidden` also keeps a closed section out of the tab order and the a11y tree.
+    expect(style).toMatch(/\.run-rules-cell\[data-open="false"\] \{\s*visibility: hidden;/);
+    expect(style).not.toMatch(/\.run-rules-cell\[data-open="false"\] \{[^}]*display: none/);
+    // Closed, the section is reserved SPACE rather than compartments, so the box's rails stop at
+    // the Options name row — a rail divides two things, and there is nothing down there to divide
+    // yet. Matched by ADJACENCY, so the grid stays the only thing deciding where a rail IS and
+    // this only says when one is showing.
+    expect(style).toMatch(/\.chrome-divided-grid__row-boundary:has\(\+ \.run-rules-cell\[data-open="false"\]\) \{\s*visibility: hidden;/);
+    expect(source).not.toContain('hidden={!');
+    // Each cell carries the closed state itself. A wrapper around them would be ONE row of the
+    // box, and the rails between the choices would go with it.
+    expect(source).not.toMatch(/<div[\s\S]{0,80}className="run-rules-content"/);
+  });
+
+  it('closed, states only its own name — no reassuring subtitle under it', () => {
+    // "Standard formations and pricing. Most Runs want these." said nothing a Run is bound by and
+    // nothing about the cost of changing one, so the box carries its name and the chevron alone.
+    expect(source).not.toContain('Standard formations and pricing');
+    expect(source).not.toContain('run-rules-summary');
+    expect(style).not.toContain('.run-rules-summary');
+  });
+
+  it('opens from a square key, because a cell has no frame to be the button', () => {
+    // It was a box whose whole slab was the disclosure. As a CELL of Start New Run's one box it has
+    // no frame — the box's frame is around all of it and the rail above is its edge — so there is
+    // no slab here to press, and making the cell pressable would put a press on a region whose
+    // boundary belongs to something bigger. The trigger is the registered tool square, seated where
+    // the chevron used to hang, and the chevron rides inside it.
+    expect(source).not.toContain('SectionBox');
+    expect(source).toMatch(/<ChromeButton\s+unit="inner-tool-square"[\s\S]*?data-testid="run-rules-toggle"/);
+    expect(source).toContain("chromeUnitClassNames('inner-tool-square', 'run-rules-toggle')");
+    expect(source).not.toContain('unit="inner-text-button"');
+    expect(source).toMatch(/<span className="run-prep-cell-name" id="run-rules-title">Options<\/span>/);
+    // The key CENTRES its mark. `.stepper-glyph` is an inline-block, so left to the square's
+    // default block layout it hangs on a text baseline — measured 2.5px high of centre, which is
+    // what put the chevron in the corner of the key. The mark's own seat is untouched: captured at
+    // 8x, a turned chevron sits 0.19 CSS px off its glyph's centre, below what the rasterizer can
+    // place at 1x.
+    expect(style).toMatch(/\.run-rules-toggle \{[\s\S]*?place-items: center;/);
+    expect(style).toMatch(/\.stepper-chevron-down \{\s*transform: rotate\(-90deg\);\s*\}/);
+    // The named-group box the section used to be still exists for Settings and the War's Battles,
+    // and there the box IS the disclosure: its name row fills the accepted InnerChromeBox, so the
+    // frame is the button's edge and its inset is the box's whole content padding.
+    expect(prepSection).toContain('const boxClassName = `section-box ${className}`.trim();');
+    expect(prepSection).toMatch(/<button[\s\S]*?className="section-box-head"[\s\S]*?aria-expanded=\{disclosure\.open\}/);
+    expect(prepSection).toContain('<span className="section-box-title" id={titleId}>{title}</span>');
+    expect(style).toMatch(/\.section-box-head \{[\s\S]*?padding: var\(--ds-inset\);/);
+  });
+
+  it('cannot be handed a rail to place itself — the box owns the space between members', () => {
+    // A box of several things takes a typed member list, never children, so no caller can author
+    // the gap where a rail would go. A hand-placed rail cannot know where its ends meet the frame,
+    // and one shipped into Settings with no junction caps on either end. Now it is unsayable:
+    // ChromeDivider has no `junctions` prop at all, and the parts that suppress caps are private.
+    expect(prepSection).toContain('members: readonly SectionBoxMember[]');
+    expect(prepSection).toContain('children?: never');
+    // A box's members can be split into compartments, and the rail between them is the BOX's
+    // column line — so it crosses every row boundary as a junction the grid places, instead of a
+    // rail drawn inside a row capping itself as though it met a frame.
+    expect(prepSection).toMatch(/<DividedInnerChromeBox[\s\S]*?columns=\{shape\.columns \?\? \['minmax\(0, 1fr\)'\]\}/);
+    expect(prepSection).toContain('columns?: readonly string[];');
+    const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url), 'utf8');
+    expect(chromeBox).not.toContain('junctions?:');
+    expect(chromeBox).toContain('data-chrome-divider-junctions="endpoints"');
+    expect(existsSync(new URL('../../scripts/check-chrome-rails.mjs', import.meta.url))).toBe(true);
+  });
+
+  it('is marble holding oak, like every field that holds other people\'s controls', () => {
+    // Opened, this is a set of pickers rather than a control itself, and a wood field behind wooden
+    // pickers gives them nothing to read against (ADR-0433). The marble is the one box around every
+    // cell of Run preparation; the pickers and the square key are the oak inserted into them.
+    expect(playMenu).toMatch(/className="run-prep-box"[\s\S]*?fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
+    expect(source).toMatch(/<HouseSelect[\s\S]*?fillSurface=\{fillSurface\}/);
+    expect(source).toMatch(/data-chrome-fill-surface=\{fillSurface\}[\s\S]*?data-testid="run-rules-toggle"/);
+    expect(prepSection).toMatch(/<InnerChromeBox[\s\S]*?fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
+  });
+
+  it('seats below Start Run, so it is not a step between the Ataraxia choice and the verb', () => {
+    expect(playMenu).toMatch(/<ChromeVerbRow verbs=\{runVerbs\}[\s\S]*?\{runRulesCells\}/);
+    expect(playMenu).not.toMatch(/\{runRulesCells\}[\s\S]*?<ChromeVerbRow verbs=\{runVerbs\}/);
+  });
+
+  it('states which way it moves, with the shared chevron rather than a second one', () => {
+    expect(source).toContain("stepper-chevron-${open ? 'up' : 'down'}");
+    expect(prepSection).toContain("stepper-chevron-${disclosure.open ? 'up' : 'down'}");
+    expect(style).toMatch(/\.stepper-chevron-down\s*\{[\s\S]*?transform:\s*rotate\(-90deg\);/);
+    expect(style).toMatch(/\.stepper-chevron-up\s*\{[\s\S]*?transform:\s*rotate\(90deg\);/);
+  });
+
+  it('gives the chevron only to a cell that opens, since that is what it means', () => {
+    // Ataraxia is the same kind of cell and never closes, so it takes no key and gets no chevron —
+    // one mark distinguishes the two, and spending it on both would erase the distinction.
+    expect(prepSection).toMatch(/\{disclosure \? \(\s*<span\s+className=\{`stepper-glyph/);
+    expect(ataraxiaSelector).not.toContain('disclosure');
+    expect(ataraxiaSelector).not.toContain('stepper-chevron');
+    expect(ataraxiaSelector).not.toContain('inner-tool-square');
+  });
+
+  it('holds its own name in both states, so pressing it never relabels the control', () => {
+    // The verb pair that used to be stacked in one cell to lock the control's width is gone with
+    // the Change button itself: the cell is named after what it holds, and only the chevron moves.
+    // The key carries no second name either — it is labelled BY the cell's name, so the screen
+    // never says Options twice and pressing it changes nothing but aria-expanded.
+    expect(source).not.toContain('>Hide<');
+    expect(source).not.toContain('>Change<');
+    expect(source).toContain('aria-labelledby="run-rules-title"');
+    expect(source).not.toMatch(/aria-label=\{open \?/);
+    expect(style).not.toContain('.run-rules-toggle-label');
+  });
+
+  it('is reachable and announced, because a Run is bound to these for its life', () => {
+    expect(source).toContain('aria-expanded={open}');
+    expect(source).toContain('aria-controls="run-rules-content"');
+    expect(source).toContain('id="run-rules-content"');
+    expect(prepSection).toContain('aria-expanded={disclosure.open}');
+    expect(prepSection).toContain('aria-controls={contentId}');
+  });
+
+  it('does not call the weighted option "by density", which it is not', () => {
+    // Density weights the material, it does not replace it -- priced by density alone, one Pawn
+    // and four Pawns would cost the same.
+    expect(source).toContain("label: 'Weighted by density'");
+    expect(source).not.toContain("label: 'By density'");
   });
 });

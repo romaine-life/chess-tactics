@@ -49,6 +49,14 @@ const APPROVED_FRAMELESS_SURFACE_RESETS = new Map([
     'border-radius:0',
     'box-shadow:none',
   ])],
+  // A score-sheet row that can be navigated to is the SAME row, made pressable — move review
+  // turns the Event Log's move lines into the way back through the game. These declarations
+  // remove the native button paint so a navigable row and a plain one are pixel-identical;
+  // the log card's own frame remains the complete owned surface.
+  ['src/style.css|.skirmish-log-card li > button.skirmish-log-move', new Set([
+    'background:none',
+    'border:0',
+  ])],
   // The accepted InnerChromeBox wrapper owns the Gold field's complete surface. These
   // declarations remove the native input paint inside that frame; they add no surface.
   ['src/style.css|.admin-gold-input', new Set([
@@ -67,6 +75,46 @@ const APPROVED_FRAMELESS_SURFACE_RESETS = new Map([
   ['src/style.css|.run-arrangement-hand-mark', new Set([
     'background:none',
     'border:0',
+  ])],
+  // A Run-preparation section makes the BOX the disclosure — its name row fills the accepted
+  // InnerChromeBox so the box's frame is the button's edge and pressing the slab is what opens
+  // it. These declarations remove the shell's native button chrome from that row; a second frame
+  // there would draw a control sitting IN the box instead of the box being the control.
+  // A section box's closing verb IS the section: the grid row itself is the button, so the box's
+  // own frame is its edge. These declarations remove the shell's native button chrome from that
+  // row; a control nested inside it would draw a second rail just inside the first.
+  ['src/style.css|.section-box-member-verb', new Set([
+    'background:none',
+    'border:0',
+    'border-radius:0',
+    'box-shadow:none',
+  ])],
+  ['src/style.css|.section-box-head', new Set([
+    'background:none',
+    'border:0',
+    'border-radius:0',
+    'box-shadow:none',
+  ])],
+  // The invariant title-bar cluster is one divided box, and each member is a COMPARTMENT of it
+  // (ADR-0242). The box's installed frame is the seat's outer edge and the box's rail is the
+  // edge it shares with the seat beside it, so these declarations remove the shell's native
+  // button chrome — including the `button.active` gradient a lit seat would otherwise wear —
+  // and paint nothing in its place.
+  ['src/style.css|.titlebar-control.titlebar-control--seat', new Set([
+    'background:none',
+    'border:0',
+    'border-radius:0',
+    'box-shadow:none',
+  ])],
+  // A pad of equal compartments is one divided box, and each key is a COMPARTMENT of it
+  // (ADR-0570). The box's installed frame is the seat's outer edge and the box's rail is the edge
+  // it shares with the seat beside it, so these declarations remove the shell's native button
+  // chrome and paint nothing in its place. Same category as the two resets above.
+  ['src/style.css|.chrome-seat', new Set([
+    'background:none',
+    'border:0',
+    'border-radius:0',
+    'box-shadow:none',
   ])],
 ]);
 

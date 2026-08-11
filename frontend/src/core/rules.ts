@@ -7,7 +7,7 @@
 import type { BoardSize, CastleRule, EnemyIntent, GameEvent, GameState, LastMove, Move, PawnPromotionRule, Piece, PieceType, PromotionPieceType, Side, UnitFacing, Vec } from './types';
 import { PROMOTION_PIECE_TYPES } from './types';
 import type { Rng } from './rng';
-import { buildTerrainIndex, canTraverse, elevationAt, haltsTravel, type TerrainIndex } from './terrain';
+import { buildTerrainIndex, canTraverse, elevationAt, haltsTravel, haltsTravelTerrain, isPassableTerrain, type TerrainIndex } from './terrain';
 import { facingFromDelta } from './pieces';
 import { fenceBlocksCrossing } from './featureAutotile';
 
@@ -903,6 +903,53 @@ export function royalForkVictim(
 }
 
 /**
+ * Every enemy unit `piece` currently attacks — the counting counterpart of `royalForkVictim`,
+ * which asks about the QUALITY of two prongs where this asks how many there are.
+ *
+ * Membership is `isEnemy`, the same predicate a capture uses, so this counts exactly the units
+ * `piece` could take: obstacles and neutrals are not attacked things. That is deliberately not
+ * `opponentsUnderAttackBy`, which serves the service record and counts any non-obstacle of
+ * another side, neutrals included.
+ *
+ * Read through the same `attacksSquare` geometry as check detection, so an attack here is an
+ * attack there. Board law never consults it.
+ */
+export function enemiesAttackedBy(
+  piece: Piece,
+  pieces: readonly Piece[],
+  size: BoardSize,
+  env?: MoveEnv,
+): Piece[] {
+  if (!piece || !piece.alive || isObstacle(piece)) return [];
+  return pieces.filter((target) => (
+    target.alive && isEnemy(piece, target) && attacksSquare(piece, pieces, size, env, target.x, target.y)
+  ));
+}
+
+/**
+ * Whether `piece` is DEFENDED — whether any OTHER living unit of its own side attacks the
+ * square it stands on, so taking it there is answered rather than free.
+ *
+ * The plain board reading of the word, and deliberately so: it is what a player sees when they
+ * look at a square and ask "can I just take that?". Attack geometry, not legality — a defender
+ * pinned against its own king still counts here, because the question is what guards the square
+ * rather than what the position would survive. Callers that need the harder question already
+ * have `sideCanCaptureUnit`, which plays legal moves.
+ *
+ * Read through the same `attacksSquare` geometry as check detection, so a defence here is an
+ * attack there; obstacles guard nothing, and a unit never defends itself. Board law never
+ * consults it.
+ */
+export function unitIsDefended(piece: Piece, pieces: readonly Piece[], size: BoardSize, env?: MoveEnv): boolean {
+  if (!piece || !piece.alive) return false;
+  for (const other of pieces) {
+    if (other.id === piece.id || !other.alive || other.side !== piece.side || isObstacle(other)) continue;
+    if (attacksSquare(other, pieces, size, env, piece.x, piece.y)) return true;
+  }
+  return false;
+}
+
+/**
  * Every living piece hostile to `side` that currently attacks one of `side`'s kings.
  *
  * `sideInCheck` answers whether that list is non-empty; this hands back the list itself,
@@ -1276,6 +1323,85 @@ export function recordPosition(state: GameState, env?: MoveEnv): GameState {
   if ((state.halfmoveClock ?? 0) === 0) return { ...state, positionCounts: { [key]: 1 } };
   const counts = state.positionCounts ?? {};
   return { ...state, positionCounts: { ...counts, [key]: (counts[key] ?? 0) + 1 } };
+}
+
+/**
+ * Whether this board is nothing but plain open squares: no obstacle pieces, no edge fences, and
+ * no terrain a move can feel — impassable cliff/rock/void, water that halts travel, or a raised
+ * tile. Deliberately strict about elevation: only a layer sitting uniformly at 0 counts, because
+ * an authored cell above an unauthored one is a climb wall like any other, and a false "plain"
+ * is the only answer here with a cost.
+ *
+ * Static for a whole match — obstacles are authored at build and never appear, move, or clear
+ * mid-game — so a caller may compute it once per game and hold the answer.
+ *
+ * The dead-position draw is the only consumer, and needs exactly this: the insufficient-material
+ * table is a statement about an open rectangle. Stand a wall beside the defending King and a lone
+ * Bishop or Knight mates, so on a board that is not all squares the material proves nothing.
+ */
+export function boardIsAllSquares(state: GameState): boolean {
+  if (state.fences && state.fences.length) return false;
+  for (let i = 0; i < state.pieces.length; i += 1) {
+    const p = state.pieces[i];
+    if (p.alive && isObstacle(p)) return false;
+  }
+  const cells = state.terrain;
+  if (cells) {
+    for (let i = 0; i < cells.length; i += 1) {
+      const c = cells[i];
+      if (c.elevation !== 0) return false;
+      if (!isPassableTerrain(c.terrain) || haltsTravelTerrain(c.terrain)) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Whether the material left on the board can never deliver checkmate — FIDE's dead position
+ * (Article 5.2.2), the classic table: King vs King, King and one minor vs King, and King and
+ * Bishop vs King and Bishop with both Bishops on the same square colour. A Pawn, Rook, or Queen
+ * always leaves a mate available, and so does a second King on one side: boards here may field
+ * more than one, and two Kings mate a lone King.
+ *
+ * King and two Knights is deliberately NOT dead — a helpmate exists, which is the exact line FIDE
+ * draws, and the rules on the chess board must match chess exactly (ADR-0072).
+ *
+ * Geometry-free by design; pair it with `boardIsAllSquares`, because the argument only holds on an
+ * open rectangle.
+ */
+export function materialCannotMate(pieces: readonly Piece[]): boolean {
+  let playerKings = 0;
+  let enemyKings = 0;
+  let minors = 0;
+  const bishops: Piece[] = [];
+  for (let i = 0; i < pieces.length; i += 1) {
+    const p = pieces[i];
+    if (!p.alive || p.side === 'neutral' || isObstacle(p)) continue;
+    if (p.type === 'king') {
+      if (p.side === 'player') playerKings += 1;
+      else enemyKings += 1;
+      continue;
+    }
+    if (p.type === 'bishop') {
+      bishops.push(p);
+      minors += 1;
+      continue;
+    }
+    if (p.type === 'knight') {
+      minors += 1;
+      continue;
+    }
+    return false; // a Pawn, Rook, or Queen keeps a mate on the board
+  }
+  if (playerKings !== 1 || enemyKings !== 1) return false;
+  if (minors <= 1) return true;
+  // One Bishop each, both on the same colour complex: neither can ever attack the other's
+  // refuge, so no mating net exists.
+  if (minors === 2 && bishops.length === 2) {
+    const [a, b] = bishops;
+    return a.side !== b.side && ((a.x + a.y) & 1) === ((b.x + b.y) & 1);
+  }
+  return false;
 }
 
 export type RuleDrawKind = 'fifty-move' | 'threefold';

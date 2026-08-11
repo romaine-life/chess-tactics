@@ -3,7 +3,9 @@ import { TitleBarButtonPrimitive } from '../shell/TitleBarControls';
 import { installedUiMedia } from '../installedUiMedia';
 
 // The signed-in account control for the trailing edge of the app chrome: an
-// icon-only avatar button (Gravatar) that opens a small kit-framed menu. The menu
+// icon-only avatar button (Gravatar) that opens a small kit-framed menu. The trigger is a
+// SEAT of the cluster's divided box — the box's frame and rail are its edges, so it carries
+// no frame of its own (see HeaderAccountCluster). The menu
 // shows the immutable email (small, static) above the editable username — click the
 // name to rename it, Enter / the save button to commit, Escape to cancel — and the
 // door (the door IS Sign Out, no text label; the bar avatar already carries identity).
@@ -16,6 +18,8 @@ interface AccountMenuProps {
   /** Persist a new display name (empty clears it). Rejects on failure. */
   onRename: (name: string) => Promise<void>;
   onSignOut: () => void;
+  /** This seat's place in the trailing cluster, for the leaf wood's phase (ADR-0433). */
+  surfacePhase: number;
   /** Render the menu open on mount (screenshot / demo harness only). */
   defaultOpen?: boolean;
   /** Render the name field in edit mode on mount (screenshot / demo harness only). */
@@ -26,7 +30,7 @@ const NAME_MAX = 40;
 
 const initial = (name: string): string => (name.trim()[0] || '?').toUpperCase();
 
-export function AccountMenu({ name, email, avatarUrl, onRename, onSignOut, defaultOpen, defaultEditing }: AccountMenuProps): ReactElement {
+export function AccountMenu({ name, email, avatarUrl, surfacePhase, onRename, onSignOut, defaultOpen, defaultEditing }: AccountMenuProps): ReactElement {
   const [open, setOpen] = useState(Boolean(defaultOpen));
   const [editing, setEditing] = useState(Boolean(defaultEditing));
   const [draft, setDraft] = useState(name);
@@ -74,7 +78,9 @@ export function AccountMenu({ name, email, avatarUrl, onRename, onSignOut, defau
     <div className="account-menu-root" ref={rootRef}>
       <TitleBarButtonPrimitive
         variant="icon"
+        seated
         className="cluster-icon-button account-avatar-button"
+        surfacePhase={surfacePhase}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`${name} — account menu`}

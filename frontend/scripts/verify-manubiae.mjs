@@ -24,10 +24,19 @@
 //   e.g. a /run/craft/<id> link crafted onto a Battle whose opening position offers a capture
 //   worth more than the unit that takes it.
 //
-// `--want` narrows the search to one entry — `advantageous-capture`, `royal-fork`,
-// `discovered-check`, `double-check`, `en-passant`, `smothered-mate` — for proving a single
-// bounty against a position known to offer it. Without it the gate takes whatever the position
-// offers first, which is what you want when the question is "does the path work at all".
+// `--want` narrows the search to one entry — `advantageous-capture`, `knight-fork`, `royal-fork`,
+// `humble-mate`, `discovered-check`, `double-check`, `en-passant`, `smothered-mate`,
+// `promotion-mate` — for
+// proving a single bounty against a position known to offer it. Without it the gate takes
+// whatever the position offers first, which is what you want when the question is "does the
+// path work at all".
+//
+// `underpromotion-mate` is the one entry this gate cannot ask for. It enumerates legal moves and
+// applies each with the board's DEFAULT promotion, which is the Queen, so a Pawn arriving on the
+// promotion rank is only ever planned as a Queen here. Choosing otherwise is a decision the
+// player makes in the promotion picker, after the move is authored, and driving that picker is a
+// different gate than this one. The path it proves is shared: an underpromotion mate is paid
+// through the same transform, from the same reader, on the same committed board.
 
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

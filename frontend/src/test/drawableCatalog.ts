@@ -227,10 +227,21 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     'ui-kit-icons-unit-studio-png',
     'ui-kit-icons-players-png',
     'ui-kit-icons-info-png',
+    // The Editor rail's two library marks. Required, not optional: the rail resolves them through
+    // `installedUiMedia`, which fails closed, so a catalog without them is a catalog the Editor
+    // cannot render at all.
+    'ui-kit-icons-war-png',
+    'ui-kit-icons-levels-png',
     'ui-kit-icons-game-power-png',
     'ui-kit-icons-game-defend-png',
     'ui-kit-icons-game-objective-png',
     'ui-kit-icons-run-ataraxia-mark-png',
+    // The Sectio rail's control marks (ADR-0549). Required rather than optional: the rail resolves
+    // them through `installedUiMedia`, which fails closed, so a catalog without them is a catalog
+    // the Run's Controls cannot render.
+    'ui-kit-icons-run-battle-png',
+    'ui-kit-icons-reset-png',
+    'ui-kit-icons-game-attack-png',
     'ui-pages-main-menu-webp',
     'ui-pages-settings-webp',
     'ui-pages-skirmish-webp',

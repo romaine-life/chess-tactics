@@ -1,6 +1,7 @@
 import { useRef, useState, type ReactElement } from 'react';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
 import { ChromeButton } from './ChromeButton';
+import { leafSurfacePhase } from './chromeSurfacePolicy';
 
 // Opt-in editable readout: pass `edit` and the value between the keys becomes a
 // typeable field (click it, type an exact value) instead of a read-only <output>.
@@ -56,6 +57,7 @@ export function Stepper({
       <ChromeButton unit="inner-minus-key"
         className={chromeUnitClassNames('inner-minus-key', 'settings-chrome-button', 'settings-chrome-button-neutral')}
         data-chrome-fill-surface={fillSurface}
+        style={leafSurfacePhase(0)}
         aria-label={decreaseLabel}
         onClick={onDecrease}
       >
@@ -67,6 +69,7 @@ export function Stepper({
       <ChromeButton unit="inner-plus-key"
         className={chromeUnitClassNames('inner-plus-key', 'settings-chrome-button', 'settings-chrome-button-neutral')}
         data-chrome-fill-surface={fillSurface}
+        style={leafSurfacePhase(1)}
         aria-label={increaseLabel}
         onClick={onIncrease}
       >

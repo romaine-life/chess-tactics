@@ -252,6 +252,21 @@ and don't tell the user screenshots are impossible. Use the helper below.
    It fails on more than one exit per navigation, a lost canonicalization
    navigation, or an uncanonicalized final address — the double-fade bug class.
 
+   Scene-layer keying / SceneBoundary changes additionally run the retention gate,
+   which drives a real navigation and asserts the screen being LEFT is not rebuilt
+   on its way out (ADR-0558):
+   ```
+   npm run verify:scene-retention -- '<battle-victory-craft-url>' --click '[data-testid="run-battle-rewards"]'
+   ```
+   It marks the committed scene's boundary element and fails if that element is not
+   the one still there once the layer becomes `outgoing` — mount identity, not
+   pixels, because a rebuilt outgoing scene walks through its whole loading contract
+   in front of the player (Rewards blinked the battlefield away and put its own
+   "Preparing battlefield…" card under the Victory heading) and pixels would only say
+   that something flashed. It is route-agnostic: any settled screen plus a selector to
+   press is a valid subject, and a click that drives no transition FAILS rather than
+   passing silently.
+
    Run viewport/scene-authority changes additionally run the Run scene gate on a
    Bona Vacantia craft link containing Conscription Notice:
    ```
@@ -305,6 +320,20 @@ and don't tell the user screenshots are impossible. Use the helper below.
    fires on the FIRST tap — click-to-deselect implemented that way makes the board
    completely unselectable. The gate asserts a fresh first click still selects,
    alongside the second-click cancel; no unit test reproduces that ordering.
+
+   SECONDARY-button changes on the board additionally run the premove-cancel gate,
+   which drives a real right drag and a real right click and reads the painted chain:
+   ```
+   npm run verify:premove-cancel -- '<vite-url>/play?campaignId=off-c-crown-valoria&levelId=off-l-hold-bridge'
+   ```
+   The board is wall-to-wall hit targets, so the secondary button both pans it and
+   takes the premove chain back (ADR-0128/ADR-0550) — the ONLY thing separating the
+   two is how far the press travelled before it was released. The gate plays a real
+   move, queues a premove in the opponent's thinking window, and proves a right DRAG
+   keeps the chain while a right CLICK drops it. It zooms in first: a battle opens
+   fitted to its board with the pan pinned, and a drag on a camera that cannot move
+   proves nothing. Each gesture gets its own ~2s premove window, and a window that
+   closes mid-gesture is re-entered rather than reported as a verdict.
 
    Board-earned bounty changes additionally run the royal fork gate, which plays a
    real fork with real clicks and reads the gold, the log line and the seated marker:
@@ -599,6 +628,36 @@ The full `smoke-test.js` additionally covers the DB-backed persistence endpoints
 On a host without Postgres binaries (this Windows box has none), the full smoke test can't
 run locally — but `netplay-smoke-test.js` covers everything multiplayer, so reach for that.
 Both are wired into `npm test` (netplay first, so netplay regressions fail fast).
+
+### Do NOT report the missing Postgres unless it actually mattered
+
+**`smoke-test.js` not running on this box is the normal, permanent state of the machine, not a
+finding.** CI runs it on every PR, so nothing merges without it. Mention it in a handoff ONLY
+when the change touched a schema migration or a DB-backed endpoint — which is exactly when its
+coverage is the coverage you needed. For anything else, a green `cd frontend && npm run check`
+is the whole report, and the caveat is noise.
+
+The owner said so directly, after hearing it in every closeout: *"you mention after EVERY
+session 'didn't have postgres' like im supposed to care."* A caveat repeated on every change
+reads as a standing blocker he is expected to fix, and it buries the two or three facts in a
+report that are not routine. Same failure mode as reporting "nothing to clean".
+
+**Do not suggest he install Postgres to fix it — that alone would not work.** `findPgBinary`
+resolves binaries by shelling out to `sh -c 'command -v …'`, which under Git Bash answers with
+an MSYS path (`/c/Program Files/PostgreSQL/17/bin/initdb`) that Node's `spawnSync` cannot
+execute on Windows. Verified: handing `spawnSync` such a path fails `ENOENT`. So with Postgres
+installed, `startEmbeddedPostgres` would find the binaries and then die on the first spawn with
+a worse error than today's clear message. The two paths that do work are `DATABASE_URL` pointed
+at a disposable database, or making `findPgBinary` Windows-aware (~10 lines, and then it
+self-provisions here exactly as it does on CI). Neither is worth raising unprompted.
+
+Know what you are skipping before deciding it mattered. `smoke-test.js` is the heaviest test in
+the repo — 11.6k lines — and it is mostly one thing: it replays roughly twenty schema migrations
+against a real database and asserts the *rows* came out right, then boots a second backend in
+`schema=check` mode to confirm the history is sealed, then truncates and drives the editor
+document, upload, prop-seat, SSE, campaign and portfolio endpoints. `test:live-media` checks
+migration *integrity and planning* and needs no database; this one checks that they actually
+transform data.
 
 ## Checking a PR: use `pr-gate`, never a hand-written poll loop
 

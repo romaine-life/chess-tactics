@@ -35,10 +35,10 @@ describe('Enchiridion and Strategikon reference contract', () => {
 
   it('uses the shared rail in both the main-menu and Battle reference hosts', () => {
     expect(mainMenu).toContain('<ApparatusRailColumn');
-    expect(enchiridion).toContain('<ApparatusRailColumn className="enchiridion-section-rail"');
+    expect(enchiridion).toContain('<ApparatusRailColumn opens="panel-beside" className="enchiridion-section-rail"');
     expect(enchiridion).toContain('<ApparatusRailTab');
     expect(strategikon).toContain('<EnchiridionSectionRail');
-    expect(strategikon).toContain('<ApparatusRailColumn className="strategikon-rail"');
+    expect(strategikon).toContain('<ApparatusRailColumn opens="panel-beside" className="strategikon-rail"');
   });
 
   it('draws the complete card catalog through the one shared formation face', () => {

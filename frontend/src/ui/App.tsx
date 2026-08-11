@@ -1,5 +1,6 @@
 import {
   lazy,
+  startTransition,
   Suspense,
   useCallback,
   useEffect,
@@ -78,6 +79,7 @@ const LipsanonReview = lazy(() => import('./LipsanonReview').then((module) => ({
 const RunSectioArtReview = lazy(() => import('./RunSectioArtReview').then((module) => ({ default: module.RunSectioArtReview })));
 const RunProgressIconReview = lazy(() => import('./RunProgressIconReview').then((module) => ({ default: module.RunProgressIconReview })));
 const BrushIconReview = lazy(() => import('./BrushIconReview').then((module) => ({ default: module.BrushIconReview })));
+const MenuIconReview = lazy(() => import('./MenuIconReview').then((module) => ({ default: module.MenuIconReview })));
 
 const SCENE_LOADING_MIN_MS = 350;
 const STARTUP_STAGE_BEAT_MS = 140;
@@ -416,6 +418,26 @@ export function App(): ReactElement {
     if (scene.phase !== 'exiting') return undefined;
     const generation = scene.generation;
     const destination = scene.destination;
+    /**
+     * Committing the destination is the heaviest thing the app does, and it used to run at
+     * SYNCHRONOUS priority — so React built the entire incoming screen, ran its layout effects
+     * and let the browser lay it all out inside ONE task, with no paint anywhere in it. On the
+     * Enchiridion's card gallery that task measured 1194ms: the rain (a rAF canvas draw) and
+     * the waterfalls (`background-position` under `steps()`, a main-thread property) both stood
+     * still for its whole length, and the rail's own open mark — whose DOM change had already
+     * happened at the START of the task — did not appear until the end of it.
+     *
+     * At transition priority React can yield between slices, so the browser paints what is
+     * ALREADY true (the pressed tab's mark, the exit fade) instead of waiting for a screen the
+     * player has not asked to see yet. Nothing about the director changes: the same actions
+     * dispatch in the same order with the same generation guard, and the phases still run
+     * exiting -> loading -> entering. Only the scheduling of the mount moves.
+     *
+     * `setPath`/`setSearch` ride INSIDE the transition on purpose. They are the address the
+     * mounted scene renders from, so splitting them across priorities would commit a tree whose
+     * scene and address disagree.
+     */
+    const mountDestination = (commit: () => void): void => { startTransition(commit); };
     const relationship = destination
       ? sceneTransitionRelationship(scene.current, destination)
       : null;
@@ -424,16 +446,18 @@ export function App(): ReactElement {
       : null;
     if (!sharedRegion) {
       loadingStartedAt.current = performance.now();
-      dispatchScene({ type: 'exit-finished', generation });
+      mountDestination(() => dispatchScene({ type: 'exit-finished', generation }));
       return undefined;
     }
     if (destination && scene.destinationHref && isEmptySlotOrigin(scene.current, destination)) {
       const url = new URL(scene.destinationHref, window.location.origin);
-      setPath(normalizeRoutePath(url.pathname));
-      setSearch(url.search);
       loadingStartedAt.current = performance.now();
       loadingMark(destination.id, 'scene-empty-slot-origin-committed', { generation });
-      dispatchScene({ type: 'exit-finished', generation });
+      mountDestination(() => {
+        setPath(normalizeRoutePath(url.pathname));
+        setSearch(url.search);
+        dispatchScene({ type: 'exit-finished', generation });
+      });
       return undefined;
     }
     let cancelTransition = (): void => {};
@@ -448,15 +472,16 @@ export function App(): ReactElement {
         const latest = sceneRef.current;
         if (latest.generation !== generation || !latest.destinationHref) return;
         const url = new URL(latest.destinationHref, window.location.origin);
-        setPath(normalizeRoutePath(url.pathname));
-        setSearch(url.search);
-        if (latest.destination && isEmptySlotDestination(latest.current, latest.destination)) {
-          loadingMark(latest.destination.id, 'scene-empty-slot-committed', { generation });
-          dispatchScene({ type: 'empty-slot-committed', generation });
-          return;
-        }
-        loadingStartedAt.current = performance.now();
-        dispatchScene({ type: 'exit-finished', generation });
+        const emptySlot = Boolean(latest.destination && isEmptySlotDestination(latest.current, latest.destination));
+        if (emptySlot) loadingMark(latest.destination!.id, 'scene-empty-slot-committed', { generation });
+        else loadingStartedAt.current = performance.now();
+        mountDestination(() => {
+          setPath(normalizeRoutePath(url.pathname));
+          setSearch(url.search);
+          dispatchScene(emptySlot
+            ? { type: 'empty-slot-committed', generation }
+            : { type: 'exit-finished', generation });
+        });
       });
     });
     return () => {
@@ -608,7 +633,15 @@ export function App(): ReactElement {
   const sceneLayers = overlapsCompleteScenes
     ? [
         {
-          key: sceneLayerKey(scene.current),
+          // The SAME key the single layer carried while this scene was committed, so
+          // beginning a replacement does not change the mount identity of the screen the
+          // player is looking at. Dropping the epoch here made every scene replacement
+          // destroy and rebuild its own outgoing scene: Rewards tore down the settled
+          // Victory board and re-ran its entrance before the crossfade began, which is the
+          // flicker ADR-0558 is about. `committedEpoch` — not `retryEpoch` — because a
+          // retry belongs to the failed destination and must not rebuild the painted scene
+          // standing behind it.
+          key: `${sceneLayerKey(scene.current)}#${scene.committedEpoch}`,
           scene: scene.current,
           manifest: scene.current,
           search,
@@ -641,7 +674,11 @@ export function App(): ReactElement {
           // The retry epoch is the one thing that DOES change it, because a screen that
           // failed is holding the failure and must be rebuilt to try again — see
           // SceneState.retryEpoch. It advances only on retry, never on navigation.
-          key: `${sceneLayerKey(mountedScene)}#${scene.retryEpoch}`,
+          // Which epoch depends on WHICH scene this layer is mounting: a destination is
+          // keyed by the retry that built it, while the committed scene keeps the epoch it
+          // was committed with. Keying an outgoing scene by a retry it had no part in
+          // rebuilt it mid-exit — the same defect as the overlap key above (ADR-0558).
+          key: `${sceneLayerKey(mountedScene)}#${mountedScene === scene.destination ? scene.retryEpoch : scene.committedEpoch}`,
           scene: mountedScene,
           manifest,
           search,
@@ -777,6 +814,7 @@ function renderScene(scene: ScenePath, search: string): ReactElement {
   if (path === '/studio' && new URLSearchParams(search).get('lipsanonReview') === '1') return <LipsanonReview />;
   if (path === '/studio' && new URLSearchParams(search).get('brushIconReview') === '1') return <BrushIconReview />;
   if (path === '/studio' && new URLSearchParams(search).get('runProgressIconReview') === '1') return <RunProgressIconReview />;
+  if (path === '/studio' && new URLSearchParams(search).get('menuIconReview') === '1') return <MenuIconReview />;
   if (path === '/studio' || path === '/tileset-studio') return <TilesetStudio />;
   // Wall review lives in the Studio proper: an owner proof only counts from a game-owned
   // surface, and this bespoke path is not one. The studio's route writer canonicalises this

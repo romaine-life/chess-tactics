@@ -250,8 +250,14 @@ if (/--le-inner-atom-(?:left|right)-footprint|--le-visible-content-(?:left|right
   failures.push('atom footprint must not become control, title, or section alignment state');
 }
 
-if (!/className="le-control-divider-host"[\s\S]*?<ChromeDivider role="outer"\s*\/>/.test(levelEditorChromeConsumers)) {
-  failures.push('level editor rail must place the shared outer-role ChromeDivider between fixed controls and dynamic content');
+// The break under the fixed action dock is the PANEL's: its ends are meetings with the panel's own
+// frame, which nothing inside the panel can see. The consumer asks for it by handing over its fixed
+// section, so there is no placement left for a screen to get wrong.
+if (!/className="le-control-divider-host shell-controls-break"[\s\S]*?<ChromeDivider role="outer"\s*\/>/.test(chromeBox)) {
+  failures.push('ShellControlsPanel must lay the shared outer-role break between its fixed head and its scrolling body');
+}
+if (!/<ShellControlsPanel[\s\S]*?fixed=\{\(/.test(levelEditorChromeConsumers)) {
+  failures.push('level editor rail must hand its fixed action dock to ShellControlsPanel instead of placing the break itself');
 }
 if (!/data-chrome-unit="inner-box"\s+className=\{chromeUnitClassNames\('inner-box', 'le-brush-thumb'\)\}/.test(levelEditor)) {
   failures.push('shared Level Editor active-brush thumbnail must inherit the registered inner-box frame');
@@ -584,29 +590,29 @@ if (!chromeRuntime.includes("calc(-1 * var(--ds-space-3))")) {
 if (/id:\s*'inner-dropdown'[\s\S]*?selectors:\s*\[[\s\S]*?'\.le-(?:layer|event)-select(?:-wrap)?'/.test(chromeUnitRegistry)) {
   failures.push('inner dropdown registry must not retain retired native-select selectors');
 }
+// The menu is one DIVIDED inner box: options are its rows, the scrollbar sits in the framed gutter
+// it rules off, and every rail between options — inside a group and between groups — is laid and
+// capped by its topology. It used to be an inner box with dividers dropped between the options by
+// HouseSelect itself, which could only cap them as though they met a frame.
 const houseSelectMenuBlock = blockFor('.house-select-menu');
-const houseSelectScrollBlock = blockFor('.house-select-menu-scroll');
-const houseSelectScrollContentBlock = blockFor('.house-select-menu-scroll > .kit-scroll-content');
-const houseSelectScrollRailBlock = blockFor('.house-select-menu-scroll > .kit-scroll-rail');
+const houseSelectScrollContentBlock = blockFor('.chrome-divided-grid__scroll > .kit-scroll-content');
 const houseSelectOptionBlock = blockFor('.house-select-option');
-if (!/<KitScroll\s+className="house-select-menu-scroll"/.test(houseSelect)
-  || !/<InnerChromeBox[\s\S]*?className="house-select-menu-box"[\s\S]*?<ChromeDivider role="inner"/.test(houseSelect)
+if (!/<DividedInnerChromeBox[\s\S]*?columns=\{\['minmax\(0, 1fr\)'\]\}[\s\S]*?scroll[\s\S]*?className="house-select-menu-box"/.test(houseSelect)
+  || !/<ChromeDividedGridRow[\s\S]*?className=\{`house-select-option /.test(houseSelect)
+  || /<ChromeDivider\b/.test(houseSelect)
   || /chromeUnitClassNames\('inner-list-row',\s*'house-select-option'/.test(houseSelect)
   || /\.house-select-option'/.test(chromeUnitRegistry)
   || !/overflow\s*:\s*visible/.test(houseSelectMenuBlock)
-  || !houseSelectScrollBlock.includes('--house-select-clip-apron-left')
-  || !houseSelectScrollBlock.includes('--house-select-clip-apron-right')
-  || !houseSelectScrollBlock.includes('--le-inner-divider-atom-left-overhang')
-  || !houseSelectScrollBlock.includes('--le-inner-divider-atom-right-overhang')
-  || !/padding-inline\s*:\s*var\(--house-select-clip-apron-left\) var\(--house-select-clip-apron-right\)/.test(houseSelectScrollContentBlock)
-  || !/bottom\s*:\s*0/.test(houseSelectScrollRailBlock)
-  || !/right\s*:\s*calc\(var\(--house-select-clip-apron-right\) - var\(--le-chrome-inner-rail-w, 7px\)\)/.test(houseSelectScrollRailBlock)
-  || !/top\s*:\s*0/.test(houseSelectScrollRailBlock)
-  || !/z-index\s*:\s*5/.test(houseSelectScrollRailBlock)
   || !/overflow-x\s*:\s*hidden/.test(houseSelectScrollContentBlock)
   || /overflow-x\s*:\s*(?:auto|scroll)/.test(houseSelectScrollContentBlock)
   || /--le-inner-atom-(?:left|right)-(?:overhang|footprint)/.test(houseSelectOptionBlock)) {
-  failures.push('HouseSelect menus must be one divided inner box with a joint-safe clip apron, unframed rows, and vertical-only scrolling');
+  failures.push('HouseSelect menus must be one divided inner box whose options are its rows, with vertical-only scrolling and no hand-placed rail');
+}
+// A semantic group of options draws no box, so its rows stay rows of the menu's own grid and the
+// rails inside it stay the menu's. A group that boxed its options would cap rails against a frame
+// it does not own — the failure the whole divided grid exists to prevent.
+if (!/display\s*:\s*contents/.test(blockFor('.chrome-divided-grid__row-group'))) {
+  failures.push('a divided-grid row group must generate no box, so its rows remain rows of the grid that caps their rails');
 }
 for (const side of ['left', 'right', 'top', 'bottom']) {
   if (!houseSelect.includes(`paintOverhang('--le-inner-atom-${side}-overhang')`)) {
@@ -804,11 +810,13 @@ const shellWorkspace = shellWorkspaceRules.find((block) => /position\s*:\s*absol
 if (!shellWorkspace) {
   failures.push('the shared chrome primitives must expose a shell-owned center-workspace surface');
 } else {
+  // `clip` rather than `hidden`: it clips at least as tightly and, unlike `hidden`, carries
+  // the paint apron allowance checked below.
   if (!/position\s*:\s*absolute\s*;/.test(shellWorkspace)
     || !/inset\s*:\s*0\s*;/.test(shellWorkspace)
     || !/min-height\s*:\s*0\s*;/.test(shellWorkspace)
     || !/min-width\s*:\s*0\s*;/.test(shellWorkspace)
-    || !/overflow\s*:\s*hidden\s*;/.test(shellWorkspace)) {
+    || !/overflow\s*:\s*clip\s*;/.test(shellWorkspace)) {
     failures.push('shared shell workspaces must fill and clip to their positioned center-workspace parent');
   }
   if (shellWorkspaceRules.some((block) => /position\s*:\s*fixed|\b(?:100)?v[wh]\b|--app-header-h|--skirmish-rail-w|--skirmish-board-controls-gutter|--le-outer-atom-outset/.test(block))) {
@@ -843,9 +851,32 @@ if (!shellWorkspaceBody
   || css.includes('--shell-workspace-content-padding')) {
   failures.push('ShellWorkspace internal body must own shared block/start insets and stay attached to Controls');
 }
+// The fill reaches the workspace edges AND one apron up under the title divider's transparent
+// last row, so that row is not left for the screen behind. Both clipping hosts have to pass
+// that apron; an `overflow: hidden` on either silently re-opens the seam.
 const shellWorkspaceFill = blockFor('.shell-workspace-fill');
-if (!shellWorkspaceFill || !/inset\s*:\s*0\s*;/.test(shellWorkspaceFill)) {
-  failures.push('shared shell workspaces must paint the outer-role fill edge-to-edge');
+if (!shellWorkspaceFill
+  || !/inset\s*:\s*calc\(-1 \* var\(--shell-workspace-paint-apron, 0px\)\) 0 0 0\s*;/.test(shellWorkspaceFill)) {
+  failures.push('shared shell workspaces must paint the outer-role fill edge-to-edge, one apron under the title divider');
+}
+// The background artwork is a pixelated cover fit: growing its box to gain the apron re-scales
+// the whole raster, so it stays exactly on the workspace box.
+if (/--shell-workspace-paint-apron/.test(blockFor('.shell-workspace-background-artwork'))) {
+  failures.push('the shell workspace background artwork must keep its exact cover box, not take the paint apron');
+}
+for (const host of ['.shell-workspace', '.run-workspace']) {
+  const hostBlock = blockFor(host);
+  if (!hostBlock
+    || !/overflow\s*:\s*clip\s*;/.test(hostBlock)
+    || !/overflow-clip-margin\s*:\s*var\(--shell-workspace-paint-apron, 0px\)\s*;/.test(hostBlock)) {
+    failures.push(`${host} must pass the shell workspace paint apron instead of clipping the chrome seam back open`);
+  }
+}
+// The Controls panel's workspace-facing rail borders a foreign surface, so its frame art's
+// transparent bleed has to be compensated on the chrome side rather than left as a hairline.
+if (!chromeRuntime.includes('border-image-outset: 0 0 0 ${FRAME_EDGE_BLEED_PX}px !important;')
+  || !chromeRuntime.includes('export const FRAME_EDGE_BLEED_PX = 1;')) {
+  failures.push('the Controls panel frame must outset its workspace-facing rail by the frame art edge bleed');
 }
 const playShellGrid = blockFor('.skirmish-screen');
 const battleFieldGutter = blockFor('.skirmish-screen:not(.level-editor-screen) .skirmish-war-room > .skirmish-field');
@@ -1070,7 +1101,10 @@ if (!/testId=\{runDeployment \? 'run-deployment' : 'skirmish'\}/.test(skirmish)
   || !/primaryClassName="skirmish-field"/.test(skirmish)
   || !/className="run-meta-controls run-deployment-controls run-arrangement-controls"/.test(runScreen)
   || !/renderCellOverlay:/.test(runScreen)
-  || !/surfaceState=\{presentedDeploymentSurface\}/.test(skirmish)
+  // Deployment still projects its own position through the battlefield's one passive-surface
+  // seam, and still outranks anything else offered there (today, a move review of the live
+  // match). What this pins is that it goes through that seam at all.
+  || !/surfaceState=\{presentedDeploymentSurface(?: \?\? \w+)?\}/.test(skirmish)
   || /run-deployment-workspace|<LevelPreviewColumn|Choose square…/.test(runBattlefieldSources)) {
   failures.push('Run Deployment must use the battlefield and phase-specific Controls instead of a RunWorkspace level manifest');
 }
@@ -1146,7 +1180,11 @@ if (!/<InnerChromeBox className="skirmish-service-record">/.test(skirmishHud)
   || !/if \(!framed\) return <div className=\{classes\}/.test(portraitEditor)
   || !/className="run-army-ledger-portrait unit-portrait--divided"[\s\S]*?framed=\{false\}/.test(runArmyWorkspace)
   || !/<DividedInnerChromeBox[\s\S]*?columns=\{\['var\(--run-army-row-block-size,\s*158px\)',\s*'minmax\(0,\s*1fr\)',\s*'112px'\]\}/.test(runArmyWorkspace)
-  || !/<ChromeDivider[\s\S]*?role="inner"[\s\S]*?orientation="vertical"[\s\S]*?junctions="none"/.test(chromeDividedGrid)) {
+  // The grid's own rails are drawn with the PRIVATE rail part, not a public ChromeDivider with its
+  // caps switched off: the grid places every junction itself from its line topology, and no call
+  // site may say "no caps" any more (see check-chrome-rails.mjs).
+  || !/<ChromeGridRail[\s\S]*?role="inner"[\s\S]*?orientation="vertical"/.test(chromeDividedGrid)
+  || !/from '\.\/chromeRailInternals'/.test(chromeDividedGrid)) {
   failures.push('Portrait hosts must use the registered InnerChromeBox or the Run Army row’s registered vertical divider composition');
 }
 if (/<ChromeDivider\b/.test(runArmyWorkspace)

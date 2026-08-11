@@ -4,7 +4,7 @@
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
-import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, MAXIMUM_AUTHORED_CAMERA_ZOOM_IN, normalizeBoardCameraBounds, normalizeCameraZoomIn, predrawnEnvironmentGeometryFingerprintInputV2, predrawnRenderSurface, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, worldViewportForCamera, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
+import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, largestBoxInsideBoardCameraPolygon, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, MAXIMUM_AUTHORED_CAMERA_ZOOM_IN, normalizeBoardCameraBounds, normalizeCameraZoomIn, predrawnEnvironmentGeometryFingerprintInputV2, predrawnRenderSurface, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, worldViewportForCamera, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
 import { boardLabCellPosition, boardLabMetrics, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
 import { projectBoardPoint, unprojectBoardPoint, type BoardForest, type BoardForestSection, type BoardForestTree, type BoardTown, type BoardTownSection } from '@chess-tactics/board-render';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
@@ -160,7 +160,9 @@ import {
   predrawnBoardPlateForEditorReview,
   predrawnReviewGridCells,
   predrawnBoardPreviewRegistration,
+  largestPaintedPlateRect,
   predrawnBoardPreviewSrc,
+  runtimePredrawnBoardPlate,
   serializePredrawnBoardPreviewRegistration,
   storedPredrawnBoardRegistration,
   type PredrawnBoardCornerRegistration,
@@ -360,8 +362,9 @@ import { SPEED_BONUS_SECONDS_PER_PAR_TURN, derivedParTurns } from '../core/speed
 import { validatePlayability, validateWarBattlePlayability } from '../core/playability';
 import { PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import { effectiveLevelEvents, normalizeLevelEvents } from '../core/levelEvents';
-import { battleSettingsForSave, guardRulesSeed, levelRulesSeed, seededBaselineLevel, type AuthoredRulesField, type LevelRulesSeed } from './levelEditorRulesSeed';
+import { editorCandidateLevel, guardRulesSeed, levelRulesSeed, seededBaselineLevel, type AuthoredRulesField, type LevelRulesSeed } from './levelEditorRulesSeed';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
+import { ChromeSeatGrid } from './shared/ChromeSeatGrid';
 
 type BoardUnitPlacement = {
   unitId: string;
@@ -1989,22 +1992,21 @@ type OtherEventTemplateId = typeof OTHER_EVENT_TEMPLATES[number]['id'];
 // dropped on the way out is written away by the recovering page's first autosave. `parTurns` and the
 // Battle's `cardsDealt` were both stored and never read, which is how an authored par survived being
 // typed, survived autosave, and then vanished the moment the level was reopened (ADR-0539).
-const levelFromDraft = (draft: LevelEditorDraft, base: Level): Level => editorBoardToLevel(draft.board, {
-  id: base.id,
-  name: draft.levelName,
-  objective: draft.objective,
-  surviveTurns: draft.objective === 'survive' ? draft.surviveTurns : undefined,
-  timeControl: draft.timeControl,
-  parTurns: draft.parTurns,
-  victory: draft.victory,
-  events: draft.events,
-  battle: battleSettingsForSave(base.battle, draft.cardsDealt ?? null),
-  notes: base.notes,
-  difficulty: base.difficulty,
-  economy: base.economy,
-  theme: base.theme,
-  previousTerrain: base.layers.terrain,
-});
+const levelFromDraft = (draft: LevelEditorDraft, base: Level): Level => editorCandidateLevel(
+  draft.board,
+  {
+    id: base.id,
+    name: draft.levelName,
+    objective: draft.objective,
+    surviveTurns: draft.objective === 'survive' ? draft.surviveTurns : undefined,
+    timeControl: draft.timeControl,
+    parTurns: draft.parTurns,
+    victory: draft.victory,
+    events: draft.events,
+  },
+  base,
+  draft.cardsDealt ?? null,
+);
 
 const EDITOR_REVISION_REASON_LABELS: Record<EditorDocumentRevisionSummary['reason'], string> = {
   migration: 'History enabled',
@@ -2320,6 +2322,14 @@ function DirectionPopover({ value, label, describe, onChange }: {
     onChange(direction);
     setOpen(false);
   };
+  const directionMenuSeats = directionCompassCells.map((cell) => cell === 'center' ? null : {
+    id: cell,
+    content: rookDirectionLabel[cell],
+    selected: value === cell,
+    title: `Face ${cell}`,
+    ariaLabel: `Face ${cell}`,
+    onPress: () => choose(cell),
+  });
   return (
     <div
       className="le-direction-popover"
@@ -2344,23 +2354,17 @@ function DirectionPopover({ value, label, describe, onChange }: {
         {rookDirectionLabel[value]}
       </ChromeButton>
       {open ? (
-        <div className="le-direction-menu" role="radiogroup" aria-label={label}>
-          {directionCompassCells.map((cell) =>
-            cell === 'center' ? (
-              <span key="center" className="unit-facing-cell le-direction-cell is-empty" aria-hidden="true" />
-            ) : (
-              <ChromeButton unit="inner-tool-square"
-                key={cell}
-                className={chromeUnitClassNames('inner-tool-square', 'unit-facing-cell', 'le-direction-cell', value === cell && 'is-active')}
-                role="radio"
-                aria-checked={value === cell}
-                title={`Face ${cell}`}
-                onClick={() => choose(cell)}
-              >
-                {rookDirectionLabel[cell]}
-              </ChromeButton>
-            ),
-          )}
+        // The same divided pad the facing compass is, with a hollow centre: this one sets a
+        // DEFAULT rather than turning the selected unit, so it has nothing to rotate. The
+        // compartment stays — it is a real cell of the grid, and dropping it would move the
+        // three southern directions one column to the left.
+        <div className="le-direction-menu">
+          <ChromeSeatGrid
+            seatClassName="unit-facing-cell"
+            rows={[directionMenuSeats.slice(0, 3), directionMenuSeats.slice(3, 6), directionMenuSeats.slice(6, 9)]}
+            ariaLabel={label}
+            selection="radio"
+          />
         </div>
       ) : null}
     </div>
@@ -2786,6 +2790,27 @@ const clearEditorSignInRecoveryIntent = (): void => {
   try { window.sessionStorage.removeItem(EDITOR_SIGN_IN_RECOVERY_INTENT_KEY); } catch { /* blocked storage */ }
 };
 
+/**
+ * The painted rectangle of the active plate, as fractions of its frame. Measuring it needs the
+ * decoded image, so it resolves after the plate loads and is null until then; every caller must
+ * treat that as "not measured yet" rather than "the paint fills the frame".
+ */
+function usePaintedPlateRect(
+  src: string | undefined,
+): { left: number; top: number; right: number; bottom: number } | null {
+  const [rect, setRect] = useState<
+    { left: number; top: number; right: number; bottom: number } | null
+  >(null);
+  useEffect(() => {
+    if (!src) { setRect(null); return undefined; }
+    let live = true;
+    setRect(null);
+    largestPaintedPlateRect(src).then((measured) => { if (live) setRect(measured); });
+    return () => { live = false; };
+  }, [src]);
+  return rect;
+}
+
 export function LevelEditor(): ReactElement {
   const animationFrame = useAnimationClock(true, 8, 150);
   // The Studio routes here with ?from=studio (show a "back to catalog" link), ?kind=<brush-kind>,
@@ -3181,13 +3206,30 @@ export function LevelEditor(): ReactElement {
       : undefined,
     [editorPredrawnPlate, predrawnCoverCells],
   );
+  /**
+   * What this page draws must be the boundary the PLAYER actually gets, or the instrument
+   * is lying about the one thing it exists to show. An unauthored level is governed at
+   * runtime by what it paints, not by the snap default, so an unauthored pre-drawn level
+   * shows its accepted pixels here and Snap/drag remain how a tighter box gets authored.
+   */
   const resolvedCameraBoundary = useMemo(
-    () => resolvedBoardCameraBounds({
-      cols: boardCols,
-      rows: boardRows,
-      cameraBounds: boardCameraBounds,
-    }),
-    [boardCameraBounds, boardCols, boardRows],
+    () => {
+      const authored = { cols: boardCols, rows: boardRows, cameraBounds: boardCameraBounds };
+      if (boardCameraBounds || !predrawnCoverPolygon?.length) {
+        return resolvedBoardCameraBounds(authored);
+      }
+      const xs = predrawnCoverPolygon.map((point) => point.x);
+      const ys = predrawnCoverPolygon.map((point) => point.y);
+      const minX = Math.min(...xs);
+      const minY = Math.min(...ys);
+      return {
+        minX,
+        minY,
+        width: Math.max(...xs) - minX,
+        height: Math.max(...ys) - minY,
+      };
+    },
+    [boardCameraBounds, boardCols, boardRows, predrawnCoverPolygon],
   );
   const {
     markViewInteraction: markBoardViewInteraction,
@@ -3306,17 +3348,29 @@ export function LevelEditor(): ReactElement {
     isPlacedArtBrushKind(initialBrushKind) ? initialBrushKind : 'artwork',
   );
   const [layer, setLayer] = useState<LayerKey>(initialLayer);
-  const cameraLayerEntryFramedRef = useRef(false);
+  const cameraLayerEntryFramedRef = useRef<string | null>(null);
   useEffect(() => {
     if (layer !== 'camera') {
-      cameraLayerEntryFramedRef.current = false;
+      cameraLayerEntryFramedRef.current = null;
       return;
     }
-    if (cameraLayerEntryFramedRef.current || !viewViewportSize) return;
-    cameraLayerEntryFramedRef.current = true;
+    if (!viewViewportSize) return;
+    // Frame the boundary that is actually THERE, not the one that was there on arrival.
+    // Landing on this page by URL frames it seconds before the accepted artwork resolves, so
+    // an unauthored level was framed against its placeholder and never re-framed once its real
+    // boundary appeared. Once a box is authored the author owns the camera, and Snap and the
+    // panel's own control are the ways back to it.
+    const identity = boardCameraBounds
+      ? `${provisionalClientScope}|authored`
+      : `${provisionalClientScope}|${resolvedCameraBoundary.width}x${resolvedCameraBoundary.height}`
+        + `@${resolvedCameraBoundary.minX},${resolvedCameraBoundary.minY}`;
+    if (cameraLayerEntryFramedRef.current === identity) return;
+    cameraLayerEntryFramedRef.current = identity;
     frameCameraBoundary(resolvedCameraBoundary);
   }, [
+    boardCameraBounds,
     layer,
+    provisionalClientScope,
     resolvedCameraBoundary.height,
     resolvedCameraBoundary.minX,
     resolvedCameraBoundary.minY,
@@ -4360,6 +4414,50 @@ export function LevelEditor(): ReactElement {
     commitCameraBoundary(bounds);
     setCameraBoundaryInteractionMode('edit');
     frameCameraBoundary(bounds);
+  };
+  /**
+   * The largest rectangle that stays inside this level's PAINT. Only offered where there is
+   * artwork; a tiled level's backdrop follows the camera and has no edge to fit to.
+   *
+   * Measured from the plate's alpha, not from the polygon: the polygon is the raster frame,
+   * and a painting with a ragged edge does not fill its own frame, so fitting to the frame
+   * hands the player unpainted world — which is the one thing the boundary is for.
+   */
+  const paintedPlateRect = usePaintedPlateRect(editorPredrawnPlate?.src);
+  const cameraBoundaryFitToArtwork = (() => {
+    if (!predrawnCoverPolygon?.length) return undefined;
+    const frame = largestBoxInsideBoardCameraPolygon(predrawnCoverPolygon);
+    if (!frame || !paintedPlateRect) return frame;
+    return {
+      minX: frame.minX + frame.width * paintedPlateRect.left,
+      minY: frame.minY + frame.height * paintedPlateRect.top,
+      width: frame.width * (paintedPlateRect.right - paintedPlateRect.left),
+      height: frame.height * (paintedPlateRect.bottom - paintedPlateRect.top),
+    };
+  })();
+  /**
+   * Artwork ASSIGNMENT refits the box to the new painting. Keyed on the surface identity and
+   * skipped on the first one seen, so opening a level never rewrites a box an author set — only
+   * actually changing the artwork does, and then the old edge is gone anyway.
+   */
+  const lastFittedSurfaceRef = useRef<string | null>(null);
+  useEffect(() => {
+    const identity = editorPredrawnPlate?.src ?? null;
+    if (lastFittedSurfaceRef.current === null) { lastFittedSurfaceRef.current = identity; return; }
+    if (identity === lastFittedSurfaceRef.current) return;
+    lastFittedSurfaceRef.current = identity;
+    // commitCameraBoundary is the one that refuses on a read-only page; nothing to repeat here.
+    if (!identity || !cameraBoundaryFitToArtwork) return;
+    commitCameraBoundary(cameraBoundaryFitToArtwork);
+  }, [cameraBoundaryFitToArtwork, editorPredrawnPlate?.src]);
+  const fitCameraBoundaryToArtwork = (): void => {
+    if (!cameraBoundaryFitToArtwork) {
+      reportStatus('This level has no artwork to fit the camera to.', 'warning');
+      return;
+    }
+    commitCameraBoundary(cameraBoundaryFitToArtwork);
+    setCameraBoundaryInteractionMode('edit');
+    frameCameraBoundary(cameraBoundaryFitToArtwork);
   };
   const setCameraBoundaryFromView = (): void => {
     if (!viewViewportSize) {
@@ -6136,23 +6234,18 @@ export function LevelEditor(): ReactElement {
   // A War Battle always authors its Deployment deal; nothing else is ever dealt cards, so nothing
   // else may pick the field up merely by being opened here.
   const isWarBattle = Boolean(routeParams.warId);
-  const battleForSave = useMemo(
-    () => battleSettingsForSave(candidateMetadataSource?.battle, isWarBattle ? battleCardsDealt : null),
-    [candidateMetadataSource, isWarBattle, battleCardsDealt],
-  );
+  // The authored Deployment deal a serialization folds in — the count for a War Battle, and null
+  // for anything else, which is never dealt cards and so must not pick the field up by passing
+  // through this editor.
+  const dealForSave = isWarBattle ? battleCardsDealt : null;
   const candidateLevel = useMemo(
-    () => editorBoardToLevel(currentEditorBoard, {
-      id: editingId ?? 'draft',
-      name: levelNameForSave,
-      ...modeMeta,
-      notes: candidateMetadataSource?.notes,
-      difficulty: candidateMetadataSource?.difficulty,
-      economy: candidateMetadataSource?.economy,
-      theme: candidateMetadataSource?.theme,
-      battle: battleForSave,
-      previousTerrain: candidateMetadataSource?.layers.terrain,
-    }),
-    [candidateMetadataSource, battleForSave, currentEditorBoard, editingId, levelNameForSave, modeMeta],
+    () => editorCandidateLevel(
+      currentEditorBoard,
+      { id: editingId ?? 'draft', name: levelNameForSave, ...modeMeta },
+      candidateMetadataSource,
+      dealForSave,
+    ),
+    [candidateMetadataSource, dealForSave, currentEditorBoard, editingId, levelNameForSave, modeMeta],
   );
   // The board's own par estimate, recomputed from the live candidate so the Par panel tracks the
   // pieces as they are painted. `effectiveParTurns` is what the level actually plays to: the
@@ -6550,7 +6643,7 @@ export function LevelEditor(): ReactElement {
       objective,
       surviveTurns,
       timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
-      cardsDealt: battleForSave?.cardsDealt,
+      cardsDealt: candidateLevel.battle?.cardsDealt,
       parTurns: parTurnsForSave,
       victory: victoryForSave,
       events: eventsForSave,
@@ -6577,13 +6670,13 @@ export function LevelEditor(): ReactElement {
       } catch { /* The browser copy still exists even if sessionStorage is unavailable. */ }
     }
     // EVERY field written into the draft above must appear below, or an edit that touches only
-    // that field never reaches the browser copy. `battleForSave` and `parTurnsForSave` were both
-    // added to the draft body without being added here, so a Deployment-deal-only or par-only edit
-    // wrote nothing — and because canonicalizing levelId -> document deliberately REMOUNTS this
+    // that field never reaches the browser copy. The Deployment deal and `parTurnsForSave` were
+    // both added to the draft body without being added here, so a Deployment-deal-only or par-only
+    // edit wrote nothing — and because canonicalizing levelId -> document deliberately REMOUNTS this
     // component (see sameDocumentRemountRef), the new instance re-seeded from a draft that had
     // never heard of the edit and silently discarded it. That is what made an authored par snap
     // back to the board estimate a second after it was typed (ADR-0539).
-  }, [battleForSave, campaignAssignmentId, clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, draftKey, editAuthorityState, editorClientIdentity, editorDocument, editorLoadError, editorReady, eventsForSave, levelNameForSave, me?.email, objective, parTurnsForSave, savedSig, surviveTurns, targetLevelId, victoryForSave]);
+  }, [candidateLevel, campaignAssignmentId, clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, draftKey, editAuthorityState, editorClientIdentity, editorDocument, editorLoadError, editorReady, eventsForSave, levelNameForSave, me?.email, objective, parTurnsForSave, savedSig, surviveTurns, targetLevelId, victoryForSave]);
 
   const eventsEditorHref = (open: boolean, tab: LevelEditorEventsTab = eventsTab): string => (
     levelEditorHrefWithRouteState(window.location.href, {
@@ -8492,21 +8585,18 @@ export function LevelEditor(): ReactElement {
     // so a board save doesn't reset them. The working document is the fallback for a brand-new
     // unassigned level that has not entered the canonical store yet.
     const existing = useCampaigns.getState().levels[targetLevelId] ?? editorDocument.level;
-    const level = editorBoardToLevel(currentEditorBoard, {
-      id: targetLevelId,
-      name: levelNameForSave,
-      notes: existing?.notes,
-      // The Rules panel is the source of truth for objective, battle settings, and authored events;
-      // setup spawning is explicit events, not the legacy placement/roster fields.
-      ...modeMeta,
-      difficulty: existing?.difficulty,
-      economy: existing?.economy,
-      theme: existing?.theme,
-      battle: existing?.battle,
-      // Preserve non-editor-expressible terrain (road/bridge/cliff/rock) from the saved level so
-      // republishing a legacy official (no boardCode) doesn't flatten those surfaces to grass.
-      previousTerrain: existing?.layers.terrain,
-    });
+    // The same serialization the playability gate judges, so what is persisted is exactly what was
+    // shown as savable. The Rules panel is the source of truth for objective, battle settings, and
+    // authored events; setup spawning is explicit events, not the legacy placement/roster fields.
+    // The canonical level is the metadata source, which is what preserves non-editor-expressible
+    // terrain (road/bridge/cliff/rock) so republishing a legacy official (no boardCode) doesn't
+    // flatten those surfaces to grass.
+    const level = editorCandidateLevel(
+      currentEditorBoard,
+      { id: targetLevelId, name: levelNameForSave, ...modeMeta },
+      existing,
+      dealForSave,
+    );
     const official = tierOf(level.id) === 'official';
     if (official && !(await ask({
       title: 'Publish to all players?',
@@ -11164,6 +11254,27 @@ export function LevelEditor(): ReactElement {
             </div>
             <p className="le-board-note">Balanced is the default: ten percent padding with a two projected-tile-step minimum per axis.</p>
           </section>
+          {cameraBoundaryFitToArtwork ? (
+            <section className="skirmish-card skirmish-view-card" aria-label="Camera boundary artwork fit">
+              <h2>Fit to artwork</h2>
+              <div className="skirmish-view-row">
+                <ChromeButton
+                  unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  onClick={fitCameraBoundaryToArtwork}
+                  disabled={!editorSessionCanWrite}
+                  title="Set the boundary to the largest rectangle that stays inside this level's artwork."
+                >Fit to artwork</ChromeButton>
+                <span className="le-board-note">
+                  {Math.round(cameraBoundaryFitToArtwork.width)}
+                  {' × '}
+                  {Math.round(cameraBoundaryFitToArtwork.height)}
+                  {' world px'}
+                </span>
+              </div>
+              <p className="le-board-note">The furthest the camera can go without leaving the painting.</p>
+            </section>
+          ) : null}
           </>
         ) : layer === 'generate' ? (<>
           <section className="skirmish-card le-generate">

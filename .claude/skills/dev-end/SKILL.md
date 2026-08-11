@@ -9,44 +9,22 @@ description: Finish the chess-tactics project coding session. Use when the user 
 
 Use this closeout workflow for `D:\repos\chess-tactics` after code changes are complete.
 
-1. **Delete the production state this session created to verify itself.** `npm run dev` talks to
-   production Postgres, so a throwaway Level Editor document opened for a screenshot, a scratch
-   level, or any other verification artifact is a real row in the owner's live data. Clean up what
-   you made:
-   - Editor documents. A document reached through `?board=<code>` mints a NEW document on open,
-     so every such link left a row behind. **A bare `DELETE` does not work** — it answers
-     `revision_required`, then `editor_document_edit_session_required`. Deleting is a
-     compare-and-swap performed by a page session, so it takes three calls per document, run from
-     an authenticated owner page on the dev server:
+1. **If this session created production state, delete it — silently.** `npm run dev` talks to
+   production Postgres, so a scratch level or an admin write is a real row in the owner's live
+   data. You know whether you made one; do not go looking. The procedure is under **Deleting an
+   editor document** below.
 
-     1. `GET /api/editor-documents/<id>` → read `document.revision`.
-     2. `POST /api/editor-documents/<id>/edit-sessions` with a client-generated
-        `{session_id, session_key, device_id, client_label, intent:'write'}` → read
-        `session.edit_generation`. The key is client-minted bearer authority the server only
-        ever stores hashed; it is never returned to you.
-     3. `DELETE /api/editor-documents/<id>` with
-        `{revision, edit_session_id, edit_session_key, edit_generation}`.
+   **Database housekeeping never reaches the owner.** Not a clean result, not a backlog of
+   orphaned documents left by other sessions, not a leak that produces them, and above all not as
+   a question for him to decide. Empty rows cost nothing and nobody sees them. He ignored
+   "nothing to clean" across roughly fifty closeouts before saying so, and reporting a backlog as
+   a *discovery* is worse than the original noise, because it dresses a non-problem as news. The
+   bar for saying anything here: does it change his game, his levels, or his next action? Orphan
+   rows do not.
 
-     Two properties worth relying on. The route deletes **never-saved documents only**
-     (`dbDeleteNeverSavedEditorDocument`), so a working copy ever promoted to a canonical Level is
-     refused — a real guard, not a formality. And `GET /api/editor-documents` returns **one page
-     of 100**, newest first, with `next_offset` in the response body: follow it (or pass
-     `limit`/`offset`) instead of assuming the first page is everything. Read one page and older
-     documents are simply invisible.
-   - Scratch files written into the repo (`tmp-shots/` is gitignored and fine to leave).
-
-   Do this **before** step 2: the API is only reachable through the running dev server. Only
-   delete what this session created — never an owner document you merely opened or were handed.
-   Guard on the authoritative body (`document.level.name`, `document.never_saved`); the top-level
-   `name` exists on the LIST response only and reads `undefined` on a single-document GET, so a
-   guard written against it rejects everything. If something can't be removed, name it and its id
-   in the final report instead of leaving it silently behind.
-
-   Clearing litter this session did **not** create — an accumulated backlog of old documents — is
-   a bulk production deletion and is not part of closeout. Report the backlog and let the owner
-   decide. If they say yes, hold back anything updated in the last ~30 minutes: sessions in other
-   worktrees write to this same production database, and deleting a document out from under a live
-   editor is the exact failure the persistence ADR exists to prevent.
+   Leave other sessions' documents alone. Deleting one another worktree is live in is the exact
+   failure the persistence ADR exists to prevent — and tidying them is not this session's job in
+   the first place.
 2. Stop the dev server started during the session. If the server was started outside the session or ownership is unclear, identify it and ask before killing it. If a later step sends you back to fix something, restart it through `devctl` rather than working blind.
 3. Inspect `git status --short --branch` and review the diff. Keep unrelated user changes out of the commit.
 4. Run the **exact command CI runs**, not a subset of it. Bare `vitest` is not the gate and
@@ -55,12 +33,17 @@ Use this closeout workflow for `D:\repos\chess-tactics` after code changes are c
    any shell or chrome refactor.
    - Touched `frontend/` — `cd frontend && npm run check`
    - Touched `backend/`, `bin/`, or `packages/` — `cd backend && npm run test:backend`. Its
-     tail (`smoke-test.js`) needs Postgres, which this Windows box does not have. When it
-     cannot run, say so plainly and name what did: `node netplay-smoke-test.js` covers all
-     lobby/netplay behaviour DB-free, and a narrow change can run just its own script (for
-     example `npm run test:pr-gate`).
-   If validation cannot run, explain why before continuing. Do not proceed to a PR on a
-   subset run and describe it as green.
+     tail (`smoke-test.js`) needs Postgres, which this Windows box does not have, so run what
+     does: `node netplay-smoke-test.js` covers all lobby/netplay behaviour DB-free,
+     `npm run test:live-media` covers migration integrity and planning, and a narrow change can
+     run just its own script (for example `npm run test:pr-gate`).
+     **Do not report the Postgres gap unless the change touched a schema migration or a
+     DB-backed endpoint.** It is a permanent property of the machine and CI runs the full test
+     on every PR, so on an ordinary change the sentence is noise that reads as a blocker the
+     owner should fix — and he has said so. Never suggest he install Postgres; see the "Do NOT
+     report the missing Postgres unless it actually mattered" section of `CLAUDE.md`.
+   If validation cannot run for any OTHER reason, explain why before continuing. Do not proceed
+   to a PR on a subset run and describe it as green.
 5. Stage only files that belong to the completed task.
 6. Commit with a concise message that reflects the user-facing change.
 7. Push the feature branch.
@@ -83,12 +66,48 @@ Use this closeout workflow for `D:\repos\chess-tactics` after code changes are c
    Each means the long wait is over before it started, not that it should be restarted blindly.
    Use `--no-wait` for a one-shot status read while troubleshooting.
 10. Merge the PR after the gate returns `READY`. Use the repository's normal merge method when discoverable; otherwise prefer squash merge for a clean project history. When using `gh pr merge`, do **not** pass `--delete-branch`: it also attempts local branch cleanup/checkouts and can fail when `main` is checked out in another worktree. Merge without that flag and do not manually delete branches as part of the normal flow; remote branch deletion is handled automatically by repository settings.
-11. Report the PR URL, merge result, final commit, cleanup of session-created production state, and dev-server shutdown status.
+11. Report the PR URL, merge result, and final commit — plus anything that went wrong, or that the
+    owner has a decision to make about. Nothing else. **A step that ran as designed does not need a
+    line.** The dev server stopping, and there being no production state to clean, are the normal
+    outcomes; stating them every session buries the two or three facts that are not routine. This
+    applies to any step here, not only those two — if the only honest thing to say about a step is
+    that it went as expected, say nothing about it.
+
+## Deleting an editor document
+
+Only relevant when step 1 applies — that is, when this session actually created one. Do this
+**before** stopping the dev server: the API is only reachable through it.
+
+A document reached through `?board=<code>` mints a NEW document on open, so such a link leaves a
+row behind. **A bare `DELETE` does not work** — it answers `revision_required`, then
+`editor_document_edit_session_required`. Deleting is a compare-and-swap performed by a page
+session, so it takes three calls per document, run from an authenticated owner page:
+
+1. `GET /api/editor-documents/<id>` → read `document.revision`.
+2. `POST /api/editor-documents/<id>/edit-sessions` with a client-generated
+   `{session_id, session_key, device_id, client_label, intent:'write'}` → read
+   `session.edit_generation`. The key is client-minted bearer authority the server only ever
+   stores hashed; it is never returned to you.
+3. `DELETE /api/editor-documents/<id>` with
+   `{revision, edit_session_id, edit_session_key, edit_generation}`.
+
+Two properties worth relying on. The route deletes **never-saved documents only**
+(`dbDeleteNeverSavedEditorDocument`), so a working copy ever promoted to a canonical Level is
+refused — a real guard, not a formality. And `GET /api/editor-documents` returns **one page of
+100**, newest first, with `next_offset` in the response body: follow it (or pass `limit`/`offset`)
+instead of assuming the first page is everything.
+
+Only delete what this session created — never an owner document you merely opened or were handed.
+Guard on the authoritative body (`document.level.name`, `document.never_saved`); the top-level
+`name` exists on the LIST response only and reads `undefined` on a single-document GET, so a guard
+written against it rejects everything. If something cannot be removed, name it and its id in the
+final report rather than leaving it silently behind.
 
 ## Notes
 
-- The owner's **active Run** is the one exception to step 1: it is disposable test state, crafting
-  over it is expected, and it needs no cleanup and no mention beyond stating a format consequence.
+- The owner's **active Run** is not production state to clean: it is disposable test state,
+  crafting over it is expected, and it needs no cleanup and no mention beyond stating a format
+  consequence.
 - Adding a NEW live-media slot for review is additive and recoverable by retiring it; overwriting,
   retiring, or re-pointing an EXISTING slot is a production content change. Never undo one as
   "cleanup" — report it and let the owner decide.

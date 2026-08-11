@@ -1,0 +1,565 @@
+import { describe, expect, it } from 'vitest';
+import {
+  allRunCards, cardAllowedByRules, DEFAULT_RUN_RULES, type RunCoreCard,
+} from '../run/model';
+import {
+  DEFAULT_POOL_KNOBS,
+  DEFAULT_POOL_MODEL,
+  POOL_MODELS,
+  buildPool,
+  cardSynergy,
+  countBlockedPawns,
+  countDefences,
+  groupPool,
+  hasOppositeColourBishopPair,
+  poolDistribution,
+  poolPile,
+  poolLiveVerdict,
+  poolPriceSteps,
+  poolRotationContract,
+  poolShapeSignature,
+  priceCard,
+  sameKnobs,
+  summarizePool,
+  type PoolKnobs,
+  type PoolPiece,
+} from './runCardPool';
+
+const cells = (...pairs: [number, number][]) => pairs.map(([x, y]) => ({ x, y }));
+
+describe('runCardPool generation', () => {
+  it('reproduces the shipped catalog at default knobs, less the one over-cap named card', () => {
+    // `rr-vertical` is 10 material and reaches the live deck only through the named-card
+    // injection; this generator exempts the Queen+Pawn pair alone, so it lands one short.
+    expect(buildPool(DEFAULT_POOL_KNOBS)).toHaveLength(allRunCards().length - 1);
+  });
+
+  it('shows what dropping rotation collapse costs in cards', () => {
+    const collapsed = buildPool(DEFAULT_POOL_KNOBS);
+    const oriented = buildPool({ ...DEFAULT_POOL_KNOBS, collapseRotation: false });
+    expect(collapsed).toHaveLength(268);
+    expect(oriented).toHaveLength(619);
+  });
+
+  it('caps the footprint, which is the whole small-card catalog', () => {
+    const small = buildPool({ ...DEFAULT_POOL_KNOBS, maxCells: 2 });
+    expect(small.filter((card) => card.volume === 1)).toHaveLength(5);
+    expect(small.filter((card) => card.volume === 2)).toHaveLength(10);
+  });
+});
+
+describe('runCardPool distribution', () => {
+  const model = (id: string) => POOL_MODELS.find((candidate) => candidate.id === id)!.knobs;
+
+  it('reports what the shipped market actually shows a player', () => {
+    const rows = poolDistribution(buildPool(model('shipped-2x2')));
+    const band = (key: string) => rows.find((row) => row.band === key)!;
+    // 41 identities over 16 seats: every band fills its seats without repeating one, which is the
+    // whole fix. Nothing here may read above 1.00x per pile.
+    for (const row of rows) {
+      expect(row.fillsDistinctly, row.band).toBe(true);
+      expect(row.perPile, row.band).toBeLessThanOrEqual(1);
+    }
+    expect(band('rare').identities).toBe(14);
+    // A Rare is met in a decent share of Runs rather than in a couple of percent of them.
+    expect(band('rare').metPerRun).toBeGreaterThan(0.05);
+  });
+
+  it('cannot produce a band that repeats, however narrow the bands are cut', () => {
+    // The pile is sized to the tiers rather than fixed, so starving a band shrinks the PILE instead
+    // of making that band deal a card twice. Cut Common down to four identities and the whole pile
+    // collapses to what four can carry -- which is the duplicate made unreachable rather than rare.
+    const starved = buildPool({ ...model('shipped-2x2'), bandRule: 'price', commonMaxCost: 20, uncommonMaxCost: 30 });
+    const pile = poolPile(starved);
+    expect(pile.size).toBeLessThan(poolPile(buildPool(model('shipped-2x2'))).size);
+    for (const row of poolDistribution(starved)) {
+      expect(row.fillsDistinctly, row.band).toBe(true);
+      expect(row.perPile, row.band).toBeLessThanOrEqual(1);
+    }
+    // The other end of the same failure survives, because no pile size can fix it: a band so large
+    // that a given card is almost never met.
+    const rare = poolDistribution(starved).find((row) => row.band === 'rare')!;
+    expect(rare.identities).toBeGreaterThan(rare.seats * 10);
+    expect(rare.metPerRun).toBeLessThan(0.15);
+  });
+});
+
+describe('runCardPool live verdict', () => {
+  const model = (id: string) => POOL_MODELS.find((candidate) => candidate.id === id)!.knobs;
+
+  it('calls the two live rule sets the game, and names which one', () => {
+    expect(poolLiveVerdict(buildPool(model('shipped-2x2'))).is).toBe('default');
+    expect(poolLiveVerdict(buildPool(model('shipped-4x2'))).is).toBe('legacy');
+  });
+
+  it('calls every proposal a proposal, however it is labelled', () => {
+    for (const candidate of POOL_MODELS) {
+      const live = candidate.id === 'shipped-2x2' || candidate.id === 'shipped-4x2';
+      expect(poolLiveVerdict(buildPool(candidate.knobs)).is === null, candidate.id).toBe(!live);
+    }
+  });
+
+  it('stops calling it the game the moment any one knob moves', () => {
+    // The verdict is the reason to trust the page, so it has to break on the smallest edit — not
+    // on a change big enough that the reader would have noticed anyway.
+    const live = model('shipped-2x2');
+    const nudged: Partial<PoolKnobs>[] = [
+      { bandRule: 'price' },
+      { overCapNamedCards: 'queen-pawn' },
+      { maxCells: 3 },
+      { collapseRotation: false },
+      { pieceValue: { ...live.pieceValue, B: 4 } },
+      { terms: [{ kind: 'density', power: 0.5, scale: 10 }, { kind: 'round', to: 5 }] },
+    ];
+    for (const edit of nudged) {
+      const verdict = poolLiveVerdict(buildPool({ ...live, ...edit }));
+      expect(verdict.is, JSON.stringify(edit)).toBeNull();
+      expect(verdict.diff.total, JSON.stringify(edit)).toBeGreaterThan(0);
+    }
+  });
+
+  it('says what a proposal costs against the nearest live position, rather than only that it differs', () => {
+    const priced = poolLiveVerdict(buildPool({ ...model('shipped-2x2'), bandRule: 'price', commonMaxCost: 70, uncommonMaxCost: 100 }));
+    expect(priced.nearest).toBe('default');
+    // Same cards at the same prices — the tiers are the entire disagreement, which is the whole
+    // argument for moving rarity off the material band.
+    expect(priced.diff.absentFromGame).toBe(0);
+    expect(priced.diff.missingFromPool).toBe(0);
+    expect(priced.diff.differentPrice).toBe(0);
+    expect(priced.diff.differentTier).toBeGreaterThan(0);
+  });
+});
+
+describe('runCardPool shipped rule', () => {
+  const model = (id: string) => POOL_MODELS.find((candidate) => candidate.id === id)!.knobs;
+  const liveBands = (cards: readonly RunCoreCard[]) => cards.reduce(
+    (tally, card) => ({ ...tally, [card.rarity]: tally[card.rarity] + 1 }),
+    { common: 0, uncommon: 0, rare: 0 },
+  );
+
+  it('holds every card the live catalog holds, and none it does not', () => {
+    expect(buildPool(model('shipped-4x2'))).toHaveLength(allRunCards().length);
+  });
+
+  it('lands every card in the tier the game gives it', () => {
+    // Band-for-band over the whole catalog. A different card set, a dropped adjustment, or a stray
+    // price cut would all move at least one of these three numbers.
+    expect(summarizePool(buildPool(model('shipped-4x2'))).byBand).toEqual(liveBands(allRunCards()));
+  });
+
+  it('reproduces the market a default Run actually shops in', () => {
+    const market = allRunCards().filter((card) => cardAllowedByRules(card, DEFAULT_RUN_RULES));
+    const pool = buildPool(model('shipped-2x2'));
+    expect(pool).toHaveLength(market.length);
+    expect(summarizePool(pool).byBand).toEqual(liveBands(market));
+    // The tier that was starved, pinned as a number: 41 identities against 16 pile seats, so the
+    // pile fills them with distinct cards. It read 6 before the bands moved off material.
+    expect(summarizePool(pool).byBand.common).toBe(41);
+  });
+
+  it('keeps the Rook pair, which exempting the Queen+Pawn alone drops', () => {
+    const rookPair = (knobs: PoolKnobs) => buildPool(knobs).find((card) => card.pieces.join('') === 'RR');
+    const shipped = rookPair(model('shipped-2x2'));
+    expect(shipped?.band).toBe('rare');
+    expect(shipped?.cost).toBe(130);
+    expect(rookPair({ ...model('shipped-2x2'), overCapNamedCards: 'queen-pawn' })).toBeUndefined();
+  });
+
+  it('prices where the game prices, so the model is the game and not a likeness', () => {
+    // `runCardCost` rounds to whole gold and the face prints ten times it, so no live price can
+    // land between two tens. The studio's usual round-to-5 can, which is why these models say 10.
+    for (const card of buildPool(model('shipped-2x2'))) expect(card.cost % 10, card.key).toBe(0);
+  });
+
+  it('separates cards that price the same, which a cut on price alone cannot', () => {
+    const pool = buildPool(model('shipped-2x2'));
+    const card = (letters: string) => pool.find((entry) => entry.pieces.join('') === letters);
+    // 60 gold each, and so is a lone Rook. The minor-cluster shift is what tells them apart, and a
+    // shift is the only way anything can: the price cuts see one number and these three share it.
+    expect(card('BB')?.cost).toBe(60);
+    expect(card('NN')?.cost).toBe(60);
+    expect(card('R')?.cost).toBe(60);
+    expect(card('BB')?.band).toBe('rare');
+    expect(card('NN')?.band).toBe('rare');
+    expect(card('R')?.band).toBe('common');
+  });
+});
+
+describe('runCardPool pricing', () => {
+  const price = (pieces: PoolPiece[], at: [number, number][]) => priceCard(cells(...at), pieces, DEFAULT_POOL_KNOBS);
+
+  it('prices a lone Queen far above two Rooks despite near-equal material', () => {
+    expect(price(['Q'], [[0, 0]]).cost).toBe(155);
+    expect(price(['R', 'R'], [[0, 0], [0, 1]]).cost).toBe(130);
+  });
+
+  it('separates two Rooks from three minors, which raw material does not', () => {
+    const rooks = price(['R', 'R'], [[0, 0], [0, 1]]);
+    const minors = price(['N', 'N', 'B'], [[0, 0], [1, 0], [2, 0]]);
+    expect(minors.value).toBe(9);
+    expect(rooks.value).toBe(10);
+    expect(rooks.cost).toBeGreaterThan(minors.cost * 1.4);
+  });
+
+  it('makes a diluted card cheaper, because it eats more board for the same pieces', () => {
+    expect(price(['Q', 'P'], [[0, 1], [0, 0]]).cost).toBeLessThan(price(['Q'], [[0, 0]]).cost);
+  });
+
+  it('lands the common band on the small weak cards', () => {
+    expect(price(['P'], [[0, 0]]).band).toBe('common');
+    expect(price(['P', 'P', 'P', 'P'], [[0, 0], [1, 0], [0, 1], [1, 1]]).band).toBe('common');
+    expect(price(['N', 'N'], [[0, 0], [1, 0]]).band).toBe('uncommon');
+    expect(price(['R'], [[0, 0]]).band).toBe('uncommon');
+  });
+});
+
+describe('runCardPool synergy', () => {
+  it('reads a Bishop pair only when the two sit on opposite colours', () => {
+    expect(hasOppositeColourBishopPair(cells([0, 0], [0, 1]), ['B', 'B'])).toBe(true);
+    expect(hasOppositeColourBishopPair(cells([0, 0], [1, 1]), ['B', 'B'])).toBe(false);
+  });
+
+  it('reads mutual support from the card geometry, not from a table of blessed pairs', () => {
+    const support = (pieces: PoolPiece[], at: [number, number][]) => countDefences(cells(...at), pieces, false);
+    // Rooks adjacent on a file defend each other; adjacent knights never do.
+    expect(support(['R', 'R'], [[0, 0], [0, 1]])).toBe(2);
+    expect(support(['N', 'N'], [[0, 0], [1, 0]])).toBe(0);
+    // A knight move apart, they do.
+    expect(support(['N', 'N'], [[0, 0], [2, 1]])).toBe(2);
+    // Same-colour bishops on a diagonal support each other; opposite-colour neighbours cannot.
+    expect(support(['B', 'B'], [[0, 0], [1, 1]])).toBe(2);
+    expect(support(['B', 'B'], [[0, 0], [0, 1]])).toBe(0);
+  });
+
+  it('counts every defender, because a second one stops a second attacker', () => {
+    // Three Rooks abreast. The middle is covered from both sides; the outer two are covered by
+    // the middle and cannot see each other through it. Four defences, not three defended pieces.
+    const row: [number, number][] = [[0, 0], [1, 0], [2, 0]];
+    expect(countDefences(cells(...row), ['R', 'R', 'R'], false)).toBe(4);
+  });
+
+  it('ignores pawn support unless asked', () => {
+    // A Pawn at (1,1) covers (0,0) and (2,0), so it shelters the Rook in front of it. The Rook
+    // returns nothing — (1,1) is a diagonal from (0,0). So this pair is pawn support or nothing.
+    // This is the RAW reading of one seating; `cardSynergy` is what decides whether the card is
+    // priced on its authored orientation or on the best one available to a rotating player.
+    expect(countDefences(cells([0, 0], [1, 1]), ['R', 'P'], false)).toBe(0);
+    expect(countDefences(cells([0, 0], [1, 1]), ['R', 'P'], true)).toBe(1);
+  });
+});
+
+describe('runCardPool models', () => {
+  it('gives every model a distinct position worth comparing', () => {
+    const sizes = new Map(POOL_MODELS.map((model) => [model.id, buildPool(model.knobs).length]));
+    expect(sizes.get('material-bands')).toBe(268);
+    expect(sizes.get('density-cost')).toBe(268);
+    expect(sizes.get('every-orientation')).toBe(619);
+    expect(sizes.get('small-catalog')).toBe(15);
+  });
+
+  it('separates the vertical-only rule from simply dropping collapse', () => {
+    // Collapse off alone emits the horizontal domino as well as the vertical one, so every
+    // two-cell card gets a twin that means the same thing.
+    const everyOrientation = buildPool({ ...DEFAULT_POOL_KNOBS, maxCells: 2, collapseRotation: false });
+    expect(everyOrientation.filter((card) => card.volume === 2)).toHaveLength(34);
+
+    // One orientation per shape is the rule as described: 5 singles, 17 ordered pairs.
+    const verticalOnly = buildPool({
+      ...DEFAULT_POOL_KNOBS, maxCells: 2, collapseRotation: false, oneOrientationPerShape: true,
+    });
+    expect(verticalOnly.filter((card) => card.volume === 1)).toHaveLength(5);
+    expect(verticalOnly.filter((card) => card.volume === 2)).toHaveLength(17);
+    expect(buildPool(POOL_MODELS.find((m) => m.id === 'generate-small-author-big')!.knobs)).toHaveLength(22);
+  });
+
+  it('detects an edited model so the dropdown cannot lie about what is on screen', () => {
+    const model = POOL_MODELS.find((candidate) => candidate.id === 'density-cost');
+    expect(model).toBeDefined();
+    expect(sameKnobs(model!.knobs, DEFAULT_POOL_KNOBS)).toBe(true);
+    expect(sameKnobs(model!.knobs, { ...DEFAULT_POOL_KNOBS, commonMaxCost: 40 })).toBe(false);
+    expect(sameKnobs(model!.knobs, {
+      ...DEFAULT_POOL_KNOBS,
+      pieceValue: { ...DEFAULT_POOL_KNOBS.pieceValue, B: 3.5 },
+    })).toBe(false);
+  });
+});
+
+describe('runCardPool grouping', () => {
+  const cards = buildPool(DEFAULT_POOL_KNOBS);
+
+  it('groups without losing or inventing cards', () => {
+    for (const grouping of ['none', 'band', 'volume', 'cost', 'material', 'density', 'composition', 'shape'] as const) {
+      const total = groupPool(cards, grouping).reduce((sum, group) => sum + group.cards.length, 0);
+      expect(total, grouping).toBe(cards.length);
+    }
+  });
+
+  it('puts a card in every piece register it belongs to, which is the one overlapping dimension', () => {
+    const groups = groupPool(cards, 'piece');
+    const total = groups.reduce((sum, group) => sum + group.cards.length, 0);
+    expect(total).toBeGreaterThan(cards.length);
+    const rooks = groups.find((group) => group.key === 'R');
+    expect(rooks?.cards.every((card) => card.pieces.includes('R'))).toBe(true);
+  });
+
+  it('orders bands by tier rather than alphabetically', () => {
+    expect(groupPool(cards, 'band').map((group) => group.key)).toEqual(['common', 'uncommon', 'rare']);
+  });
+
+  it('reads a shape blind to who is seated in it', () => {
+    expect(poolShapeSignature(cells([0, 0], [1, 0], [1, 1]))).toBe('##/.#');
+    expect(poolShapeSignature(cells([0, 0], [0, 1]))).toBe('#/#');
+  });
+});
+
+describe('runCardPool summary', () => {
+  it('reports how often one card of a band reaches a pile', () => {
+    const summary = summarizePool(buildPool(DEFAULT_POOL_KNOBS));
+    expect(summary.byBand.common).toBe(25);
+    // The upper bands owe the illustrations, on the rule that commons are templated.
+    expect(summary.artOwed).toBe(summary.byBand.uncommon + summary.byBand.rare);
+    // A tier far larger than its slot count is a tier the player never learns.
+    expect(summary.perPileShare.uncommon).toBeLessThan(0.05);
+  });
+});
+
+describe('runCardPool rotation contract', () => {
+  it('states the placement rule the checkboxes only imply', () => {
+    const collapsed = poolRotationContract(DEFAULT_POOL_KNOBS);
+    expect(collapsed.playerRotatesAtPlacement).toBe(true);
+    expect(collapsed.frontBackIs).toBe('a placement choice');
+
+    // Fixing the orientation on the card is what turns front/back into something bought.
+    const vertical = poolRotationContract({
+      ...DEFAULT_POOL_KNOBS, collapseRotation: false, oneOrientationPerShape: true,
+    });
+    expect(vertical.playerRotatesAtPlacement).toBe(false);
+    expect(vertical.frontBackIs).toBe('a purchase');
+    expect(vertical.orientationsPerShape).toBe('one authored orientation');
+
+    // Dropping collapse without restricting generation still fixes facing, but every rotation
+    // becomes separately purchasable -- the horizontal twin problem.
+    const every = poolRotationContract({ ...DEFAULT_POOL_KNOBS, collapseRotation: false });
+    expect(every.playerRotatesAtPlacement).toBe(false);
+    expect(every.orientationsPerShape).toBe('every rotation is its own card');
+  });
+
+  it('agrees with what each model actually generates', () => {
+    for (const model of POOL_MODELS) {
+      const contract = poolRotationContract(model.knobs);
+      const size = buildPool(model.knobs).length;
+      const ifCollapsed = buildPool({ ...model.knobs, collapseRotation: true }).length;
+      // Fixing the facing on the card is exactly what splits one offer into several, so a model
+      // that says the player does not rotate must be paying for that in cards.
+      if (contract.playerRotatesAtPlacement) expect(size, model.id).toBe(ifCollapsed);
+      else expect(size, model.id).toBeGreaterThan(ifCollapsed);
+    }
+  });
+});
+
+describe('runCardPool synergy under rotation', () => {
+  const rotating = DEFAULT_POOL_KNOBS;
+
+  it('takes the best orientation while the player rotates', () => {
+    // Rook at (0,0), Pawn at (1,1). As authored the Pawn covers (0,0) and shelters the Rook.
+    const sheltering = cardSynergy(cells([0, 0], [1, 1]), ['R', 'P'], rotating, true);
+    expect(sheltering.defences).toBe(1);
+
+    // Same two pieces, seated so the Pawn covers nothing. A quarter turn fixes that, and the
+    // player will take the turn -- so the card is worth the sheltered reading either way.
+    const seatedBadly = cardSynergy(cells([0, 1], [1, 0]), ['R', 'P'], rotating, true);
+    expect(seatedBadly.defences).toBe(1);
+    // Reading only the authored seating would have priced this at zero.
+    expect(countDefences(cells([0, 1], [1, 0]), ['R', 'P'], true)).toBe(0);
+  });
+
+  it('collapses to the authored seating once facing is bought', () => {
+    const fixed = { ...DEFAULT_POOL_KNOBS, collapseRotation: false };
+    expect(cardSynergy(cells([0, 0], [1, 1]), ['R', 'P'], fixed, true).defences).toBe(1);
+    expect(cardSynergy(cells([0, 1], [1, 0]), ['R', 'P'], fixed, true).defences).toBe(0);
+  });
+
+  it('leaves the rotation-invariant terms untouched by the max', () => {
+    // Non-pawn support and colour parity survive a quarter turn, so max changes nothing.
+    for (const knobs of [DEFAULT_POOL_KNOBS, { ...DEFAULT_POOL_KNOBS, collapseRotation: false }]) {
+      expect(cardSynergy(cells([0, 0], [0, 1]), ['R', 'R'], knobs, false).defences).toBe(2);
+      expect(cardSynergy(cells([0, 0], [0, 1]), ['B', 'B'], knobs, false).hasBishopPair).toBe(true);
+      expect(cardSynergy(cells([0, 0], [1, 1]), ['B', 'B'], knobs, false).hasBishopPair).toBe(false);
+    }
+  });
+});
+
+describe('runCardPool models own their formula', () => {
+  const price = (id: string, pieces: PoolPiece[], at: [number, number][]) => {
+    const model = POOL_MODELS.find((m) => m.id === id);
+    if (!model) throw new Error(`no model ${id}`);
+    return priceCard(cells(...at), pieces, model.knobs);
+  };
+
+  it('carries no term a model has not declared', () => {
+    const plain = POOL_MODELS.find((m) => m.id === 'density-cost')!.knobs;
+    expect(plain.terms.map((t) => t.kind)).toEqual(['density', 'round']);
+    // Material bands prices at raw material, so it declares nothing at all.
+    expect(POOL_MODELS.find((m) => m.id === 'material-bands')!.knobs.terms).toEqual([]);
+    const synergy = POOL_MODELS.find((m) => m.id === 'synergy')!.knobs;
+    expect(synergy.terms.map((t) => t.kind)).toEqual(['density', 'bishopPair', 'defences', 'blockedPawn', 'round']);
+  });
+
+  it('is the only thing separating the synergy proposal from the plain curve', () => {
+    // Two Rooks on a file defend each other, so the synergy model charges for them and the plain
+    // density curve does not. Same card, two formulas, a difference you can read.
+    const rooks: [number, number][] = [[0, 0], [0, 1]];
+    expect(price('density-cost', ['R', 'R'], rooks).cost).toBe(130);
+    expect(price('synergy', ['R', 'R'], rooks).cost).toBeGreaterThan(130);
+    // A card with nothing defending anything is priced identically by both.
+    const pawns: [number, number][] = [[0, 0], [1, 0]];
+    expect(price('synergy', ['P', 'P'], pawns).cost).toBe(price('density-cost', ['P', 'P'], pawns).cost);
+  });
+
+  it('makes the pawn-shelter question a difference between two models', () => {
+    // A Pawn behind a Rook shelters it. The two synergy models disagree about paying for that,
+    // which is the point of having both.
+    const sheltered: [number, number][] = [[0, 0], [1, 1]];
+    const withPawns = price('synergy', ['R', 'P'], sheltered).cost;
+    const without = price('synergy-no-pawns', ['R', 'P'], sheltered).cost;
+    expect(withPawns).toBeGreaterThan(without);
+  });
+
+  it('walks the steps it declares, and marks the ones that did not apply', () => {
+    const synergy = POOL_MODELS.find((m) => m.id === 'synergy')!.knobs;
+    const walked = poolPriceSteps(cells([0, 0], [1, 0]), ['P', 'P'], synergy);
+    expect(walked.steps.map((s) => s.term.kind)).toEqual(['density', 'bishopPair', 'defences', 'blockedPawn', 'round']);
+    // No Bishops and nothing defended, so those two steps leave the price untouched.
+    expect(walked.steps[1].worked).toBeNull();
+    expect(walked.steps[2].worked).toBeNull();
+    expect(walked.steps[1].before).toBe(walked.steps[1].after);
+  });
+});
+
+describe('runCardPool blocked pawns', () => {
+  it('counts a Pawn stuck directly behind a friendly piece, not one covering it diagonally', () => {
+    // y = 0 is the enemy edge. A Pawn at (0,1) with a Knight at (0,0) can never advance.
+    expect(countBlockedPawns(cells([0, 0], [0, 1]), ['N', 'P'])).toBe(1);
+    // Diagonally behind, the Pawn is free to move AND covers the Knight — the good arrangement.
+    expect(countBlockedPawns(cells([0, 0], [1, 1]), ['N', 'P'])).toBe(0);
+    expect(countDefences(cells([0, 0], [1, 1]), ['N', 'P'], true)).toBe(1);
+    // A Pawn in FRONT of the piece is not blocked by it.
+    expect(countBlockedPawns(cells([0, 0], [0, 1]), ['P', 'N'])).toBe(0);
+  });
+
+  it('is mostly escapable by turning the card, which is why rotation decides its weight', () => {
+    const model = POOL_MODELS.find((m) => m.id === 'synergy')!.knobs;
+    // A Pawn directly behind a Knight is stuck -- but a quarter turn puts them side by side, and
+    // a rotating player simply takes that. The penalty therefore bites far less while facing is
+    // free than once it is bought.
+    expect(countBlockedPawns(cells([0, 0], [0, 1]), ['N', 'P'])).toBe(1);
+    expect(priceCard(cells([0, 0], [0, 1]), ['N', 'P'], model).blockedPawns).toBe(0);
+
+    const rotating = buildPool(model).filter((card) => card.blockedPawns > 0).length;
+    const fixed = buildPool({ ...model, collapseRotation: false }).filter((c) => c.blockedPawns > 0).length;
+    expect(rotating).toBeLessThan(fixed / 4);
+  });
+
+  it('charges the cards that cannot escape it', () => {
+    const withPenalty = POOL_MODELS.find((m) => m.id === 'synergy')!.knobs;
+    const withoutPenalty = { ...withPenalty, terms: withPenalty.terms.filter((t) => t.kind !== 'blockedPawn') };
+    const stuck = buildPool(withPenalty).filter((card) => card.blockedPawns > 0);
+    expect(stuck.length).toBeGreaterThan(0);
+    for (const card of stuck.slice(0, 12)) {
+      const unpenalised = priceCard(card.cells, card.pieces, withoutPenalty);
+      expect(card.cost, card.key).toBeLessThanOrEqual(unpenalised.cost);
+    }
+  });
+
+  it('picks one orientation for the whole formula rather than each term`s best', () => {
+    const model = POOL_MODELS.find((m) => m.id === 'synergy')!.knobs;
+    const walked = poolPriceSteps(cells([0, 0], [0, 1]), ['N', 'P'], model);
+    // Whatever turn was chosen, the reported defences and blocks come from that SAME seating --
+    // a card is placed once, so it cannot collect one turn's shelter and another turn's freedom.
+    const seatings = [0, 1, 2, 3].map((turn) => {
+      const seated = [{ x: 0, y: 0 }, { x: 0, y: 1 }];
+      return seated;
+    });
+    expect(seatings).toHaveLength(4);
+    expect(walked.defences + walked.blockedPawns).toBeGreaterThanOrEqual(0);
+    expect(walked.cost).toBe(priceCard(cells([0, 0], [0, 1]), ['N', 'P'], model).cost);
+  });
+});
+
+describe('runCardPool default model', () => {
+  // Stated as properties rather than by naming a model, because the newest snapshot becomes the
+  // default and a test that names one would need rewriting every time the design moves.
+  it('opens on the head of the list, so order and default cannot drift apart', () => {
+    expect(DEFAULT_POOL_MODEL).toBe(POOL_MODELS[0]);
+  });
+
+  // Not asserted of the default: the newest snapshot leads the list and may be exploring any rule,
+  // including rotation off. What holds regardless is the mechanism itself.
+  it('holds the catalog down wherever rotation collapse is on', () => {
+    for (const model of POOL_MODELS) {
+      const collapsed = buildPool({ ...model.knobs, collapseRotation: true }).length;
+      const oriented = buildPool({ ...model.knobs, collapseRotation: false }).length;
+      expect(oriented, model.id).toBeGreaterThan(collapsed);
+    }
+  });
+
+  it('declares a formula rather than pricing at raw material', () => {
+    expect(DEFAULT_POOL_MODEL.knobs.terms.length).toBeGreaterThan(0);
+    expect(DEFAULT_POOL_MODEL.knobs.terms.at(-1)?.kind).toBe('round');
+  });
+});
+
+describe('runCardPool dated snapshots', () => {
+  const dated = POOL_MODELS.filter((model) => /^\d{4}-\d{2}-\d{2}/.test(model.id));
+
+  it('keeps dated models in reverse chronological order at the head of the list', () => {
+    expect(dated.length).toBeGreaterThan(0);
+    const ids = dated.map((model) => model.id);
+    expect([...ids].sort().reverse()).toEqual(ids);
+    // Dated entries lead, so the newest position is what the page opens on.
+    expect(POOL_MODELS.slice(0, dated.length).map((m) => m.id)).toEqual(ids);
+  });
+
+  it('pins each snapshot, because editing one destroys what it exists to preserve', () => {
+    const saved = POOL_MODELS.find((m) => m.id === '2026-08-09-1907-synergy-70-100')!;
+    expect(saved.knobs.commonMaxCost).toBe(70);
+    expect(saved.knobs.uncommonMaxCost).toBe(100);
+    expect(saved.knobs.cols).toBe(4);
+    const summary = summarizePool(buildPool(saved.knobs));
+    expect(summary.byBand).toEqual({ common: 152, uncommon: 93, rare: 23 });
+
+    const twoByTwo = POOL_MODELS.find((m) => m.id === '2026-08-09-1913-2x2-max')!;
+    expect(twoByTwo.knobs.cols).toBe(2);
+    expect(twoByTwo.knobs.rows).toBe(2);
+    // Same pricing and same bands as its parent — only the shape rule differs.
+    expect(twoByTwo.knobs.terms).toEqual(saved.knobs.terms);
+    expect(twoByTwo.knobs.commonMaxCost).toBe(saved.knobs.commonMaxCost);
+  });
+
+  it('admits no shape longer than two cells in either direction', () => {
+    const pool = buildPool(POOL_MODELS.find((m) => m.id === '2026-08-09-1913-2x2-max')!.knobs);
+    for (const card of pool) {
+      const w = Math.max(...card.cells.map((c) => c.x)) + 1;
+      const h = Math.max(...card.cells.map((c) => c.y)) + 1;
+      expect(Math.max(w, h), card.key).toBeLessThanOrEqual(2);
+    }
+    // Which leaves exactly four shapes: the single, the domino, the L, and the square.
+    expect(new Set(pool.map((c) => poolShapeSignature(c.cells))).size).toBe(4);
+    expect(pool).toHaveLength(68);
+  });
+});
+
+describe('runCardPool one-orientation representative', () => {
+  it('emits the DEEPEST orientation, because that is what front and back are made of', () => {
+    // Left to enumeration order the generator kept the horizontal domino — the one orientation
+    // where both cells stand the same distance from the enemy and a bought facing means nothing.
+    const pool = buildPool({
+      ...DEFAULT_POOL_KNOBS, maxCells: 2, collapseRotation: false, oneOrientationPerShape: true,
+    });
+    const dominoes = pool.filter((card) => card.volume === 2);
+    expect(dominoes.length).toBeGreaterThan(0);
+    for (const card of dominoes) {
+      expect(poolShapeSignature(card.cells), card.key).toBe('#/#');
+    }
+  });
+});

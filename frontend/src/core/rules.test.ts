@@ -17,6 +17,7 @@ import {
   sideHasLegalMove,
   sideInCheck,
   smotheredMateBy,
+  unitIsDefended,
   type MoveEnv,
 } from './rules';
 import { roadEdgeKey } from './featureAutotile';
@@ -358,6 +359,48 @@ describe('royal fork', () => {
     expect(royalForkVictim(rook, pieces, SIZE, undefined, 5)).toBe(victim);
     const env: MoveEnv = { fences: new Set([roadEdgeKey(4, 4, 5, 4)]) }; // closes the east prong
     expect(royalForkVictim(rook, pieces, SIZE, env, 5)).toBeNull();
+  });
+});
+
+describe('unitIsDefended', () => {
+  it('says nothing guards a lone unit, and that a friend on its square does', () => {
+    const target = P('enemy', 'bishop', 4, 4);
+    expect(unitIsDefended(target, [target], SIZE)).toBe(false);
+
+    const guard = P('enemy', 'rook', 4, 0); // down the file it stands on
+    expect(unitIsDefended(target, [target, guard], SIZE)).toBe(true);
+  });
+
+  it('does not let a unit defend itself, nor count the other side guarding the square', () => {
+    const target = P('enemy', 'queen', 4, 4); // strikes every ray out of its own square
+    const foe = P('player', 'rook', 4, 0);
+    expect(unitIsDefended(target, [target, foe], SIZE)).toBe(false);
+  });
+
+  it('counts the King as a defender, and a blocked friend as none', () => {
+    const target = P('enemy', 'pawn', 4, 4);
+    const king = P('enemy', 'king', 3, 3);
+    expect(unitIsDefended(target, [target, king], SIZE)).toBe(true);
+
+    // The same Rook with one of their own men in the way reaches the blocker, not the target.
+    const rook = P('enemy', 'rook', 4, 0);
+    const blocker = P('enemy', 'knight', 4, 2);
+    expect(unitIsDefended(target, [target, rook, blocker], SIZE)).toBe(false);
+  });
+
+  it('reads the board the pieces actually stand on: a fenced defender guards nothing', () => {
+    const target = P('enemy', 'bishop', 4, 4);
+    const guard = P('enemy', 'king', 3, 4);
+    const pieces = [target, guard];
+    expect(unitIsDefended(target, pieces, SIZE)).toBe(true);
+    const env: MoveEnv = { fences: new Set([roadEdgeKey(3, 4, 4, 4)]) };
+    expect(unitIsDefended(target, pieces, SIZE, env)).toBe(false);
+  });
+
+  it('an obstacle guards nothing', () => {
+    const target = P('neutral', 'bishop', 4, 4);
+    const rock = P('neutral', 'rock', 3, 3);
+    expect(unitIsDefended(target, [target, rock], SIZE)).toBe(false);
   });
 });
 

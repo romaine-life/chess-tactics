@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from 'react';
 import type { Level } from '../core/level';
 import { levelToEditorBoard } from '../core/levelBoard';
 import {
@@ -7,7 +7,7 @@ import {
   boardContentHash,
 } from './bakeBoardThumbnail';
 import { loadingError, loadingMark, loadingMeasure } from '../diagnostics/loadingTimeline';
-import { levelThumbnailUrl } from '../net/levelThumbnails';
+import { levelThumbnailUrl, subscribeLevelThumbnailUrls } from '../net/levelThumbnails';
 import {
   BOARD_PREVIEW_ASPECT,
   BOARD_THUMBNAIL_SIZE,
@@ -75,6 +75,19 @@ function rasterScale(): number {
   return Math.min(2, Math.max(1, Math.round(window.devicePixelRatio || 1)));
 }
 
+/**
+ * The canonical derivative installed for a level, re-read whenever one is installed. A Save or a
+ * publish answers with the address it just baked, so a mounted row has to be able to swap to it —
+ * a one-shot read at hydration leaves the list showing the pre-save picture until a full reload.
+ */
+export function useLevelThumbnailUrl(levelId: string): string | null {
+  return useSyncExternalStore(
+    subscribeLevelThumbnailUrls,
+    useCallback(() => levelThumbnailUrl(levelId), [levelId]),
+    useCallback(() => levelThumbnailUrl(levelId), [levelId]),
+  );
+}
+
 export function LevelThumbnail({
   level,
   width,
@@ -94,8 +107,9 @@ export function LevelThumbnail({
   authoringPreview?: boolean;
 }): ReactElement {
   const board = useMemo(() => authoringPreview ? levelToEditorBoard(level) : null, [authoringPreview, level]);
+  const installedDerivative = useLevelThumbnailUrl(level.id);
   const canonicalDerivative = !authoringPreview
-    ? levelThumbnailUrl(level.id)
+    ? installedDerivative
     : null;
   // Canonical and authoring derivatives own the canonical 4:3 board window (ADR-0259).
   const coverThumbnail = true;

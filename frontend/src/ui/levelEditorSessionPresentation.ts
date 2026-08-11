@@ -1,3 +1,5 @@
+import { relativeTimeLabel } from './relativeTime';
+
 export type LevelEditorSessionRelationship = 'this_tab' | 'same_device' | 'other_device';
 
 export interface LevelEditorSessionAttribution {
@@ -71,21 +73,9 @@ export function levelEditorSessionLocationLabel(
   return clientLabel ? `${relationship} · ${clientLabel}` : relationship;
 }
 
-export function levelEditorSessionTimeLabel(
-  value: string | null | undefined,
-  now = Date.now(),
-): string {
-  const timestamp = value ? Date.parse(value) : Number.NaN;
-  if (!Number.isFinite(timestamp)) return 'time unavailable';
-  const elapsedSeconds = Math.max(0, Math.round((now - timestamp) / 1000));
-  if (elapsedSeconds < 10) return 'just now';
-  if (elapsedSeconds < 60) return `${elapsedSeconds} seconds ago`;
-  const elapsedMinutes = Math.round(elapsedSeconds / 60);
-  if (elapsedMinutes < 60) return `${elapsedMinutes} minute${elapsedMinutes === 1 ? '' : 's'} ago`;
-  const elapsedHours = Math.round(elapsedMinutes / 60);
-  if (elapsedHours < 24) return `${elapsedHours} hour${elapsedHours === 1 ? '' : 's'} ago`;
-  return new Date(timestamp).toLocaleString();
-}
+/** How long ago, in the one shared voice — see relativeTime.ts. Kept as a named export
+ *  because session attribution reads as its own vocabulary at every call site here. */
+export const levelEditorSessionTimeLabel = relativeTimeLabel;
 
 export function levelEditorSessionPresenceDetail(
   attribution: LevelEditorSessionAttribution,

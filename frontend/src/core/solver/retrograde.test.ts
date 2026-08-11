@@ -20,6 +20,14 @@ function tinyLevel(units: LevelUnit[], opts: { cols: number; rows: number; objec
   return lvl;
 }
 
+/** One impassable corner keeps a bare-Kings board OFF the dead-position draw (ADR-0554), which
+ * would otherwise make every K-vs-K position a terminal and collapse the loopy space these tests
+ * exist to walk. The kings keep the rest of the board, so play is still infinite. */
+function withCliff(lvl: Level, x: number, y: number): Level {
+  lvl.layers.terrain = lvl.layers.terrain.map((c) => (c.x === x && c.y === y ? { ...c, terrain: 'cliff' as const } : c));
+  return lvl;
+}
+
 /** Author last-rank promotion the way real levels do — a pawn-promotion zone across row `y`.
  * There is no built-in far-edge default (promotion is strictly rules-driven since the
  * authored-events merge); a fixture whose story needs queening must AUTHOR it, like a level. */
@@ -38,10 +46,10 @@ function solve(lvl: Level, cap = 5_000_000) {
 // ─── King vs King → draw (the loopy canary) ─────────────────────────────────────────────
 
 describe('K vs K → draw', () => {
-  const lvl = tinyLevel([
+  const lvl = withCliff(tinyLevel([
     { x: 0, y: 0, side: 'enemy', type: 'king', facing: 'south' },
     { x: 3, y: 3, side: 'player', type: 'king', facing: 'north' },
-  ], { cols: 4, rows: 4, objective: 'rival-kings' });
+  ], { cols: 4, rows: 4, objective: 'rival-kings' }), 0, 3);
 
   it('the root is a proven draw', () => {
     const { result, space } = solve(lvl);
@@ -62,6 +70,21 @@ describe('K vs K → draw', () => {
     const { result } = solve(lvl);
     expect(result.stats.states).toBeGreaterThan(0);
     expect(Number.isFinite(result.stats.states)).toBe(true);
+  });
+
+  it('is over before it starts once the same board is nothing but squares (ADR-0554)', () => {
+    // Same two kings, no cliff: the solver reads the live adjudicator, so the root IS the
+    // terminal — a dead position, with no space left to walk.
+    const plain = tinyLevel([
+      { x: 0, y: 0, side: 'enemy', type: 'king', facing: 'south' },
+      { x: 3, y: 3, side: 'player', type: 'king', facing: 'north' },
+    ], { cols: 4, rows: 4, objective: 'rival-kings' });
+    const { result } = solve(plain);
+    expect(result.rootValue.outcome).toBe('draw');
+    expect(result.stats.terminals).toBe(1);
+    expect(result.stats.states).toBe(1);
+    expect(result.stats.solvedWin).toBe(0);
+    expect(result.stats.solvedLoss).toBe(0);
   });
 });
 

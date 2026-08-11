@@ -7,7 +7,9 @@ import { levelParTurns, speedBonusClockMs, speedBonusRemainingMs, speedBonusTent
 import type { GameState, Piece, Vec } from '../core/types';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
-import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
+import { ChromeDividedGridRow, DividedInnerChromeBox } from './shared/ChromeDividedGrid';
+import { ChromeVerbRow, verbColumns, type ChromeVerb } from './shared/ChromeVerbRow';
+import { CHROME_LEAF_FILL_SURFACE, CHROME_STRUCTURAL_FILL_ROLE } from './shared/chromeSurfacePolicy';
 import { TitleBarStatus } from './shell/TitleBarControls';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleRoute, type TitleRouteSegment } from './shell/TitleRoute';
@@ -37,6 +39,7 @@ import {
   canLeaveSectio,
   canUndoRunBattleMove,
   captureRunBattleUndo,
+  chargeRunBattleUndoCheckpoint,
   closeBattle,
   deditioGoldTenths,
   hasLipsanon,
@@ -48,6 +51,8 @@ import {
   prepareDeployment,
   rerollDeployment,
   resetSectio,
+  reviewSectioBattleReport,
+  sectioBattleReport,
   RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS,
   RUN_BATTLE_RETRY_COST_TENTHS,
   RUN_CARD_BY_ID,
@@ -55,6 +60,7 @@ import {
   runBattleActivityId,
   runCardUnitIds,
   performExpunctio,
+  sectioAdlectioSpent,
   sectioHasChanges,
   runCardDefinition,
   takeCommendatioKing,
@@ -64,6 +70,7 @@ import {
   type RunBattleNotice,
   type RunCardOffer,
   type RunDocument,
+  type RunPhase,
   type LipsanonId,
 } from '../run/model';
 import {
@@ -109,14 +116,17 @@ import { useLipsanonFlight } from './runLipsanonFlightView';
 import { RunGoldAmount } from './RunResources';
 import {
   isSectioWorkspaceView,
+  RUN_SECTIO_CONTROL_ICON_ROLE,
   RUN_WORKSPACE_VIEW_LABEL,
   SECTIO_WORKSPACE_VIEWS,
   runArmyUnitHref,
   runWorkspaceHref,
   runWorkspaceTitleSegment,
+  type RunSectioControl,
   type RunSelfInspectionView,
   type RunWorkspaceView,
 } from './RunSelfInspection';
+import { installedUiMedia } from './installedUiMedia';
 import {
   DEFAULT_RUN_ARMY_FILTERS,
   RunArmyWorkspace,
@@ -157,6 +167,21 @@ type RunScreenView = RunWorkspaceView;
 
 function visibleLipsanonCount(run: RunDocument): number {
   return run.lipsana.filter((lipsanonId) => Boolean(LIPSANON_BY_ID[lipsanonId])).length;
+}
+
+/**
+ * Phases whose workspace paints an installed opaque raster over the whole environment
+ * column, so the shell's battlefield backdrop reaches no pixel behind them and is dropped
+ * (`.skirmish-screen.run-workspace-owns-environment`). Both mount the `run-victory`
+ * workspace background at cover fit over the shell's own opaque surface fill.
+ *
+ * This is a claim about pixels, so re-measure it rather than extend it by eye: paint
+ * `.skirmish-screen::before` a flat colour on the live phase and count the pixels that
+ * change. A phase that yields its fill to a retained scene — Sectio's room, which hides
+ * `.shell-workspace-fill` — does NOT qualify, and keeps the backdrop.
+ */
+export function runWorkspaceOwnsEnvironment(phase: RunPhase | undefined): boolean {
+  return phase === 'victory' || phase === 'aftermath';
 }
 
 function runBattleProgress(run: RunDocument): {
@@ -305,6 +330,15 @@ function useRunAbandon(run: RunDocument): {
   return { abandonDialog: dialog, abandoning, requestAbandon };
 }
 
+/**
+ * The padlock laid on a Sectio offer the visit's one admission has closed. The installed kit
+ * lock, through the same `app-ui` role the Level Editor's own lock resolves and the same door
+ * every other mark on this screen uses: this is the ordinary "you cannot have this" glyph, and
+ * both a padlock drawn for one row and a second way of reaching this one would be a bespoke
+ * parallel (ADR-0059).
+ */
+const RUN_SECTIO_LOCK_ICON_ROLE = 'ui-kit-icons-lock-png';
+
 /** The installed full-screen Sectio scene, or null when the Sectio has no scene art. */
 function useInstalledSectioScene(): ReactElement | null {
   return useMemo(() => {
@@ -313,6 +347,21 @@ function useInstalledSectioScene(): ReactElement | null {
       ? <img className="run-sectio-scene-artwork" src={installed.src} alt="" draggable={false} />
       : null;
   }, []);
+}
+
+/**
+ * A Sectio control's mark, seated ahead of its word.
+ *
+ * `.app-header-button` is already an inline flex row with its own gap, so the mark takes a fixed
+ * seat and the label follows it — every button in the rail then starts its text on the same line
+ * whatever glyph it wears, which is what makes the column scannable rather than ragged.
+ */
+function RunControlMark({ control }: { control: RunSectioControl }): ReactElement {
+  return (
+    <span className="run-control-mark" aria-hidden="true">
+      <img src={installedUiMedia(RUN_SECTIO_CONTROL_ICON_ROLE[control])} alt="" draggable={false} />
+    </span>
+  );
 }
 
 function RunMetaControls({
@@ -329,6 +378,7 @@ function RunMetaControls({
   const replace = useActiveRun((state) => state.replace);
   const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
   const sectio = run.phase === 'sectio' ? run.sectio : null;
+  const battleReport = sectioBattleReport(run);
   const canLeave = canLeaveSectio(run);
   // Nothing inside the Sectio blocks Continue any more: the Conflict's lipsanon is taken on
   // Bona Vacantia, before the Sectio is even built.
@@ -349,10 +399,11 @@ function RunMetaControls({
                 data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                 data-testid="run-view-primary"
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'primary' && 'active')}
-                style={{ ['--run-leaf-control-index' as string]: 0 } as CSSProperties}
+                style={{ ['--chrome-leaf-surface-index' as string]: 0 } as CSSProperties}
                 aria-pressed={view === 'primary'}
                 onClick={() => onNavigate('primary')}
               >
+                <RunControlMark control="primary" />
                 Sectio
               </ChromeButton>
               {SECTIO_WORKSPACE_VIEWS.map((candidate, index) => (
@@ -361,10 +412,11 @@ function RunMetaControls({
                   data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                   data-testid={`run-view-${candidate}`}
                   className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === candidate && 'active')}
-                  style={{ ['--run-leaf-control-index' as string]: index + 1 } as CSSProperties}
+                  style={{ ['--chrome-leaf-surface-index' as string]: index + 1 } as CSSProperties}
                   aria-pressed={view === candidate}
                   onClick={() => onNavigate(candidate)}
                 >
+                  <RunControlMark control={candidate} />
                   {RUN_WORKSPACE_VIEW_LABEL[candidate]}
                 </ChromeButton>
               ))}
@@ -375,10 +427,31 @@ function RunMetaControls({
           <div className="skirmish-view-group">
             <span className="skirmish-eyebrow">Sectio</span>
             <div className="run-meta-navigation">
+              {/* The way back out of the Sectio, seated with the way forward because they are the
+                  same pair the Victory screen itself offers. Pressing it REVIEWS the report: the
+                  Sectio stands exactly as it is left — gold banked, cards admitted, offers locked
+                  — and its Continue lands back here (ADR-0568). A Sectio crafted or migrated
+                  before the report was retained has none to turn back to, and says so by being
+                  unpressable rather than by dropping a control out of the rail. */}
               <ChromeButton unit="inner-text-button"
                 data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-                style={{ ['--run-leaf-control-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 1 } as CSSProperties}
+                style={{ ['--chrome-leaf-surface-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 1 } as CSSProperties}
+                disabled={!battleReport}
+                data-testid="review-run-victory"
+                title={battleReport ? undefined : 'This Sectio kept no report of the Battle it followed.'}
+                onClick={() => {
+                  replace(reviewSectioBattleReport(run));
+                  onNavigate('primary');
+                }}
+              >
+                <RunControlMark control="victory" />
+                Back to Victory
+              </ChromeButton>
+              <ChromeButton unit="inner-text-button"
+                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+                style={{ ['--chrome-leaf-surface-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 2 } as CSSProperties}
                 disabled={!sectioHasChanges(run)}
                 data-testid="reset-run-sectio"
                 onClick={() => {
@@ -386,20 +459,26 @@ function RunMetaControls({
                   onNavigate('primary');
                 }}
               >
+                <RunControlMark control="reset-sectio" />
                 Reset Sectio
               </ChromeButton>
               <ChromeButton unit="inner-text-button"
                 data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-                style={{ ['--run-leaf-control-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 2 } as CSSProperties}
+                style={{ ['--chrome-leaf-surface-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 3 } as CSSProperties}
                 disabled={!canLeave}
                 data-testid="continue-run-sectio"
                 title={!canLeave && continueHint ? continueHint : undefined}
                 onClick={() => {
+                  // The Battle is finally over here, so this is where its retained won-board
+                  // review is retired -- one screen later than ADR-0455 put it, because the
+                  // report itself is reachable until now (ADR-0568).
+                  clearMatch();
                   replace(prepareDeployment(leaveSectio(run)));
                   onNavigate('primary');
                 }}
               >
+                <RunControlMark control="continue" />
                 Continue to next Battle
               </ChromeButton>
             </div>
@@ -413,11 +492,12 @@ function RunMetaControls({
               <ChromeButton unit="inner-text-button"
                 data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
-                style={{ ['--run-leaf-control-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 3 } as CSSProperties}
+                style={{ ['--chrome-leaf-surface-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 4 } as CSSProperties}
                 data-testid="abandon-run"
                 disabled={abandoning}
                 onClick={() => { void requestAbandon(); }}
               >
+                <RunControlMark control="abandon" />
                 {abandoning ? 'Abandoning…' : 'Abandon Run'}
               </ChromeButton>
             </div>
@@ -435,6 +515,7 @@ function ArrangedDeploymentControls({
   availableRotations,
   dealProgress,
   onDealProgress,
+  onDeckDeparture,
   onStepCard,
   onSelectCard,
   onTurn,
@@ -449,6 +530,7 @@ function ArrangedDeploymentControls({
   availableRotations: ReadonlySet<RunFormationRotation>;
   dealProgress: number;
   onDealProgress: (count: number) => void;
+  onDeckDeparture: (count: number) => void;
   onStepCard: (step: 1 | -1) => void;
   onSelectCard: (cardId: string) => void;
   onTurn: (direction: FormationTurnDirection) => void;
@@ -494,6 +576,7 @@ function ArrangedDeploymentControls({
             run={run}
             dealProgress={dealProgress}
             onDealProgress={onDealProgress}
+            onDeckDeparture={onDeckDeparture}
             onDealComplete={onDealComplete}
             onRevealComplete={() => undefined}
             onDiscardComplete={() => undefined}
@@ -525,7 +608,7 @@ function ArrangedDeploymentControls({
                     unit="inner-text-button"
                     data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                     className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'run-arrangement-turn')}
-                    style={{ ['--run-leaf-control-index' as string]: 2 } as CSSProperties}
+                    style={{ ['--chrome-leaf-surface-index' as string]: 2 } as CSSProperties}
                     disabled={!turnable || departing || availableRotations.size < 2}
                     onClick={() => onTurn('counter-clockwise')}
                     aria-label="Turn the formation left"
@@ -537,7 +620,7 @@ function ArrangedDeploymentControls({
                     unit="inner-text-button"
                     data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                     className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'run-arrangement-turn')}
-                    style={{ ['--run-leaf-control-index' as string]: 3 } as CSSProperties}
+                    style={{ ['--chrome-leaf-surface-index' as string]: 3 } as CSSProperties}
                     disabled={!turnable || departing || availableRotations.size < 2}
                     onClick={() => onTurn('clockwise')}
                     aria-label="Turn the formation right"
@@ -561,7 +644,7 @@ function ArrangedDeploymentControls({
                   unit="inner-text-button"
                   data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                   className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-                  style={{ ['--run-leaf-control-index' as string]: 4 } as CSSProperties}
+                  style={{ ['--chrome-leaf-surface-index' as string]: 4 } as CSSProperties}
                   data-testid="arrangement-remove-formation"
                   disabled={!arranging || departing || !selected?.placed}
                   onClick={onRemove}
@@ -580,11 +663,14 @@ function ArrangedDeploymentControls({
             unit="inner-text-button"
             data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
             className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
-            style={{ ['--run-leaf-control-index' as string]: 6 } as CSSProperties}
+            style={{ ['--chrome-leaf-surface-index' as string]: 6 } as CSSProperties}
             data-testid="abandon-run"
             disabled={abandoning || departing}
             onClick={() => { void requestAbandon(); }}
           >
+            {/* The same control as the Sectio rail's, so it wears the same mark: one button
+                cannot read two ways because it is reached from two screens. */}
+            <RunControlMark control="abandon" />
             {abandoning ? 'Abandoning…' : 'Abandon Run'}
           </ChromeButton>
         </div>
@@ -609,7 +695,7 @@ function ArrangedDeploymentControls({
               className={chromeUnitClassNames(
                 'inner-text-button', 'app-header-button', 'run-arrangement-begin', canBegin && 'active',
               )}
-              style={{ ['--run-leaf-control-index' as string]: 5 } as CSSProperties}
+              style={{ ['--chrome-leaf-surface-index' as string]: 5 } as CSSProperties}
               data-testid="arrangement-begin-battle"
               disabled={departing || !canBegin}
               onClick={onBeginBattle}
@@ -661,6 +747,9 @@ function useRunDeploymentPresentation({
   const options = useMemo(() => deploymentOptions(prepared, level), [level, prepared]);
   const stage = deploymentInteractionStage(prepared, options);
   const [dealProgress, setDealProgress] = useState(0);
+  // Cards that have LEFT the deck. Separate from dealProgress, which counts the hand arriving in
+  // Controls two and a half seconds later: the deck empties as it deals, not as the hand lands.
+  const [deckDeparted, setDeckDeparted] = useState(0);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [arrangementRotation, setArrangementRotation] = useState<RunFormationRotation>(0);
   // Where the mouse is. ONLY the pointer may clear it — pointerenter does not fire again for a
@@ -829,7 +918,9 @@ function useRunDeploymentPresentation({
   }, [prepared, replace, run]);
 
   useEffect(() => {
-    if (prepared.deployment?.stage === 'awaiting-deal') setDealProgress(0);
+    if (prepared.deployment?.stage !== 'awaiting-deal') return;
+    setDealProgress(0);
+    setDeckDeparted(0);
   }, [prepared.deployment?.battleIndex, prepared.deployment?.stage]);
 
   useEffect(() => {
@@ -1093,6 +1184,7 @@ function useRunDeploymentPresentation({
         availableRotations={availableArrangementRotations}
         dealProgress={dealProgress}
         onDealProgress={setDealProgress}
+        onDeckDeparture={setDeckDeparted}
         onStepCard={stepArrangementCard}
         onSelectCard={selectArrangementCard}
         onTurn={turnArrangement}
@@ -1106,7 +1198,7 @@ function useRunDeploymentPresentation({
       <>
         <RunDeploymentDeckDeal
           run={prepared}
-          dealtCount={dealProgress}
+          departedCount={deckDeparted}
           onBeginDeal={beginDeal}
           disabled={departureActive}
         />
@@ -1227,8 +1319,11 @@ function SectioPanel({
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const sectio = run.sectio!;
-  const availableOffers = sectio.cardOffers.filter((offer) => !sectio.adlectedCardOfferIds.includes(offer.offerId));
+  // One card to a Sectio. The row keeps every unbought face on the table afterwards -- what you
+  // turned down is part of what you decided -- and a padlock is laid on each one instead.
+  const adlectioSpent = sectioAdlectioSpent(run);
   const cardBackMediaUrl = useRunCardBackMediaUrl();
+  const lockMediaUrl = installedUiMedia(RUN_SECTIO_LOCK_ICON_ROLE);
   return (
     <>
       {view === 'expunctio'
@@ -1252,19 +1347,21 @@ function SectioPanel({
           <span className="sr-only" role="status" aria-live="polite">{adlectioAnnouncement}</span>
           {/*
             The answering half of the opening grant's line. Both screens deal the same faces
-            with the same number printed on them; only here is that number what you hand over.
-            It goes once the stall is bought out, so the screen never invites a take it has
-            just told you is impossible — the empty notice below speaks for that state.
+            with the same number printed on them; only here is that number what you hand over,
+            and only here is one of them all you may have. It stands over the row for the whole
+            visit, before and after the take: with the padlocks that appear on the survivors it
+            reads as one statement — you get one, and this is the one you took. Nothing has to
+            pop up to say so.
           */}
-          {availableOffers.length === 0 ? null : (
-            <p className="run-card-row-call">They require compensation.</p>
-          )}
+          <p className="run-card-row-call">They require compensation. Only one may be admitted.</p>
           <SectioCardRow>
             {sectio.cardOffers.map((offer, index) => {
               const adlected = sectio.adlectedCardOfferIds.includes(offer.offerId);
               return (
                 <RunCardPile
                   backMediaUrl={cardBackMediaUrl}
+                  lockMediaUrl={lockMediaUrl}
+                  locked={adlectioSpent}
                   key={offer.offerId}
                   seatIndex={index}
                 >
@@ -1273,7 +1370,7 @@ function SectioPanel({
                       card={offer}
                       mode="sectio"
                       layoutId={offer.offerId}
-                      disabled={run.goldTenths < offer.cost * GOLD_SCALE}
+                      disabled={adlectioSpent || run.goldTenths < offer.cost * GOLD_SCALE}
                       onSelect={(source) => onAdlect(offer, source)}
                     />
                   )}
@@ -1281,11 +1378,6 @@ function SectioPanel({
               );
             })}
           </SectioCardRow>
-          {availableOffers.length === 0 ? (
-            <InnerChromeBox className="run-sectio-cards-empty" role="status">
-              All offered cards are in the Chartulary.
-            </InnerChromeBox>
-          ) : null}
         </section>
 
 
@@ -1383,6 +1475,28 @@ function AftermathPanel({
     deditioTenths ? 'Deditio' : null,
     speedTenths ? 'the speed bonus' : null,
   ].filter((source): source is string => source !== null);
+  // The verbs that close the report, declared rather than composed: the box seats each one in a
+  // compartment its own column line divides. Back is there only when the won board can still be
+  // reopened, and a report with one verb has nothing to rule a line through.
+  const verbs: readonly ChromeVerb[] = [
+    ...(canReviewBattle ? [{
+      id: 'back',
+      label: 'Back',
+      testId: 'run-aftermath-back',
+      onPress: onReviewBattle,
+    }] : []),
+    {
+      id: 'continue',
+      label: 'Continue',
+      testId: 'run-aftermath-continue',
+      onPress: (): void => {
+        // The won-board review is NOT retired here any more: the report stays reachable from
+        // the Sectio this opens, so the snapshot it reads has to outlast this press and is
+        // retired when the Sectio is finally left (ADR-0568 refining ADR-0455).
+        replace(leaveAftermath(run));
+      },
+    },
+  ];
   return (
     <RunSceneViewport
       scene={{
@@ -1399,95 +1513,104 @@ function AftermathPanel({
         {named ? <p className="run-aftermath-subtitle">{named}</p> : null}
       </header>
 
-      <InnerChromeBox as="div" className="run-aftermath-report">
-        <dl className="run-aftermath-ledger">
-          <AftermathMeasure
-            label="Gold won"
-            detail={goldSources.length ? `including ${goldSources.join(' and ')}` : null}
-          >
-            <RunGoldAmount valueTenths={aftermath.goldTenths} />
-          </AftermathMeasure>
-          {/* Par is a benchmark and never a rule -- crossing it costs nothing, so the detail
-              states the standing plainly rather than dressing it as a pass or a failure. */}
-          <AftermathMeasure
-            label="Turns taken"
-            detail={parTurns === null ? null : (
-              underPar > 0
-                ? `${underPar} under par of ${parTurns}`
-                : underPar < 0
-                  ? `${-underPar} over par of ${parTurns}`
-                  : `Level par of ${parTurns}`
-            )}
-          >
-            {aftermath.turns}
-          </AftermathMeasure>
-          <AftermathMeasure label="Time">
-            {aftermath.elapsedMs === null ? '—' : formatBattleElapsed(aftermath.elapsedMs)}
-          </AftermathMeasure>
-          {/* What the enemy still had on the board when its King fell. A player who mates
-              early is paid for the army they never had to take; one who grinds the board down
-              to a bare King reads zero here, which is the whole of the incentive. */}
-          <AftermathMeasure
-            label="Deditio"
-            detail={aftermath.standingEnemyValue > 0
-              ? `${aftermath.standingEnemyValue} points of enemy force surrendered with their King`
-              : 'The enemy had nothing left to surrender.'}
-          >
-            <RunGoldAmount valueTenths={deditioTenths} />
-          </AftermathMeasure>
-          {/* What the clock paid. The bonus clock is sized from par and is not lethal: an
-              exhausted one reads 0:00 here and took nothing away from the fight. */}
-          <AftermathMeasure
-            label="Speed bonus"
-            detail={aftermath.elapsedMs === null
-              ? 'The battle clock was never started.'
-              : `${formatBattleElapsed(speedRemainingMs)} left of ${formatBattleElapsed(speedClockMs)}`}
-          >
-            <RunGoldAmount valueTenths={speedTenths} />
-          </AftermathMeasure>
-          {/* Being taken off the board costs a unit the rest of the Battle and nothing more --
-              it is back in the army for the next one. "Fallen" read as a permanent loss the
-              Run does not actually impose, so the measure says what happened instead. */}
-          <AftermathMeasure
-            label="Recovered from wounds"
-            detail={aftermath.fallenUnits.length
-              ? aftermath.fallenUnits.map((unit) => (
-                <span className="run-aftermath-measure-name" key={unit.id}>{unit.name}</span>
-              ))
-              : 'The whole force came through unhurt.'}
-          >
-            {aftermath.fallenUnits.length}
-          </AftermathMeasure>
-        </dl>
-      </InnerChromeBox>
+      {/* The report is a structural box, so it wears the installed marble borrowed from the outer
+          role (ADR-0433) — the same material the Editor's rows and the Run's Battle-preview pane
+          are painted with. Unfilled, the ledger read its labels and its numerals straight off the
+          vista behind it, which is the one thing the frame around them was there to prevent.
 
-      <div className="run-aftermath-actions">
-        {canReviewBattle ? (
-          <ChromeButton unit="inner-text-button"
-            data-testid="run-aftermath-back"
-            className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-            onClick={onReviewBattle}
-          >
-            Back
-          </ChromeButton>
-        ) : null}
-        <ChromeButton unit="inner-text-button"
-          data-testid="run-aftermath-continue"
-          className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-          onClick={() => {
-            replace(leaveAftermath(run));
-            clearMatch();
-          }}
-        >
-          Continue
-        </ChromeButton>
-      </div>
+          ONE box, with a rail instead of a gap. The verbs used to be a loose pair of framed buttons
+          under it, so the vista showed through between the report and the thing it is read to
+          decide, and each button drew a second frame a few pixels inside the one already there.
+          They are cells of this box's bottom row now: the rail under the ledger and the line
+          between Back and Continue are the box's own, laid and capped from its grid lines
+          (ADR-0059). The oak they wear is still the leaf material the ADR-0557 family adopts —
+          a box wears the marble, every trigger in it wears the oak. */}
+      <DividedInnerChromeBox
+        className="run-aftermath-report"
+        columns={verbColumns(verbs)}
+        fillRole={CHROME_STRUCTURAL_FILL_ROLE}
+      >
+        <ChromeDividedGridRow spans="all" className="run-aftermath-record">
+          <dl className="run-aftermath-ledger">
+            <AftermathMeasure
+              label="Gold won"
+              detail={goldSources.length ? `including ${goldSources.join(' and ')}` : null}
+            >
+              <RunGoldAmount valueTenths={aftermath.goldTenths} />
+            </AftermathMeasure>
+            {/* Par is a benchmark and never a rule -- crossing it costs nothing, so the detail
+                states the standing plainly rather than dressing it as a pass or a failure. */}
+            <AftermathMeasure
+              label="Turns taken"
+              detail={parTurns === null ? null : (
+                underPar > 0
+                  ? `${underPar} under par of ${parTurns}`
+                  : underPar < 0
+                    ? `${-underPar} over par of ${parTurns}`
+                    : `Level par of ${parTurns}`
+              )}
+            >
+              {aftermath.turns}
+            </AftermathMeasure>
+            <AftermathMeasure label="Time">
+              {aftermath.elapsedMs === null ? '—' : formatBattleElapsed(aftermath.elapsedMs)}
+            </AftermathMeasure>
+            {/* What the enemy still had on the board when its King fell. A player who mates
+                early is paid for the army they never had to take; one who grinds the board down
+                to a bare King reads zero here, which is the whole of the incentive. */}
+            <AftermathMeasure
+              label="Deditio"
+              detail={aftermath.standingEnemyValue > 0
+                ? `${aftermath.standingEnemyValue} points of enemy force surrendered with their King`
+                : 'The enemy had nothing left to surrender.'}
+            >
+              <RunGoldAmount valueTenths={deditioTenths} />
+            </AftermathMeasure>
+            {/* What the clock paid. The bonus clock is sized from par and is not lethal: an
+                exhausted one reads 0:00 here and took nothing away from the fight. */}
+            <AftermathMeasure
+              label="Speed bonus"
+              detail={aftermath.elapsedMs === null
+                ? 'The battle clock was never started.'
+                : `${formatBattleElapsed(speedRemainingMs)} left of ${formatBattleElapsed(speedClockMs)}`}
+            >
+              <RunGoldAmount valueTenths={speedTenths} />
+            </AftermathMeasure>
+            {/* Being taken off the board costs a unit the rest of the Battle and nothing more --
+                it is back in the army for the next one. "Fallen" read as a permanent loss the
+                Run does not actually impose, so the measure says what happened instead. */}
+            <AftermathMeasure
+              label="Recovered from wounds"
+              detail={aftermath.fallenUnits.length
+                ? aftermath.fallenUnits.map((unit) => (
+                  <span className="run-aftermath-measure-name" key={unit.id}>{unit.name}</span>
+                ))
+                : 'The whole force came through unhurt.'}
+            >
+              {aftermath.fallenUnits.length}
+            </AftermathMeasure>
+          </dl>
+        </ChromeDividedGridRow>
+
+        <ChromeVerbRow verbs={verbs} className="run-result-verbs" cellClassName="run-result-verb" />
+      </DividedInnerChromeBox>
     </RunSceneViewport>
   );
 }
 
 function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
   const abandon = useActiveRun((state) => state.abandon);
+  // One verb, so the row spans the box: there is nothing divided here for a rail to be.
+  const verbs: readonly ChromeVerb[] = [{
+    id: 'finish',
+    label: 'Finish Run',
+    onPress: (): void => {
+      // Same as Abandon: the Run is closed locally before this suspends, so the finished
+      // War does not hold the player on an empty workspace while its row is deleted.
+      void abandon();
+      navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false });
+    },
+  }];
   return (
     <RunSceneViewport
       scene={{
@@ -1499,26 +1622,38 @@ function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
         backgroundArtwork: workspaceBackgroundArtwork('run-victory'),
       }}
     >
-      <h2 id="run-victory-workspace-title">War won</h2>
-      <h2>{run.war.name}</h2>
-      <p>{ATARAXIA_BY_TIER[run.ataraxiaTier].label} — {ATARAXIA_BY_TIER[run.ataraxiaTier].title}</p>
-      <p>{run.war.description}</p>
-      <p className="run-victory-summary">
-        <span>{run.army.length} persistent units</span>
-        <span>{visibleLipsanonCount(run)} lipsana</span>
-        <RunGoldAmount valueTenths={run.goldTenths} />
-      </p>
-      <ChromeButton unit="inner-text-button"
-        className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-        onClick={() => {
-          // Same as Abandon: the Run is closed locally before this suspends, so the finished
-          // War does not hold the player on an empty workspace while its row is deleted.
-          void abandon();
-          navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false });
-        }}
+      {/* The same composition as the Battle's Aftermath, because it is the same moment one scale
+          up: a display heading standing on the artwork, the facts in a report box under it, the
+          action last. Every line but the heading used to stand on the artwork too — and this
+          workspace's artwork is a bright daylight sky, so a block of white copy was reading off
+          clouds. Only the heading is display type, which carries its own shadow; the rest is the
+          record the War is remembered by, and a record needs a surface. */}
+      <header className="run-victory-head">
+        <h2 id="run-victory-workspace-title" className="run-victory-title">War won</h2>
+      </header>
+
+      {/* Same box as the Aftermath's, for the same reason: the verb that ends the Run is the
+          record's own last row rather than a button parked under it. */}
+      <DividedInnerChromeBox
+        className="run-victory-report"
+        columns={verbColumns(verbs)}
+        fillRole={CHROME_STRUCTURAL_FILL_ROLE}
       >
-        Finish Run
-      </ChromeButton>
+        <ChromeDividedGridRow spans="all" className="run-victory-record">
+          <h3 className="run-victory-war">{run.war.name}</h3>
+          <p className="run-victory-ataraxia">
+            {ATARAXIA_BY_TIER[run.ataraxiaTier].label} — {ATARAXIA_BY_TIER[run.ataraxiaTier].title}
+          </p>
+          <p className="run-victory-description">{run.war.description}</p>
+          <p className="run-victory-summary">
+            <span>{run.army.length} persistent units</span>
+            <span>{visibleLipsanonCount(run)} lipsana</span>
+            <RunGoldAmount valueTenths={run.goldTenths} />
+          </p>
+        </ChromeDividedGridRow>
+
+        <ChromeVerbRow verbs={verbs} className="run-result-verbs" cellClassName="run-result-verb" />
+      </DividedInnerChromeBox>
     </RunSceneViewport>
   );
 }
@@ -1694,6 +1829,7 @@ function RunBattlefieldPanel({
         replace(restored);
         return true;
       },
+      chargeEarlier: (checkpoint) => chargeRunBattleUndoCheckpoint(checkpoint),
     } satisfies RunBattleUndoAdapter,
     onVictory: (report) => {
       if (onReviewRewards) {
@@ -1849,7 +1985,12 @@ export function RunScreen({
     // every remaining affordable card and every Sectio control stays responsive while
     // any number of independent visual flights finish in the continuity layer.
     replace(adlected);
-    setAdlectioAnnouncement(`${runCardName(offer)} admitted by Adlectio and added to the Chartulary.`);
+    // The closure is spoken with the admission because it is the same event: a screen reader
+    // gets no second cue from a row whose remaining faces are printed exactly as they were.
+    setAdlectioAnnouncement(
+      `${runCardName(offer)} admitted by Adlectio and added to the Chartulary.`
+      + ' This Sectio admits no other card.',
+    );
   };
   // The Run's opening grant is the same admission as Adlectio and reads as one: the taken
   // card travels into the Chartulary from where it was lying. The Run phase owns that carry
@@ -1944,7 +2085,7 @@ export function RunScreen({
   ) : null;
   // The Sectio scene belongs to the retained shell viewport, not to whichever Sectio
   // workspace happens to be in front of it. Keeping it outside the transition region
-  // prevents Sectio/View Battle/Expunctio swaps from fading or remounting the room.
+  // prevents Sectio/Exploratio/Expunctio swaps from fading or remounting the room.
   const persistentSectioScene = shellRun?.phase === 'sectio' ? sectioScene : null;
   // A craft request speaks for the whole screen while it runs: the Run it is about to replace must
   // not flash its own phase first, and a refused spec has to say why instead of silently doing
@@ -2114,6 +2255,7 @@ export function RunScreen({
         {form.add(runActivity({
           id: sceneInstance,
           testId: 'run-screen',
+          className: runWorkspaceOwnsEnvironment(shellRun?.phase) ? 'run-workspace-owns-environment' : undefined,
           controlsContent: shellRun ? (
             <RunMetaControls
               run={shellRun}

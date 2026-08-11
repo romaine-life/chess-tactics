@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { drawableAssets } from '@chess-tactics/board-render';
+import { installedUiMedia } from './installedUiMedia';
 import { useCampaigns } from '../campaign/store';
 import { useWars } from '../war/store';
 import { saveUserWorkspace, publishOfficialWorkspace, userWorkspaceForSave, officialWorkspaceForSave, mapSaveError, tierOf } from '../campaign/save';
@@ -36,7 +37,7 @@ import {
   EditorButton,
   EditorRow,
 } from './shared/EditorColumnControls';
-import { ApparatusRailColumn } from './shared/ApparatusRailTab';
+import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { HouseSelect } from './shared/HouseSelect';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { LEVEL_NAME_MAX, normalizeLevelName } from './shared/levelNamePolicy';
@@ -98,6 +99,11 @@ if (campaignMenuModes.length !== 1) {
 }
 const CAMPAIGN_TAB_ICON = campaignMenuModes[0].media.icon?.media.immutableUrl;
 if (!CAMPAIGN_TAB_ICON) throw new Error('installed campaign menu mode has no icon');
+
+// The two workspace libraries carry their own marks. Both are fitted to the rail's 52px ink
+// height, so they read at the same size as the campaign scroll they stack beside.
+const EDITOR_WAR_TAB_ICON = installedUiMedia('ui-kit-icons-war-png');
+const EDITOR_LEVELS_TAB_ICON = installedUiMedia('ui-kit-icons-levels-png');
 
 async function withRecentDraftEditingAuthority<T>(
   document: EditorDocument,
@@ -199,33 +205,20 @@ function CampaignRailTab({
     if (!locked) onSelect();
   };
   return (
-    <div
-      role="button"
-      tabIndex={locked ? -1 : 0}
-      aria-current={active ? 'page' : undefined}
-      aria-disabled={locked || undefined}
+    <ApparatusRailTab
+      label={campaign.name}
+      detail={`${campaign.levels.length} levels`}
       // --tab-index drives the shared stone-continuity slice so the rail's stone reads as
       // one sheet however many campaigns there are (counted continuously past the Unassigned
       // tab), matching the menu / Settings / Campaign rails.
-      style={{ ['--tab-index' as string]: index }}
-      data-chrome-unit="inner-box"
-      className={chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab ce-campaign-tab', active && 'is-active', locked && 'is-locked')}
-      onClick={selectCampaign}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          selectCampaign();
-        }
-      }}
-    >
-      <span className="settings-tab-icon" aria-hidden="true">
-        <img src={CAMPAIGN_TAB_ICON} alt="" />
-      </span>
-      <span className="ce-campaign-tab-copy">
-        <strong>{campaign.name}</strong>
-        <small>{campaign.levels.length} levels</small>
-      </span>
-      {locked ? (
+      index={index}
+      active={active}
+      locked={locked}
+      iconSrc={CAMPAIGN_TAB_ICON}
+      className="ce-campaign-tab"
+      opensAddress={editorCampaignHref('/editor', campaign.id)}
+      onSelect={selectCampaign}
+      trailing={locked ? (
         <span className="ce-tab-trail ce-row-lock" aria-label={`${campaign.name} locked`} role="img">
           <EditorRowIcon icon="lock" />
         </span>
@@ -237,8 +230,8 @@ function CampaignRailTab({
         >
           <EditorRowIcon icon="favorite" />
         </ChromeButton>
-      ) : null}
-    </div>
+      ) : undefined}
+    />
   );
 }
 
@@ -248,17 +241,26 @@ export function UnassignedRailTab({
   active,
   index,
   onSelect,
-  title = 'Unassigned levels',
+  opensAddress,
+  title = 'Levels',
   itemName = 'level',
-  hasUnsavedDrafts = false,
+  iconSrc = CAMPAIGN_TAB_ICON,
 }: {
   count: number;
   active: boolean;
   index: number;
   onSelect: () => void;
+  opensAddress: string;
   title?: string;
   itemName?: string;
-  hasUnsavedDrafts?: boolean;
+  /**
+   * The tab's own mark. Wars and Levels are two different libraries, and both drew the campaign
+   * scroll — so the rail said the same thing three times and the only way to tell the tabs apart
+   * was to read them. A mark here is fitted to the same 52px ink height as the scroll beside it
+   * (see MAIN_MENU_MARK_FITTED_SLOTS): the seat scales the whole 64px canvas, so an unfitted
+   * mark reads at a different size in the same column.
+   */
+  iconSrc?: string;
 }): ReactElement {
   return (
     <EditorCollectionRailTab
@@ -266,10 +268,10 @@ export function UnassignedRailTab({
       active={active}
       index={index}
       onSelect={onSelect}
-      iconSrc={CAMPAIGN_TAB_ICON}
+      opensAddress={opensAddress}
+      iconSrc={iconSrc}
       title={title}
       itemName={itemName}
-      hasAttention={hasUnsavedDrafts}
     />
   );
 }
@@ -1047,6 +1049,7 @@ export function CampaignEditor({
     <>
       {/* ── RAIL: the campaigns navigator (fold 1 of the old 3-panel layout) ── */}
       <ApparatusRailColumn
+        opens="panel-beside"
         className={embedded ? 'menu-dest-col menu-dest-tabs ce-editor-rail' : 'settings-frame settings-rail-frame ce-editor-rail'}
         placement={embedded ? 'open' : 'framed'}
         aria-label="Campaigns"
@@ -1096,12 +1099,16 @@ export function CampaignEditor({
                     ))}
                   </>
                 ) : null}
-                <p className="campaign-rail-group">Workspace</p>
-                {/* Continue the stone slice past both content libraries and through the
-                    workspace collections; the pinned footer is reserved for verbs. */}
+                {/* No "Workspace" eyebrow. It was bare text on the night vista naming a group of
+                    two tabs that already say what they are, on a rail that carries no other group
+                    unless a campaign is addressed. Continue the stone slice past both content
+                    libraries and through the workspace collections; the pinned footer is reserved
+                    for verbs. */}
                 <UnassignedRailTab
-                  title="Wars"
+                  title="War"
                   itemName="War"
+                  iconSrc={EDITOR_WAR_TAB_ICON}
+                  opensAddress={campaignCollectionHref('/editor', 'wars')}
                   count={wars.length}
                   index={railCampaigns.length}
                   active={isWarsSelected}
@@ -1109,9 +1116,10 @@ export function CampaignEditor({
                 />
                 <UnassignedRailTab
                   count={unassignedLevels.length}
+                  iconSrc={EDITOR_LEVELS_TAB_ICON}
                   index={railCampaigns.length + 1}
                   active={isUnassignedSelected}
-                  hasUnsavedDrafts={recentDrafts.length > 0}
+                  opensAddress={campaignCollectionHref('/editor', 'unassigned')}
                   onSelect={selectUnassignedCollection}
                 />
               </div>
@@ -1315,43 +1323,41 @@ export function CampaignEditor({
           {/* ── PREVIEW COLUMN (col 4, top-right) — the shared LevelPreviewColumn (same one the
               play-side Campaign screen uses). Lifted OUT of the main scroll into its OWN column;
               renders ONLY when a level is selected, so nothing shows until you click a level. The
-              editor's verbs (Edit Board / Test Play, plus the unassigned Assign picker) ride in as
-              its actions slot. ── */}
+              editor's verbs (Edit Board / Test Play) become cells of that box's bottom row, and
+              the unassigned Assign picker takes the field row under them — given as data, so
+              nothing here can wrap them in a box of its own outside the frame.
+
+              That picker is the house dropdown, not a native select: the registered control the
+              Enchiridion's filters and the Ataraxia picker use, wearing the same oak as the verbs
+              above it. A native select cannot take the installed fill — its kit frame paints its
+              own interior — and its menu is drawn by the OS. ── */}
           {levelDoc ? (
             <LevelPreviewColumn
               level={levelDoc}
               title={selectedLevelTitle}
               embedded={embedded}
-              actions={(levelRef || isMetaCollectionSelected) ? (
-                <div className={`ce-preview-actions ${isUnassignedSelected ? 'has-assign' : ''}`.trim()}>
-                  <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} data-chrome-fill-surface={EDITOR_COLUMN_CONTROL_FILL_SURFACE} to={editHref}><span>Edit Board</span></ChromeNavButton>
-                  <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button ce-link-button-ghost')} data-chrome-fill-surface={EDITOR_COLUMN_CONTROL_FILL_SURFACE} to={playHref}><span>Test Play</span></ChromeNavButton>
-                  {/* The house dropdown, not a native select: the registered control the
-                      Enchiridion's filters and the Ataraxia picker use, wearing the same oak
-                      as the verbs beside it. A native select cannot take the installed fill —
-                      its kit frame paints its own interior — and its menu is drawn by the OS. */}
-                  {isUnassignedSelected ? (
-                    <div className="ce-assign-field">
-                      <HouseSelect
-                        value=""
-                        options={[
-                          {
-                            value: '',
-                            label: editableCampaignsForLevel.length === 0 ? 'No eligible campaigns' : 'Assign to campaign',
-                            disabled: true,
-                          },
-                          ...editableCampaignsForLevel.map((campaign) => ({ value: campaign.id, label: campaign.name })),
-                        ]}
-                        onChange={(campaignId) => { if (campaignId) assignSelectedUnassignedLevel(campaignId); }}
-                        ariaLabel="Assign to campaign"
-                        disabled={editableCampaignsForLevel.length === 0}
-                        title={editableCampaignsForLevel.length === 0 ? 'No editable campaign matches this level tier' : 'Assign selected level to campaign'}
-                        testId="assign-to-campaign"
-                        fillSurface={EDITOR_COLUMN_CONTROL_FILL_SURFACE}
-                      />
-                    </div>
-                  ) : null}
-                </div>
+              verbs={(levelRef || isMetaCollectionSelected) ? [
+                { id: 'edit', label: 'Edit Board', to: editHref },
+                { id: 'test', label: 'Test Play', to: playHref },
+              ] : []}
+              field={(levelRef || isMetaCollectionSelected) && isUnassignedSelected ? (
+                <HouseSelect
+                  value=""
+                  options={[
+                    {
+                      value: '',
+                      label: editableCampaignsForLevel.length === 0 ? 'No eligible campaigns' : 'Assign to campaign',
+                      disabled: true,
+                    },
+                    ...editableCampaignsForLevel.map((campaign) => ({ value: campaign.id, label: campaign.name })),
+                  ]}
+                  onChange={(campaignId) => { if (campaignId) assignSelectedUnassignedLevel(campaignId); }}
+                  ariaLabel="Assign to campaign"
+                  disabled={editableCampaignsForLevel.length === 0}
+                  title={editableCampaignsForLevel.length === 0 ? 'No editable campaign matches this level tier' : 'Assign selected level to campaign'}
+                  testId="assign-to-campaign"
+                  fillSurface={EDITOR_COLUMN_CONTROL_FILL_SURFACE}
+                />
               ) : null}
             />
           ) : null}

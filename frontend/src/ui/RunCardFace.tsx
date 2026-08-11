@@ -11,6 +11,8 @@ import { projectBoardPoint, resolvedLiveMediaUrl, TILE_TEMPLATE } from '@chess-t
 import { defaultFacingForSide, paletteForSide, pieceSpritePath, type PlayablePieceType, type UnitPalette } from '../core/pieces';
 import type { RunCardFaceContent, RunCardFormationPiece, RunCardGrant } from './runCardFaceContent';
 import {
+  RUN_CARD_COIN_FACE_FILL,
+  RUN_CARD_COST_LETTER_SPACING_CQW,
   RUN_CARD_FRAME_BOX_NAMES,
   RUN_CARD_STANDARD_FRAME_GEOMETRY,
   RUN_CARD_TEXT_PLACEMENT,
@@ -46,6 +48,12 @@ export type { RunCardFaceContent, RunCardGrant } from './runCardFaceContent';
 
 export type RunCardFaceTuning = Readonly<{
   costSize: number;
+  /**
+   * The share of the coin's face the WIDEST reading of a length may ink. This, not `costSize`, is
+   * what governs a multi-digit price: a two- or three-digit reading is held by the fit rather than
+   * by the approved size, so raising `costSize` alone moves nothing on a card that costs 160.
+   */
+  costFaceFill: number;
   titleSize: number;
   typeSize: number;
   flavorSize: number;
@@ -69,6 +77,7 @@ export const RUN_CARD_APPROVED_TUNING: RunCardFaceTuning = Object.freeze({
   titleSize: 6.85,
   typeSize: 5.3,
   costSize: 6.2,
+  costFaceFill: RUN_CARD_COIN_FACE_FILL,
   flavorSize: 5,
   textInset: RUN_CARD_TEXT_PLACEMENT.insetInline,
   textInkCentre: RUN_CARD_TEXT_PLACEMENT.inkCentreEm,
@@ -894,7 +903,10 @@ export function RunCardFace({
       className="run-card-prototype run-card-face"
       style={{
         '--run-card-prototype-width': width,
-        '--run-card-cost-size': `${runCardCostSizeCqw(displayed.card.cost, tuning.costSize)}cqw`,
+        '--run-card-cost-size': `${runCardCostSizeCqw(displayed.card.cost, tuning.costSize, tuning.costFaceFill)}cqw`,
+        // The tracking the size above already priced in, so CSS sets the same number rather
+        // than a second one that the cap would be blind to.
+        '--run-card-cost-tracking': `${RUN_CARD_COST_LETTER_SPACING_CQW}cqw`,
         '--run-card-title-size': `${tuning.titleSize}cqw`,
         '--run-card-type-size': `${tuning.typeSize}cqw`,
         '--run-card-text-inset': `${tuning.textInset}cqw`,

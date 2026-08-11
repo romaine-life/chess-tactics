@@ -4,6 +4,10 @@ const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const test = require('node:test');
 const {
+  ADLECTIO_MARK_COMPONENT,
+  ADLECTIO_MARK_SLOT,
+  adlectioMarkMediaIssue,
+  adlectioMarkSlot,
   ATARAXIA_NUMERAL_COMPONENT,
   ATARAXIA_NUMERAL_PROOF_RENDERER,
   ATARAXIA_NUMERAL_PROOF_SCHEMA,
@@ -57,6 +61,11 @@ const {
   levelEditorBrushIconMediaIssue,
   levelEditorBrushIconOwnerProofIssue,
   levelEditorBrushIconSlot,
+  MAIN_MENU_MARK_FITTED_EXCEPTION_SCHEMA,
+  MAIN_MENU_MARK_FITTED_SLOTS,
+  MAIN_MENU_MARK_FITTED_TRANSFORM,
+  mainMenuMarkMediaIssue,
+  mainMenuMarkSlot,
   nativeMediaEvidenceIssue,
   predrawnBoardAlignmentIssue,
   predrawnBoardMediaIssue,
@@ -121,6 +130,87 @@ test('raster native evidence is required to identify the exact uploaded bytes', 
   delete missingSha.native_evidence.sourceSha256;
   assert.match(nativeMediaEvidenceIssue(missingSha), /sourceSha256 is required/);
   assert.equal(nativeMediaEvidenceIssue(raster()), null);
+});
+
+test('ADR-0560 main-menu marks carry a typed projection instead of staying bridge-only', () => {
+  const row = (overrides = {}, metadata = {}) => ({
+    slot: 'ui/main-menu/icons-carved/settings.png',
+    domain: 'ui-kit',
+    media_type: 'image/png',
+    width: 64,
+    height: 64,
+    metadata: { canvas: 64, inkHeight: 52, evenInkDimensions: true, ...metadata },
+    ...overrides,
+  });
+
+  assert.equal(mainMenuMarkMediaIssue(row()), null);
+  for (const slot of MAIN_MENU_MARK_FITTED_SLOTS) {
+    assert.equal(mainMenuMarkSlot(slot), slot);
+    assert.equal(mainMenuMarkMediaIssue(row({ slot })), null, slot);
+  }
+  assert.equal(mainMenuMarkSlot('ui/kit/icons/design-index.png'), null);
+  assert.match(
+    mainMenuMarkMediaIssue(row({ slot: 'ui/kit/icons/design-index.png' })),
+    /registered semantic slots/,
+  );
+  // The seat draws the WHOLE canvas, so the canvas and the ink height ARE the contract.
+  assert.match(mainMenuMarkMediaIssue(row({ width: 128, height: 128 })), /64x64 icon canvas/);
+  assert.match(mainMenuMarkMediaIssue(row({}, { canvas: 128 })), /metadata\.canvas 64/);
+  assert.match(mainMenuMarkMediaIssue(row({}, { inkHeight: 48 })), /metadata\.inkHeight 52/);
+  assert.match(mainMenuMarkMediaIssue(row({}, { evenInkDimensions: false })), /evenInkDimensions/);
+  assert.match(mainMenuMarkMediaIssue(row({ media_type: 'image/webp' })), /image\/png/);
+  assert.match(mainMenuMarkMediaIssue(row({ domain: 'ui' })), /ui-kit domain/);
+});
+
+test('ADR-0560 fitted main-menu marks record their resampling instead of claiming native 1x', () => {
+  const mark = (overrides = {}, evidence = {}) => ({
+    media_type: 'image/png',
+    blob_sha256: originalSha,
+    width: 64,
+    height: 64,
+    slot: 'ui/main-menu/icons-carved/settings.png',
+    native_evidence: {
+      schema: MAIN_MENU_MARK_FITTED_EXCEPTION_SCHEMA,
+      decision: 'ADR-0560',
+      status: 'owner-approved-production-exception',
+      native1x: false,
+      spatialResampling: true,
+      outputWidth: 64,
+      outputHeight: 64,
+      inkHeight: 52,
+      sourceWidth: 64,
+      sourceHeight: 64,
+      outputSha256: originalSha,
+      sourceSha256: replacementSha,
+      transform: MAIN_MENU_MARK_FITTED_TRANSFORM,
+      ...evidence,
+    },
+    ...overrides,
+  });
+
+  assert.equal(nativeMediaEvidenceIssue(mark()), null);
+  // Every slot the marks and the shared kit gear occupy, and nothing else.
+  for (const slot of MAIN_MENU_MARK_FITTED_SLOTS) {
+    assert.equal(nativeMediaEvidenceIssue(mark({ slot })), null, slot);
+  }
+  assert.match(
+    nativeMediaEvidenceIssue(mark({ slot: 'ui/kit/icons/design-index.png' })),
+    /restricted to the main-menu mark slots/,
+  );
+  // Rows installed before the renumber name ADR-0556 and cannot be patched, so both hold.
+  assert.equal(nativeMediaEvidenceIssue(mark({}, { decision: 'ADR-0556' })), null);
+  assert.match(nativeMediaEvidenceIssue(mark({}, { decision: 'ADR-0555' })), /incomplete/);
+  // The exception exists to be HONEST about the fit; it cannot be used to claim the opposite.
+  assert.match(nativeMediaEvidenceIssue(mark({}, { native1x: true })), /incomplete/);
+  assert.match(nativeMediaEvidenceIssue(mark({}, { spatialResampling: false })), /incomplete/);
+  // The ink height IS the decision, so evidence that does not state 52 does not pass.
+  assert.match(nativeMediaEvidenceIssue(mark({}, { inkHeight: 48 })), /exactly 52px of ink/);
+  assert.match(nativeMediaEvidenceIssue(mark({ width: 128, height: 128 })), /exactly 52px of ink/);
+  // It must authorize THESE bytes and name the transform that produced them.
+  assert.match(nativeMediaEvidenceIssue(mark({}, { outputSha256: replacementSha })), /authorize these bytes/);
+  assert.match(nativeMediaEvidenceIssue(mark({}, { transform: 'nearest-neighbor' })), /authorize these bytes/);
+  assert.match(nativeMediaEvidenceIssue(mark({}, { sourceSha256: '' })), /authorize these bytes/);
+  assert.match(nativeMediaEvidenceIssue(mark({}, { sourceWidth: 0 })), /generator canvas/);
 });
 
 test('only the active exact ADR-0414 starter-card derivatives pass their production evidence gate', () => {
@@ -703,6 +793,28 @@ test('condition icon projection keeps all four card properties and granted state
     }), null);
     assert.match(gameConditionIconMediaIssue({ ...progress, width: 47 }), /square/);
   }
+  // Athetize's mark rides a button beside a label, so it ships trimmed to its own ink
+  // like the position marks rather than in the unit-ability icons' padded 64x64 frame.
+  const athetize = gameConditionIcon({
+    slot: 'ui/kit/icons/game/athetize.png',
+    width: 63,
+    height: 63,
+    metadata: { runtime: {
+      ...cacochymic.metadata.runtime,
+      component: 'run-action-icon',
+      variant: 'athetize',
+      nativeRole: 'run-action-icon',
+      frameWidth: 63,
+      frameHeight: 63,
+    } },
+  });
+  assert.deepEqual(gameConditionIconSlot(athetize.slot), { component: 'run-action-icon', variant: 'athetize' });
+  assert.equal(gameConditionIconMediaIssue(athetize), null);
+  assert.match(gameConditionIconMediaIssue({ ...athetize, width: 47 }), /square/);
+  assert.match(gameConditionIconMediaIssue({
+    ...athetize,
+    metadata: { runtime: { ...athetize.metadata.runtime, variant: 'expunctio' } },
+  }), /variant/);
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({ role: 'media' })), /icon role/);
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({ width: 32 })), /64x64/);
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({
@@ -1474,4 +1586,49 @@ test('Run card rarity-frame review pins native pixels and the artwork-bezel deci
   }, rarityFrameSurfaceUrl), /candidate bytes/);
   const wrongUrl = rarityFrameSurfaceUrl.replace(rarityFrameSha, 'a'.repeat(64));
   assert.match(runCardRarityFrameOwnerProofIssue(row, { ...proof, surfaceUrl: wrongUrl }, wrongUrl), /exact Card Layout/);
+});
+
+const adlectioMarkRow = (overrides = {}) => ({
+  slot: ADLECTIO_MARK_SLOT,
+  domain: 'ui-kit',
+  role: 'icon',
+  media_type: 'image/png',
+  width: 61,
+  height: 63,
+  metadata: { runtime: { component: ADLECTIO_MARK_COMPONENT, nativeRole: ADLECTIO_MARK_COMPONENT, altText: '' } },
+  native_evidence: { inkBox: { width: 61, height: 63 } },
+  ...overrides,
+});
+
+test('the Adlectio mark is one registered ui-kit slot, not a shape', () => {
+  assert.equal(adlectioMarkSlot(ADLECTIO_MARK_SLOT), true);
+  assert.equal(adlectioMarkSlot('ui/kit/icons/game/wait.png'), false);
+  assert.equal(adlectioMarkSlot(''), false);
+});
+
+test('the Adlectio mark must be trimmed to its own ink and name its own component', () => {
+  // The seat draws with `contain`, so transparent margin comes straight off the glyph: an
+  // untrimmed mark would silently draw smaller than the coin beside it.
+  assert.equal(adlectioMarkMediaIssue(adlectioMarkRow()), null);
+  assert.match(
+    adlectioMarkMediaIssue(adlectioMarkRow({ native_evidence: { inkBox: { width: 48, height: 63 } } })),
+    /trimmed to its own ink/,
+  );
+  assert.match(adlectioMarkMediaIssue(adlectioMarkRow({ native_evidence: {} })), /nativeEvidence\.inkBox/);
+  assert.match(adlectioMarkMediaIssue(adlectioMarkRow({ metadata: {} })), /requires metadata\.runtime/);
+  assert.match(
+    adlectioMarkMediaIssue(adlectioMarkRow({
+      metadata: { runtime: { component: 'title-bar-mark', nativeRole: 'title-bar-mark', altText: '' } },
+    })),
+    /component must be adlectio-mark/,
+  );
+  // The line already says "Adlected this visit"; alt text here would be announced twice.
+  assert.match(
+    adlectioMarkMediaIssue(adlectioMarkRow({
+      metadata: { runtime: { component: ADLECTIO_MARK_COMPONENT, nativeRole: ADLECTIO_MARK_COMPONENT, altText: 'card' } },
+    })),
+    /altText must be empty/,
+  );
+  assert.match(adlectioMarkMediaIssue(adlectioMarkRow({ media_type: 'image/webp' })), /image\/png/);
+  assert.match(adlectioMarkMediaIssue(adlectioMarkRow({ domain: 'terrain' })), /ui-kit domain/);
 });

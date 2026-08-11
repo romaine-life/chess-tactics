@@ -77,6 +77,8 @@ const {
   levelEditorBrushIconOwnerProofIssue,
   levelEditorBrushIconSlot,
   nativeMediaEvidenceIssue,
+  runRailMarkMediaIssue,
+  runRailMarkSlot,
   predrawnBoardMediaIssue,
   predrawnBoardOwnerProofIssue,
   predrawnBoardSlotSlug,
@@ -100,6 +102,10 @@ const {
   runExpunctioReviewSurface,
   runGoldTransactionReviewSurface,
   titleBarMarkReviewSurface,
+  adlectioMarkSlot,
+  adlectioMarkMediaIssue,
+  mainMenuMarkSlot,
+  mainMenuMarkMediaIssue,
   titleBarMarkSlot,
   titleBarMarkMediaIssue,
   runSectioWrapMediaIssue,
@@ -8755,7 +8761,7 @@ app.post('/api/lobbies/:id/moves', async (req, res) => {
 });
 
 const LOBBY_PLAYING_SIDES = new Set(['player', 'enemy']);
-const LOBBY_DRAW_REASONS = new Set(['stalemate', 'fifty-move', 'threefold']);
+const LOBBY_DRAW_REASONS = new Set(['stalemate', 'dead-position', 'fifty-move', 'threefold']);
 const LOBBY_WIN_REASONS = new Set(['victory-rule', 'checkmate']);
 
 function sameLobbyResult(a, b) {
@@ -13287,8 +13293,14 @@ app.post('/api/editor-documents/:documentId/save', async (req, res) => {
       ? `official:${current.workspace_id}:${current.level_id}`
       : `user:${user.email}:${current.level_id}`;
     let thumbnailReady = true;
+    // The address of the derivative this Save just baked. Lists hold installed thumbnail URLs for
+    // the life of a page, so a Save that answers without one leaves every row rendering the
+    // pre-save picture until a full reload — which is exactly what the editor's own "the thumbnail
+    // now uses this position" acknowledgement promises did not happen.
+    let thumbnailUrl = null;
     try {
-      await ensureLevelThumbnailDerivative(thumbnailAuthority, saved.row.body);
+      const derivative = await ensureLevelThumbnailDerivative(thumbnailAuthority, saved.row.body);
+      thumbnailUrl = levelThumbnailDerivativeUrl(thumbnailAuthority, current.level_id, derivative.blob_sha256);
     } catch (thumbnailError) {
       // The canonical save has already committed. Never report that durable user
       // work failed merely because its disposable list derivative could not be
@@ -13300,6 +13312,7 @@ app.post('/api/editor-documents/:documentId/save', async (req, res) => {
       document: publicEditorDocument(saved.row),
       workspace_revision: saved.workspaceRevision,
       thumbnail_ready: thumbnailReady,
+      thumbnail_url: thumbnailUrl,
     });
   } catch (error) {
     respondEditorDocumentError(res, error, 'save');
@@ -17041,19 +17054,28 @@ app.put('/api/official-campaigns/:id', async (req, res) => {
       });
       return;
     }
+    const publishedLevels = Object.entries(raw.data.levels);
     const thumbnailResults = await ensureLevelThumbnailDerivativeBatch(
-      Object.entries(raw.data.levels).map(([levelId, level]) => [`official:${id}:${levelId}`, level]),
+      publishedLevels.map(([levelId, level]) => [`official:${id}:${levelId}`, level]),
     );
     const thumbnailReady = thumbnailResults.every((thumbnailResult) => thumbnailResult.status === 'fulfilled');
-    for (const thumbnailResult of thumbnailResults) {
+    // Answer with the addresses this publish just baked, in the same shape the read manifest uses.
+    // Without them the publisher's own lists keep the pre-publish pictures for the whole session.
+    const thumbnailUrls = {};
+    thumbnailResults.forEach((thumbnailResult, index) => {
       if (thumbnailResult.status === 'rejected') {
         console.error('saved official level thumbnail preparation failed:', thumbnailResult.reason && thumbnailResult.reason.message);
+        return;
       }
-    }
+      const levelId = publishedLevels[index][0];
+      const authorityKey = `official:${id}:${levelId}`;
+      thumbnailUrls[levelId] = levelThumbnailDerivativeUrl(authorityKey, levelId, thumbnailResult.value.blob_sha256);
+    });
     res.status(200).json({
       portfolio: publicOfficialCampaignsDocument(id, result.row),
       store_schema_version: OFFICIAL_CAMPAIGNS_STORE_SCHEMA_VERSION,
       thumbnail_ready: thumbnailReady,
+      thumbnail_urls: thumbnailUrls,
     });
   } catch (error) {
     if (error?.statusCode && error?.responseCode) {
@@ -19642,6 +19664,15 @@ function mediaDomainProjectionIssue(row) {
   }
   if (titleBarMarkSlot(row.slot)) {
     return titleBarMarkMediaIssue(row, runtime.value);
+  }
+  if (runRailMarkSlot(row.slot)) {
+    return runRailMarkMediaIssue(row, runtime.value);
+  }
+  if (adlectioMarkSlot(row.slot)) {
+    return adlectioMarkMediaIssue(row, runtime.value);
+  }
+  if (mainMenuMarkSlot(row.slot)) {
+    return mainMenuMarkMediaIssue(row, runtime.value);
   }
   const runCardFrame = runCardFrameProjection(row);
   if (runCardFrame.claimed) return runCardFrame.issue;
@@ -22845,6 +22876,10 @@ const ACTIVE_RUN_PHASES = new Set([
   'aftermath', 'bona-vacantia', 'commendatio', 'deployment', 'battle', 'sectio', 'victory',
 ]);
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
+const ACTIVE_RUN_CARD_SPANS = new Set([2, 4]);
+const ACTIVE_RUN_CARD_PRICING = new Set(['material', 'density']);
+const ACTIVE_RUN_RARITY_RULES = new Set(['price-shifts', 'material-bands']);
+const ACTIVE_RUN_RULES_FIELDS = new Set(['cardSpan', 'pricing', 'mayRotate', 'rarity']);
 const ACTIVE_RUN_UNIT_SOURCES = new Set(['king', 'starting', 'adlectio']);
 const ACTIVE_RUN_SECTIO_FIELDS = new Set([
   'afterBattleIndex',
@@ -22945,7 +22980,37 @@ function formationRunOwnedCardIssue(card, warBattleCount) {
   return null;
 }
 
-function formationRunOfferIssue(offer) {
+/**
+ * A Run's own rules, or null when the document predates them and is therefore playing the legacy
+ * game. Pricing is the field this validator reads: an offer's cost is DERIVED from it, so a
+ * malformed rules block would silently reprice the market rather than be rejected.
+ */
+function formationRunRulesIssue(rules) {
+  if (rules === null || rules === undefined) return null;
+  if (!isObjectRecord(rules)) return 'run.rules is invalid';
+  if (Object.keys(rules).some((field) => !ACTIVE_RUN_RULES_FIELDS.has(field))) {
+    return 'run.rules contains an unsupported field';
+  }
+  if (!ACTIVE_RUN_CARD_SPANS.has(rules.cardSpan)) return 'run.rules.cardSpan is invalid';
+  if (!ACTIVE_RUN_CARD_PRICING.has(rules.pricing)) return 'run.rules.pricing is invalid';
+  if (typeof rules.mayRotate !== 'boolean') return 'run.rules.mayRotate is invalid';
+  // Absent is valid: rarity was global and derived before ADR-0568, so a Run saved without it is
+  // not malformed -- it predates the field and reads the default.
+  if (rules.rarity !== undefined && !ACTIVE_RUN_RARITY_RULES.has(rules.rarity)) return 'run.rules.rarity is invalid';
+  return null;
+}
+
+/**
+ * What a card costs the Run being saved. Pricing is a Run rule (material, or material weighted by
+ * density), so the printed price cannot be restated here as the card's material -- doing that
+ * rejected every Sectio a density Run ever tried to save.
+ */
+function formationRunOfferCost(definition, rules) {
+  if (typeof serverRender?.runCardCost !== 'function') return definition.value;
+  return serverRender.runCardCost(definition, rules ?? serverRender.LEGACY_RUN_RULES);
+}
+
+function formationRunOfferIssue(offer, rules) {
   if (!isObjectRecord(offer)) return 'offer must be an object';
   if (containsRetiredFormationRunField(offer)) return 'offer contains retired ability state';
   const definition = typeof offer.id === 'string' ? ACTIVE_RUN_CARD_BY_ID[offer.id] : null;
@@ -22953,7 +23018,7 @@ function formationRunOfferIssue(offer) {
   if (typeof offer.offerId !== 'string' || !offer.offerId || offer.offerId.length > 200) return 'offer.offerId is invalid';
   if (!Array.isArray(offer.pieces) || offer.pieces.join(',') !== definition.pieces.join(',')) return 'offer.pieces is invalid';
   if (!isFiniteInteger(offer.value) || offer.value !== definition.value) return 'offer.value is invalid';
-  if (!isFiniteInteger(offer.cost) || offer.cost !== definition.value) return 'offer.cost is invalid';
+  if (!isFiniteInteger(offer.cost) || offer.cost !== formationRunOfferCost(definition, rules)) return 'offer.cost is invalid';
   if (offer.rarity !== definition.rarity) return 'offer.rarity is invalid';
   if (!Array.isArray(offer.formation) || offer.formation.length !== definition.formation.length) {
     return 'offer.formation is invalid';
@@ -23008,6 +23073,8 @@ function validateFormationRunBody(run) {
   if (!isFiniteInteger(run.sectioCardCursor) || run.sectioCardCursor < 0) {
     return 'run.sectioCardCursor is invalid';
   }
+  const rulesIssue = formationRunRulesIssue(run.rules);
+  if (rulesIssue) return rulesIssue;
 
   if (!isObjectRecord(run.war) || typeof run.war.id !== 'string' || !run.war.id) return 'run.war is invalid';
   if (typeof run.war.name !== 'string' || typeof run.war.description !== 'string') return 'run.war is invalid';
@@ -23199,9 +23266,25 @@ function validateFormationRunBody(run) {
     return 'run.commendatio is invalid outside Commendatio';
   }
 
-  if (run.phase === 'aftermath') {
-    if (!isObjectRecord(run.aftermath) || !Array.isArray(run.aftermath.survivingUnitIds)
-      || !Array.isArray(run.aftermath.fallenUnits)) return 'run.aftermath is invalid';
+  // A Battle's report outlives its own screen: the Bona Vacantia and Sectio that follow spend the
+  // gold it reports, so it stays with them and the Sectio can hand the player back to the Victory
+  // screen (ADR-0568). It may only ever describe the Battle that screen followed, and leaving for
+  // the next Deployment retires it.
+  if (run.phase === 'aftermath' || run.phase === 'bona-vacantia' || run.phase === 'sectio') {
+    if (run.phase === 'aftermath' || run.aftermath !== null) {
+      if (!isObjectRecord(run.aftermath) || !Array.isArray(run.aftermath.survivingUnitIds)
+        || !Array.isArray(run.aftermath.fallenUnits)) return 'run.aftermath is invalid';
+    }
+    if (run.phase !== 'aftermath' && run.aftermath !== null) {
+      const followed = run.phase === 'sectio'
+        ? (isObjectRecord(run.sectio) ? run.sectio.afterBattleIndex : null)
+        : (isObjectRecord(run.vacantia) && run.vacantia.kind === 'post-battle'
+          ? run.vacantia.afterBattleIndex
+          : null);
+      if (followed === null || run.aftermath.battleIndex !== followed) {
+        return `run.aftermath does not report the Battle this ${run.phase === 'sectio' ? 'Sectio' : 'Bona Vacantia'} followed`;
+      }
+    }
   } else if (run.aftermath !== null) return 'run.aftermath is invalid outside Aftermath';
 
   if (run.phase === 'bona-vacantia') {
@@ -23217,13 +23300,20 @@ function validateFormationRunBody(run) {
     if (grantOffers.some((id) => !known(id))) return 'run.vacantia is invalid';
   } else if (run.vacantia !== null) return 'run.vacantia is invalid outside Bona Vacantia';
 
-  if (run.phase === 'sectio') {
+  // A Sectio STANDS behind its own Victory report while that report is being reviewed: reaching
+  // back to it is a review and never a rewind, so the Sectio it will return to is untouched and
+  // still fully valid (ADR-0568). Every other phase still forbids one outright.
+  const sectioStands = run.phase === 'sectio'
+    || (run.phase === 'aftermath' && run.sectio !== null
+      && isObjectRecord(run.aftermath) && isObjectRecord(run.sectio)
+      && run.sectio.afterBattleIndex === run.aftermath.battleIndex);
+  if (sectioStands) {
     const sectio = run.sectio;
     if (!isObjectRecord(sectio) || Object.keys(sectio).some((field) => !ACTIVE_RUN_SECTIO_FIELDS.has(field))) {
       return 'run.sectio is invalid';
     }
     if (!Array.isArray(sectio.cardOffers) || sectio.cardOffers.length < 1
-      || sectio.cardOffers.some((offer) => formationRunOfferIssue(offer))) return 'run.sectio.cardOffers is invalid';
+      || sectio.cardOffers.some((offer) => formationRunOfferIssue(offer, run.rules ?? null))) return 'run.sectio.cardOffers is invalid';
     if (typeof serverRender?.runSectioCardOfferCount !== 'function'
       || sectio.cardOffers.length !== serverRender.runSectioCardOfferCount(run)) {
       return 'run.sectio.cardOffers has an invalid count';
@@ -23251,11 +23341,20 @@ function validateFormationRunBody(run) {
   // The aftermath report is the Battle just fought, still being read: closeBattle carries its
   // runtime across and only leaving for the Sectio retires it (ADR-0377, ADR-0452). Requiring
   // the runtime to be null there rejected the saved report of every won Battle.
-  if (run.phase === 'battle' || run.phase === 'aftermath') {
+  //
+  // A report REVIEWED back from the Sectio is the exception: the Sectio retired that runtime on
+  // the way past, and returning to read the report does not resurrect it (ADR-0568). That is
+  // exactly the case `sectioStands` names, so the report and the standing Sectio agree.
+  const reviewedReport = run.phase === 'aftermath' && sectioStands;
+  if (run.phase === 'battle' || (run.phase === 'aftermath' && !reviewedReport)) {
     if (!isObjectRecord(run.battleRuntime) || run.battleRuntime.battleIndex !== run.battleIndex) {
       return `run.battleRuntime is invalid during ${run.phase === 'battle' ? 'Battle' : 'Aftermath'}`;
     }
-  } else if (run.battleRuntime !== null) return 'run.battleRuntime is invalid outside Battle';
+  } else if (run.battleRuntime !== null) {
+    return reviewedReport
+      ? 'run.battleRuntime is invalid during a reviewed Aftermath'
+      : 'run.battleRuntime is invalid outside Battle';
+  }
   return null;
 }
 
@@ -24008,6 +24107,22 @@ async function storedLevelThumbnail(authorityKey) {
   return rows[0] || null;
 }
 
+/**
+ * The address a stored derivative is served from: an official one is a published blob, a private
+ * one is served through the owner-scoped workspace route.
+ *
+ * Every response that hands a derivative back — a manifest read OR the write that just baked it —
+ * addresses it here, so a write's answer can never disagree with the manifest the next read
+ * produces. That matters because the client holds installed URLs for the life of a page: a Save
+ * whose response omits the new address leaves the list rendering the pre-save picture until a
+ * full reload.
+ */
+function levelThumbnailDerivativeUrl(authorityKey, levelId, blobSha256) {
+  return authorityKey.startsWith('user:')
+    ? `/api/campaign-workspace/level-thumbnails/${encodeURIComponent(levelId)}/${blobSha256}.png`
+    : `/api/media/${blobSha256}`;
+}
+
 async function currentStoredLevelThumbnailUrls(preparedEntries) {
   if (!preparedEntries.length) return {};
   await ensureDbReady();
@@ -24023,10 +24138,7 @@ async function currentStoredLevelThumbnailUrls(preparedEntries) {
     const entry = entryByAuthority.get(row.authority_key);
     if (!entry) return [];
     if (row.content_version !== entry.contentVersion) return [];
-    const url = row.authority_key.startsWith('user:')
-      ? `/api/campaign-workspace/level-thumbnails/${encodeURIComponent(entry.levelId)}/${row.blob_sha256}.png`
-      : `/api/media/${row.blob_sha256}`;
-    return [[entry.levelId, url]];
+    return [[entry.levelId, levelThumbnailDerivativeUrl(row.authority_key, entry.levelId, row.blob_sha256)]];
   }));
 }
 

@@ -491,8 +491,18 @@ export function initBgm(iconUrl) {
   function buildControl() {
     const el = document.createElement('button');
     el.type = 'button';
-    el.dataset.chromeUnit = 'inner-box';
-    el.className = 'inner-box titlebar-control titlebar-control--icon bgm-control';
+    // A COMPARTMENT of the trailing cluster's divided box, not a framed box of its own: the
+    // cluster's frame is this button's outer edge and the cluster's rail is the edge it shares
+    // with the gear. Deliberately no registered chrome unit — the unit is what brings a frame,
+    // and a second frame inside the box's would draw the doubled edge the divided box replaced.
+    // Same leaf material as every other control in the bar (ADR-0433). This module is
+    // plain vanilla ES that plain `node` also loads (scripts/check-bgm-shuffle.mjs), so it
+    // states the registered ids as literals; check-titlebar-actions.mjs holds this one to
+    // CHROME_LEAF_FILL_SURFACE so the two cannot drift. It is the first seat of the invariant
+    // trailing cluster, so it takes phase 0 — the CSS default — and TITLE_BAR_CLUSTER_LEAF_PHASE
+    // phases the gear and account seats after it.
+    el.dataset.chromeFillSurface = 'hybrid-wood-oak';
+    el.className = 'titlebar-control titlebar-control--icon titlebar-control--seat bgm-control';
     const icon = document.createElement('img');
     icon.className = 'titlebar-control-glyph bgm-control-icon';
     icon.src = iconUrl;

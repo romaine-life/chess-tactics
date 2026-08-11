@@ -1,8 +1,20 @@
+import type { CSSProperties } from 'react';
+
 /**
  * Installed fill for terminal chrome: controls and identity plates that end,
  * rather than establish, a containment level (ADR-0433).
  */
 export const CHROME_LEAF_FILL_SURFACE = 'hybrid-wood-oak';
+
+/**
+ * A repeated leaf collection phases its wood by the item's own place in the data the
+ * renderer is walking, so a row of identical controls is cut from one plank run instead
+ * of stamping the same grain N times (ADR-0433). Deriving the offset from DOM position
+ * instead is forbidden by ADR-0063 — pass the index the data already has.
+ */
+export function leafSurfacePhase(index: number): CSSProperties {
+  return { ['--chrome-leaf-surface-index' as string]: index } as CSSProperties;
+}
 
 /**
  * The role whose installed marble a STRUCTURAL box borrows under its own inner frame:

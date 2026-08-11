@@ -28,6 +28,7 @@ import {
   type EditorDocumentEditSession,
 } from './editorDocuments';
 import { HttpError } from './http';
+import { levelThumbnailUrl } from './levelThumbnails';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -446,6 +447,37 @@ describe('editor document persistence', () => {
     await saveEditorDocument('doc-7f3c', 4);
 
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ revision: 4 });
+  });
+
+  it('installs the derivative the Save baked so mounted lists leave the pre-save board behind', async () => {
+    const saved = `/api/media/${'9'.repeat(64)}`;
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, {
+      document: { ...document, dirty: false },
+      workspace_revision: 9,
+      thumbnail_url: saved,
+    }));
+
+    await saveEditorDocument('doc-7f3c', 4, level);
+
+    expect(levelThumbnailUrl('level-a')).toBe(saved);
+  });
+
+  it('retires the installed address when a Save could not prepare a derivative', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, {
+        document: { ...document, dirty: false },
+        thumbnail_url: `/api/media/${'8'.repeat(64)}`,
+      }))
+      .mockResolvedValueOnce(jsonResponse(200, {
+        document: { ...document, dirty: false },
+        thumbnail_ready: false,
+        thumbnail_url: null,
+      }));
+
+    await saveEditorDocument('doc-7f3c', 4, level);
+    await saveEditorDocument('doc-7f3c', 5, level);
+
+    expect(levelThumbnailUrl('level-a')).toBeNull();
   });
 });
 

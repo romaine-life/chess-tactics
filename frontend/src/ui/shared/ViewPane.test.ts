@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { ZOOM_TIER_RATIO, snapToTier } from '../../game/zoomTiers';
+import { ZOOM_TIER_RATIO, snapToTier, zoomTierRange } from '../../game/zoomTiers';
 import {
+  boardZoomFloor,
   clientDeltaToLocal,
   constrainPanToCoverViewport,
   exceedsViewPanePanThreshold,
@@ -17,26 +19,29 @@ const rectangle = [
 ];
 
 /**
- * The outer limit is a rung on the global ladder at which the whole level box fits
- * inside the viewport. Asserting that contract directly — it fits, it is on the
- * ladder, and one rung closer would not fit — says what the camera promises, where
- * a hardcoded float only says what today's arithmetic happens to produce.
+ * The safety floor is a rung on the global ladder at which the viewport is still entirely
+ * INSIDE the boundary. Asserting that contract directly — it is covered, it is on the
+ * ladder, and one rung further out would not be — says what the camera promises, where a
+ * hardcoded float only says what today's arithmetic happens to produce.
+ *
+ * The direction matters and is the whole defect this guards: a rung chosen so the boundary
+ * fits inside the VIEWPORT guarantees a margin of unpainted world around it.
  */
-const outerTierFits = (
+const coverTierHolds = (
   viewport: { width: number; height: number },
   box: { width: number; height: number },
   zoom: number,
 ): void => {
   expect(zoom).toBe(snapToTier(zoom));
-  expect(box.width * zoom).toBeLessThanOrEqual(viewport.width + 1e-9);
-  expect(box.height * zoom).toBeLessThanOrEqual(viewport.height + 1e-9);
-  const closer = zoom * ZOOM_TIER_RATIO;
+  expect(viewport.width / zoom).toBeLessThanOrEqual(box.width + 1e-9);
+  expect(viewport.height / zoom).toBeLessThanOrEqual(box.height + 1e-9);
+  const further = zoom / ZOOM_TIER_RATIO;
   expect(
-    box.width * closer > viewport.width + 1e-9 || box.height * closer > viewport.height + 1e-9,
+    viewport.width / further > box.width + 1e-9 || viewport.height / further > box.height + 1e-9,
   ).toBe(true);
 };
 
-describe('ViewPane outer zoom tier', () => {
+describe('ViewPane cover zoom floor', () => {
   it('maps screen-space pointer movement back into a scaled design canvas', () => {
     expect(clientDeltaToLocal(40, 1560, 1040)).toBeCloseTo(60);
     expect(clientDeltaToLocal(-25, 1920, 960)).toBeCloseTo(-50);
@@ -44,13 +49,13 @@ describe('ViewPane outer zoom tier', () => {
   });
 
   it('is limited by the tighter viewport axis', () => {
-    // 501x300 against a 1000x600 box: height is the binding axis, not width.
+    // 501x300 against a 1000x600 box: width is the binding axis for coverage, not height.
     const wide = { width: 501, height: 300 };
-    outerTierFits(wide, RECTANGLE_BOX, minimumZoomToCoverViewport({
+    coverTierHolds(wide, RECTANGLE_BOX, minimumZoomToCoverViewport({
       viewport: wide, polygon: rectangle, minZoom: 0.4, maxZoom: 4,
     }));
     const square = { width: 600, height: 600 };
-    outerTierFits(square, RECTANGLE_BOX, minimumZoomToCoverViewport({
+    coverTierHolds(square, RECTANGLE_BOX, minimumZoomToCoverViewport({
       viewport: square, polygon: rectangle, minZoom: 0.4, maxZoom: 4,
     }));
   });
@@ -81,7 +86,7 @@ describe('ViewPane outer zoom tier', () => {
 
   it('is independent of current pan', () => {
     const viewport = { width: 500, height: 300 };
-    outerTierFits(viewport, RECTANGLE_BOX, minimumZoomToCoverViewport({
+    coverTierHolds(viewport, RECTANGLE_BOX, minimumZoomToCoverViewport({
       viewport, polygon: rectangle, minZoom: 0.4, maxZoom: 4,
     }));
   });
@@ -94,7 +99,7 @@ describe('ViewPane outer zoom tier', () => {
       { x: -744, y: 365 },
     ];
     const viewport = { width: 275.375, height: 183.578125 };
-    outerTierFits(viewport, { width: 1450, height: 816 }, minimumZoomToCoverViewport({
+    coverTierHolds(viewport, { width: 1450, height: 816 }, minimumZoomToCoverViewport({
       viewport, polygon: asymmetricArt, minZoom: 0.2, maxZoom: 4,
     }));
 
@@ -136,7 +141,7 @@ describe('ViewPane outer zoom tier', () => {
       viewport, polygon: [...rectangle].reverse(), minZoom: 0.55, maxZoom: 1.45,
     });
     expect(reversed).toBe(forward);
-    outerTierFits(viewport, RECTANGLE_BOX, forward);
+    coverTierHolds(viewport, RECTANGLE_BOX, forward);
   });
 
   it('follows a temporary automatic clamp back down after the viewport settles', () => {
@@ -161,4 +166,38 @@ describe('ViewPane outer zoom tier', () => {
       automaticFloorZoom: 2.6,
     })).toEqual({ zoom: 3, automaticFloorZoom: null });
   });
+});
+
+/**
+ * One rule: the view stops at the box. There is deliberately no second behaviour to compose
+ * with, because a camera limit that changes rule per level cannot be read off the screen.
+ */
+describe('board zoom floor', () => {
+  it('stops the view at the box, on the tighter axis, one notch at a time', () => {
+    for (const viewport of [{ width: 2400, height: 1100 }, { width: 900, height: 1400 }]) {
+      const floor = boardZoomFloor({ viewport, coverPolygon: rectangle, minZoom: 0.05, maxZoom: 16 });
+      coverTierHolds(viewport, RECTANGLE_BOX, floor);
+    }
+  });
+
+  it('has nothing to say without a box', () => {
+    expect(boardZoomFloor({
+      viewport: { width: 2400, height: 1100 }, minZoom: 0.37, maxZoom: 16,
+    })).toBe(0.37);
+  });
+
+  // The regression the owner caught: coverage was enforced on the whole WINDOW, so the camera
+  // bought coverage for the strips under the opaque title bar and Controls rail and paid for
+  // it out of the pixels a player can see. The rail is on the right, which is where the board
+  // was being cut. The board's own allocation is the region that is actually visible.
+  it('measures the visible region from the board allocation, not the window', () => {
+    const source = readFileSync(new URL('./ViewPane.tsx', import.meta.url), 'utf8');
+    const body = source.slice(source.indexOf('export function coverageViewportForStage'));
+    const fn = body.slice(0, body.indexOf('\n}') + 2);
+    expect(fn).toContain('data-shell-viewport-primary');
+    // Preferred OVER the clipping ancestor, which is the window and includes the strips
+    // under the opaque title bar and Controls rail.
+    expect(fn.indexOf('data-shell-viewport-primary')).toBeLessThan(fn.indexOf('overflowX'));
+  });
+
 });

@@ -27,12 +27,14 @@ import {
   closeBattle,
   levelEnemyForceValue,
   createRun,
+  leaveAftermath,
   leaveSectio,
   mixSeed,
   observeRunUnitDeath,
-  openSectio,
   prepareDeployment,
   removeUnitFromArmyAndCards,
+  runCardCost,
+  runRules,
   setDeploymentChoices,
   snapshotWar,
   takeVacantiaCard,
@@ -615,7 +617,18 @@ function fightBattle(run: RunDocument): RunDocument {
   if (started.phase !== 'battle') throw new RunCraftError('craft: the crafted Battle could not be started.');
   // Every deployed unit survives a crafted Battle: the crafter is placing the player at a state,
   // not simulating an outcome.
-  return openSectio(started, deployedUnitIds);
+  //
+  // It is CLOSED and then left, rather than fast-forwarded straight into the Sectio, so the
+  // Sectio a craft link lands on carries the Victory report it followed and can hand the player
+  // back to it (ADR-0568). The accounting is unchanged: nothing was taken, so nothing surrendered
+  // and the clock reads the same instant openSectio would have read. Only the turn count is
+  // dressed, and turns pay nothing — par is a benchmark and the bonus is the clock (ADR-0539).
+  const closed = closeBattle(started, {
+    survivingUnitIds: deployedUnitIds,
+    turns: DEFAULT_CRAFT_AFTERMATH_TURNS,
+    standingEnemyValue: 0,
+  });
+  return leaveAftermath(closed);
 }
 
 /**
@@ -709,6 +722,11 @@ function leaveSectioAuto(run: RunDocument): RunDocument {
  * `run.cards` directly. Gold is restored afterwards, so held cards do not silently pay for
  * themselves out of what the Run has to spend, and the staged offers are withdrawn so the Sectio
  * that is about to be left still reads as the one the game dealt.
+ *
+ * That withdrawal also takes the offer back out of `adlectedCardOfferIds`, which is what lets a
+ * spec name more than one held card: a Sectio admits ONE card (`SECTIO_ADLECTIO_LIMIT`), and each
+ * staged admission is retracted before the next is staged, so no card is ever adlected into a
+ * visit that has already spent its admission.
  *
  * They are adlected at the earliest legal point, after Battle 1, and then live through every
  * later Battle before the target.
@@ -881,7 +899,10 @@ function craftOffer(
     pieces: [...core.pieces],
     formation: core.formation?.map((cell) => ({ ...cell })),
     offerId: `craft-${slotIndex}-${core.id}`,
-    cost: core.value,
+    // A pinned offer names the CARD, not its price. Pricing is a Run rule, so the price is the
+    // one this Run's market would print -- restating it as the card's material dealt a flat
+    // market into a density Run, which is a state the game cannot reach and the server refuses.
+    cost: runCardCost(core, runRules(run)),
   };
 }
 

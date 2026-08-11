@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { ensureCampaignsHydrated, isUserWorkspaceAvailable } from '../campaign/hydrate';
 import {
   CAMPAIGN_PROGRESS_EVENT,
@@ -33,6 +33,7 @@ import {
 import { playSkirmishLevelHref, skirmishMapLevels } from './skirmishMaps';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { installedUiMedia } from './installedUiMedia';
+import { menuModeIcon } from './menuModeIcon';
 import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
 import { PlayContentSceneSlot, RunDetailContentSceneSlot } from './shell/AuthoredSceneSlot';
 import {
@@ -40,12 +41,11 @@ import {
   ThumbnailSurface as AtomicThumbnailSurface,
   type ThumbnailSurfaceState,
 } from './shell/ThumbnailSurface';
-import { drawableAssets } from '@chess-tactics/board-render';
 import { useWars, runEligibleOfficialWars } from '../war/store';
-import { useActiveRun } from '../run/store';
+import { useActiveRun, type RunAdoptionConflict } from '../run/store';
 import {
-  ATARAXIA_BY_TIER, createRun, formatGold, snapshotWar,
-  type AtaraxiaTier,
+  ATARAXIA_BY_TIER, DEFAULT_RUN_RULES, createRun, formatCardCount, formatGold, runHeldCardCount,
+  snapshotWar, type RunRules, type AtaraxiaTier,
 } from '../run/model';
 import {
   RUN_PROGRESSION_EVENT,
@@ -53,13 +53,21 @@ import {
   readRunProgression,
 } from '../run/progression';
 import { InnerChromeBox } from './shared/ChromeBox';
+import {
+  ChromeDividedGridRow,
+  ChromeDividedGridRowGroup,
+  DividedInnerChromeBox,
+} from './shared/ChromeDividedGrid';
+import { ChromeVerbRow, verbColumns, type ChromeVerb } from './shared/ChromeVerbRow';
 import { loadMatch, type PersistedMatch } from '../game/matchPersistence';
 import { continueInventory, type ContinueInventory } from './playContinue';
-import { AtaraxiaSelector } from './AtaraxiaSelector';
+import { runAdoptionFacts } from './runAdoption';
+import { ataraxiaPrepCells } from './AtaraxiaSelector';
+import { useRunRulesCells } from './RunRulesSelector';
 import { ActionList } from './shared/ActionList';
 import { SettingsRow, SettingsSection } from './shared/SettingsControls';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
-import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
+import { CHROME_LEAF_FILL_SURFACE, CHROME_STRUCTURAL_FILL_ROLE } from './shared/chromeSurfacePolicy';
 import {
   CAMPAIGN_RAIL_START_INDEX,
   PLAY_MODE_ENTRY_ENABLED,
@@ -69,15 +77,6 @@ import {
 } from './playModeAvailability';
 
 type PlayIcon = 'solo-skirmish' | 'campaign-editor' | 'level-editor' | 'lobbies';
-
-/** Installed menu-mode records own their icons. Play must not independently ask
- * app-ui for duplicate legacy path roles that are not members of that projection. */
-function menuModeIcon(value: 'play' | 'campaign-editor' | 'lobbies'): string {
-  const asset = drawableAssets('menu-mode').find((candidate) => candidate.behavior.value === value);
-  const icon = asset?.media.icon?.media.immutableUrl;
-  if (!icon) throw new Error(`menu mode ${value} has no installed icon`);
-  return icon;
-}
 
 function carvedIcon(name: PlayIcon): string {
   if (name === 'solo-skirmish') return menuModeIcon('play');
@@ -127,9 +126,9 @@ function levelForceSummary(level: Level): string {
   return `${count('player')}v${count('enemy')}`;
 }
 
-function ActionColumn({ children }: { children: ReactElement }): ReactElement {
+function ActionColumn({ children, className = '' }: { children: ReactElement; className?: string }): ReactElement {
   return (
-    <main className="menu-dest-col menu-dest-action play-action-col">
+    <main className={`menu-dest-col menu-dest-action play-action-col ${className}`.trim()}>
       <KitScroll className="play-action-scroll">{children}</KitScroll>
     </main>
   );
@@ -139,24 +138,38 @@ function ContinuePanel({ inventory }: { inventory: ContinueInventory }): ReactEl
   // Retained direct Continue shows the one most recent enabled activity and nothing
   // else. It is no longer an ordinary Play entry while Run is the sole mode (ADR-0514).
   const selected = inventory.activities[0] ?? null;
+  // One verb, so the row spans the card: there is nothing divided here for a rail to be.
+  const verbs: readonly ChromeVerb[] = selected
+    ? [{ id: 'continue', label: 'Continue', to: selected.playHref }]
+    : [];
   return (
     <ActionColumn>
       <div className="settings-panel-content continue-selector-panel">
-        <section className="settings-section">
-          <h3 className="settings-section-title">Continue</h3>
+        {/* No eyebrow over the one group in the column, and none over the card either: an
+            eyebrow distinguishes a group from the ones beside it, and this column holds exactly
+            one (ADR-0556). It also ran a hairline rule straight across the live vista. The card
+            names the activity and its verb says Continue; the section keeps the landmark. */}
+        <section className="settings-section" aria-label="Continue">
           {selected ? (
             <div className="continue-resume" data-testid="continue-detail" aria-label={selected.title}>
-              <div className="ce-selected-head"><h2>{selected.title}</h2></div>
-              <InnerChromeBox className="play-detail-facts">
-                <dl>
-                  {selected.facts.map((fact) => (
-                    <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>
-                  ))}
-                </dl>
-              </InnerChromeBox>
-              <div className="ce-preview-actions is-single">
-                <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE} to={selected.playHref}><span>Continue</span></ChromeNavButton>
-              </div>
+              {/* The same one-field card Run's detail uses: facts and the verb that completes them
+                  inside one structural stone region, with the oak plaque as its only leaf. Which
+                  activity is being resumed is the one fact the rows do not carry, so the name goes
+                  INSIDE the field as its first line — it never stands outside on the vista.
+                  The verb is the card's closing ROW, not a plaque parked in it (ADR-0059). */}
+              <DividedInnerChromeBox className="play-detail-card" columns={verbColumns(verbs)} fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
+                <ChromeDividedGridRow spans="all" className="play-detail-head">
+                  <h2>{selected.title}</h2>
+                </ChromeDividedGridRow>
+                <ChromeDividedGridRow spans="all" className="play-detail-facts">
+                  <dl>
+                    {selected.facts.map((fact) => (
+                      <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>
+                    ))}
+                  </dl>
+                </ChromeDividedGridRow>
+                <ChromeVerbRow verbs={verbs} className="play-detail-verbs" cellClassName="play-detail-verb" />
+              </DividedInnerChromeBox>
             </div>
           ) : (
             <div className="settings-section-rows">
@@ -175,6 +188,28 @@ function ContinuePanel({ inventory }: { inventory: ContinueInventory }): ReactEl
     </ActionColumn>
   );
 }
+
+/**
+ * Where each Run destination sits on the one plank the list is cut from, so its installed oak
+ * steps instead of restarting — the rail tab's `index`, which is the same seat every other rail
+ * in the app states (ADR-0063). The panel owns the seats rather than the DOM: Current always
+ * seats above New whatever transient status row the list is carrying, so a :nth-child ladder
+ * would re-cut both the moment "Loading Runs…" joins.
+ */
+const PLAY_CHOICE_ROW_SEATS = { current: 0, new: 1 } as const;
+
+/**
+ * The Current Run card's closing verb. One verb, so its row spans the card and there is no column
+ * line for a rail to be — `verbColumns` states that rather than the card counting its own tracks.
+ */
+const RUN_PLAY_VERBS: readonly ChromeVerb[] = [{ id: 'play', label: 'Play', to: '/run' }];
+
+/**
+ * The adoption card's tracks. EVERY row of it spans — the lede, each candidate's name, its facts
+ * and its single Keep — so there is no column line anywhere for a rail to be. Taken from the one
+ * owner of that track string rather than written out again here.
+ */
+const ADOPTION_CARD_COLUMNS = verbColumns([]);
 
 type RunChoice = 'current' | 'new' | null;
 
@@ -217,10 +252,24 @@ function RunPanel({
   // Replacing an active Run is confirmed inline: the first Start Run click arms the
   // decision and the actions row swaps to an explicit Keep Run / Abandon and Start pair.
   const [armed, setArmed] = useState(false);
-  const keepRunButtonRef = useRef<HTMLButtonElement>(null);
   const [progression, setProgression] = useState(readRunProgression);
   const [ataraxiaTier, setAtaraxiaTier] = useState<AtaraxiaTier>(0);
+  const [runRules, setRunRules] = useState<RunRules>(DEFAULT_RUN_RULES);
+  // Cells rather than a component: only a DIRECT child of the box is a row it lays a rail around,
+  // so a component returning several rows would collapse them into one (see ChromeDividedGrid).
+  const runRulesCells = useRunRulesCells({
+    value: runRules,
+    onChange: (rules) => { setArmed(false); setRunRules(rules); },
+    fillSurface: CHROME_LEAF_FILL_SURFACE,
+  });
   const eligible = useMemo(() => runEligibleOfficialWars(wars), [wars]);
+  // Each destination wears its OWN installed mark, authored for this seat and reviewed on this
+  // tab (ADR-0559). They borrowed the title bar's Battle and Ataraxia marks first, which read as
+  // arbitrary: those are minted for the bar's tight measure chip, warm where the kit is not, and
+  // authored edge-to-edge so they needed the `bleed` canvas. These are kit-canvas marks, so they
+  // take the same `inset` seat every other rail mark uses.
+  const currentRunMark = installedUiMedia('ui-kit-icons-run-current-png');
+  const newRunMark = installedUiMedia('ui-kit-icons-run-new-png');
   const highestUnlockedTier = highestUnlockedAtaraxiaTier(progression);
   // An adoption conflict does not gate a new Run: starting one discards both candidates, so it
   // is a third answer to "which Run does the account keep?" rather than something blocked by the
@@ -229,6 +278,64 @@ function RunPanel({
     || !hydrated
     || presentation.syncing
     || eligible.length === 0;
+  // The two candidates in the same shape, so the column renders one list instead of hand-writing
+  // each side. The Run in your hand leads: it is the one you were just playing, and the account's
+  // copy is the thing it collided with. Both verbs begin with Keep — they are the same kind of
+  // answer, and "Adopt" beside "Keep" read as two different kinds of action.
+  // The box's closing verbs, as data. Armed, the one verb becomes the two answers to the
+  // replacement question; both are cells of the same row, and `verbColumns` is what turns that
+  // into the box's tracks so the count is never restated.
+  const runVerbs: readonly ChromeVerb[] = presentedRun && armed
+    ? [
+      { id: 'keep', label: 'Keep Run', testId: 'run-keep', disabled: starting, onPress: () => setArmed(false) },
+      {
+        id: 'abandon',
+        label: starting ? 'Starting…' : 'Abandon and Start',
+        testId: 'run-abandon-and-start',
+        disabled: starting,
+        onPress: () => { void start(); },
+      },
+    ]
+    : [{
+      id: 'start',
+      label: starting ? 'Starting…' : 'Start Run',
+      testId: 'run-start',
+      disabled: newRunUnavailable || starting,
+      onPress: () => { if (presentedRun) { setArmed(true); return; } void start(); },
+    }];
+  const adoptionCandidates = (conflict: RunAdoptionConflict): Array<{
+    label: string;
+    verb: string;
+    testId: string;
+    disabled: boolean;
+    onKeep: () => void;
+    facts: ReturnType<typeof runAdoptionFacts>;
+  }> => [
+    {
+      label: 'This browser',
+      verb: 'Keep browser Run',
+      testId: 'run-adopt-browser',
+      disabled: presentation.syncing,
+      onKeep: () => { void adoptBrowserRun(); },
+      facts: runAdoptionFacts(conflict.browserRun, conflict.accountRun),
+    },
+    {
+      label: 'Your account',
+      verb: 'Keep account Run',
+      testId: 'run-keep-account',
+      disabled: false,
+      onKeep: keepAccountRun,
+      facts: runAdoptionFacts(conflict.accountRun, conflict.browserRun),
+    },
+  ];
+  // A candidate closes with ONE verb, so its row spans and the card carries no column line at all.
+  const adoptionVerbs = (candidate: ReturnType<typeof adoptionCandidates>[number]): readonly ChromeVerb[] => [{
+    id: candidate.testId,
+    label: candidate.verb,
+    onPress: candidate.onKeep,
+    disabled: candidate.disabled,
+    testId: candidate.testId,
+  }];
 
   useEffect(() => { void hydrate(); }, [hydrate]);
   useEffect(() => {
@@ -245,7 +352,10 @@ function RunPanel({
   useEffect(() => {
     if (!armed) return;
     // Mirror the danger-dialog convention: focus lands on the safe choice, Escape keeps the Run.
-    keepRunButtonRef.current?.focus();
+    // Found by its test id rather than a ref, because the verbs are ChromeVerbRow's cells now and
+    // a verb is DECLARED there rather than rendered here — which is the whole point of that
+    // primitive, and not worth putting a ref through it for one focus call.
+    document.querySelector<HTMLElement>('[data-testid="run-keep"]')?.focus();
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') { event.preventDefault(); setArmed(false); }
     };
@@ -264,7 +374,7 @@ function RunPanel({
       globalThis.crypto?.getRandomValues?.(seedArray);
       const seed = seedArray[0] || (Date.now() >>> 0);
       const war = [...eligible].sort((a, b) => a.id.localeCompare(b.id))[seed % eligible.length];
-      replace(createRun(snapshotWar(war, levels), seed, ataraxiaTier, { chooseKing: true }));
+      replace(createRun(snapshotWar(war, levels), seed, ataraxiaTier, { chooseKing: true, rules: runRules }));
       navigationAccepted = navigateApp('/run');
     } finally {
       // A successful scene replacement retains this component as the outgoing layer
@@ -279,181 +389,229 @@ function RunPanel({
 
   return (
     <>
-      <ActionColumn>
-        <div className="settings-panel-content run-selector-panel">
-          <section className="settings-section">
-            <h3 className="settings-section-title">Run</h3>
-            <div className="settings-section-rows">
-              {!hydrated || loading ? (
-                <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
-                  <div className="settings-row-copy"><h4>Loading Runs…</h4></div>
-                </section>
-              ) : null}
-              {presentation.adoptionConflict ? (
-                <div className="run-adoption-conflict" role="alert" data-testid="run-adoption-conflict">
-                  <div className="run-adoption-conflict-copy">
-                    <h3>Two active Runs</h3>
-                    <p>This browser has {presentation.adoptionConflict.browserRun.war.name}; your account has {presentation.adoptionConflict.accountRun.war.name}. Choose which one the account keeps.</p>
-                  </div>
-                  <div className="run-inline-actions">
-                    <ChromeButton unit="inner-text-button"
-                      className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-                      data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                      data-testid="run-keep-account"
-                      onClick={keepAccountRun}
-                    >
-                      Keep account Run
-                    </ChromeButton>
-                    <ChromeButton unit="inner-text-button"
-                      className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-                      data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                      data-testid="run-adopt-browser"
-                      disabled={presentation.syncing}
-                      onClick={() => { void adoptBrowserRun(); }}
-                    >
-                      Adopt browser Run
-                    </ChromeButton>
-                  </div>
-                </div>
-              ) : null}
-              {/* The row keeps its place when no Run exists — disabled like the Continue
-                  rows ("Nothing to continue") and the locked Ataraxia tiers, so the
-                  resume point stays learnable where it will appear (ADR-0289's
-                  visible-but-disabled language). It only leaves the list while the
-                  adoption conflict card speaks for the current Run instead. */}
-              {!presentation.adoptionConflict && (presentedRun || (hydrated && !loading)) ? (
-                <ChromeNavButton unit="inner-list-row"
-                  to={PLAY_RUN_CURRENT_SELECTOR_HREF}
-                  className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row', !presentedRun && 'is-disabled', choice === 'current' && 'active is-selected')}
-                  data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                  disabled={!presentedRun}
-                  aria-current={choice === 'current' ? 'page' : undefined}
-                  data-testid="run-choice-current"
-                >
-                  <div className="settings-row-copy">
-                    <h4>Current Run</h4>
-                    <p>{presentedRun
-                      ? `Battle ${presentedRun.battleIndex + 1} of ${presentedRun.war.battles.length} · ${ATARAXIA_BY_TIER[presentedRun.ataraxiaTier].label}`
-                      : 'No active Run'}</p>
-                  </div>
-                </ChromeNavButton>
-              ) : null}
-              {!loading && officialAvailable && eligible.length === 0 ? (
-                <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
-                  <div className="settings-row-copy">
-                    <h4>No Runs available</h4>
-                    <p>No official Wars are currently marked Eligible for Run.</p>
-                  </div>
-                </section>
-              ) : null}
-              {!loading && !officialAvailable ? (
-                <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
-                  <div className="settings-row-copy">
-                    <h4>Runs unavailable</h4>
-                    <p>Official Wars could not be loaded. Reopen Play to retry.</p>
-                  </div>
-                </section>
-              ) : null}
-              <ChromeNavButton unit="inner-list-row"
-                to={PLAY_RUN_NEW_SELECTOR_HREF}
-                className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row', newRunUnavailable && 'is-disabled', choice === 'new' && 'active is-selected')}
-                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                disabled={newRunUnavailable}
-                aria-current={choice === 'new' ? 'page' : undefined}
-                data-testid="run-choice-new"
-              >
-                <div className="settings-row-copy">
-                  <h4>Start New Run</h4>
-                  <p>Choose Ataraxia</p>
-                </div>
-              </ChromeNavButton>
+      {/* Run's two destinations are menu-language rail buttons, so they ARE rail tabs — the same
+          primitive the main menu, Settings, Enchiridion and Strategikon mount (ADR-0558). They
+          were hand-assembled from `inner-list-row` + settings-row classes before, and the
+          lookalike drifted: its own gap, its own seat, its own plank-phase machinery, none of it
+          tied to the rail standing beside it. The column carries no eyebrow — a section title
+          distinguishes one group from others beside it, and this column holds exactly one
+          (ADR-0556). */}
+      <ApparatusRailColumn opens="panel-beside" className="play-run-choice-rail" placement="open" aria-label="Run">
+        {!hydrated || loading ? (
+          <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
+            <div className="settings-row-copy"><h4>Loading Runs…</h4></div>
+          </section>
+        ) : null}
+        {/* The tab keeps its place when no Run exists — disabled like the locked Ataraxia tiers,
+            so the resume point stays learnable where it will appear (ADR-0289's
+            visible-but-disabled language). It keeps its place during an adoption conflict too:
+            that question belongs to whoever is going to resume, and a card standing in the tab's
+            seat removed the expected control from a player who was only ever going to start a
+            new Run (ADR-0557). The question is now what the tab OPENS.
+            An available tab carries its name and nothing else — the Battle position and Ataraxia
+            it used to restate are the first two facts of the detail column it opens (ADR-0556).
+            ADR-0334's "No active Run" is the tab's detail line, which is why it appears only
+            when the tab cannot be taken. */}
+        {presentedRun || (hydrated && !loading) ? (
+          <ApparatusRailTab
+            label="Current Run"
+            detail={presentedRun ? undefined : 'No active Run'}
+            to={PLAY_RUN_CURRENT_SELECTOR_HREF}
+            index={PLAY_CHOICE_ROW_SEATS.current}
+            active={choice === 'current'}
+            disabled={!presentedRun}
+            iconSrc={currentRunMark}
+            testId="run-choice-current"
+          />
+        ) : null}
+        {!loading && officialAvailable && eligible.length === 0 ? (
+          <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
+            <div className="settings-row-copy">
+              <h4>No Runs available</h4>
+              <p>No official Wars are currently marked Eligible for Run.</p>
             </div>
           </section>
-          {presentation.persistenceError ? <p className="play-content-warning" role="status">{presentation.persistenceError}</p> : null}
-        </div>
-      </ActionColumn>
+        ) : null}
+        {!loading && !officialAvailable ? (
+          <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
+            <div className="settings-row-copy">
+              <h4>Runs unavailable</h4>
+              <p>Official Wars could not be loaded. Reopen Play to retry.</p>
+            </div>
+          </section>
+        ) : null}
+        <ApparatusRailTab
+          label="Start New Run"
+          to={PLAY_RUN_NEW_SELECTOR_HREF}
+          index={PLAY_CHOICE_ROW_SEATS.new}
+          active={choice === 'new'}
+          disabled={newRunUnavailable}
+          iconSrc={newRunMark}
+          testId="run-choice-new"
+        />
+        {presentation.persistenceError ? <p className="play-content-warning" role="status">{presentation.persistenceError}</p> : null}
+      </ApparatusRailColumn>
 
       <RunDetailContentSceneSlot
         className="play-run-detail-slot"
         sceneInstance={choice ? `play/run/${choice}` : 'play/run'}
       >
-        {choice === 'current' && presentedRun ? (
-          <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Current Run" data-testid="run-detail-current">
-            <div className="ce-selected-head"><h2>Current Run</h2></div>
+        {/* Which Run the account keeps is a question for the player who is about to RESUME one,
+            so it is answered here, behind Current Run, in the seat that already holds "what
+            happens if I take this row". Someone starting a new Run never has to read it —
+            starting one is itself a third answer, and it was already never blocked by the
+            question (ADR-0557). */}
+        {choice === 'current' && presentation.adoptionConflict ? (
+          <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Two active Runs" data-testid="run-detail-current">
+            {/* No heading. "Two active Runs" only renamed the sentence directly under it, which
+                already states both Runs and the question — so it was a line of text standing on
+                the live vista for nothing. The aside's label keeps the name as a landmark. */}
             <div className="play-detail-body">
-              <InnerChromeBox className="play-detail-facts">
-                <dl>
-                  <div><dt>Battle</dt><dd>{presentedRun.battleIndex + 1} of {presentedRun.war.battles.length}</dd></div>
-                  <div><dt>Army</dt><dd>{presentedRun.army.length} units</dd></div>
-                  <div><dt>Gold</dt><dd>{formatGold(presentedRun.goldTenths)}</dd></div>
-                  <div><dt>Ataraxia</dt><dd>{ATARAXIA_BY_TIER[presentedRun.ataraxiaTier].label}</dd></div>
-                  <div><dt>Deployment</dt><dd>Arrange formations</dd></div>
-                </dl>
-              </InnerChromeBox>
+              {/* One line of situation, then the two Runs THEMSELVES. Naming each side's War in
+                  a single run-on sentence was the whole statement before, and both sides are
+                  almost always the same War — so it read as a question with no information in
+                  it. Each candidate is a labelled row list ending in its own verb, and the
+                  facts are the ones that actually separate two Runs (ADR-0557).
+
+                  A candidate is a GROUP of this card's rows, not a section boxed inside it: the
+                  rails between the lede, each name, its facts and its Keep are the card's own,
+                  laid and capped from its grid lines (ADR-0059). Boxed, each side drew a second
+                  frame just inside the first and its verb a third inside that. */}
+              <DividedInnerChromeBox
+                className="play-detail-card run-adoption-conflict"
+                columns={ADOPTION_CARD_COLUMNS}
+                fillRole={CHROME_STRUCTURAL_FILL_ROLE}
+                data-testid="run-adoption-conflict"
+              >
+                <ChromeDividedGridRow spans="all" className="play-detail-lede">
+                  <p className="run-adoption-conflict-lede">Two Runs are active. Keep one; the other is discarded.</p>
+                </ChromeDividedGridRow>
+                {adoptionCandidates(presentation.adoptionConflict).map((candidate) => (
+                  <ChromeDividedGridRowGroup
+                    className="run-adoption-candidate"
+                    key={candidate.testId}
+                    role="group"
+                    aria-label={candidate.label}
+                  >
+                    <ChromeDividedGridRow spans="all" className="play-detail-head">
+                      <h2>{candidate.label}</h2>
+                    </ChromeDividedGridRow>
+                    <ChromeDividedGridRow spans="all" className="play-detail-facts">
+                      <dl>
+                        {candidate.facts.map((fact) => (
+                          <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>
+                        ))}
+                      </dl>
+                    </ChromeDividedGridRow>
+                    <ChromeVerbRow
+                      verbs={adoptionVerbs(candidate)}
+                      className="play-detail-verbs"
+                      cellClassName="play-detail-verb"
+                    />
+                  </ChromeDividedGridRowGroup>
+                ))}
+              </DividedInnerChromeBox>
             </div>
-            <div className="ce-preview-actions is-single">
-              <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE} to="/run"><span>Play</span></ChromeNavButton>
+          </aside>
+        ) : choice === 'current' && presentedRun ? (
+          /* No heading, for the same reason the sibling column has none: the rail tab that
+             opened this column already says Current Run, so a title there spends a row
+             restating the press that got you here. The aside keeps the name as a landmark. */
+          <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Current Run" data-testid="run-detail-current">
+            <div className="play-detail-body">
+              {/* One field, not a stack of floats. The facts and the verb that completes them
+                  share a single structural stone card, so neither stands as bare text on the live
+                  vista. The card is teal because it establishes a region; the Play plate inside
+                  it is oak because it is the one thing here that takes a click (ADR-0433). The
+                  verb still directly follows the facts it completes (ADR-0475) — it is inside the
+                  same field now rather than under it.
+
+                  Play IS the card's closing row: a plaque parked in the field drew a second frame
+                  a few pixels inside the one already around it, with a margin of marble showing
+                  on all four sides. As a row it reaches the card's frame on both sides and the
+                  kit's rail above it, and that rail is the box's own — laid and capped from its
+                  grid lines rather than placed by hand (ADR-0059). */}
+              <DividedInnerChromeBox className="play-detail-card" columns={verbColumns(RUN_PLAY_VERBS)} fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
+                <ChromeDividedGridRow spans="all" className="play-detail-facts">
+                  <dl>
+                    <div><dt>Battle</dt><dd>{presentedRun.battleIndex + 1} of {presentedRun.war.battles.length}</dd></div>
+                    {/* Cards, not units: Deployment deals the CHARTULARY, one whole card at a
+                        time, and a card that overruns the level's band takes none of its units
+                        onto the board — so a unit count states a force this Run may never
+                        field. The unit roster is the Army ledger's subject, not this row's. */}
+                    <div><dt>Army</dt><dd>{formatCardCount(runHeldCardCount(presentedRun))}</dd></div>
+                    <div><dt>Gold</dt><dd>{formatGold(presentedRun.goldTenths)}</dd></div>
+                    <div><dt>Ataraxia</dt><dd>{ATARAXIA_BY_TIER[presentedRun.ataraxiaTier].label}</dd></div>
+                    <div><dt>Deployment</dt><dd>Arrange formations</dd></div>
+                  </dl>
+                </ChromeDividedGridRow>
+                <ChromeVerbRow verbs={RUN_PLAY_VERBS} className="play-detail-verbs" cellClassName="play-detail-verb" />
+              </DividedInnerChromeBox>
             </div>
           </aside>
         ) : null}
 
         {choice === 'new' ? (
+          /* No heading. The rail tab that opened this column already says Start New Run, and the
+             verb at the bottom says it again — a title that only repeats the tab you just pressed
+             spends a row of the column and settles nothing. The aside keeps the name for anyone
+             reading the page by its landmarks. */
           <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Start New Run" data-testid="run-detail-new">
-            <div className="ce-selected-head"><h2>Start New Run</h2></div>
-            <div className="play-detail-body">
-              <AtaraxiaSelector
-                value={ataraxiaTier}
-                highestUnlockedTier={highestUnlockedTier}
-                onChange={(tier) => { setArmed(false); setAtaraxiaTier(tier); }}
-                fillSurface={CHROME_LEAF_FILL_SURFACE}
-              />
-            </div>
-            {presentedRun ? (
-              <InnerChromeBox
-                className="run-replace-note"
-                fillSurface={CHROME_LEAF_FILL_SURFACE}
-                role="note"
-                data-testid="run-replace-warning"
-              >
-                <h3>Replaces your current Run</h3>
-                <p>Starting a new Run abandons {presentedRun.war.name} — Battle {presentedRun.battleIndex + 1} of {presentedRun.war.battles.length} · {formatGold(presentedRun.goldTenths)} gold. This cannot be undone.</p>
-              </InnerChromeBox>
-            ) : null}
-            {presentedRun && armed ? (
-              <div className="ce-preview-actions run-replace-decision">
-                <ChromeButton unit="inner-text-button"
-                  ref={keepRunButtonRef}
-                  className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
-                  data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                  data-testid="run-keep"
-                  disabled={starting}
-                  onClick={() => setArmed(false)}
+            {/* ONE field, not four slabs with the vista showing through between them. Preparing a
+                Run is a single control — choose the rung, read what it costs you, press the verb —
+                and it was drawn as four separate boxes whose gaps read as four unrelated things
+                that happened to be stacked. The gaps are now the box's own rails, which is what a
+                boundary between parts of one thing looks like in this kit, and each part is a CELL
+                with its controls inserted into it (ADR-0433: marble field, oak leaves).
+                Rails sit exactly where the gaps were — between the former boxes. Options' name and
+                its choices are two halves of one cell, not two things, so no rail divides them. */}
+            <DividedInnerChromeBox
+              className="run-prep-box"
+              /* The verbs decide the box's tracks: two only while the replacement question is
+                 open, because that is the only row with a compartment in it. Every other cell
+                 spans, so the box suppresses its full-height rail and the armed row carries the one
+                 vertical segment itself, capped at both ends by the tees the boundary layer places
+                 where it meets the rows above and below (ChromeDividedGrid). */
+              columns={verbColumns(runVerbs)}
+              fillRole={CHROME_STRUCTURAL_FILL_ROLE}
+              aria-label="Run preparation"
+            >
+              {ataraxiaPrepCells({
+                value: ataraxiaTier,
+                highestUnlockedTier,
+                onChange: (tier) => { setArmed(false); setAtaraxiaTier(tier); },
+                fillSurface: CHROME_LEAF_FILL_SURFACE,
+              })}
+
+              {presentedRun ? (
+                /* Bare marble — no oak, and no box of its own. Nothing in this cell can be pressed;
+                   it is a standing statement about the Run you are replacing, and the oak is what
+                   tells you a surface takes a click (ADR-0433). */
+                <ChromeDividedGridRow
+                  spans="all"
+                  className="run-prep-cell run-replace-note"
+                  role="note"
+                  data-testid="run-replace-warning"
                 >
-                  <span>Keep Run</span>
-                </ChromeButton>
-                <ChromeButton unit="inner-text-button"
-                  className={chromeUnitClassNames('inner-text-button', 'ce-asset-button', 'is-danger')}
-                  data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                  data-testid="run-abandon-and-start"
-                  disabled={starting}
-                  onClick={() => { void start(); }}
-                >
-                  <span>{starting ? 'Starting…' : 'Abandon and Start'}</span>
-                </ChromeButton>
-              </div>
-            ) : (
-              <div className="ce-preview-actions is-single">
-                <ChromeButton unit="inner-text-button"
-                  className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
-                  data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                  data-testid="run-start"
-                  disabled={newRunUnavailable || starting}
-                  onClick={() => { if (presentedRun) { setArmed(true); return; } void start(); }}
-                >
-                  <span>{starting ? 'Starting…' : 'Start Run'}</span>
-                </ChromeButton>
-              </div>
-            )}
+                  <h3>Replaces your current Run</h3>
+                  <p>Starting a new Run abandons {presentedRun.war.name} — Battle {presentedRun.battleIndex + 1} of {presentedRun.war.battles.length} · {formatGold(presentedRun.goldTenths)} gold. This cannot be undone.</p>
+                </ChromeDividedGridRow>
+              ) : null}
+
+              {/* The verb IS the cell — wood filling the whole area between the rails, with the
+                  box's frame as its edge — and armed it SPLITS into two, each answer its own
+                  compartment of the same row. Both shapes are ChromeVerbRow's, declared as data:
+                  this branch hand-rolled the row first, and the shared primitive landed on main
+                  the same day doing exactly this, which makes a private copy the parallel
+                  ADR-0059 forbids. */}
+              <ChromeVerbRow verbs={runVerbs} className="run-prep-verbs" cellClassName="run-prep-verb" />
+
+              {/* Below the verb, deliberately. The defaults are the game and almost nobody opens
+                  this, so it must not sit between the Ataraxia choice and Start Run as if it were
+                  a step in setup. It no longer grows the box either — its cells are there whether
+                  the choices are showing or not, so opening it moves nothing. */}
+              {runRulesCells}
+            </DividedInnerChromeBox>
           </aside>
         ) : null}
       </RunDetailContentSceneSlot>
@@ -790,6 +948,7 @@ export function PlayMenu({
         data-thumbnail-authority={thumbnailSurface.error ? 'error' : thumbnailSurface.complete ? 'ready' : 'loading'}
       >
       {PLAY_SOURCE_RAIL_ENABLED ? <ApparatusRailColumn
+          opens="panel-beside"
         className="menu-dest-col menu-dest-tabs play-source-rail"
         aria-label="Play"
       >
@@ -912,13 +1071,9 @@ export function PlayMenu({
           level={selectedLevel}
           title={selectedTitle}
           embedded
-          actions={
-            <div className="ce-preview-actions is-single">
-              {selectedUnlocked
-                ? <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE} to={selectedPlayHref}><span>Play</span></ChromeNavButton>
-                : <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE} disabled><span>Locked</span></ChromeButton>}
-            </div>
-          }
+          verbs={[selectedUnlocked
+            ? { id: 'play', label: 'Play', to: selectedPlayHref }
+            : { id: 'locked', label: 'Locked', disabled: true }]}
         />
       ) : null}
       </PlayContentSceneSlot>

@@ -8,11 +8,15 @@ import { defaultFacingForSide, PLAYABLE_PIECE_TYPES, type PlayablePieceType } fr
 import {
   beginBattle,
   hasLipsanon,
+  isRunStarterCardId,
   mixSeed,
   PIECE_VALUE,
   runCardDefinition,
   runCardUnitIds,
+  runDeploymentDealCount,
+  runRules,
   setDeploymentChoices,
+  shuffled,
   type RunArmyUnit,
   type RunDeploymentTransport,
   type RunDocument,
@@ -680,12 +684,26 @@ export function distinctCardRotations(
   run: RunDocument,
   cardId: string,
 ): RunFormationRotation[] {
+  // A Run created without rotation places a card as it was dealt. This is the one place the
+  // offered turns are decided -- the rail reads it and the cycling gestures walk it -- so the
+  // rule is enforced here rather than at each control that would otherwise have to remember it.
+  if (!runRules(run).mayRotate) return [0];
   const card = dealtCards(run).find((candidate) => candidate.id === cardId);
-  if (!card) return [];
+  return card ? distinctFormationRotations(card, run.army) : [];
+}
+
+/** The same answer for a card that has not been dealt — what Exploratio's shuffled preview
+ * asks of a card it is only imagining onto the band (ADR-0549). The rule is one rule: a turn
+ * counts when it seats a different arrangement of TYPES, which is the only difference a
+ * player can see. */
+export function distinctFormationRotations(
+  card: RunOwnedCard,
+  army: readonly RunArmyUnit[],
+): RunFormationRotation[] {
   const definition = runCardDefinition(card.coreId);
   const formation = definition?.formation ?? card.unitSeats.map((_, x) => ({ x, y: 0 }));
   const types = card.unitSeats.map((unitId) => (
-    run.army.find((candidate) => candidate.id === unitId)?.type ?? ''
+    army.find((candidate) => candidate.id === unitId)?.type ?? ''
   ));
   const seen = new Set<string>();
   return ([0, 1, 2, 3] as const).filter((rotation) => {
@@ -747,14 +765,52 @@ export function arrangedCardPlacementOptions(
     || run.deployment?.stage !== 'arranging'
   ) return [];
   const card = dealtCards(run).find((candidate) => candidate.id === cardId);
-  const definition = card ? runCardDefinition(card.coreId) : null;
   if (!card) return [];
-  const admitted = new Set(run.deployment.deployingUnitIds);
+  const ownUnitIds = new Set(runCardUnitIds(card));
+  return formationPlacementOptions({
+    level,
+    army: run.army,
+    card,
+    admittedUnitIds: new Set(run.deployment.deployingUnitIds),
+    // The card's own seats are not obstacles to itself: a formation already on the board is
+    // being MOVED, not stacked on.
+    occupied: new Set(Object.entries(decodedPlacements(run))
+      .filter(([unitId]) => !ownUnitIds.has(unitId))
+      .map(([, cell]) => key(cell))),
+    rotation,
+  });
+}
+
+/**
+ * Every legal seating of one card's formation, given the band and the squares already taken.
+ *
+ * The geometry with the Deployment phase lifted off it, so Exploratio's shuffled preview seats
+ * a formation by exactly the rule that will seat it for real (ADR-0059) rather than by a second
+ * planner that could drift from it. The arranging path above is this function plus its phase
+ * guard and its own reading of what is admitted and occupied.
+ */
+export function formationPlacementOptions({
+  level,
+  army,
+  card,
+  admittedUnitIds,
+  occupied,
+  rotation,
+}: {
+  level: Level;
+  army: readonly RunArmyUnit[];
+  card: RunOwnedCard;
+  admittedUnitIds: ReadonlySet<string>;
+  /** Cell keys already claimed by OTHER formations. */
+  occupied: ReadonlySet<string>;
+  rotation: RunFormationRotation;
+}): RunArrangedPlacementOption[] {
+  const definition = runCardDefinition(card.coreId);
   const formation = definition?.formation ?? card.unitSeats.map((_, x) => ({ x, y: 0 }));
   const seats = formation.flatMap((offset, index) => {
     const unitId = card.unitSeats[index];
-    const unit = unitId ? run.army.find((candidate) => candidate.id === unitId) : undefined;
-    return unit && admitted.has(unit.id) ? [{ unit, offset }] : [];
+    const unit = unitId ? army.find((candidate) => candidate.id === unitId) : undefined;
+    return unit && admittedUnitIds.has(unit.id) ? [{ unit, offset }] : [];
   });
   if (!seats.length || seats.length !== runCardUnitIds(card).length) return [];
   const transformed = rotatedFormation(seats.map(({ offset }) => offset), rotation);
@@ -762,10 +818,6 @@ export function arrangedCardPlacementOptions(
   const eligibleByType = new Map(
     PLAYABLE_PIECE_TYPES.map((type) => [type, new Set(pools.byType[type].map(key))]),
   );
-  const ownUnitIds = new Set(seats.map(({ unit }) => unit.id));
-  const occupied = new Set(Object.entries(decodedPlacements(run))
-    .filter(([unitId]) => !ownUnitIds.has(unitId))
-    .map(([, cell]) => key(cell)));
   // Anchors sweep the band in its own coordinates — every lane against every position along
   // it — so a band standing on its side is enumerated as completely as one lying flat. The
   // seat offsets stay in BOARD space here: the player turns the shape themselves, so this
@@ -1441,7 +1493,19 @@ export function selectedDeploymentLayout(run: RunDocument, options: RunDeploymen
   return options.layouts[0];
 }
 
-export function levelWithRunDeployment(run: RunDocument, level: Level, layout: RunDeploymentLayout): Level {
+/**
+ * The Run's own figures for a settled layout, as durable level units.
+ *
+ * Split out of `levelWithRunDeployment` because Exploratio paints the same army onto a board it
+ * is only imagining, and a board built from `boardCode` reads its units from that code rather
+ * than from `layers.units` — so the preview needs the figures themselves, not a level carrying
+ * them (ADR-0059).
+ */
+export function runDeploymentLevelUnits(
+  run: RunDocument,
+  level: Level,
+  layout: RunDeploymentLayout,
+): LevelUnit[] {
   const armyById = new Map(run.army.map((unit) => [unit.id, unit]));
   const runUnits: LevelUnit[] = Object.entries(layout.placements).flatMap(([unitId, cell]) => {
     const unit = armyById.get(unitId);
@@ -1463,10 +1527,17 @@ export function levelWithRunDeployment(run: RunDocument, level: Level, layout: R
     side: 'neutral',
     runUnitId: `run-tent-rock-${index}`,
   }));
+  return [...runUnits, ...rocks];
+}
+
+export function levelWithRunDeployment(run: RunDocument, level: Level, layout: RunDeploymentLayout): Level {
   return {
     ...level,
     runRules: { occultDagger: hasLipsanon(run, 'occult-dagger') },
-    layers: { ...level.layers, units: [...level.layers.units, ...runUnits, ...rocks] },
+    layers: {
+      ...level.layers,
+      units: [...level.layers.units, ...runDeploymentLevelUnits(run, level, layout)],
+    },
   };
 }
 
@@ -1482,6 +1553,112 @@ export function levelForRunDeployment(
   _includeAutomaticFormation = false,
 ): Level {
   return levelWithRunDeployment(run, level, layout);
+}
+
+export interface RunDeploymentPreviewCard {
+  card: RunOwnedCard;
+  /** The band still had room for the whole card when its turn came. */
+  admitted: boolean;
+  /** This shuffle found the admitted card a legal seating. */
+  placed: boolean;
+}
+
+export interface RunDeploymentPreview {
+  /** The imagined deal, in the order it would be admitted. */
+  cards: RunDeploymentPreviewCard[];
+  /** Seatings in the shape the canonical projection consumes. */
+  layout: RunDeploymentLayout;
+  placedUnitCount: number;
+}
+
+/**
+ * One arrangement the upcoming Battle COULD open with: a fresh shuffle of the held collection,
+ * dealt to the Battle's own count, admitted by the band's own capacity rule, and seated at
+ * random wherever the band will legally take each formation.
+ *
+ * Deliberately not the deal the Run will make. Exploratio is reconnaissance (ADR-0386), and the
+ * real deal is settled by `prepareDeployment` from the Run's own seed after the Sectio is left —
+ * so this reads its own shuffle number instead, and a new one is a new possibility rather than a
+ * peek at the answer. Nothing here writes: the caller holds the shuffle number and this returns
+ * a layout (ADR-0549).
+ *
+ * Every rule it applies is the rule Deployment applies — the King card dealt first, whole-card
+ * admission while the band has room, and `formationPlacementOptions` for where a formation may
+ * stand — so a preview cannot show an arrangement the Battle would refuse.
+ */
+export function shuffledDeploymentPreview({
+  run,
+  level,
+  battleIndex,
+  shuffle,
+}: {
+  run: RunDocument;
+  level: Level;
+  /** The Battle being previewed — during a Sectio that is the one it leads INTO. */
+  battleIndex: number;
+  /** Which imagining this is. Same number, same arrangement; a new one reshuffles. */
+  shuffle: number;
+}): RunDeploymentPreview {
+  const seed = mixSeed(mixSeed(run.seed, 'battle-preview', battleIndex), 'shuffle', shuffle);
+  // A deck smaller than the deal is dealt whole, exactly as the Sectio's own note promises.
+  const dealCount = Math.min(runDeploymentDealCount({ war: run.war, battleIndex }), run.cards.length);
+  const kingCard = run.cards.find((card) => isRunStarterCardId(card.coreId));
+  const dealt = [
+    ...(kingCard ? [kingCard] : []),
+    ...shuffled(run.cards.filter((card) => card.id !== kingCard?.id), mixSeed(seed, 'preview-cards')),
+  ].slice(0, dealCount);
+
+  // Capacity admission, on `resolveDeploymentCapacity`'s terms: cards are admitted WHOLE and in
+  // order, and the first one that will not fit stops the admission rather than being skipped.
+  let remaining = playerDeploymentCells(level).length;
+  const admittedCardIds = new Set<string>();
+  for (const card of dealt) {
+    const unitIds = runCardUnitIds(card).filter((id) => run.army.some((unit) => unit.id === id));
+    if (unitIds.length > remaining) break;
+    admittedCardIds.add(card.id);
+    remaining -= unitIds.length;
+  }
+  const admittedUnitIds = new Set(dealt
+    .filter((card) => admittedCardIds.has(card.id))
+    .flatMap(runCardUnitIds));
+
+  const rng = createRng(mixSeed(seed, 'preview-placement'));
+  const placements: Record<string, Vec> = {};
+  const occupied = new Set<string>();
+  const placedCardIds = new Set<string>();
+  for (const card of dealt) {
+    if (!admittedCardIds.has(card.id)) continue;
+    // Every seating of every distinguishable turn, drawn from as one pool — so the turn a
+    // formation takes is as much a part of the shuffle as the square it stands on, and a turn
+    // the remaining band cannot hold simply contributes nothing.
+    const options = distinctFormationRotations(card, run.army).flatMap((rotation) => (
+      formationPlacementOptions({ level, army: run.army, card, admittedUnitIds, occupied, rotation })
+    ));
+    if (!options.length) continue;
+    for (const [unitId, cell] of Object.entries(options[rng.int(options.length)].placements)) {
+      placements[unitId] = cell;
+      occupied.add(key(cell));
+    }
+    placedCardIds.add(card.id);
+  }
+
+  return {
+    cards: dealt.map((card) => ({
+      card,
+      admitted: admittedCardIds.has(card.id),
+      placed: placedCardIds.has(card.id),
+    })),
+    layout: {
+      index: 0,
+      placements,
+      blockedUnitIds: run.army.map((unit) => unit.id).filter((unitId) => !placements[unitId]),
+      reserveUnitIds: [],
+      // The tent stands in a preview too: it takes squares off the board the player is reading.
+      temporaryRocks: temporaryTentRocks(run, level, placements),
+      trace: [],
+    },
+    placedUnitCount: Object.keys(placements).length,
+  };
 }
 
 export function normalReservistCell(

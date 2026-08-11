@@ -18,7 +18,7 @@ import type { LogEntry, SkirmishState } from './store';
 import { readElapsedClockMs } from '../core/clock';
 
 const KEY = 'chess-tactics-active-match-v1';
-const VERSION = 3;
+const VERSION = 4;
 
 // The fields that fully describe a resumable match. `env` (derived) and
 // `selectedId`/`focusedId` (transient) are deliberately omitted — see module note.
@@ -27,8 +27,10 @@ export type PersistedMatch = Pick<
   'game' | 'seed' | 'tick' | 'log' | 'objective' | 'objectiveCtx' | 'victoryOverride' | 'turnsElapsed' | 'levelId' | 'clock' | 'battleElapsed'
 > &
   // Optional for snapshots written before these fields existed. resumeMatch defaults
-  // a missing AI mode to search and a missing activity id to standalone play.
-  Partial<Pick<SkirmishState, 'aiMode' | 'activityId' | 'undoCheckpoint'>> & {
+  // a missing AI mode to search and a missing activity id to standalone play, and a
+  // missing position history to the one board the snapshot holds (review has nothing
+  // earlier to offer, rather than claiming the game began there).
+  Partial<Pick<SkirmishState, 'aiMode' | 'activityId' | 'undoStack' | 'positions'>> & {
     /** Wall-clock recency used only to order Play's resumable activities. */
     savedAt?: string;
   };
@@ -83,7 +85,12 @@ function sliceOf(state: SkirmishState): PersistedMatch {
       startedAtMs: null,
     },
     aiMode: state.aiMode,
-    undoCheckpoint: state.undoCheckpoint ?? null,
+    undoStack: state.undoStack ?? [],
+    // The score sheet's boards, so a reloaded match can still be read back move by move.
+    // Each entry is the mutable half of a position only (see game/moveReview), which is what
+    // keeps a whole game's worth of them off the same order of size as the board itself.
+    // The review CURSOR is not stored: a resumed match opens live.
+    positions: state.positions ?? [],
     savedAt: new Date().toISOString(),
   };
 }
@@ -117,14 +124,37 @@ export function persistMatch(state: SkirmishState): void {
   // this mounted board. Any later started non-victory match retires the stale handoff.
   if (state.started) currentSessionRunVictory = reviewableRunVictory ? sliceOf(state) : null;
   if (!enabled) return;
-  if (!state.started || (state.game.winner !== null && !state.undoCheckpoint && !reviewableRunVictory)) {
+  if (!state.started || (state.game.winner !== null && !state.undoStack.length && !reviewableRunVictory)) {
     if (state.started) clearMatch(); // an irrevocably finished match has nothing to resume
     return;
   }
   const store = storage();
   if (!store) return;
-  const envelope: StoredEnvelope = { version: VERSION, ...sliceOf(state) };
-  try { store.setItem(KEY, JSON.stringify(envelope)); } catch { /* quota/blocked — best-effort */ }
+  writeEnvelope(store, { version: VERSION, ...sliceOf(state) });
+}
+
+/**
+ * Write the snapshot, shortening its Undo history rather than losing the board.
+ *
+ * The undo stack carries one whole position per move played (ADR-0556), so a long Battle is
+ * the largest thing this module stores and the only part of it that grows without bound. When
+ * the quota refuses the write, the old failure was silent and total: `setItem` threw, the
+ * PREVIOUS snapshot stayed on disk, and a reload resumed a board several moves stale. So the
+ * deepest half of the history is dropped and the write retried, repeatedly, until the board
+ * itself fits. Losing the oldest undos is a shallower rewind; losing the write is the wrong
+ * position. Recent moves are kept because they are the ones a player reaches for.
+ */
+function writeEnvelope(store: Storage, envelope: StoredEnvelope): void {
+  let undoStack = envelope.undoStack ?? [];
+  for (;;) {
+    try {
+      store.setItem(KEY, JSON.stringify({ ...envelope, undoStack }));
+      return;
+    } catch {
+      if (undoStack.length === 0) return; // not the history — nothing left to trade away
+      undoStack = undoStack.slice(Math.ceil(undoStack.length / 2));
+    }
+  }
 }
 
 // Minimal shape guard: enough to trust the blob can drive a board without throwing.
@@ -169,7 +199,14 @@ function migrateEnvelope(value: unknown): StoredEnvelope | null {
       ...(undo ? { undoCheckpoint: { ...undo, log: migrateLog(undo.log) } } : {}),
     };
   }
+  // v3 offered one level of Undo and stored the single checkpoint it could hold. A snapshot
+  // written then resumes as a one-deep history: exactly the Undo it was already offering.
+  if (envelope.version === 3) {
+    const { undoCheckpoint, ...rest } = envelope;
+    envelope = { ...rest, version: 4, undoStack: undoCheckpoint ? [undoCheckpoint] : [] };
+  }
   if (envelope.version !== VERSION) return null;
+  if (!Array.isArray(envelope.undoStack)) return null;
   const elapsed = envelope.battleElapsed as Record<string, unknown> | undefined;
   if (
     !elapsed
@@ -192,7 +229,7 @@ export function loadMatch(): PersistedMatch | null {
     const envelope = migrateEnvelope(parsed);
     if (!envelope) { clearMatch(); return null; }
     if ((parsed as { version?: unknown }).version !== VERSION) {
-      try { store.setItem(KEY, JSON.stringify(envelope)); } catch { /* best-effort migration write */ }
+      writeEnvelope(store, envelope); // best-effort migration write
     }
     const { version: _version, ...match } = envelope;
     return match;
@@ -214,7 +251,7 @@ export function persistedMatchMatchesActivity(
   const reviewableRunVictory = match.game.winner === 'player'
     && typeof match.activityId === 'string'
     && match.activityId.startsWith('run:');
-  return (match.game.winner === null || Boolean(match.undoCheckpoint) || reviewableRunVictory)
+  return (match.game.winner === null || Boolean(match.undoStack?.length) || reviewableRunVictory)
     && match.levelId === levelId
     && (match.activityId ?? null) === activityId;
 }

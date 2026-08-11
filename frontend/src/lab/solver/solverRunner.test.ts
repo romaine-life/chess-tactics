@@ -26,11 +26,17 @@ const mateIn1 = () => tinyLevel([
   { x: 2, y: 0, side: 'player', type: 'queen', facing: 'north' },
 ], 3, 3);
 
-/** 4×4 K vs K — every position drawn (the loopy canary). */
-const kvk = () => tinyLevel([
-  { x: 0, y: 0, side: 'enemy', type: 'king', facing: 'south' },
-  { x: 3, y: 3, side: 'player', type: 'king', facing: 'north' },
-], 4, 4);
+/** 4×4 K vs K — every position drawn (the loopy canary). One impassable corner keeps it OFF the
+ * dead-position draw (ADR-0554), which would otherwise make the root a terminal and leave the
+ * runner nothing loopy to walk. */
+const kvk = () => {
+  const lvl = tinyLevel([
+    { x: 0, y: 0, side: 'enemy', type: 'king', facing: 'south' },
+    { x: 3, y: 3, side: 'player', type: 'king', facing: 'north' },
+  ], 4, 4);
+  lvl.layers.terrain = lvl.layers.terrain.map((c) => (c.x === 0 && c.y === 3 ? { ...c, terrain: 'cliff' as const } : c));
+  return lvl;
+};
 
 /** 3×5 K+P vs K — mate-in-5 via queening; a real interior search for the search phases.
  * Promotion must be AUTHORED (a pawn-promotion zone) like a real level — there is no

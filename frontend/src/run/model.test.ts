@@ -13,19 +13,35 @@ import {
   RUN_EN_PASSANT_BOUNTY_TENTHS,
   RUN_ROYAL_FORK_BOUNTY_TENTHS,
   RUN_ROYAL_FORK_MIN_VICTIM_VALUE,
-  RUN_SECTIO_CARD_PILE_SIZE,
+  RUN_SECTIO_CARD_OFFER_COUNT,
+  RUN_SECTIO_CARD_PILE_MAX,
+  sectioPileSize,
   RUN_SECTIO_EARLY_CARD_MAX_VALUE,
   RUN_CARD_BY_ID,
   RUN_CARD_CATALOG,
   RUN_CARD_DECK,
   RUN_CARD_RARITIES,
+  RUN_CARD_RARITY_COMMON_MAX_GOLD,
+  RUN_RARITY_RULES,
+  DEFAULT_RUN_RARITY_RULE,
+  RUN_CARD_RARITY_UNCOMMON_MAX_GOLD,
   RUN_LIPSANA,
   RUN_STARTER_CARD_BY_ID,
   RUN_STARTER_CARDS,
   RUN_STARTER_GOLD_BASELINE_VALUE,
+  RUN_STARTING_GOLD,
   RUN_STARTING_GOLD_TENTHS,
   acquireLipsanon,
+  canUndoRunBattleMove,
   captureRunBattleUndo,
+  chargeRunBattleUndoCheckpoint,
+  DEFAULT_RUN_RULES,
+  LEGACY_RUN_RULES,
+  RUN_SECTIO_CARD_PILE_RARITY_COUNT,
+  formationSpan,
+  openingKingOffers,
+  cardAllowedByRules,
+  runCardCost,
   createRun,
   createRunCardOffer,
   leaveSectio,
@@ -35,15 +51,22 @@ import {
   manubiaeUnitWorth,
   manubiumGoldTenths,
   payRunManubium,
+  RUN_LONG_REACH_SQUARES,
   RUN_MANUBIAE,
+  RUN_MANUBIUM_BY_ID,
   performAdlectio,
+  performExpunctio,
   resetSectio,
+  sectioAdmittedCardIds,
   runCardDefinition,
   undoRunBattleMove,
   runCardUnitIds,
   runCardRarity,
+  runCardRarityFor,
+  runRarityShiftAudit,
   runCardRarityForRoll,
   runSectioCardMaxValue,
+  sectioAdlectioSpent,
   sectioUpcomingBattleIndex,
   sectioCardOffersAtCursor,
   sectioCardPile,
@@ -52,6 +75,7 @@ import {
   takeVacantiaCard,
   takeVacantiaLipsanon,
   type RunDocument,
+  type RunRules,
   type RunWarSnapshot,
 } from './model';
 
@@ -70,8 +94,12 @@ function war(): RunWarSnapshot {
   };
 }
 
-function firstSectio(seed: number): RunDocument {
-  const run = createRun(war(), seed);
+// These exercise the PILE mechanism -- cursor advance, row retention, deterministic ordering -- so
+// they name the wide rules explicitly rather than inheriting whatever the default currently is. A
+// mechanism test that moves when the market's shape rule moves is a mechanism test that will one
+// day fail for a reason having nothing to do with the mechanism.
+function firstSectio(seed: number, rules: RunRules = LEGACY_RUN_RULES): RunDocument {
+  const run = createRun(war(), seed, { rules });
   return openSectio(
     { ...run, phase: 'battle' },
     run.army.map((unit) => unit.id),
@@ -193,14 +221,16 @@ describe('formation card catalog', () => {
     ]);
   });
 
-  it('bands rarity by material value', () => {
+  it('bands rarity on price, which material could not do', () => {
     expect(RUN_CARD_BY_ID.p.rarity).toBe('common');
-    expect(RUN_CARD_BY_ID.r.rarity).toBe('uncommon');
     expect(RUN_CARD_BY_ID.q.rarity).toBe('rare');
     expect(RUN_CARD_BY_ID['rr-vertical'].rarity).toBe('rare');
-    // Bishop material is six either way; the Bishops are what carry both pairs past the band.
-    expect(RUN_CARD_BY_ID['bb-diagonal'].rarity).toBe('rare');
-    expect(RUN_CARD_BY_ID['bb-vertical'].rarity).toBe('rare');
+    // A lone Rook is 50 gold and ordinary; the material band called it Uncommon on five points
+    // while a Queen-and-Pawn at ten points cost less than the Queen alone.
+    expect(RUN_CARD_BY_ID.r.rarity).toBe('common');
+    expect(RUN_CARD_BY_ID.q.value).toBeLessThan(RUN_CARD_BY_ID['pq-front'].value);
+    expect(runCardCost(RUN_CARD_BY_ID.q, DEFAULT_RUN_RULES))
+      .toBeGreaterThan(runCardCost(RUN_CARD_BY_ID['pq-front'], DEFAULT_RUN_RULES));
     expect(runCardRarityForRoll(0)).toBe('common');
     expect(runCardRarityForRoll(79)).toBe('common');
     expect(runCardRarityForRoll(80)).toBe('uncommon');
@@ -208,59 +238,97 @@ describe('formation card catalog', () => {
     expect(runCardRarityForRoll(95)).toBe('rare');
   });
 
-  it('drops the five awkward footprints one tier', () => {
-    const z = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 }];
-    const t = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 1, y: 1 }];
-    const j = [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }];
-    const line = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 }];
-    const square = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }];
-    const threePawns = ['pawn', 'pawn', 'pawn'] as const;
-    // Rare material on a shape that wastes the band comes down to Uncommon.
-    expect(runCardRarity(['rook', ...threePawns], z)).toBe('uncommon');
-    expect(runCardRarity(['rook', ...threePawns], j)).toBe('uncommon');
-    // Uncommon material takes the same step, which is what puts value-6 cards in the Common pool.
-    expect(runCardRarity(['knight', ...threePawns], t)).toBe('common');
-    // A straight run and a square pack cleanly, so both keep their band at the same material.
-    expect(runCardRarity(['rook', ...threePawns], line)).toBe('rare');
-    expect(runCardRarity(['knight', ...threePawns], square)).toBe('uncommon');
-    // The drop reads the shape after rotation, exactly as card identity does.
-    expect(runCardRarity(['rook', ...threePawns], z.map(({ x, y }) => ({ x: -y, y: x }))))
-      .toBe('uncommon');
-    // A Bishop is worth exactly the band a wasteful shape costs, so the two cancel.
-    expect(runCardRarity(['bishop', ...threePawns], z)).toBe('uncommon');
-    expect(runCardRarity(['bishop', 'bishop', 'pawn', 'pawn'], z)).toBe('rare');
-  });
-
-  it('costs a band for a Bishop however that card places it', () => {
-    const withBishop = RUN_CARD_DECK.filter((card) => card.pieces.includes('bishop'));
-    expect(withBishop.length).toBeGreaterThan(0);
-    // Free placement decides the colour a Bishop lands on, so the card's own parity earns nothing:
-    // every Bishop card sits one band above the same roster's material-and-shape reading.
-    for (const card of withBishop) {
-      const withoutBishops = card.pieces.map((piece) => piece === 'bishop' ? 'knight' as const : piece);
-      const unpriced = runCardRarity(withoutBishops, card.formation!);
-      const ladder = [...RUN_CARD_RARITIES];
-      expect(ladder.indexOf(card.rarity), card.id)
-        .toBe(Math.min(ladder.length - 1, ladder.indexOf(unpriced) + 1));
+  it('cuts the bands at the declared prices and nowhere else', () => {
+    for (const card of RUN_CARD_DECK) {
+      const gold = runCardCost(card, DEFAULT_RUN_RULES) * GOLD_SCALE;
+      const shifted = RUN_RARITY_RULES[DEFAULT_RUN_RARITY_RULE].shifts.some((shift) => shift.holds(
+        { pieces: card.pieces, formation: card.formation ?? [] },
+      ));
+      if (shifted) continue;
+      const expected = gold <= RUN_CARD_RARITY_COMMON_MAX_GOLD
+        ? 'common'
+        : gold <= RUN_CARD_RARITY_UNCOMMON_MAX_GOLD ? 'uncommon' : 'rare';
+      expect(card.rarity, `${card.id} at ${gold}`).toBe(expected);
     }
-    // No Bishop reaches the tier that owns 80% of a pile's seats, and the made pair is always Rare.
-    expect(withBishop.some((card) => card.rarity === 'common')).toBe(false);
-    const paired = withBishop.filter((card) => (
-      card.pieces.filter((piece) => piece === 'bishop').length >= 2
-    ));
-    expect(paired.length).toBeGreaterThan(0);
-    expect(paired.every((card) => card.rarity === 'rare')).toBe(true);
   });
 
-  it('holds the catalog to a Common tier that cannot hand out clean material', () => {
+  it('takes every card of nothing but minors into Rare, whatever it costs', () => {
+    const corner = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }];
+    const domino = [{ x: 0, y: 0 }, { x: 0, y: 1 }];
+    // The pair the player assembles by hand, and the batteries. None of these price as Rare.
+    expect(runCardRarity(['bishop', 'bishop'], domino)).toBe('rare');
+    expect(runCardRarity(['knight', 'knight'], domino)).toBe('rare');
+    expect(runCardRarity(['bishop', 'knight'], domino)).toBe('rare');
+    expect(runCardRarity(['bishop', 'bishop', 'knight'], corner)).toBe('rare');
+    expect(runCardRarity(['knight', 'knight', 'knight'], corner)).toBe('rare');
+    // One minor is not a cluster, and a Pawn riding along means the card is not made of minors.
+    expect(runCardRarity(['bishop'], [{ x: 0, y: 0 }])).toBe('common');
+    expect(runCardRarity(['bishop', 'bishop', 'pawn'], corner)).toBe('common');
+  });
+
+  it('declares its shifts as data, so a dead one can be seen rather than discovered', () => {
+    // The rule this replaced fused two adjustments into the function. One of them stopped acting on
+    // any card at all when the shape rule narrowed, and nothing anywhere reported that -- it
+    // surfaced as a Sectio dealing the same card twice. A shift is auditable for that reason.
+    const audit = runRarityShiftAudit(DEFAULT_RUN_RULES);
+    expect(audit).toHaveLength(RUN_RARITY_RULES[DEFAULT_RUN_RARITY_RULE].shifts.length);
+    for (const report of audit) {
+      expect(report.moved.length, `${report.shift.id} moves nothing and is dead`).toBeGreaterThan(0);
+    }
+    const cluster = audit.find((report) => report.shift.id === 'minor-cluster')!;
+    expect(cluster.moved).toHaveLength(11);
+    expect(cluster.moved).toContain('bb-vertical');
+    expect(cluster.moved).toContain('kk-horizontal');
+    expect(cluster.moved).toContain('f-011011-kkk');
+  });
+
+  it('lets a Run be started on the older ladder, and deals it what that ladder deals', () => {
+    const material: RunRules = { ...DEFAULT_RUN_RULES, rarity: 'material-bands' };
+    const tally = (rules: RunRules) => Object.fromEntries(RUN_CARD_RARITIES.map((rarity) => [
+      rarity,
+      RUN_CARD_DECK.filter((card) => (
+        cardAllowedByRules(card, rules) && runCardRarityFor(card, rules) === rarity
+      )).length,
+    ]));
+    expect(tally(DEFAULT_RUN_RULES)).toEqual({ common: 41, uncommon: 14, rare: 14 });
+    expect(tally(material)).toEqual({ common: 6, uncommon: 9, rare: 54 });
+
+    // The option is only worth having if it reaches the market, and what it reaches now is the
+    // PILE. A tier no longer repeats to fill its seats; the pile shrinks to what the tiers can
+    // fill, so the older ladder pays for its narrowness in how much market it can show at once.
+    expect(sectioPileSize(Number.POSITIVE_INFINITY, material))
+      .toBeLessThan(sectioPileSize(Number.POSITIVE_INFINITY, DEFAULT_RUN_RULES));
+    // Whichever ladder is chosen, no pile repeats a card. That is a property of the size rule
+    // rather than of the rarity rule, which is why it holds for both.
+    for (const rules of [material, DEFAULT_RUN_RULES]) {
+      const pile = sectioCardPile(23, 0, Number.POSITIVE_INFINITY, rules);
+      expect(new Set(pile.map((card) => card.id)).size, rules.rarity).toBe(pile.length);
+    }
+  });
+
+  it('reports the older ladder’s footprint shift as dead on the narrow market', () => {
+    // The failure that started this, stated by the machinery itself rather than by a comment. The
+    // demotion is alive on the wide catalog and moves nothing on the two-by-two one, because all
+    // five of the shapes it names are three cells long.
+    const wide = runRarityShiftAudit({ ...LEGACY_RUN_RULES, rarity: 'material-bands' });
+    const narrow = runRarityShiftAudit({ ...DEFAULT_RUN_RULES, rarity: 'material-bands' });
+    const footprint = (audit: typeof wide) => audit.find((report) => report.shift.id === 'awkward-footprint')!;
+    expect(footprint(wide).moved.length).toBeGreaterThan(0);
+    expect(footprint(narrow).moved).toEqual([]);
+    // And the Bishop step is alive on both, so a dead reading is about that shift and not the audit.
+    expect(narrow.find((report) => report.shift.id === 'bishop-step')!.moved.length).toBeGreaterThan(0);
+  });
+
+  it('holds a Common tier large enough that a pile cannot repeat itself', () => {
+    const market = RUN_CARD_DECK.filter((card) => cardAllowedByRules(card, DEFAULT_RUN_RULES));
     expect(Object.fromEntries(RUN_CARD_RARITIES.map((rarity) => [
       rarity,
-      RUN_CARD_DECK.filter((card) => card.rarity === rarity).length,
-    ]))).toEqual({ common: 29, uncommon: 71, rare: 169 });
-    // Every Common above the value band is there because its footprint wastes the band.
-    const richCommons = RUN_CARD_DECK.filter((card) => card.rarity === 'common' && card.value > 4);
-    expect(richCommons).toHaveLength(16);
-    expect(richCommons.every((card) => card.value === 6 && card.formation!.length === 4)).toBe(true);
+      market.filter((card) => card.rarity === rarity).length,
+    ]))).toEqual({ common: 41, uncommon: 14, rare: 14 });
+    // THE POINT. A pile draws its sixteen Common seats from one shuffle of the tier, so a tier at
+    // least that large fills them with distinct cards and a row cannot deal the same card twice.
+    expect(market.filter((card) => card.rarity === 'common').length)
+      .toBeGreaterThanOrEqual(sectioPileRarityQuota(Number.POSITIVE_INFINITY, DEFAULT_RUN_RULES).common);
   });
 
   it('keeps His Grace on one protected three-unit starter card', () => {
@@ -302,6 +370,23 @@ describe('plain Run creation and acquisition', () => {
     expect(run.deploymentMode).toBe('arranged');
   });
 
+  it('deals a pile of distinct cards under the narrow default', () => {
+    // This test used to assert the opposite, and record it: the material bands left six distinct
+    // commons against sixteen pile seats, so a pile filled its seats by repeating them and a Sectio
+    // dealt the same card twice in one row. Pricing the bands is what fixed it, and asserting
+    // distinctness here is what stops it coming back the next time the shape rule moves.
+    const narrow = RUN_CARD_DECK.filter((card) => cardAllowedByRules(card, DEFAULT_RUN_RULES));
+    expect(narrow.filter((card) => card.rarity === 'common').length)
+      .toBeGreaterThanOrEqual(sectioPileRarityQuota(Number.POSITIVE_INFINITY, DEFAULT_RUN_RULES).common);
+    const pile = sectioCardPile(23, 0, Number.POSITIVE_INFINITY, DEFAULT_RUN_RULES);
+    expect(pile).toHaveLength(sectioPileSize(Number.POSITIVE_INFINITY, DEFAULT_RUN_RULES));
+    expect(new Set(pile.map((card) => card.id)).size).toBe(pile.length);
+
+    // And the pile outlasts a whole Run's walk of offers, so the row cannot repeat by crossing a
+    // pile boundary either. That is what takes the duplicate from rare to unreachable.
+    expect(pile.length).toBeGreaterThan(RUN_SECTIO_CARD_OFFER_COUNT * 10);
+  });
+
   it('deals the first three hidden-pile cards only after Battle 1', () => {
     const run = firstSectio(23);
     const offers = run.sectio!.cardOffers;
@@ -310,7 +395,7 @@ describe('plain Run creation and acquisition', () => {
     expect(offers.every((offer) => ['common', 'uncommon', 'rare'].includes(offer.rarity))).toBe(true);
     expect(run.sectioCardCursor).toBe(3);
     expect(offers.map((offer) => offer.id)).toEqual(
-      sectioCardOffersAtCursor(run.seed, 0, 0, 3).map((offer) => offer.id),
+      sectioCardOffersAtCursor(run.seed, 0, 0, 3, LEGACY_RUN_RULES).map((offer) => offer.id),
     );
   });
 
@@ -454,6 +539,70 @@ describe('plain Run creation and acquisition', () => {
     expect(runCardUnitIds(card).map((id) => acquired.army.find((unit) => unit.id === id)!.type))
       .toEqual(['knight', 'pawn', 'pawn']);
   });
+
+  it('reports which cards THIS Sectio visit admitted, so Expunctio can say so', () => {
+    const base = firstSectio(31);
+    const offer = createRunCardOffer(base, RUN_CARD_BY_ID['ppk-protected'], -1, 0);
+    const run = {
+      ...base,
+      goldTenths: 400 * GOLD_SCALE,
+      sectio: { ...base.sectio!, cardOffers: [offer] },
+    };
+    // A visit that has bought nothing has admitted nothing, however the Run came to hold its cards.
+    expect(sectioAdmittedCardIds(run).size).toBe(0);
+
+    const acquired = performAdlectio(run, offer.offerId);
+    const admitted = acquired.cards.at(-1)!;
+    expect([...sectioAdmittedCardIds(acquired)]).toEqual([admitted.id]);
+    expect(sectioAdmittedCardIds(acquired).has(acquired.cards[0].id)).toBe(false);
+
+    // Struck by the same visit that bought it: no longer held, still this visit's doing, and
+    // Expunctio shows that record beside the cards still held.
+    const struck = performExpunctio(acquired, admitted.id);
+    expect(struck.cards.some((card) => card.id === admitted.id)).toBe(false);
+    expect([...sectioAdmittedCardIds(struck)]).toEqual([admitted.id]);
+
+    // Reset restores the entry snapshot, so the visit has admitted nothing again.
+    expect(sectioAdmittedCardIds(resetSectio(struck)).size).toBe(0);
+  });
+
+  it('admits one card however much gold is left over', () => {
+    // The refusal is the rule, not the price: the Run below can pay for the whole row twice
+    // and still leaves with one card.
+    const base = { ...firstSectio(59), goldTenths: 10_000 };
+    const funded = {
+      ...base,
+      sectio: { ...base.sectio!, entrySnapshot: { ...base.sectio!.entrySnapshot, goldTenths: 10_000 } },
+    };
+    const [first, second] = funded.sectio!.cardOffers;
+
+    const once = performAdlectio(funded, first.offerId);
+    expect(once.sectio!.adlectedCardOfferIds).toEqual([first.offerId]);
+    expect(sectioAdlectioSpent(once)).toBe(true);
+
+    const twice = performAdlectio(once, second.offerId);
+    expect(twice).toBe(once);
+    expect(twice.cards).toHaveLength(once.cards.length);
+    expect(twice.goldTenths).toBe(once.goldTenths);
+  });
+
+  it('returns the admission to the visit when the Sectio is reset', () => {
+    // What keeps one card from being a misclick: Reset restores the entry snapshot, and the
+    // player may then admit a different one.
+    const base = { ...firstSectio(61), goldTenths: 10_000 };
+    const funded = {
+      ...base,
+      sectio: { ...base.sectio!, entrySnapshot: { ...base.sectio!.entrySnapshot, goldTenths: 10_000 } },
+    };
+    const [first, second] = funded.sectio!.cardOffers;
+
+    const reset = resetSectio(performAdlectio(funded, first.offerId));
+    expect(sectioAdlectioSpent(reset)).toBe(false);
+
+    const rechosen = performAdlectio(reset, second.offerId);
+    expect(rechosen.sectio!.adlectedCardOfferIds).toEqual([second.offerId]);
+    expect(rechosen.cards.at(-1)!.coreId).toBe(second.id);
+  });
 });
 
 describe('derived Sectio card pile', () => {
@@ -464,28 +613,38 @@ describe('derived Sectio card pile', () => {
   it('carries the declared rarity quota exactly, not on average', () => {
     for (const seed of [101, 211, 907]) {
       const pile = sectioCardPile(seed, 0);
-      expect(pile).toHaveLength(RUN_SECTIO_CARD_PILE_SIZE);
-      expect(composition(pile)).toEqual({ common: 16, uncommon: 3, rare: 1 });
-      expect(new Set(pile.map((card) => card.id)).size).toBe(RUN_SECTIO_CARD_PILE_SIZE);
+      expect(pile).toHaveLength(sectioPileSize());
+      expect(composition(pile)).toEqual({ common: 32, uncommon: 6, rare: 2 });
+      expect(new Set(pile.map((card) => card.id)).size).toBe(sectioPileSize());
     }
   });
 
   it('re-apportions a tier the cost ceiling empties', () => {
-    expect(sectioPileRarityQuota()).toEqual({ common: 16, uncommon: 3, rare: 1 });
-    // The live ceiling empties nothing: a Bishop card is Rare on material an early Battle can
-    // afford, so the opening market keeps its whole ladder and only its prices are held down.
+    // Forty seats at an exact 80/15/5, which is the largest pile no tier has to repeat to fill.
+    expect(sectioPileSize()).toBe(40);
+    expect(sectioPileRarityQuota()).toEqual({ common: 32, uncommon: 6, rare: 2 });
+
+    // The opening ceiling is on MATERIAL and the bands are on PRICE, so the tier it empties is the
+    // middle one: nothing at six material or less reaches 80 gold, while the minor pairs sit at 60
+    // and are Rare by shift. The opening market is therefore cheap cards and the occasional pair.
+    expect(RUN_CARD_DECK.some((card) => (
+      card.value <= RUN_SECTIO_EARLY_CARD_MAX_VALUE && card.rarity === 'uncommon'
+    ))).toBe(false);
+    expect(RUN_CARD_DECK.some((card) => (
+      card.value <= RUN_SECTIO_EARLY_CARD_MAX_VALUE && card.rarity === 'rare'
+    ))).toBe(true);
     expect(sectioPileRarityQuota(RUN_SECTIO_EARLY_CARD_MAX_VALUE)).toEqual({
-      common: 16, uncommon: 3, rare: 1,
+      common: 38, uncommon: 0, rare: 2,
     });
     const capped = sectioCardPile(101, 0, RUN_SECTIO_EARLY_CARD_MAX_VALUE);
-    expect(capped).toHaveLength(RUN_SECTIO_CARD_PILE_SIZE);
+    expect(capped).toHaveLength(sectioPileSize(RUN_SECTIO_EARLY_CARD_MAX_VALUE));
     expect(capped.every((card) => card.value <= RUN_SECTIO_EARLY_CARD_MAX_VALUE)).toBe(true);
-    expect(composition(capped)).toEqual({ common: 16, uncommon: 3, rare: 1 });
+    expect(composition(capped)).toEqual({ common: 38, uncommon: 0, rare: 2 });
 
-    // A ceiling low enough to empty one still hands that tier's share on: nothing at four gold
-    // or less is Rare, so Common and Uncommon apportion the whole pile between themselves.
-    expect(RUN_CARD_DECK.some((card) => card.value <= 4 && card.rarity === 'rare')).toBe(false);
-    expect(sectioPileRarityQuota(4)).toEqual({ common: 17, uncommon: 3, rare: 0 });
+    // A ceiling low enough to empty two hands both shares on to the tier still standing.
+    expect(RUN_CARD_DECK.some((card) => card.value <= 4 && card.rarity !== 'common')).toBe(false);
+    expect(sectioPileSize(4)).toBe(15);
+    expect(sectioPileRarityQuota(4)).toEqual({ common: 15, uncommon: 0, rare: 0 });
   });
 
   it('is deterministic and independently shuffles each exhausted pile', () => {
@@ -676,7 +835,9 @@ describe('Manubiae — what the board pays for', () => {
     // The catalog is the source. A named constant that disagreed with it would be a second
     // price for the same deed, which is exactly what naming the category was meant to end.
     expect(RUN_MANUBIAE.map((entry) => entry.id)).toEqual([
-      'advantageous-capture', 'royal-fork', 'discovered-check', 'double-check', 'en-passant', 'smothered-mate',
+      'advantageous-capture', 'knight-fork', 'royal-fork', 'long-capture', 'humble-mate',
+      'discovered-check', 'long-check', 'double-check', 'en-passant', 'smothered-mate',
+      'promotion-mate', 'underpromotion-mate',
     ]);
     expect(new Set(RUN_MANUBIAE.map((entry) => entry.id)).size).toBe(RUN_MANUBIAE.length);
     expect(RUN_EN_PASSANT_BOUNTY_TENTHS).toBe(50);
@@ -695,6 +856,70 @@ describe('Manubiae — what the board pays for', () => {
     expect(manubiumGoldTenths({ id: 'double-check' })).toBe(30);
     expect(manubiumGoldTenths({ id: 'en-passant' })).toBe(50);
     expect(manubiumGoldTenths({ id: 'smothered-mate' })).toBe(50);
+    expect(manubiumGoldTenths({ id: 'promotion-mate' })).toBe(50);
+    // Reach: the capture is usually one the player wanted anyway and the distance is the flourish,
+    // so it sits at the noticing pole; the check had to be engineered and pays double.
+    expect(manubiumGoldTenths({ id: 'long-capture' })).toBe(10);
+    expect(manubiumGoldTenths({ id: 'long-check' })).toBe(20);
+    // Eight squares, because that is the width of a standard chessboard — the one reach every
+    // player already has a feel for, even though no board in this game is that shape.
+    expect(RUN_LONG_REACH_SQUARES).toBe(8);
+  });
+
+  it('prices a mating underpromotion by the piece the Pawn chose instead of a Queen', () => {
+    // The ladder is what each choice asks of the position. A Rook or a Bishop can never mate
+    // where a Queen would not — on that square she attacks everything they do — so choosing one
+    // is a flourish, and it is paid just above the ordinary promotion mate. The Knight is the
+    // only piece that can mate where she cannot, which is why it sits at the top.
+    expect(manubiumGoldTenths({ id: 'underpromotion-mate', piece: 'rook' })).toBe(60);
+    expect(manubiumGoldTenths({ id: 'underpromotion-mate', piece: 'bishop' })).toBe(80);
+    expect(manubiumGoldTenths({ id: 'underpromotion-mate', piece: 'knight' })).toBe(80);
+    // The scaled entry's own words are written FROM those rates, so the sentence in the
+    // Enchiridion cannot drift from the gold the player is handed.
+    expect(RUN_MANUBIUM_BY_ID['underpromotion-mate'].priceNote).toBe('60 for a Rook, 80 for a Bishop or Knight');
+  });
+
+  it("accelerates a Knight's fork, so each further prong is worth more than the last", () => {
+    const paid = (targets: number) => manubiumGoldTenths({ id: 'knight-fork', targets });
+    expect(paid(0)).toBe(0);
+    expect(paid(1)).toBe(0); // one prong is not a fork
+    expect(paid(2)).toBe(5);
+    expect(paid(3)).toBe(15);
+    expect(paid(4)).toBe(30);
+    expect(paid(5)).toBe(50);
+    // Each step up is bigger than the one before it — a flat rate would say a Knight hitting
+    // four things is twice a Knight hitting two, and it is nothing of the sort.
+    const steps = [2, 3, 4, 5, 6].map((n) => paid(n) - paid(n - 1));
+    for (let i = 1; i < steps.length; i += 1) expect(steps[i]).toBeGreaterThan(steps[i - 1]);
+    // A plain two-prong fork lands UNDER the royal fork it is often a lesser version of, and
+    // three prongs passes it. That order is the whole reason the rate is five and not ten.
+    expect(paid(2)).toBeLessThan(manubiumGoldTenths({ id: 'royal-fork' }));
+    expect(paid(3)).toBeGreaterThan(manubiumGoldTenths({ id: 'royal-fork' }));
+    expect(RUN_MANUBIUM_BY_ID['knight-fork'].priceNote)
+      .toBe('5 for two prongs, 15 for three, 30 for four, 50 for five');
+  });
+
+  it('pays a humble mate for the distance the mating unit falls short of a Queen', () => {
+    // The Queen's own 9 makes her mate come out at exactly nothing, so "anything but a Queen" is
+    // what the arithmetic says rather than a clause bolted onto it.
+    expect(manubiumGoldTenths({ id: 'humble-mate', piece: 'queen' })).toBe(0);
+    expect(manubiumGoldTenths({ id: 'humble-mate', piece: 'rook' })).toBe(12);
+    expect(manubiumGoldTenths({ id: 'humble-mate', piece: 'bishop' })).toBe(18);
+    expect(manubiumGoldTenths({ id: 'humble-mate', piece: 'knight' })).toBe(18);
+    expect(manubiumGoldTenths({ id: 'humble-mate', piece: 'pawn' })).toBe(24);
+    // The King's zero on the piece scale is a sentinel for "never bought" and would otherwise
+    // read as the humblest unit on the board. A King cannot give check, so this cannot arise —
+    // the scale is simply not asked to be lucky about it.
+    expect(manubiumGoldTenths({ id: 'humble-mate', piece: 'king' })).toBe(0);
+    expect(RUN_MANUBIUM_BY_ID['humble-mate'].priceNote)
+      .toBe('12 for a Rook, 18 for a Bishop or Knight, 24 for a Pawn');
+    // And every rung of the mate ladder above it outpays it, which is what makes "the dearest
+    // pays" and "the most specific pays" the same rule rather than two that can disagree.
+    const humblest = manubiumGoldTenths({ id: 'humble-mate', piece: 'pawn' });
+    for (const better of ['smothered-mate', 'promotion-mate'] as const) {
+      expect(manubiumGoldTenths({ id: better })).toBeGreaterThan(humblest);
+    }
+    expect(manubiumGoldTenths({ id: 'underpromotion-mate', piece: 'rook' })).toBeGreaterThan(humblest);
   });
 
   it('scales an advantageous capture by the material actually won', () => {
@@ -779,11 +1004,145 @@ describe('Manubiae — what the board pays for', () => {
     expect(undone.goldTenths).toBe(battle.goldTenths - RUN_BATTLE_UNDO_COST_TENTHS);
   });
 
+  it('charges every checkpoint the walk back passes over, so each step costs its own gold', () => {
+    // Two moves' worth of checkpoints cut from the SAME purse -- neither move earned anything.
+    // Restoring the older one verbatim would hand back the gold the first Undo spent, and the
+    // whole rewind would cost one gold however deep it went.
+    const battle = inBattle(createRun(war(), 13));
+    const older = captureRunBattleUndo(battle)!;
+    const newer = captureRunBattleUndo(battle)!;
+
+    const first = undoRunBattleMove(battle, newer);
+    expect(first.goldTenths).toBe(battle.goldTenths - RUN_BATTLE_UNDO_COST_TENTHS);
+
+    const second = undoRunBattleMove(first, chargeRunBattleUndoCheckpoint(older));
+    expect(second.goldTenths).toBe(battle.goldTenths - 2 * RUN_BATTLE_UNDO_COST_TENTHS);
+  });
+
+  it('refuses the step a charged checkpoint can no longer pay for, and never books a debt', () => {
+    const battle = inBattle({ ...createRun(war(), 13), goldTenths: RUN_BATTLE_UNDO_COST_TENTHS });
+    const checkpoint = captureRunBattleUndo(battle)!;
+    expect(canUndoRunBattleMove(battle, checkpoint)).toBe(true);
+
+    // Passed over once, this checkpoint's purse is empty -- and an empty purse is where it
+    // stops. It is not carried into debt, it simply stops being reachable.
+    const charged = chargeRunBattleUndoCheckpoint(checkpoint);
+    expect(charged.goldTenths).toBe(0);
+    expect(chargeRunBattleUndoCheckpoint(charged).goldTenths).toBe(0);
+    expect(canUndoRunBattleMove(battle, charged)).toBe(false);
+    expect(undoRunBattleMove(battle, charged)).toBe(battle);
+  });
+
   it('asks a royal fork for a Rook or better, reading the bar off the piece scale itself', () => {
     // A bare 5 would silently become some other piece's worth if the scale were re-weighted.
     expect(RUN_ROYAL_FORK_MIN_VICTIM_VALUE).toBe(PIECE_VALUE.rook);
     expect(PIECE_VALUE.queen).toBeGreaterThanOrEqual(RUN_ROYAL_FORK_MIN_VICTIM_VALUE);
     expect(PIECE_VALUE.bishop).toBeLessThan(RUN_ROYAL_FORK_MIN_VICTIM_VALUE);
     expect(PIECE_VALUE.knight).toBeLessThan(RUN_ROYAL_FORK_MIN_VICTIM_VALUE);
+  });
+});
+
+describe('Run rules bind the King as firmly as the market', () => {
+  it('never opens a narrow Run on a King that breaks its own rule', () => {
+    // Ten of the fifteen starters are three-long, Z-shaped, or three-tall. Handing one to a
+    // two-by-two Run would break the rule on the very first card, before the market has offered
+    // anything, and that formation then sits in the army for the whole Run.
+    const wide = RUN_STARTER_CARDS.filter((card) => cardAllowedByRules(card, LEGACY_RUN_RULES));
+    const narrow = RUN_STARTER_CARDS.filter((card) => cardAllowedByRules(card, DEFAULT_RUN_RULES));
+    expect(wide).toHaveLength(15);
+    expect(narrow).toHaveLength(5);
+
+    for (let seed = 0; seed < 40; seed += 1) {
+      for (const id of openingKingOffers(seed, DEFAULT_RUN_RULES)) {
+        const king = RUN_STARTER_CARDS.find((card) => card.id === id);
+        expect(king, id).toBeDefined();
+        expect(formationSpan(king!.formation), id).toBeLessThanOrEqual(2);
+      }
+    }
+  });
+
+  it('still deals a full choice from the narrowed set', () => {
+    // Five eligible Kings against three offered, so the opening is still a choice rather than a
+    // formality -- but the same five recur every Run, which is the cost of the narrow rule.
+    const offers = openingKingOffers(11, DEFAULT_RUN_RULES);
+    expect(offers).toHaveLength(3);
+    expect(new Set(offers).size).toBe(3);
+  });
+
+  it('opens a Run on the Kings its own rules admit', () => {
+    const narrow = createRun(war(), 7, { chooseKing: true, rules: DEFAULT_RUN_RULES });
+    for (const id of narrow.commendatio!.kingOffers) {
+      expect(formationSpan(RUN_STARTER_CARDS.find((c) => c.id === id)!.formation)).toBeLessThanOrEqual(2);
+    }
+    const wide = createRun(war(), 7, { chooseKing: true, rules: LEGACY_RUN_RULES });
+    expect(wide.commendatio!.kingOffers).not.toEqual(narrow.commendatio!.kingOffers);
+  });
+});
+
+describe('card pricing is a Run rule', () => {
+  const priced = (id: string, rules: typeof DEFAULT_RUN_RULES) => {
+    const card = RUN_CARD_DECK.find((c) => c.id === id);
+    expect(card, id).toBeDefined();
+    return runCardCost(card!, rules);
+  };
+  const material = { ...DEFAULT_RUN_RULES, pricing: 'material' as const };
+  const density = { ...DEFAULT_RUN_RULES, pricing: 'density' as const };
+
+  it('weights material by density unless the Run was told otherwise', () => {
+    expect(DEFAULT_RUN_RULES.pricing).toBe('density');
+    // Legacy Runs keep the game they were dealt: their offers were priced flat when they were
+    // dealt, so the mode they are bound to has to stay flat too.
+    expect(LEGACY_RUN_RULES.pricing).toBe('material');
+  });
+
+  it('charges material when told to, which is what the game has always done', () => {
+    for (const card of RUN_CARD_DECK) {
+      expect(runCardCost(card, material), card.id).toBe(card.value);
+    }
+  });
+
+  it('charges concentration when told to, so the same material costs differently', () => {
+    // A Queen alone and a Queen behind a Pawn are 9 and 10 material -- nearly equal -- but one
+    // occupies a single square. Material pricing cannot tell them apart; density can.
+    expect(priced('q', material)).toBe(9);
+    expect(priced('pq-front', material)).toBe(10);
+    expect(priced('q', density)).toBe(16);
+    expect(priced('pq-front', density)).toBe(13);
+  });
+
+  it('leaves the opening market inside the opening purse', () => {
+    // The early ceiling is a VALUE ceiling, so under density an offer can cost more than the
+    // ceiling reads. It still cannot outrun the starting gold -- the dearest card the six-value
+    // band admits is a lone Rook, at six against eight.
+    const early = RUN_CARD_DECK.filter((card) => (
+      card.value <= RUN_SECTIO_EARLY_CARD_MAX_VALUE && cardAllowedByRules(card, DEFAULT_RUN_RULES)
+    ));
+    expect(early.length).toBeGreaterThan(0);
+    const dearest = Math.max(...early.map((card) => runCardCost(card, DEFAULT_RUN_RULES)));
+    expect(dearest).toBe(6);
+    expect(dearest).toBeLessThanOrEqual(RUN_STARTING_GOLD);
+  });
+
+  it('never gives a card away, however thin it is', () => {
+    for (const card of RUN_CARD_DECK) {
+      expect(runCardCost(card, density), card.id).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('keeps every price whole, because gold is whole', () => {
+    for (const card of RUN_CARD_DECK) {
+      expect(Number.isInteger(runCardCost(card, density)), card.id).toBe(true);
+    }
+  });
+
+  it('prices an offer by the rules of the Run that was dealt it', () => {
+    const materialRun = createRun(war(), 5, { rules: material });
+    const densityRun = createRun(war(), 5, { rules: density });
+    expect(materialRun.rules.pricing).toBe('material');
+    expect(densityRun.rules.pricing).toBe('density');
+    const asMaterial = sectioCardOffersAtCursor(5, 0, 0, 3, material);
+    const asDensity = sectioCardOffersAtCursor(5, 0, 0, 3, density);
+    expect(asDensity.map((o) => o.id)).toEqual(asMaterial.map((o) => o.id));
+    expect(asDensity.map((o) => o.cost)).not.toEqual(asMaterial.map((o) => o.cost));
   });
 });

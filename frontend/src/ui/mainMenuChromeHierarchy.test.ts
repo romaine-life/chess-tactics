@@ -37,7 +37,7 @@ describe('Main Menu chrome hierarchy', () => {
 
     expect(modeTab).toContain('<ApparatusRailTab');
     expect(apparatusRailTab).toContain('<ChromeNavButton unit="inner-box"');
-    expect(apparatusRailTab).toContain("chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab'");
+    expect(apparatusRailTab).toMatch(/chromeUnitClassNames\(\s*'inner-box',\s*'settings-tab main-menu-mode-tab',/);
     expect(modeTab).not.toMatch(/className=\{`settings-tab main-menu-mode-tab/);
   });
 
@@ -61,16 +61,40 @@ describe('Main Menu chrome hierarchy', () => {
   it('owns the main-menu icon footprint without changing shared settings tabs', () => {
     expect(styleCss).toMatch(/\.settings-tab\.main-menu-mode-tab\s*\{[\s\S]*?--settings-tab-icon-size:\s*44px;[\s\S]*?overflow:\s*hidden;/);
     expect(styleCss).toMatch(/\.main-menu-mode-tab \.settings-tab-icon\s*\{[\s\S]*?overflow:\s*visible;[\s\S]*?position:\s*relative;/);
-    expect(styleCss).toMatch(/\.main-menu-mode-tab \.settings-tab-icon img\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?left:\s*50%;[\s\S]*?top:\s*calc\(50% - \.5px\);[\s\S]*?transform:\s*translate\(calc\(-50% \+ 0px\), -50%\);/);
+    // `top: 50%`, NOT the `calc(50% - .5px)` this used to pin. That nudge existed to keep the
+    // raster on whole logical pixels and bought nothing — 44/64 is already a fractional scale,
+    // so the art resamples either way — while costing the symmetry the eye reads: it put 6px
+    // above the mark and 7px below it on every button in the rail (ADR-0560).
+    expect(styleCss).toMatch(/\.main-menu-mode-tab \.settings-tab-icon img\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?left:\s*50%;[\s\S]*?top:\s*50%;[\s\S]*?transform:\s*translate\(calc\(-50% \+ 0px\), -50%\);/);
+    expect(styleCss).not.toMatch(/\.main-menu-mode-tab \.settings-tab-icon img\s*\{[^}]*top:\s*calc\(50% - \.5px\)/);
+    // The shared rail button centres its own icon+label row. Both rail heights were computed
+    // against a 2px border while the panel-line border-image resolves to 7px a side, so a 40px
+    // icon row sat in a 30px content box and overflowed the full 10px downward — every mark and
+    // label 5px under its button's centre line, on every rail in the family (ADR-0560).
+    expect(styleCss).toMatch(/\.settings-tab\s*\{[\s\S]*?align-content:\s*center;/);
   });
 
   it('rejects legacy button boxes anywhere in a menu destination', () => {
     expect(mainMenu).toContain('<ApparatusRailTab');
     expect(playMenu).toContain('<ApparatusRailTab');
-    expectTaggedLegacyControls(apparatusRailTab, 'settings-tab main-menu-mode-tab');
-    for (const source of [settings, editor]) expectTaggedLegacyControls(source, 'settings-tab main-menu-mode-tab');
-    expectTaggedLegacyControls(playMenu, 'ce-link-button');
-    for (const source of [editor, warEditor]) expectTaggedLegacyControls(source, 'ce-link-button');
+    // The primitive is the ONLY place a rail tab is assembled — Settings and the Editor mount
+    // <ApparatusRailTab> now, and check-rail-tab-primitive.mjs fails the build on any file that
+    // names these classes in markup again (ADR-0558). So this asserts the one remaining
+    // assembly is registered, and that the converted surfaces carry none.
+    // The primitive assembles the tab across several lines now, so match its registered call
+    // rather than a single-tag regex: chromeUnitClassNames + a registered unit on both hosts.
+    expect(apparatusRailTab).toMatch(/chromeUnitClassNames\(\s*'inner-box',/);
+    expect(apparatusRailTab).toContain('<ChromeNavButton unit="inner-box"');
+    expect(apparatusRailTab).toContain('data-chrome-unit="inner-box"');
+    for (const source of [settings, editor]) {
+      expect(source).not.toMatch(/className=\{?.*?(?<![\w-])settings-tab(?![\w-])/);
+      expect(source).toContain('<ApparatusRailTab');
+    }
+    // Every one of these is off the legacy class entirely: their verbs are CELLS of a divided
+    // box now, so the box's own frame and column line are those controls' edges and there is no
+    // button box left to register. Play was the last holdout — Start New Run's column became one
+    // box whose verbs close it through ChromeVerbRow, like every card beside it.
+    for (const source of [playMenu, editor, warEditor]) expect(source).not.toContain('ce-link-button');
     expectTaggedLegacyControls(lobbies, 'utility-button', 'utilityButtonClassNames(');
     expect(lobbies).toMatch(/utilityButtonClassNames[\s\S]*?chromeUnitClassNames\('inner-text-button'/);
 
@@ -81,7 +105,11 @@ describe('Main Menu chrome hierarchy', () => {
   it('registers selectable levels and settings option rows as inner boxes', () => {
     // SettingsRow no longer hand-tags the unit. It composes the shared InnerChromeBox, which is
     // what registers `inner-box` and carries the borrowed-fill plumbing the Editor column uses.
-    expect(settingsControls).toMatch(/function SettingsRow[\s\S]*?<InnerChromeBox[\s\S]*?settings-row/);
+    // A row that is a MEMBER of a SettingsGroup takes no frame — the group's box is already the
+    // frame and already wears the marble — so the class list is built before the element and the
+    // unframed branch returns a plain section instead.
+    expect(settingsControls).toMatch(/function SettingsRow[\s\S]*?`settings-row [\s\S]*?<InnerChromeBox/);
+    expect(settingsControls).toContain('if (!framed) return <section className={classes} role={role}>{body}</section>;');
     expect(chromeBox).toContain('data-chrome-unit="inner-box"');
     expect(playMenu.match(/<ActionList\b/g)).toHaveLength(2);
     expect(playMenu).toContain('className: `campaign-level-row ${!unlocked ? \'is-disabled\' : \'\'}`.trim()');

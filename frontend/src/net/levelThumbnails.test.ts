@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { installLevelThumbnailUrls, levelThumbnailUrl } from './levelThumbnails';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  installLevelThumbnailUrl,
+  installLevelThumbnailUrls,
+  levelThumbnailUrl,
+  subscribeLevelThumbnailUrls,
+} from './levelThumbnails';
 
 describe('level thumbnail delivery projection', () => {
   it('accepts public media and owner-scoped immutable derivative identities', () => {
@@ -20,6 +25,45 @@ describe('level thumbnail delivery projection', () => {
     expect(levelThumbnailUrl('l903')).toBeNull();
     expect(levelThumbnailUrl('l904')).toBeNull();
     expect(levelThumbnailUrl('l905')).toBeNull();
+  });
+
+  it('re-addresses a level a write just rebaked and tells mounted rows', () => {
+    const before = `/api/media/${'c'.repeat(64)}`;
+    const after = `/api/media/${'d'.repeat(64)}`;
+    installLevelThumbnailUrls({ l910: before });
+    const listener = vi.fn();
+    const unsubscribe = subscribeLevelThumbnailUrls(listener);
+
+    // A Save that changed nothing re-answers with the same address: no listener churn.
+    installLevelThumbnailUrl('l910', before);
+    expect(listener).not.toHaveBeenCalled();
+
+    installLevelThumbnailUrl('l910', after);
+    expect(levelThumbnailUrl('l910')).toBe(after);
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    // A write that could not prepare one retires the address rather than leaving the row
+    // rendering content the level no longer has.
+    installLevelThumbnailUrl('l910', null);
+    expect(levelThumbnailUrl('l910')).toBeNull();
+    expect(listener).toHaveBeenCalledTimes(2);
+
+    unsubscribe();
+    installLevelThumbnailUrl('l910', after);
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it('announces a batch install once, and not at all when every address already stood', () => {
+    const sha = `/api/media/${'e'.repeat(64)}`;
+    const other = `/api/media/${'f'.repeat(64)}`;
+    installLevelThumbnailUrls({ l920: sha, l921: other });
+    const listener = vi.fn();
+    const unsubscribe = subscribeLevelThumbnailUrls(listener);
+    installLevelThumbnailUrls({ l920: sha, l921: other });
+    expect(listener).not.toHaveBeenCalled();
+    installLevelThumbnailUrls({ l920: other, l921: sha });
+    expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe();
   });
 });
 
