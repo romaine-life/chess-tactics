@@ -14,55 +14,18 @@ import { levelToEditorBoard } from '../core/levelBoard';
 import { boardPalettes, LevelInfoCompact, levelBattleDealLine } from './LevelInfoCompact';
 import type { Level } from '../core/level';
 import { ChromeDividedGridRow, DividedInnerChromeBox } from './shared/ChromeDividedGrid';
-import { NavButton } from './shared/NavButton';
-import {
-  CHROME_LEAF_FILL_SURFACE,
-  CHROME_STRUCTURAL_FILL_ROLE,
-  leafSurfacePhase,
-} from './shared/chromeSurfacePolicy';
+import { ChromeVerbRow, verbColumns, type ChromeVerb } from './shared/ChromeVerbRow';
+import { CHROME_STRUCTURAL_FILL_ROLE } from './shared/chromeSurfacePolicy';
 import { PieceTypeIcon } from './shared/PieceTypeIcon';
 import { STRATEGIKON_CARD_MARK_CLASS, useStrategikonCardsIcon } from './strategikonNavigation';
 import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
 
 /**
- * One verb of the column, seated as a CELL of the box's bottom row.
- *
- * Declared, never handed over rendered: a caller that could pass its own markup could wrap the
- * verbs in a box of its own — which is what every call site did, and why they sat outside the
- * frame as a loose pair. Given as data, the column seats each one in a compartment the box's own
- * column line divides, and a caller cannot author the space between them.
+ * One verb of the column, seated as a CELL of the box's bottom row by the shared primitive that
+ * every divided box's closing verbs use (ADR-0059). The column names the shape it wants; it does
+ * not build one of its own.
  */
-export type LevelPreviewVerb = {
-  /** Stable identity, so React keeps the cell across selection changes. */
-  id: string;
-  label: string;
-  /** Same-origin app target. Game controls are buttons, never hyperlinks (ADR-0052). */
-  to?: string;
-  /** Present but unavailable — a locked level's Play. Absent `to` is inert either way. */
-  disabled?: boolean;
-  title?: string;
-};
-
-/**
- * A verb IS its compartment: pressable edge to edge, wearing the leaf oak over the box's marble
- * (ADR-0433), with the box's own frame and rail as its edges. Not a registered unit — that brings
- * its own frame, which would draw a control sitting INSIDE the cell a few pixels in from the rail
- * that already bounds it. Same reset the section box's full-width verbs use.
- */
-function VerbCell({ verb, index }: { verb: LevelPreviewVerb; index: number }): ReactElement {
-  const className = 'section-box-member-verb ce-preview-verb';
-  const seat = {
-    className,
-    // A row of identical controls is cut from one plank run rather than stamping one grain twice.
-    style: leafSurfacePhase(index),
-    'data-chrome-fill-surface': CHROME_LEAF_FILL_SURFACE,
-    title: verb.title,
-  };
-  if (verb.to === undefined || verb.disabled) {
-    return <button {...seat} type="button" disabled>{verb.label}</button>;
-  }
-  return <NavButton {...seat} to={verb.to}>{verb.label}</NavButton>;
-}
+export type LevelPreviewVerb = ChromeVerb;
 
 export function LevelPreviewColumn({
   level,
@@ -110,9 +73,7 @@ export function LevelPreviewColumn({
   // The box's columns ARE its verbs: one compartment each, so the rail between Edit Board and
   // Test Play is the box's own column line. A column with a single verb declares one column and
   // has no internal line for a rail to be.
-  const columns = verbs.length > 1
-    ? verbs.map(() => 'minmax(0, 1fr)')
-    : ['minmax(0, 1fr)'];
+  const columns = verbColumns(verbs);
   const resetFrame = (): void => {
     setTerrainPainted(false);
     setScenePainted(false);
@@ -184,14 +145,7 @@ export function LevelPreviewColumn({
           </ChromeDividedGridRow>
 
           {verbs.length ? (
-            <ChromeDividedGridRow
-              className="ce-preview-verbs"
-              spans={verbs.length > 1 ? undefined : 'all'}
-            >
-              {verbs.map((verb, index) => (
-                <VerbCell key={verb.id} verb={verb} index={index} />
-              ))}
-            </ChromeDividedGridRow>
+            <ChromeVerbRow verbs={verbs} className="ce-preview-verbs" cellClassName="ce-preview-verb" />
           ) : null}
 
           {field ? (
