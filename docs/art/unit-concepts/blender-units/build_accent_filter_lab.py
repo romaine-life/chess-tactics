@@ -32,15 +32,15 @@ ACCENT_LABEL = os.environ.get("ACCENT_LABEL", "CROWN")
 #
 # PIECE selects the row. Anything not listed falls back to the defaults.
 PIECE_TUNING = {
-    "pawn":   {"block": 7, "outline_sensitivity": 3.0},
-    "king":   {"block": 6, "outline_sensitivity": 3.0},
-    "rook":   {"block": 5, "outline_sensitivity": 4.0},
-    "queen":  {"block": 6, "outline_sensitivity": 3.0},
-    "bishop": {"block": 6, "outline_sensitivity": 3.0},
-    "knight": {"block": 7, "outline_sensitivity": 3.0},
+    "pawn":   {"block": 7, "outline_sensitivity": 3.0, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
+    "king":   {"block": 6, "outline_sensitivity": 3.0, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
+    "rook":   {"block": 5, "outline_sensitivity": 4.0, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
+    "queen":  {"block": 6, "outline_sensitivity": 3.0, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
+    "bishop": {"block": 7, "outline_sensitivity": 3.0, "positions": [0.00000, 0.04837, 0.10824, 0.16031, 0.25274]},
+    "knight": {"block": 7, "outline_sensitivity": 3.0, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
 }
 PIECE = os.environ.get("PIECE", "")
-_tuning = PIECE_TUNING.get(PIECE, {"block": 7, "outline_sensitivity": 3.0})
+_tuning = PIECE_TUNING.get(PIECE, {"block": 7, "outline_sensitivity": 3.0, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]})
 if PIECE and PIECE not in PIECE_TUNING:
     raise SystemExit("no tuning row for piece %r; add one rather than rendering defaults" % PIECE)
 
@@ -381,7 +381,14 @@ def make_ramp(stops):
 # rather than a possibility, so the positions are stated ONCE here and every ramp is
 # built from them. Tune them on one palette in the lab, then have them read back and
 # set here -- do not hand-edit five ramps to match a sixth.
-BODY_POSITIONS = [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]
+# Positions are PER PIECE, and shared by the six palettes within a piece.
+#
+# They were global, so sliders moved on the bishop would have retuned the pawn, king,
+# rook and queen -- which is not what moving a slider on the bishop means. Pieces differ
+# in shape and in how the light falls, so there is no reason their luminance breaks
+# should match. The six palettes within a piece still share, which is the drift that
+# actually matters: teams have to read alike.
+BODY_POSITIONS = _tuning["positions"]
 
 BODY_COLOURS = [
     ("navy-blue", ["#0d1926", "#17314a", "#224466", "#2f5983", "#416e9c"]),
