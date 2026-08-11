@@ -21,7 +21,9 @@ of them stack. The king runs three -- navy body, gold crown, red velvet -- after
 """
 import bpy, os, math, mathutils
 
-SPRITE = 51; BLOCK = 7
+# What the accent is called on THIS piece, so a rook does not label its gate CROWN.
+ACCENT_LABEL = os.environ.get("ACCENT_LABEL", "CROWN")
+SPRITE = 51; BLOCK = int(os.environ.get('BLOCK','6'))
 BODY = [(0.00000,"#0d1526"),(0.05139,"#172a4a"),(0.09918,"#223866"),(0.15729,"#2f4a83"),(0.28899,"#415f9c")]
 # Gold for the crown. Same shape as the body ramp -- dark stop first, positions on the
 # render's linear luminance, not on PNG-measured values.
@@ -41,12 +43,11 @@ VELVET = [(0.00000,"#2a0709"),(0.05139,"#5a1013"),(0.09918,"#8a1c1c"),(0.15729,"
 # cloth averages to an in-between brightness and takes an in-between stop, so
 # sub-pixel detail degrades into shading rather than into blocks. Shadow reads velvet,
 # highlight reads gold, and the crown holds its shape at any threshold.
-CROWN = [(0.00000, "#2a0709"), (0.05139, "#5a1013"), (0.09918, "#8a1c1c"),
-         (0.15729, "#b8933a"), (0.28899, "#e2c268")]
+CROWN = [(0.00000, "#2a0709"), (0.03628, "#5a1013"), (0.07803, "#8a1c1c"), (0.17240, "#b8933a"), (0.24367, "#e2c268")]
 
 ACCENTS = [(2, "CROWN gold", GOLD), (3, "CROWN velvet", VELVET)]
 if os.environ.get("CROWN_SPLIT") is None:
-    ACCENTS = [(2, "CROWN", CROWN)]
+    ACCENTS = [(2, ACCENT_LABEL, CROWN)]
 # Which HUE each accent owns, measured off the restored crown texture rather than
 # assumed. Gold sits in the yellows; velvet is red and wraps past 0, so it is written
 # as two bands and summed.
@@ -106,15 +107,28 @@ for o in added:
 for o in bpy.data.objects:
     if o.name in existing and o.type=="MESH": o.hide_render = o.hide_viewport = True
 
-# Body 1, crown 2. This is the split the compositor masks on.
+# Body 1, accent 2, second accent 3. This is the split the compositor masks on.
+#
+# Which materials count as accent is PER PIECE and set by name. The defaults cover the
+# king's crown and the queen's tiara; the rook's gate is "gate iron" and "gate wood",
+# which match none of them, so it would render body-only and the bridge would be
+# indistinguishable from the wall. ACCENT_2 and ACCENT_3 take comma-separated
+# substrings, matched case-insensitively against the material name.
+ACCENT_2_MATCH = [x.strip().lower() for x in os.environ.get("ACCENT_2", "crown,tiara,gold").split(",") if x.strip()]
+ACCENT_3_MATCH = [x.strip().lower() for x in os.environ.get("ACCENT_3", "velvet").split(",") if x.strip()]
+
+_matched = []
 for m in bpy.data.materials:
     n = m.name.lower()
-    if "velvet" in n:
+    if any(x in n for x in ACCENT_3_MATCH):
         m.pass_index = 3
-    elif "crown" in n or "tiara" in n or "gold" in n:
+    elif any(x in n for x in ACCENT_2_MATCH):
         m.pass_index = 2
     else:
         m.pass_index = 1
+    if m.pass_index in (2, 3):
+        _matched.append((m.name, m.pass_index))
+print("ACCENT_MATERIALS", _matched or "none -- body only")
 
 lows=[min((o.matrix_world @ v.co).z for v in o.data.vertices) for o in meshes if o.data.vertices]
 if lows:
@@ -344,7 +358,7 @@ if _crown_cov is not None:
     _he[0].position, _he[0].color = 0.0, (0, 0, 0, 1)
     _he.new(float(os.environ.get("CROWN_THRESH", "0.2"))).color = (1, 1, 1, 1)
     _hd.location = (280, -930)
-    _hd.label = "CROWN region"
+    _hd.label = "%s region" % ACCENT_LABEL
     tree.links.new(_dv.outputs[0], _hd.inputs["Fac"])
     crown_mask = _hd.outputs["Color"]
 

@@ -23,7 +23,7 @@ SOURCE = os.environ["UNIT_ART_BLEND"]
 BTP = os.environ["BTP_BLEND"]
 OUT = os.environ["UNIT_ART_OUTPUT_DIR"]
 SPRITE = int(os.environ.get("UNIT_ART_SPRITE_PX", "51"))
-BLOCK = 7
+BLOCK = int(os.environ.get('UNIT_ART_BLOCK', '6'))
 os.makedirs(OUT, exist_ok=True)
 
 # Sampled from the shipped sprites; the ramp positions are LINEAR, which is where a
@@ -167,6 +167,34 @@ if rig is None:
         if obj.parent is None:
             obj.parent = rig
             obj.matrix_parent_inverse = rig.matrix_world.inverted()
+
+# Height override, applied to the rig everything now hangs off.
+#
+# Blends are used at their authored scale, which is right when a model carries true set
+# proportions -- pawn 2.15 world units, bishop 2.70, a ratio matching a real set. It is
+# wrong when a piece was assembled rather than modelled: the king came out pawn-height
+# because its crown was joined on and nothing rescaled the result.
+#
+# Scaling each root object individually does NOT work and is worth not retrying: parts
+# hang off empties in some blends, so a per-object pass covers a different set of things
+# in each one. On the bishop it measured 2.24 where the file is 2.70 and then produced
+# 2.47 from a factor below one -- larger than it started. One rig, one scale, and a
+# check afterwards, because a scale that silently half-applies reads as art that was
+# modelled wrong.
+_target_h = os.environ.get("UNIT_ART_PIECE_HEIGHT")
+if _target_h and meshes:
+    def _height():
+        bpy.context.view_layer.update()
+        zs = [(o.matrix_world @ v.co).z for o in meshes for v in o.data.vertices]
+        return max(zs) - min(zs)
+    _before = _height()
+    if _before > 0:
+        k = float(_target_h) / _before
+        rig.scale = tuple(c * k for c in rig.scale)
+        _after = _height()
+        print("PIECE_HEIGHT asked=%.4f before=%.4f after=%.4f" % (float(_target_h), _before, _after))
+        if abs(_after - float(_target_h)) > 0.02 * float(_target_h):
+            raise SystemExit("piece height override did not take: wanted %.4f, got %.4f" % (float(_target_h), _after))
 
 ELEV = math.radians(35.264389682754654)
 DIST = 5.0
