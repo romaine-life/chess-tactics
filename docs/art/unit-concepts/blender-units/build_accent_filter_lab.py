@@ -33,19 +33,24 @@ ACCENT_LABEL = os.environ.get("ACCENT_LABEL", "CROWN")
 #
 # PIECE selects the row. Anything not listed falls back to the defaults.
 PIECE_TUNING = {
-    "pawn":   {"block": 7, "outline_sensitivity": 3.0, "height": 2.147, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
-    "king":   {"block": 6, "outline_sensitivity": 3.0, "height": 3.006, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
-    "rook":   {"block": 5, "outline_sensitivity": 4.0, "height": 2.770, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
-    "queen":  {"block": 6, "outline_sensitivity": 3.0, "height": 2.856, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
-    "bishop": {"block": 7, "outline_sensitivity": 3.0, "height": 3.157, "positions": [0.00000, 0.04837, 0.10824, 0.16031, 0.25274]},
-    "knight": {"block": 3, "outline_sensitivity": 3.0, "height": 2.963, "positions": [0.00000, 0.05139, 0.09428, 0.16715, 0.22410]},
+    "pawn":   {"block": 7, "outline_sensitivity": 3.0, "frame": (51, 71), "height": 2.147, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
+    "king":   {"block": 6, "outline_sensitivity": 3.0, "frame": (51, 81), "height": 3.006, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
+    "rook":   {"block": 5, "outline_sensitivity": 4.0, "frame": (61, 95), "height": 2.770, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
+    "queen":  {"block": 6, "outline_sensitivity": 3.0, "frame": (51, 81), "height": 2.856, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
+    "bishop": {"block": 7, "outline_sensitivity": 3.0, "frame": (51, 81), "height": 3.157, "positions": [0.00000, 0.04837, 0.10824, 0.16031, 0.25274]},
+    "knight": {"block": 3, "outline_sensitivity": 3.0, "frame": (51, 81), "height": 2.963, "positions": [0.00000, 0.05139, 0.09428, 0.16715, 0.22410]},
 }
 PIECE = os.environ.get("PIECE", "")
-_tuning = PIECE_TUNING.get(PIECE, {"block": 7, "outline_sensitivity": 3.0, "height": 2.147, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]})
+_tuning = PIECE_TUNING.get(PIECE, {"block": 7, "outline_sensitivity": 3.0, "frame": (51, 71), "height": 2.147, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]})
 if PIECE and PIECE not in PIECE_TUNING:
     raise SystemExit("no tuning row for piece %r; add one rather than rendering defaults" % PIECE)
 
-SPRITE = 51
+# Frame size is per piece. Every frame was 51x71 while the pieces were scaled to their
+# live proportions, so the tall ones ran off the top -- the bishop's mitre and the
+# rook's battlements were both cut flat in shipped sprites, and nothing failed.
+SPRITE, SPRITE_H = _tuning.get("frame", (51, 71))
+SPRITE = int(os.environ.get("SPRITE_PX", SPRITE))
+SPRITE_H = int(os.environ.get("SPRITE_PY", SPRITE_H))
 BLOCK = int(os.environ.get("BLOCK", _tuning["block"]))
 BODY = [(0.00000,"#0d1526"),(0.05139,"#172a4a"),(0.09918,"#223866"),(0.15729,"#2f4a83"),(0.28899,"#415f9c")]
 # Gold for the crown. Same shape as the body ramp -- dark stop first, positions on the
@@ -314,7 +319,11 @@ cam = scene.camera or next(o for o in bpy.data.objects if o.type=="CAMERA")
 scene.camera=cam; cam.parent=None
 cam.location=(c,-c,1.0+math.sin(E)*D)
 cam.rotation_euler=(mathutils.Vector((0,0,1.0))-mathutils.Vector(cam.location)).to_track_quat("-Z","Y").to_euler()
-cam.data.type="ORTHO"; cam.data.ortho_scale=2.7
+cam.data.type="ORTHO"; # Ortho scale follows the frame WIDTH, so a wider frame is more room rather than a
+# bigger piece. It was a constant 2.7, which meant widening the rook's frame to fit it
+# magnified it instead -- it clipped at 81 tall, clipped again at 95, and would have
+# gone on clipping. 2.7 spans 51 art pixels; anything else scales from that.
+cam.data.ortho_scale = 2.7 * (SPRITE / 51.0)
 
 vl = scene.view_layers[0]; vl.use_pass_material_index = True
 
@@ -350,7 +359,7 @@ scene.render.film_transparent=True; scene.render.use_compositing=True
 # giving it room. A square lab frame cut the rook's battlements off at row 0, which
 # would have meant tuning a piece whose top was not on screen.
 scene.render.resolution_x = SPRITE * BLOCK
-scene.render.resolution_y = int(os.environ.get("SPRITE_PY", SPRITE)) * BLOCK
+scene.render.resolution_y = SPRITE_H * BLOCK
 cam.data.sensor_fit = "HORIZONTAL"
 scene.render.image_settings.file_format="PNG"; scene.render.image_settings.color_mode="RGBA"
 
@@ -955,7 +964,21 @@ if _wanted:
         _im = bpy.data.images.load(os.path.join(os.environ["OUT"], _name + ".png"))
         _sizes.add(tuple(_im.size))
         bpy.data.images.remove(_im)
-    _want_size = (SPRITE, int(os.environ.get("SPRITE_PY", SPRITE)))
+    _want_size = (SPRITE, SPRITE_H)
+    for _name in _wanted:
+        _im = bpy.data.images.load(os.path.join(os.environ["OUT"], _name + ".png"))
+        _w, _h = _im.size
+        _px = np.array(_im.pixels[:], dtype=np.float32).reshape(_h, _w, 4)
+        bpy.data.images.remove(_im)
+        _a = _px[..., 3] > 0.5
+        _rows = np.where(_a.any(axis=1))[0]
+        _cols = np.where(_a.any(axis=0))[0]
+        if not len(_rows):
+            raise SystemExit("%s rendered empty" % _name)
+        # Blender's pixel buffer is bottom-up, so row 0 is the BOTTOM of the image.
+        if _rows.min() == 0 or _rows.max() == _h - 1 or _cols.min() == 0 or _cols.max() == _w - 1:
+            raise SystemExit("%s touches the frame edge: rows %d-%d of %d, cols %d-%d of %d"
+                             % (_name, _rows.min(), _rows.max(), _h, _cols.min(), _cols.max(), _w))
     if _sizes != {_want_size}:
         raise SystemExit("sprites came out %s, wanted %s" % (sorted(_sizes), _want_size))
     print("SPRITES_DONE %s %dx%d" % (os.environ["OUT"], *_want_size))
