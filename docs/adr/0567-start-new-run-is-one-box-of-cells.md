@@ -62,12 +62,21 @@ Two more things followed from being four boxes rather than one:
   - The plate is **30px**, not the 38px of a framed control. A framed button's 9-slice eats a
     rail's width a side, so about 24px of it is oak; a cell painting the full 38 would read half
     again as heavy as every framed control on the screen.
-- **One control height, and one name-cell seat, through the whole box.** The square key that opens
-  Options is the same 30px as every plate — the box sets `--le-inner-square`, which is the token
-  the registered unit already reads, rather than a rule out-specifying it. And every name cell is
-  one seat sized to hold that key, whether it carries one or not: Ataraxia holds only a line of
-  text, so left to itself it stood 18px shorter than Options and the two titles sat at different
-  heights in what is meant to be the same treatment.
+- **One WOOD height through the whole box, measured in oak rather than in boxes.** The square key
+  that opens Options is the only framed control here, and a frame is measured in what it eats: at
+  a plate-sized 30px box its 9-slice rails take 7px a side and leave **16px** of oak against the
+  30px a frameless plate paints, so matching their BOXES made the key read half the size of the
+  bars above it. Its box is therefore one plate plus its own two rails (44px), which paints one
+  plate of oak. This is `.ce-preview-box`'s lesson from the other direction — there a frameless
+  cell was shrunk to the oak a framed button paints. The size is set on `--le-inner-square`, the
+  token the registered unit already reads; that token is scoped to the Level Editor's screen and
+  never reached the menu shell, where the unit fell back to 38px.
+- **The inset is measured to the OAK.** A framed control's rails live inside it, so the key seats
+  itself one rail shallower and its wood starts exactly as far from the cell's edge as the title's
+  text does. That also makes **one name-cell seat** come out the same either way — a 44px key with
+  9px above and below is the same 62px as a line of text with 16px — which matters because
+  Ataraxia's cell holds only text, and left to itself it stood shorter than Options and put the two
+  titles at different heights in what is meant to be the same treatment.
 - **A cell that CARRIES something** — a name, a sentence — takes `--ds-inset` and wears the box's
   marble. The replacement warning is one of these, and being bare marble is now what tells you it
   cannot be pressed, in a column where the cells either side of it are solid wood.

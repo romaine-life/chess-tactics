@@ -293,16 +293,20 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // That is the difference between a control INSERTED into the box and one standing inside it.
     expect(style).toMatch(/\.run-prep-plate \{[\s\S]*?padding: 0;/);
     expect(style).toMatch(/\.run-prep-verb \{[\s\S]*?min-block-size: var\(--run-prep-plate-h\);/);
-    // ONE control height through the whole box: the square key that opens Options is the same
-    // plate height as every picker and every verb, not the 38px a tool square takes on the Level
-    // Editor's screen. The registered unit reads its size from this token, so this is the token's
-    // value here rather than a rule out-specifying the unit.
-    expect(style).toMatch(/--le-inner-square: var\(--run-prep-plate-h\);/);
-    // ONE seat for every name cell, sized to hold that key whether the cell carries one or not.
-    // Ataraxia holds only a line of text, so without this it stood 18px shorter than Options and
-    // the two titles sat at different heights in what is meant to be the same treatment.
+    // ONE WOOD height through the whole box, measured in oak rather than in boxes. The square key
+    // that opens Options is the only FRAMED control here, and at a plate-sized BOX its 9-slice
+    // rails leave 16px of oak against a plate's 30 — so it read half the size of the bars above it.
+    // Its box is one plate PLUS its own two rails. Stated on `--le-inner-square` because that is
+    // the token the registered unit already reads; scoped to the Level Editor's screen, it never
+    // reached the menu shell, where the unit fell back to 38px.
+    expect(style).toMatch(/--le-inner-square: calc\(var\(--run-prep-plate-h\) \+ 2 \* var\(--le-chrome-inner-rail-w, 7px\)\);/);
+    // ONE seat for every name cell, whether it carries that key or only a line of text. Ataraxia
+    // holds only text, so without this it stood shorter than Options and the two titles sat at
+    // different heights in what is meant to be the same treatment. The inset is measured to the
+    // OAK, so the key seats itself one rail shallower and the seat comes out the same either way.
     expect(style).toMatch(/--run-prep-name-h: calc\(var\(--run-prep-plate-h\) \+ 2 \* var\(--ds-inset\)\);/);
     expect(style).toMatch(/\.run-prep-name \{[\s\S]*?min-block-size: var\(--run-prep-name-h\);/);
+    expect(style).toMatch(/\.run-prep-name \{[\s\S]*?padding-block: calc\(var\(--ds-inset\) - var\(--le-chrome-inner-rail-w, 7px\)\);/);
     // The box takes no padding of its own: a rail has to reach the frame on both sides, and box
     // padding would hold every one of them short of it. Each cell carries the inset instead.
     expect(style).toMatch(/\.run-prep-box \{[\s\S]*?padding: 0;/);
