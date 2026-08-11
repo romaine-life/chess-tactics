@@ -27,10 +27,10 @@ import {
   closeBattle,
   levelEnemyForceValue,
   createRun,
+  leaveAftermath,
   leaveSectio,
   mixSeed,
   observeRunUnitDeath,
-  openSectio,
   prepareDeployment,
   removeUnitFromArmyAndCards,
   runCardCost,
@@ -617,7 +617,18 @@ function fightBattle(run: RunDocument): RunDocument {
   if (started.phase !== 'battle') throw new RunCraftError('craft: the crafted Battle could not be started.');
   // Every deployed unit survives a crafted Battle: the crafter is placing the player at a state,
   // not simulating an outcome.
-  return openSectio(started, deployedUnitIds);
+  //
+  // It is CLOSED and then left, rather than fast-forwarded straight into the Sectio, so the
+  // Sectio a craft link lands on carries the Victory report it followed and can hand the player
+  // back to it (ADR-0567). The accounting is unchanged: nothing was taken, so nothing surrendered
+  // and the clock reads the same instant openSectio would have read. Only the turn count is
+  // dressed, and turns pay nothing — par is a benchmark and the bonus is the clock (ADR-0539).
+  const closed = closeBattle(started, {
+    survivingUnitIds: deployedUnitIds,
+    turns: DEFAULT_CRAFT_AFTERMATH_TURNS,
+    standingEnemyValue: 0,
+  });
+  return leaveAftermath(closed);
 }
 
 /**

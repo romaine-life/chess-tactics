@@ -1009,6 +1009,16 @@ describe('Run chrome hierarchy', () => {
     expect(skirmish).toContain('? loadReviewableRunBattleMatch(levelId, activityId)');
     expect(runScreen).toContain("? { ...shellRun, phase: 'battle', aftermath: null }");
     expect(runScreen).toContain('clearMatch();');
+    // The won-board snapshot outlives the report's Continue, because the report itself is
+    // reachable from the Sectio it opens; the Sectio's Continue is what retires it (ADR-0567).
+    expect(runScreen).toMatch(/data-testid="continue-run-sectio"[\s\S]{0,400}?clearMatch\(\);/);
+    expect(runScreen).not.toMatch(/replace\(leaveAftermath\(run\)\);\s*\n\s*clearMatch\(\);/);
+    // Back to Victory is seated with Continue, and reopens the report without touching the
+    // Sectio standing behind it.
+    expect(runScreen).toContain('data-testid="review-run-victory"');
+    expect(runScreen).toContain('replace(reviewSectioBattleReport(run));');
+    expect(runScreen).toContain('const battleReport = sectioBattleReport(run);');
+    expect(runScreen).toContain('disabled={!battleReport}');
     expect(runScreen).toContain("data-run-controls-scroll={sectio ? 'scroll' : 'static'}");
     expect(styleCss).toMatch(/\.run-meta-controls\[data-run-controls-scroll="static"\]\s*\{[\s\S]*?overflow-y:\s*hidden;/);
 
