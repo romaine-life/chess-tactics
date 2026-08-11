@@ -28137,8 +28137,8 @@ button.run-card-formation-cell {
   display: grid;
 }
 
-.run-rules-selector h4,
-.run-rules-selector p {
+.run-rules-content h4,
+.run-rules-content p {
   margin: 0;
 }
 
@@ -28245,12 +28245,71 @@ button.run-card-formation-cell {
   text-align: end;
 }
 
-/* Replacement disclosure seated above Start Run — the popup-free abandon confirm.
-   Sits between the detail body and the actions row, so the column's own gap spaces it. */
-.run-replace-note {
+/* ── Start New Run is ONE box ─────────────────────────────────────────────────────────────────
+   Ataraxia, the replacement warning, the verb and Options were four separate slabs with the live
+   vista showing through the gaps, which drew one control as four unrelated things. They are cells
+   of a single box now and the gaps are that box's own rails — laid and capped by its topology, so
+   nothing here draws a rule. See the mount in PlayMenu. */
+.run-prep-box {
+  /* Sized by what it holds. Stretching it to the column and packing the cells from the top is
+     what leaves a slab of empty marble under the last one. */
+  flex: 0 0 auto;
+  min-inline-size: 0;
+  /* NO padding: a rail has to reach the frame on both sides, and box padding would hold every one
+     of them short of it. Each cell takes the inset instead. */
+  padding: 0;
+}
+
+.run-prep-box > .chrome-divided-grid__rows {
+  display: grid;
+  min-block-size: 0;
+}
+
+.run-prep-cell {
+  gap: var(--ds-inline-tight);
   padding: var(--ds-inset);
 }
 
+/* A cell's name, and whatever control belongs beside it — the square key that opens Options. */
+.run-prep-cell-head {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline-tight);
+  justify-content: space-between;
+  min-block-size: 0;
+}
+
+.run-prep-cell-name {
+  font-size: var(--ds-text-md);
+}
+
+/* The disclosure is a registered tool square; this rule only seats it at the end of the name row. */
+.run-rules-toggle {
+  color: inherit;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+/* Options' choices hold their space whether they are painted or not, so opening the section moves
+   nothing above or below it. `visibility` rather than `hidden`/`display:none` is what reserves it:
+   the choices stay laid out, so the space is exactly what they need and cannot drift from a number
+   written here. It also keeps them out of the tab order and the accessibility tree while closed. */
+.run-rules-content {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.run-rules-content[data-open="false"] {
+  visibility: hidden;
+}
+
+/* The verb closes the box, so its actions row drops the bottom padding it carried when it stood
+   loose in the column. */
+.run-prep-verb .ce-preview-actions {
+  padding: 0;
+}
+
+/* Replacement warning seated above Start Run — the popup-free abandon confirm. */
 .run-replace-note h3 {
   font-size: var(--ds-text-2xs);
   margin: 0 0 var(--ds-inline-tight);
@@ -28702,17 +28761,18 @@ button.run-card-formation-cell {
   text-align: center;
 }
 
-/* Start New Run → one section box per question (SectionBox). Rule options is the one that
-   opens: closed, its name row is the box's entire interior, so pressing anywhere on the slab
-   opens it and the slab itself is what grows.
-   That name row is deliberately NOT a registered unit. A second frame inside this one would draw
-   a control sitting IN the box rather than the box being the control, so it fills the accepted
-   InnerChromeBox, takes that box's whole content padding as its own inset (the pressable area
-   therefore reaches the frame on every side), strips the shell's native button paint, and paints
-   nothing of its own. check-ui-surface-contract.mjs registers exactly that reset. A section
-   without a disclosure renders the same row as a div, which needs the layout and inherits the
-   reset harmlessly. */
-.run-rules-selector h4 {
+/* A named group of controls elsewhere in the app — Settings groups, the War editor's Battles —
+   is a box whose name row heads it (SectionBox). Where that row is a disclosure it is deliberately
+   NOT a registered unit: a second frame inside this one would draw a control sitting IN the box
+   rather than the box being the control, so it fills the accepted InnerChromeBox, takes that box's
+   whole content padding as its own inset (the pressable area therefore reaches the frame on every
+   side), strips the shell's native button paint, and paints nothing of its own.
+   check-ui-surface-contract.mjs registers exactly that reset. A section without a disclosure
+   renders the same row as a div, which needs the layout and inherits the reset harmlessly.
+   Start New Run is NOT one of these: it is a single box of cells, and the one disclosure in it is
+   a square key rather than a pressable slab — a cell has no frame to be the button. See
+   `.run-prep-box`. */
+.run-rules-content h4 {
   margin-block-start: var(--ds-inline-tight);
   font-size: var(--ds-text-xs);
   opacity: .78;

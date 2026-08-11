@@ -53,6 +53,7 @@ import {
   readRunProgression,
 } from '../run/progression';
 import { InnerChromeBox } from './shared/ChromeBox';
+import { ChromeDividedGridRow, DividedInnerChromeBox } from './shared/ChromeDividedGrid';
 import { loadMatch, type PersistedMatch } from '../game/matchPersistence';
 import { continueInventory, type ContinueInventory } from './playContinue';
 import { runAdoptionFacts } from './runAdoption';
@@ -480,74 +481,96 @@ function RunPanel({
              spends a row of the column and settles nothing. The aside keeps the name for anyone
              reading the page by its landmarks. */
           <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Start New Run" data-testid="run-detail-new">
-            <div className="play-detail-body">
-              <AtaraxiaSelector
-                value={ataraxiaTier}
-                highestUnlockedTier={highestUnlockedTier}
-                onChange={(tier) => { setArmed(false); setAtaraxiaTier(tier); }}
-                fillSurface={CHROME_LEAF_FILL_SURFACE}
-              />
-            </div>
-            {presentedRun ? (
-              /* Marble, not oak. Nothing in this box can be pressed — it is a standing statement
-                 about the Run you are replacing — and the oak is what tells you a surface takes a
-                 click (ADR-0433). Wearing it here made the one slab you cannot act on look like
-                 the two either side of it that you can. */
-              <InnerChromeBox
-                className="run-replace-note"
-                fillRole={CHROME_STRUCTURAL_FILL_ROLE}
-                role="note"
-                data-testid="run-replace-warning"
-              >
-                <h3>Replaces your current Run</h3>
-                <p>Starting a new Run abandons {presentedRun.war.name} — Battle {presentedRun.battleIndex + 1} of {presentedRun.war.battles.length} · {formatGold(presentedRun.goldTenths)} gold. This cannot be undone.</p>
-              </InnerChromeBox>
-            ) : null}
-            {presentedRun && armed ? (
-              <div className="ce-preview-actions run-replace-decision">
-                <ChromeButton unit="inner-text-button"
-                  ref={keepRunButtonRef}
-                  className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
-                  data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                  data-testid="run-keep"
-                  disabled={starting}
-                  onClick={() => setArmed(false)}
+            {/* ONE field, not four slabs with the vista showing through between them. Preparing a
+                Run is a single control — choose the rung, read what it costs you, press the verb —
+                and it was drawn as four separate boxes whose gaps read as four unrelated things
+                that happened to be stacked. The gaps are now the box's own rails, which is what a
+                boundary between parts of one thing looks like in this kit, and each part is a CELL
+                with its controls inserted into it (ADR-0433: marble field, oak leaves).
+                Rails sit exactly where the gaps were — between the former boxes. Options' name and
+                its choices are two halves of one cell, not two things, so no rail divides them. */}
+            <DividedInnerChromeBox
+              className="run-prep-box"
+              columns={['minmax(0, 1fr)']}
+              fillRole={CHROME_STRUCTURAL_FILL_ROLE}
+              aria-label="Run preparation"
+            >
+              <ChromeDividedGridRow spans="all" className="run-prep-cell">
+                <AtaraxiaSelector
+                  value={ataraxiaTier}
+                  highestUnlockedTier={highestUnlockedTier}
+                  onChange={(tier) => { setArmed(false); setAtaraxiaTier(tier); }}
+                  fillSurface={CHROME_LEAF_FILL_SURFACE}
+                />
+              </ChromeDividedGridRow>
+
+              {presentedRun ? (
+                /* Bare marble — no oak, and no box of its own. Nothing in this cell can be pressed;
+                   it is a standing statement about the Run you are replacing, and the oak is what
+                   tells you a surface takes a click (ADR-0433). */
+                <ChromeDividedGridRow
+                  spans="all"
+                  className="run-prep-cell run-replace-note"
+                  role="note"
+                  data-testid="run-replace-warning"
                 >
-                  <span>Keep Run</span>
-                </ChromeButton>
-                <ChromeButton unit="inner-text-button"
-                  className={chromeUnitClassNames('inner-text-button', 'ce-asset-button', 'is-danger')}
-                  data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                  data-testid="run-abandon-and-start"
-                  disabled={starting}
-                  onClick={() => { void start(); }}
-                >
-                  <span>{starting ? 'Starting…' : 'Abandon and Start'}</span>
-                </ChromeButton>
-              </div>
-            ) : (
-              <div className="ce-preview-actions is-single">
-                <ChromeButton unit="inner-text-button"
-                  className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
-                  data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                  data-testid="run-start"
-                  disabled={newRunUnavailable || starting}
-                  onClick={() => { if (presentedRun) { setArmed(true); return; } void start(); }}
-                >
-                  <span>{starting ? 'Starting…' : 'Start Run'}</span>
-                </ChromeButton>
-              </div>
-            )}
-            {/* Below the verb, deliberately. The defaults are the game and almost nobody opens
-                this, so it must not sit between the Ataraxia choice and Start Run as if it were
-                a step in setup — and it is a disclosure that grows the column when opened, which
-                would push the verb down the screen from above. Last child, so opening it extends
-                the column downward and leaves everything above it where it was. */}
-            <RunRulesSelector
-              value={runRules}
-              onChange={(rules) => { setArmed(false); setRunRules(rules); }}
-              fillSurface={CHROME_LEAF_FILL_SURFACE}
-            />
+                  <h3>Replaces your current Run</h3>
+                  <p>Starting a new Run abandons {presentedRun.war.name} — Battle {presentedRun.battleIndex + 1} of {presentedRun.war.battles.length} · {formatGold(presentedRun.goldTenths)} gold. This cannot be undone.</p>
+                </ChromeDividedGridRow>
+              ) : null}
+
+              {presentedRun && armed ? (
+                <ChromeDividedGridRow spans="all" className="run-prep-cell run-prep-verb">
+                  <div className="ce-preview-actions run-replace-decision">
+                    <ChromeButton unit="inner-text-button"
+                      ref={keepRunButtonRef}
+                      className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
+                      data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                      data-testid="run-keep"
+                      disabled={starting}
+                      onClick={() => setArmed(false)}
+                    >
+                      <span>Keep Run</span>
+                    </ChromeButton>
+                    <ChromeButton unit="inner-text-button"
+                      className={chromeUnitClassNames('inner-text-button', 'ce-asset-button', 'is-danger')}
+                      data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                      data-testid="run-abandon-and-start"
+                      disabled={starting}
+                      onClick={() => { void start(); }}
+                    >
+                      <span>{starting ? 'Starting…' : 'Abandon and Start'}</span>
+                    </ChromeButton>
+                  </div>
+                </ChromeDividedGridRow>
+              ) : (
+                <ChromeDividedGridRow spans="all" className="run-prep-cell run-prep-verb">
+                  <div className="ce-preview-actions is-single">
+                    <ChromeButton unit="inner-text-button"
+                      className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
+                      data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                      data-testid="run-start"
+                      disabled={newRunUnavailable || starting}
+                      onClick={() => { if (presentedRun) { setArmed(true); return; } void start(); }}
+                    >
+                      <span>{starting ? 'Starting…' : 'Start Run'}</span>
+                    </ChromeButton>
+                  </div>
+                </ChromeDividedGridRow>
+              )}
+
+              {/* Below the verb, deliberately. The defaults are the game and almost nobody opens
+                  this, so it must not sit between the Ataraxia choice and Start Run as if it were
+                  a step in setup. It no longer grows the box either — its cell holds the height its
+                  choices need whether they are showing or not, so opening it moves nothing. */}
+              <ChromeDividedGridRow spans="all" className="run-prep-cell run-prep-options">
+                <RunRulesSelector
+                  value={runRules}
+                  onChange={(rules) => { setArmed(false); setRunRules(rules); }}
+                  fillSurface={CHROME_LEAF_FILL_SURFACE}
+                />
+              </ChromeDividedGridRow>
+            </DividedInnerChromeBox>
           </aside>
         ) : null}
       </RunDetailContentSceneSlot>

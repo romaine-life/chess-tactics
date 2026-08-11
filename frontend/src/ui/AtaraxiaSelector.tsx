@@ -1,25 +1,31 @@
 import type { ReactElement } from 'react';
 import { ATARAXIA_BY_TIER, ATARAXIA_TIERS, type AtaraxiaTier } from '../run/model';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
-import { SectionBox } from './shared/SectionBox';
+
+// The Ataraxia CELL of Start New Run's one box: its name, and the dropdown inserted under it.
+//
+// It used to be a box of its own, standing above three more boxes with the page showing through
+// between them. The whole column is now a single divided box and this is its first cell, so it
+// draws no frame at all — the box's own frame is around it and the rail under it is the boundary
+// that used to be a gap. See the box's mount in PlayMenu.
 
 export function AtaraxiaSelector({
   value,
   highestUnlockedTier,
   onChange,
   fillSurface,
-  framed = true,
+  named = true,
 }: {
   value: AtaraxiaTier;
   highestUnlockedTier: AtaraxiaTier;
   onChange: (tier: AtaraxiaTier) => void;
   fillSurface?: string;
   /**
-   * False where this is one setting inside somebody else's box — the War editor's War group. Its
-   * own box there would draw the same marble twice, so it renders as the bare picker and the row
-   * around it supplies the name.
+   * False where this is one setting inside somebody else's row — the War editor's War group.
+   * A second name there would state the same word twice, so it renders as the bare picker and
+   * the row around it supplies the name.
    */
-  framed?: boolean;
+  named?: boolean;
 }): ReactElement {
   const options: readonly HouseSelectOption[] = ATARAXIA_TIERS.map((tier) => {
     const definition = ATARAXIA_BY_TIER[tier];
@@ -56,10 +62,13 @@ export function AtaraxiaSelector({
       fillSurface={fillSurface}
     />
   );
-  if (!framed) return picker;
+  if (!named) return picker;
   return (
-    <SectionBox title="Ataraxia" titleId="run-ataraxia-title" className="run-ataraxia-selector">
+    <>
+      <div className="run-prep-cell-head">
+        <span className="run-prep-cell-name" id="run-ataraxia-title">Ataraxia</span>
+      </div>
       {picker}
-    </SectionBox>
+    </>
   );
 }

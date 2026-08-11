@@ -1,7 +1,8 @@
 import { useState, type ReactElement } from 'react';
 import { RUN_CARD_SPANS, type RunRules } from '../run/model';
+import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { ChromeButton } from './shared/ChromeButton';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
-import { SectionBox } from './shared/SectionBox';
 
 // Start New Run → the rules the Run is bound to, behind a disclosure that starts closed.
 //
@@ -14,12 +15,23 @@ import { SectionBox } from './shared/SectionBox';
 // Not hidden, though: a Run is bound to these for its whole life, so a player who did change one
 // has to be able to see what they are about to start.
 //
-// The BOX is the control -- see SectionBox, which owns that decision for every section of Run
-// preparation. This is the one section given a disclosure, so its name row is the trigger: closed,
-// the whole slab is pressable, and opening it grows the same box downward around the choices.
+// This is the LAST CELL of Start New Run's one box, and two things follow from being a cell rather
+// than a box of its own:
 //
-// It seats BELOW Start Run in the detail column, after the verb rather than before it — see the
-// comment at its mount in PlayMenu.
+//   The trigger is a SQUARE KEY, not the slab. A cell has no frame — the box's frame is around all
+//   of it and the rail above is its edge — so there is no slab here to be the button, and pressing
+//   the whole cell would put a press on a region whose boundary belongs to something bigger. The
+//   key is the registered tool square, seated where the chevron used to hang.
+//
+//   The contents' HEIGHT IS ALWAYS RESERVED, empty when closed. A disclosure that grows the box
+//   moves the box's own bottom edge and every rail above it settles differently, which is a lot of
+//   the screen moving for a control almost nobody presses. Reserved, opening it fills a space that
+//   was already there and nothing else on the screen moves at all. The space is held by keeping the
+//   choices LAID OUT and only hiding their paint (`visibility`), so what is reserved is exactly
+//   what they need — not a number in the stylesheet that would drift the first time a rule changed.
+//
+// It seats BELOW Start Run in the box, after the verb rather than before it — see the comment at
+// its mount in PlayMenu.
 
 const SPAN_COPY: Readonly<Record<2 | 4, { label: string; effect: string }>> = {
   2: {
@@ -97,52 +109,73 @@ export function RunRulesSelector({
   }));
 
   return (
-    <SectionBox
-      title="Options"
-      titleId="run-rules-title"
-      className="run-rules-selector"
-      contentId="run-rules-content"
-      disclosure={{
-        open,
-        onToggle: () => setOpen((wasOpen) => !wasOpen),
-        testId: 'run-rules-toggle',
-      }}
-    >
-      <h4>Formations</h4>
+    <>
+      <div className="run-prep-cell-head">
+        <span className="run-prep-cell-name" id="run-rules-title">Options</span>
+        {/* Named BY the cell's own name rather than carrying a second one, so pressing it never
+            relabels the control and the screen never says Options twice. What changed is stated
+            by aria-expanded and by which way the chevron points. */}
+        <ChromeButton
+          unit="inner-tool-square"
+          className={chromeUnitClassNames('inner-tool-square', 'run-rules-toggle')}
+          data-chrome-fill-surface={fillSurface}
+          data-testid="run-rules-toggle"
+          aria-labelledby="run-rules-title"
+          aria-expanded={open}
+          aria-controls="run-rules-content"
+          onClick={() => setOpen((wasOpen) => !wasOpen)}
+        >
+          <span
+            className={`stepper-glyph stepper-chevron stepper-chevron-${open ? 'up' : 'down'}`}
+            aria-hidden="true"
+          />
+        </ChromeButton>
+      </div>
 
-      <HouseSelect
-        value={String(value.cardSpan)}
-        options={spanOptions}
-        onChange={(next) => onChange({ ...value, cardSpan: Number(next) as 2 | 4 })}
-        ariaLabel="Formation size"
-        className="run-rules-select"
-        testId="run-rules-span"
-        fillSurface={fillSurface}
-      />
-      <p className="run-rules-effect">{SPAN_COPY[value.cardSpan].effect}</p>
+      {/* Laid out either way; closed, it is only unpainted. `visibility: hidden` also takes it out
+          of the tab order and the accessibility tree, so a closed section is no more reachable than
+          it was when it was display:none. */}
+      <div
+        id="run-rules-content"
+        className="run-rules-content"
+        data-open={open ? 'true' : 'false'}
+      >
+        <h4>Formations</h4>
 
-      <HouseSelect
-        value={rotationKey}
-        options={rotationOptions}
-        onChange={(next) => onChange({ ...value, mayRotate: next === 'on' })}
-        ariaLabel="Placement facing"
-        className="run-rules-select"
-        testId="run-rules-rotation"
-        fillSurface={fillSurface}
-      />
-      <p className="run-rules-effect">{ROTATION_COPY[rotationKey].effect}</p>
+        <HouseSelect
+          value={String(value.cardSpan)}
+          options={spanOptions}
+          onChange={(next) => onChange({ ...value, cardSpan: Number(next) as 2 | 4 })}
+          ariaLabel="Formation size"
+          className="run-rules-select"
+          testId="run-rules-span"
+          fillSurface={fillSurface}
+        />
+        <p className="run-rules-effect">{SPAN_COPY[value.cardSpan].effect}</p>
 
-      <h4>Pricing</h4>
-      <HouseSelect
-        value={value.pricing}
-        options={pricingOptions}
-        onChange={(next) => onChange({ ...value, pricing: next as 'material' | 'density' })}
-        ariaLabel="Card pricing"
-        className="run-rules-select"
-        testId="run-rules-pricing"
-        fillSurface={fillSurface}
-      />
-      <p className="run-rules-effect">{PRICING_COPY[value.pricing].effect}</p>
-    </SectionBox>
+        <HouseSelect
+          value={rotationKey}
+          options={rotationOptions}
+          onChange={(next) => onChange({ ...value, mayRotate: next === 'on' })}
+          ariaLabel="Placement facing"
+          className="run-rules-select"
+          testId="run-rules-rotation"
+          fillSurface={fillSurface}
+        />
+        <p className="run-rules-effect">{ROTATION_COPY[rotationKey].effect}</p>
+
+        <h4>Pricing</h4>
+        <HouseSelect
+          value={value.pricing}
+          options={pricingOptions}
+          onChange={(next) => onChange({ ...value, pricing: next as 'material' | 'density' })}
+          ariaLabel="Card pricing"
+          className="run-rules-select"
+          testId="run-rules-pricing"
+          fillSurface={fillSurface}
+        />
+        <p className="run-rules-effect">{PRICING_COPY[value.pricing].effect}</p>
+      </div>
+    </>
   );
 }
