@@ -16,6 +16,8 @@ interface AccountMenuProps {
   /** Persist a new display name (empty clears it). Rejects on failure. */
   onRename: (name: string) => Promise<void>;
   onSignOut: () => void;
+  /** This seat's place in the trailing cluster, for the leaf wood's phase (ADR-0433). */
+  surfacePhase: number;
   /** Render the menu open on mount (screenshot / demo harness only). */
   defaultOpen?: boolean;
   /** Render the name field in edit mode on mount (screenshot / demo harness only). */
@@ -26,7 +28,7 @@ const NAME_MAX = 40;
 
 const initial = (name: string): string => (name.trim()[0] || '?').toUpperCase();
 
-export function AccountMenu({ name, email, avatarUrl, onRename, onSignOut, defaultOpen, defaultEditing }: AccountMenuProps): ReactElement {
+export function AccountMenu({ name, email, avatarUrl, surfacePhase, onRename, onSignOut, defaultOpen, defaultEditing }: AccountMenuProps): ReactElement {
   const [open, setOpen] = useState(Boolean(defaultOpen));
   const [editing, setEditing] = useState(Boolean(defaultEditing));
   const [draft, setDraft] = useState(name);
@@ -75,6 +77,7 @@ export function AccountMenu({ name, email, avatarUrl, onRename, onSignOut, defau
       <TitleBarButtonPrimitive
         variant="icon"
         className="cluster-icon-button account-avatar-button"
+        surfacePhase={surfacePhase}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`${name} — account menu`}
