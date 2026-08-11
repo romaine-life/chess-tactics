@@ -160,6 +160,7 @@ import {
   predrawnBoardPlateForEditorReview,
   predrawnReviewGridCells,
   predrawnBoardPreviewRegistration,
+  largestPaintedPlateRect,
   predrawnBoardPreviewSrc,
   runtimePredrawnBoardPlate,
   serializePredrawnBoardPreviewRegistration,
@@ -2789,6 +2790,27 @@ const clearEditorSignInRecoveryIntent = (): void => {
   try { window.sessionStorage.removeItem(EDITOR_SIGN_IN_RECOVERY_INTENT_KEY); } catch { /* blocked storage */ }
 };
 
+/**
+ * The painted rectangle of the active plate, as fractions of its frame. Measuring it needs the
+ * decoded image, so it resolves after the plate loads and is null until then; every caller must
+ * treat that as "not measured yet" rather than "the paint fills the frame".
+ */
+function usePaintedPlateRect(
+  src: string | undefined,
+): { left: number; top: number; right: number; bottom: number } | null {
+  const [rect, setRect] = useState<
+    { left: number; top: number; right: number; bottom: number } | null
+  >(null);
+  useEffect(() => {
+    if (!src) { setRect(null); return undefined; }
+    let live = true;
+    setRect(null);
+    largestPaintedPlateRect(src).then((measured) => { if (live) setRect(measured); });
+    return () => { live = false; };
+  }, [src]);
+  return rect;
+}
+
 export function LevelEditor(): ReactElement {
   const animationFrame = useAnimationClock(true, 8, 150);
   // The Studio routes here with ?from=studio (show a "back to catalog" link), ?kind=<brush-kind>,
@@ -4394,12 +4416,40 @@ export function LevelEditor(): ReactElement {
     frameCameraBoundary(bounds);
   };
   /**
-   * The largest rectangle that stays inside this level's artwork. Only offered where there IS
+   * The largest rectangle that stays inside this level's PAINT. Only offered where there is
    * artwork; a tiled level's backdrop follows the camera and has no edge to fit to.
+   *
+   * Measured from the plate's alpha, not from the polygon: the polygon is the raster frame,
+   * and a painting with a ragged edge does not fill its own frame, so fitting to the frame
+   * hands the player unpainted world — which is the one thing the boundary is for.
    */
-  const cameraBoundaryFitToArtwork = predrawnCoverPolygon?.length
-    ? largestBoxInsideBoardCameraPolygon(predrawnCoverPolygon)
-    : undefined;
+  const paintedPlateRect = usePaintedPlateRect(editorPredrawnPlate?.src);
+  const cameraBoundaryFitToArtwork = (() => {
+    if (!predrawnCoverPolygon?.length) return undefined;
+    const frame = largestBoxInsideBoardCameraPolygon(predrawnCoverPolygon);
+    if (!frame || !paintedPlateRect) return frame;
+    return {
+      minX: frame.minX + frame.width * paintedPlateRect.left,
+      minY: frame.minY + frame.height * paintedPlateRect.top,
+      width: frame.width * (paintedPlateRect.right - paintedPlateRect.left),
+      height: frame.height * (paintedPlateRect.bottom - paintedPlateRect.top),
+    };
+  })();
+  /**
+   * Artwork ASSIGNMENT refits the box to the new painting. Keyed on the surface identity and
+   * skipped on the first one seen, so opening a level never rewrites a box an author set — only
+   * actually changing the artwork does, and then the old edge is gone anyway.
+   */
+  const lastFittedSurfaceRef = useRef<string | null>(null);
+  useEffect(() => {
+    const identity = editorPredrawnPlate?.src ?? null;
+    if (lastFittedSurfaceRef.current === null) { lastFittedSurfaceRef.current = identity; return; }
+    if (identity === lastFittedSurfaceRef.current) return;
+    lastFittedSurfaceRef.current = identity;
+    // commitCameraBoundary is the one that refuses on a read-only page; nothing to repeat here.
+    if (!identity || !cameraBoundaryFitToArtwork) return;
+    commitCameraBoundary(cameraBoundaryFitToArtwork);
+  }, [cameraBoundaryFitToArtwork, editorPredrawnPlate?.src]);
   const fitCameraBoundaryToArtwork = (): void => {
     if (!cameraBoundaryFitToArtwork) {
       reportStatus('This level has no artwork to fit the camera to.', 'warning');
@@ -4451,20 +4501,11 @@ export function LevelEditor(): ReactElement {
     const current = currentEditorBoardRef.current;
     // Newly set artwork was generated FROM the geometry on screen, so it arrives bound to it again:
     // the detachment and the hand placement both belong to the selection they were made against.
-    // New artwork brings a new edge, so the camera box is refitted to it. Assigning art and
-    // then finding the camera still bounded by the old one is the drawn-box-means-nothing
-    // problem in miniature; the button below does the same thing on demand.
-    const fitted = largestBoxInsideBoardCameraPolygon(
-      predrawnBoardCoverPolygon(runtimePredrawnBoardPlate(surface), predrawnCoverCells),
-    );
     const next = {
       ...cloneEditorBoard(current),
       surface,
       predrawnGridDetached: false,
       predrawnPlateOffset: undefined,
-      ...(fitted
-        ? { cameraBounds: normalizeBoardCameraBounds(fitted, { cols: boardCols, rows: boardRows }) }
-        : {}),
     };
     if (boardSignature(next) === boardSignature(current)) return;
     setPredrawnSelectionValidation({ kind: 'checking' });

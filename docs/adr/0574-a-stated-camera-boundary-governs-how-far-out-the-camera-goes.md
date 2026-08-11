@@ -190,3 +190,25 @@ Note for anyone writing a similar tool: the plate's stored `worldBounds` are rel
 board origin, which is `boardLabMetrics`. A hand-rolled origin put every plate hundreds of
 world pixels off and reported six of nine levels as needing to grow past their own art; the
 package's own function is the only correct source.
+
+### The fit is measured from paint, not from the frame
+
+A plate's declared `worldBounds` are its raster FRAME, and a painting with a ragged or
+feathered edge does not fill its own frame. Fitting to the frame therefore left unpainted world
+inside the box — visible as a sliver of backdrop between the ragged edge and the boundary line,
+which is exactly what the boundary exists to prevent.
+
+Measured from alpha: Hold the Bridge paints 99.4% of her frame, Fortress Gate 73.9%. So the fit
+is now the largest ALL-PAINTED rectangle (`largestPaintedPlateRect`, a maximal-rectangle scan
+over the decoded plate), and the boxes moved accordingly — Hold the Bridge 1450x816 to
+1436x806, Fortress Gate 1360x765 to 1140x639. Five of the nine AI levels paint their whole
+frame and did not move.
+
+Cropping the rasters to their painted rectangle was considered and left alone: it would tidy
+the files and delete this measurement, but only two levels carry meaningful waste, and it costs
+four new accepted artwork versions in production. Recorded because the analysis is the reusable
+part — a crop needs the occlusion mask cropped identically, `frameWidth`/`frameHeight`/
+`worldBounds` shifted, and the move-highlight profile repointed at the new
+`backgroundVersionId` (it returns nothing on a mismatch), but `environmentGeometrySha256`
+survives because it deliberately excludes the raster, and the footprints survive because they
+are per-cell percentages rather than raster pixels.
