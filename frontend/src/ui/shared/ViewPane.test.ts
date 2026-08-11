@@ -202,20 +202,28 @@ describe('board zoom floor composition', () => {
     ).toBe(true);
   });
 
-  it('takes the tighter of the two limits, never the average or the last one asked', () => {
-    // Boundary far larger than the level: coverage is satisfied long before the level stops
-    // being worth zooming out from, so usefulness is what binds here.
-    const viewport = { width: 800, height: 600 };
-    const wideBoundary = [
-      { x: -4000, y: -3000 }, { x: 4000, y: -3000 }, { x: 4000, y: 3000 }, { x: -4000, y: 3000 },
+  // The regression that made a boundary-governed camera stop short of its own boundary:
+  // the level box is the snap default, sized around the playable surface and smaller than
+  // what a level paints, so consulting it as well held the camera in tighter than the
+  // boundary the Level Editor draws. A stated boundary is the answer, not one of two.
+  it('lets a stated boundary govern alone, with no level box holding it in tighter', () => {
+    const viewport = { width: 2000, height: 1214 };
+    // A boundary wider than the level box, exactly as accepted art is wider than the default.
+    const artBoundary = [
+      { x: -725, y: -408 }, { x: 725, y: -408 }, { x: 725, y: 408 }, { x: -725, y: 408 },
     ];
-    const floor = boardZoomFloor({
-      viewport, coverPolygon: wideBoundary, containBox: RECTANGLE_BOX, minZoom: 0.05, maxZoom: 16,
+    const smallerLevelBox = { width: 1152, height: 648 };
+    const withBox = boardZoomFloor({
+      viewport, coverPolygon: artBoundary, containBox: smallerLevelBox, minZoom: 0.05, maxZoom: 16,
     });
     const coverOnly = minimumZoomToCoverViewport({
-      viewport, polygon: wideBoundary, minZoom: 0.05, maxZoom: 16,
+      viewport, polygon: artBoundary, minZoom: 0.05, maxZoom: 16,
     });
-    expect(floor).toBeGreaterThan(coverOnly);
-    expect(RECTANGLE_BOX.height * floor).toBeLessThanOrEqual(viewport.height + 1e-9);
+    expect(withBox).toBe(coverOnly);
+    // And the level box alone WOULD have bound tighter, which is what made this reachable.
+    const containOnly = boardZoomFloor({
+      viewport, containBox: smallerLevelBox, minZoom: 0.05, maxZoom: 16,
+    });
+    expect(containOnly).toBeGreaterThan(coverOnly);
   });
 });

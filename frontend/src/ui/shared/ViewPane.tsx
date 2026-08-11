@@ -414,13 +414,22 @@ export function minimumZoomToCoverViewport({
 }
 
 /**
- * How far out this pane may go, obeying both limits at once.
+ * How far out this pane may go.
  *
- * `containBox` is the level's own extent and answers "is there any point going further
- * out" — zooming out ends with the whole level visible. `coverPolygon` is the camera
- * boundary and answers "is what I would reveal actually painted". A camera obeys both, so
- * the floor is whichever binds, and a level supplies whichever of the two it has: a
- * viewport-locked backdrop paints wherever the camera goes and passes no boundary at all.
+ * **A stated boundary governs alone.** `coverPolygon` is the camera boundary, and the
+ * furthest-out rung it permits is already the answer to "how far out may I go" — the whole
+ * point of stating one is that the camera fills it and stops. Nothing else may hold the
+ * camera in tighter, and a usefulness limit taken from a DIFFERENT box will: the snap
+ * default is sized around the playable surface and is smaller than what a level paints, so
+ * asking it as well stopped a boundary-governed camera short of the boundary the Level
+ * Editor draws — 81% of it where coverage alone reaches 89%. Two limits measured against
+ * two different boxes is not a safety margin, it is the editor and the game disagreeing
+ * again, which is the whole defect (ADR-0573).
+ *
+ * `containBox` is the level's own extent, and it answers only the case where there IS no
+ * boundary: a viewport-locked backdrop paints wherever the camera goes, so nothing is
+ * uncovered and a camera that could retreat forever would be useless. Then, and only then,
+ * zooming out ends with the whole level visible.
  */
 export function boardZoomFloor({
   viewport,
@@ -435,14 +444,13 @@ export function boardZoomFloor({
   minZoom: number;
   maxZoom: number;
 }): number {
-  const cover = coverPolygon
-    ? minimumZoomToCoverViewport({ viewport, polygon: coverPolygon, minZoom, maxZoom })
-    : null;
-  const contain = containBox
-    ? zoomTierRange({ viewport, levelBox: containBox, cell: BOARD_CELL_SIZE }).outer
-    : null;
-  if (cover === null && contain === null) return minZoom;
-  return Math.max(cover ?? minZoom, contain ?? minZoom);
+  if (coverPolygon) {
+    return minimumZoomToCoverViewport({ viewport, polygon: coverPolygon, minZoom, maxZoom });
+  }
+  if (containBox) {
+    return zoomTierRange({ viewport, levelBox: containBox, cell: BOARD_CELL_SIZE }).outer;
+  }
+  return minZoom;
 }
 
 export function ViewPane({

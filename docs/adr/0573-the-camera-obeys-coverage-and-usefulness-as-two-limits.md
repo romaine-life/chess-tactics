@@ -9,7 +9,7 @@ refines:
   - "[ADR-0302](0302-camera-authoring-is-a-dedicated-level-editor-page.md)"
 ---
 
-# ADR-0573: The camera obeys coverage and usefulness as two limits
+# ADR-0573: A stated camera boundary governs how far out the camera goes
 
 ## Context
 
@@ -41,16 +41,29 @@ full-width bands at the left, right and bottom — at the OPENING view, without 
 
 ## Decision
 
-**A camera obeys two limits, and the zoom floor is whichever binds.**
+**A stated camera boundary governs the zoom floor alone.**
 
 - **Coverage (safety)** — `coverageTier`: the furthest-out rung at which the visible rectangle is
   still entirely inside the level's camera boundary. Rounds UP, because the chosen rung must land
   on the safe side of the constraint and one rung of slack outside the boundary is exposed black.
+  A level that states a boundary is answered by this and nothing else: filling the boundary and
+  stopping is the whole point of stating one.
 - **Usefulness** — `zoomTierRange().outer`, unchanged: the first rung at which the whole level box
-  fits inside the viewport, so zooming out ends with the level visible and never further.
+  fits inside the viewport. This answers only the case where there is NO boundary, because a
+  viewport-locked backdrop paints wherever the camera goes and a camera that can retreat forever
+  is useless. Coverage alone cannot stop that retreat, which is why the limit still exists.
 
-Neither subsumes the other. Coverage alone cannot stop a camera retreating forever on a level whose
-backdrop is locked to the viewport; usefulness alone cannot keep a camera out of unpainted world.
+The two are **not** combined into "whichever binds". They are measured against different boxes —
+the boundary is what a level paints, the level box is the snap default sized around the playable
+surface — so consulting both holds a boundary-governed camera short of its own boundary. Measured
+on Hold the Bridge at 2000x1214: the boundary permits 1.5513 and reaches 89% of its own width,
+while the level box permitted only 1.7103 and reached 81%. The Level Editor draws that boundary,
+so stopping short of it is the editor and the game disagreeing again — the defect this ADR exists
+to end, reintroduced from the other side.
+
+A viewport can only touch a boundary of a different aspect on one axis; the other axis
+necessarily shows less. That is the geometry of "the viewport stays inside the boundary", not a
+shortfall to be corrected.
 
 **Coverage is enforced on the rectangle art is VISIBLE in, not on the measured stage.** ViewPane
 resolves it from the nearest clipping ancestor in the live DOM, so a change to where the board is
