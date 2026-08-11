@@ -1,33 +1,18 @@
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { ATARAXIA_BY_TIER, ATARAXIA_TIERS, type AtaraxiaTier } from '../run/model';
+import { ChromeDividedGridRow } from './shared/ChromeDividedGrid';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 
-// The Ataraxia CELL of Start New Run's one box: its name, and the dropdown inserted under it.
+// Ataraxia: the bare picker for a row that already names it (the War editor), and the CELLS it
+// takes in Start New Run's one box.
 //
 // It used to be a box of its own, standing above three more boxes with the page showing through
-// between them. The whole column is now a single divided box and this is its first cell, so it
-// draws no frame at all — the box's own frame is around it and the rail under it is the boundary
-// that used to be a gap. See the box's mount in PlayMenu.
+// between them. The column is a single divided box now and this is its first pair of cells: a name,
+// and the picker SEATED in the cell under it — the wood filling the whole area between the rails,
+// with no frame of its own, because the box's rails are already its edges. See the box in PlayMenu.
 
-export function AtaraxiaSelector({
-  value,
-  highestUnlockedTier,
-  onChange,
-  fillSurface,
-  named = true,
-}: {
-  value: AtaraxiaTier;
-  highestUnlockedTier: AtaraxiaTier;
-  onChange: (tier: AtaraxiaTier) => void;
-  fillSurface?: string;
-  /**
-   * False where this is one setting inside somebody else's row — the War editor's War group.
-   * A second name there would state the same word twice, so it renders as the bare picker and
-   * the row around it supplies the name.
-   */
-  named?: boolean;
-}): ReactElement {
-  const options: readonly HouseSelectOption[] = ATARAXIA_TIERS.map((tier) => {
+function ataraxiaOptions(highestUnlockedTier: AtaraxiaTier): readonly HouseSelectOption[] {
+  return ATARAXIA_TIERS.map((tier) => {
     const definition = ATARAXIA_BY_TIER[tier];
     const locked = tier > highestUnlockedTier;
     // The ladder is linear, so the tier below is exactly the one that opens this rung.
@@ -46,15 +31,33 @@ export function AtaraxiaSelector({
       ),
     };
   });
+}
 
+export type AtaraxiaSelectorProps = {
+  value: AtaraxiaTier;
+  highestUnlockedTier: AtaraxiaTier;
+  onChange: (tier: AtaraxiaTier) => void;
+  fillSurface?: string;
+};
+
+/**
+ * One setting inside somebody else's row — the War editor's War group. The row supplies the name,
+ * and the picker keeps its own frame because it is standing on a field rather than filling a cell.
+ */
+export function AtaraxiaSelector({
+  value,
+  highestUnlockedTier,
+  onChange,
+  fillSurface,
+}: AtaraxiaSelectorProps): ReactElement {
   // The selected tier's `effect` is not restated under the picker. Every tier the ladder installs
   // says it in the option the picker is already showing, and the baseline's -- the only rung there
   // is -- reads "Standard rules.", which is a line of copy spent saying that the default is the
   // default. The Enchiridion's Ataraxia reference is where the ladder is explained in full.
-  const picker = (
+  return (
     <HouseSelect
       value={String(value)}
-      options={options}
+      options={ataraxiaOptions(highestUnlockedTier)}
       onChange={(next) => onChange(Number(next) as AtaraxiaTier)}
       ariaLabel="Ataraxia"
       className="run-ataraxia-select"
@@ -62,13 +65,33 @@ export function AtaraxiaSelector({
       fillSurface={fillSurface}
     />
   );
-  if (!named) return picker;
-  return (
-    <>
-      <div className="run-prep-cell-head">
-        <span className="run-prep-cell-name" id="run-ataraxia-title">Ataraxia</span>
-      </div>
-      {picker}
-    </>
-  );
+}
+
+/**
+ * The same choice as CELLS of Run preparation's box — an array rather than a component, because
+ * only a direct child of the box is a row it lays a rail around (see ChromeDividedGrid).
+ */
+export function ataraxiaPrepCells({
+  value,
+  highestUnlockedTier,
+  onChange,
+  fillSurface,
+}: AtaraxiaSelectorProps): ReactNode[] {
+  return [
+    <ChromeDividedGridRow key="ataraxia-name" spans="all" className="run-prep-cell run-prep-name">
+      <span className="run-prep-cell-name" id="run-ataraxia-title">Ataraxia</span>
+    </ChromeDividedGridRow>,
+    <ChromeDividedGridRow key="ataraxia-choice" spans="all" className="run-prep-plate">
+      <HouseSelect
+        seated
+        value={String(value)}
+        options={ataraxiaOptions(highestUnlockedTier)}
+        onChange={(next) => onChange(Number(next) as AtaraxiaTier)}
+        ariaLabel="Ataraxia"
+        className="run-ataraxia-select"
+        testId="run-ataraxia-select"
+        fillSurface={fillSurface}
+      />
+    </ChromeDividedGridRow>,
+  ];
 }

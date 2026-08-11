@@ -247,7 +247,6 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
                         content: (
                           <EditorRow framed={false} title="Ataraxia" description="The rung this War is played at.">
                             <AtaraxiaSelector
-                              named={false}
                               value={ataraxiaTier}
                               highestUnlockedTier={highestUnlockedTier}
                               onChange={setAtaraxiaTier}

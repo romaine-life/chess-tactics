@@ -6534,6 +6534,26 @@ body.loading-bootstrap .app-startup-status {
   display: flex;
   min-width: 0;
 }
+/* A picker SEATED in a cell of a divided box: the cell's edges are the box's rails, so it takes no
+   frame of its own and fills the whole area between them. It names no registered unit — the
+   `inner-dropdown` unit IS the 9-slice frame — and paints nothing but the wood its host names, so
+   the declarations here are geometry only. See HouseSelect's `seated`. */
+.house-select-seated {
+  block-size: 100%;
+  gap: var(--ds-inline);
+  inline-size: 100%;
+  min-block-size: var(--run-prep-plate-h, 30px);
+  padding: 0 var(--ds-inset);
+}
+.house-select-seated-label {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.house-select-seated > .stepper-glyph {
+  flex: 0 0 auto;
+}
 .house-select-trigger:disabled {
   cursor: default;
   opacity: .55;
@@ -28137,8 +28157,8 @@ button.run-card-formation-cell {
   display: grid;
 }
 
-.run-rules-content h4,
-.run-rules-content p {
+.run-rules-cell h4,
+.run-rules-cell p {
   margin: 0;
 }
 
@@ -28251,6 +28271,12 @@ button.run-card-formation-cell {
    of a single box now and the gaps are that box's own rails — laid and capped by its topology, so
    nothing here draws a rule. See the mount in PlayMenu. */
 .run-prep-box {
+  /* The plate a CELL paints when it is the control. A framed button is a 38px box whose 9-slice
+     eats a rail's width a side, so about 24px of it is oak; a cell has no frame — the box's rails
+     are its edges — so at 38px it would paint the whole 38 and read half again as heavy as every
+     framed control on the screen. Stated here because `--le-inner-square` and its siblings are
+     scoped to the Level Editor screen and do not reach the menu shell's columns. */
+  --run-prep-plate-h: 30px;
   /* Sized by what it holds. Stretching it to the column and packing the cells from the top is
      what leaves a slab of empty marble under the last one. */
   flex: 0 0 auto;
@@ -28265,16 +28291,25 @@ button.run-card-formation-cell {
   min-block-size: 0;
 }
 
+/* A cell that CARRIES something — a name, a sentence — takes the inset and wears the box's marble. */
 .run-prep-cell {
   gap: var(--ds-inline-tight);
   padding: var(--ds-inset);
 }
 
-/* A cell's name, and whatever control belongs beside it — the square key that opens Options. */
-.run-prep-cell-head {
+/* A cell that IS something — a verb, a picker — takes no inset at all: its control fills the whole
+   area between the rails, and the wood reaches them. That is the difference between a control
+   INSERTED into the box and one merely standing inside it. */
+.run-prep-plate {
+  min-block-size: var(--run-prep-plate-h);
+  padding: 0;
+}
+
+.run-prep-name {
   align-items: center;
   display: flex;
   gap: var(--ds-inline-tight);
+  grid-template-columns: minmax(0, 1fr);
   justify-content: space-between;
   min-block-size: 0;
 }
@@ -28283,30 +28318,42 @@ button.run-card-formation-cell {
   font-size: var(--ds-text-md);
 }
 
-/* The disclosure is a registered tool square; this rule only seats it at the end of the name row. */
+/* The verb IS the row (section-box-member-verb owns the frameless reset); this sizes the plate and
+   gives its label the same display treatment every other verb cell in the menu shell wears. */
+.run-prep-verb {
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xs);
+  min-block-size: var(--run-prep-plate-h);
+  padding: 0 var(--ds-inset);
+  text-transform: uppercase;
+}
+
+.run-prep-verb:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.run-prep-verb:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: -2px;
+}
+
+/* The disclosure is a registered tool square; this rule only seats it at the end of the name row.
+   It keeps its own frame — it is a control standing ON the marble cell, not filling one. */
 .run-rules-toggle {
   color: inherit;
   cursor: pointer;
   flex: 0 0 auto;
 }
 
-/* Options' choices hold their space whether they are painted or not, so opening the section moves
-   nothing above or below it. `visibility` rather than `hidden`/`display:none` is what reserves it:
-   the choices stay laid out, so the space is exactly what they need and cannot drift from a number
-   written here. It also keeps them out of the tab order and the accessibility tree while closed. */
-.run-rules-content {
-  display: grid;
-  gap: var(--ds-inline-tight);
-}
-
-.run-rules-content[data-open="false"] {
+/* Options' cells are there whether the choices are painted or not, so opening the section moves
+   nothing above or below it. `visibility` rather than `hidden`/`display:none` is what reserves the
+   space: the choices stay laid out, so what is held is exactly what they need and cannot drift from
+   a number written here. It also keeps them out of the tab order and the accessibility tree while
+   closed. The RAILS stay drawn either way — they belong to the box, and closed the section shows
+   the compartments its choices are about to fill. */
+.run-rules-cell[data-open="false"] {
   visibility: hidden;
-}
-
-/* The verb closes the box, so its actions row drops the bottom padding it carried when it stood
-   loose in the column. */
-.run-prep-verb .ce-preview-actions {
-  padding: 0;
 }
 
 /* Replacement warning seated above Start Run — the popup-free abandon confirm. */
@@ -28772,8 +28819,7 @@ button.run-card-formation-cell {
    Start New Run is NOT one of these: it is a single box of cells, and the one disclosure in it is
    a square key rather than a pressable slab — a cell has no frame to be the button. See
    `.run-prep-box`. */
-.run-rules-content h4 {
-  margin-block-start: var(--ds-inline-tight);
+.run-rules-cell h4 {
   font-size: var(--ds-text-xs);
   opacity: .78;
 }

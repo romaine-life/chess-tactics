@@ -542,7 +542,9 @@ describe('Run chrome hierarchy', () => {
 
     expect(chromeSurfacePolicy).toContain("export const CHROME_LEAF_FILL_SURFACE = 'hybrid-wood-oak'");
     expect(houseSelect).toContain('fillSurface?: string;');
-    expect(houseSelect).toContain('data-chrome-fill-surface={fillSurface}');
+    // One props object for both forks — the framed trigger and the one seated in a divided cell —
+    // so a picker cannot wear the oak in one shape and lose it in the other.
+    expect(houseSelect).toContain("'data-chrome-fill-surface': fillSurface,");
     expect((runArmyWorkspace.match(/fillSurface=\{CHROME_LEAF_FILL_SURFACE\}/g) ?? [])).toHaveLength(3);
     expect(runArmyWorkspace).toContain("['--run-roster-filter-index' as string]: 2");
     expect(styleCss).toMatch(/\.run-roster-filters \.house-select\s*\{[\s\S]*?--chrome-surface-position-y:\s*calc\(var\(--run-roster-filter-index, 0\)/);

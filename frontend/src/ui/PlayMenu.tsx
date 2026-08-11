@@ -57,8 +57,8 @@ import { ChromeDividedGridRow, DividedInnerChromeBox } from './shared/ChromeDivi
 import { loadMatch, type PersistedMatch } from '../game/matchPersistence';
 import { continueInventory, type ContinueInventory } from './playContinue';
 import { runAdoptionFacts } from './runAdoption';
-import { AtaraxiaSelector } from './AtaraxiaSelector';
-import { RunRulesSelector } from './RunRulesSelector';
+import { ataraxiaPrepCells } from './AtaraxiaSelector';
+import { useRunRulesCells } from './RunRulesSelector';
 import { ActionList } from './shared/ActionList';
 import { SettingsRow, SettingsSection } from './shared/SettingsControls';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
@@ -233,6 +233,13 @@ function RunPanel({
   const [progression, setProgression] = useState(readRunProgression);
   const [ataraxiaTier, setAtaraxiaTier] = useState<AtaraxiaTier>(0);
   const [runRules, setRunRules] = useState<RunRules>(DEFAULT_RUN_RULES);
+  // Cells rather than a component: only a DIRECT child of the box is a row it lays a rail around,
+  // so a component returning several rows would collapse them into one (see ChromeDividedGrid).
+  const runRulesCells = useRunRulesCells({
+    value: runRules,
+    onChange: (rules) => { setArmed(false); setRunRules(rules); },
+    fillSurface: CHROME_LEAF_FILL_SURFACE,
+  });
   const eligible = useMemo(() => runEligibleOfficialWars(wars), [wars]);
   // Each destination wears its OWN installed mark, authored for this seat and reviewed on this
   // tab (ADR-0559). They borrowed the title bar's Battle and Ataraxia marks first, which read as
@@ -495,14 +502,12 @@ function RunPanel({
               fillRole={CHROME_STRUCTURAL_FILL_ROLE}
               aria-label="Run preparation"
             >
-              <ChromeDividedGridRow spans="all" className="run-prep-cell">
-                <AtaraxiaSelector
-                  value={ataraxiaTier}
-                  highestUnlockedTier={highestUnlockedTier}
-                  onChange={(tier) => { setArmed(false); setAtaraxiaTier(tier); }}
-                  fillSurface={CHROME_LEAF_FILL_SURFACE}
-                />
-              </ChromeDividedGridRow>
+              {ataraxiaPrepCells({
+                value: ataraxiaTier,
+                highestUnlockedTier,
+                onChange: (tier) => { setArmed(false); setAtaraxiaTier(tier); },
+                fillSurface: CHROME_LEAF_FILL_SURFACE,
+              })}
 
               {presentedRun ? (
                 /* Bare marble — no oak, and no box of its own. Nothing in this cell can be pressed;
@@ -519,57 +524,63 @@ function RunPanel({
                 </ChromeDividedGridRow>
               ) : null}
 
+              {/* The verb IS the cell: the row is the button, the wood fills the whole area
+                  between the rails, and the box's own frame is its edge. A framed button seated in
+                  a cell draws a second rail a few pixels inside the first — see
+                  `section-box-member-verb`, which owns this reset. Armed, the two answers stack as
+                  two such cells rather than sharing a row: the box's columns are box-wide, and a
+                  second column declared for one transient row would rule a line down every cell
+                  above it. */}
               {presentedRun && armed ? (
-                <ChromeDividedGridRow spans="all" className="run-prep-cell run-prep-verb">
-                  <div className="ce-preview-actions run-replace-decision">
-                    <ChromeButton unit="inner-text-button"
-                      ref={keepRunButtonRef}
-                      className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
-                      data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                      data-testid="run-keep"
-                      disabled={starting}
-                      onClick={() => setArmed(false)}
-                    >
-                      <span>Keep Run</span>
-                    </ChromeButton>
-                    <ChromeButton unit="inner-text-button"
-                      className={chromeUnitClassNames('inner-text-button', 'ce-asset-button', 'is-danger')}
-                      data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                      data-testid="run-abandon-and-start"
-                      disabled={starting}
-                      onClick={() => { void start(); }}
-                    >
-                      <span>{starting ? 'Starting…' : 'Abandon and Start'}</span>
-                    </ChromeButton>
-                  </div>
-                </ChromeDividedGridRow>
+                /* An ARRAY, not a fragment: the box flattens arrays into rows and sees a fragment
+                   as one child, so a fragment here would put both answers in a single row with no
+                   rail between them. */
+                [
+                  <ChromeDividedGridRow
+                    key="run-keep"
+                    as="button"
+                    spans="all"
+                    ref={keepRunButtonRef}
+                    className="section-box-member-verb run-prep-verb"
+                    data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                    data-testid="run-keep"
+                    disabled={starting}
+                    onClick={() => setArmed(false)}
+                  >
+                    <span>Keep Run</span>
+                  </ChromeDividedGridRow>,
+                  <ChromeDividedGridRow
+                    key="run-abandon-and-start"
+                    as="button"
+                    spans="all"
+                    className="section-box-member-verb run-prep-verb is-danger"
+                    data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                    data-testid="run-abandon-and-start"
+                    disabled={starting}
+                    onClick={() => { void start(); }}
+                  >
+                    <span>{starting ? 'Starting…' : 'Abandon and Start'}</span>
+                  </ChromeDividedGridRow>,
+                ]
               ) : (
-                <ChromeDividedGridRow spans="all" className="run-prep-cell run-prep-verb">
-                  <div className="ce-preview-actions is-single">
-                    <ChromeButton unit="inner-text-button"
-                      className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
-                      data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                      data-testid="run-start"
-                      disabled={newRunUnavailable || starting}
-                      onClick={() => { if (presentedRun) { setArmed(true); return; } void start(); }}
-                    >
-                      <span>{starting ? 'Starting…' : 'Start Run'}</span>
-                    </ChromeButton>
-                  </div>
+                <ChromeDividedGridRow
+                  as="button"
+                  spans="all"
+                  className="section-box-member-verb run-prep-verb"
+                  data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                  data-testid="run-start"
+                  disabled={newRunUnavailable || starting}
+                  onClick={() => { if (presentedRun) { setArmed(true); return; } void start(); }}
+                >
+                  <span>{starting ? 'Starting…' : 'Start Run'}</span>
                 </ChromeDividedGridRow>
               )}
 
               {/* Below the verb, deliberately. The defaults are the game and almost nobody opens
                   this, so it must not sit between the Ataraxia choice and Start Run as if it were
-                  a step in setup. It no longer grows the box either — its cell holds the height its
-                  choices need whether they are showing or not, so opening it moves nothing. */}
-              <ChromeDividedGridRow spans="all" className="run-prep-cell run-prep-options">
-                <RunRulesSelector
-                  value={runRules}
-                  onChange={(rules) => { setArmed(false); setRunRules(rules); }}
-                  fillSurface={CHROME_LEAF_FILL_SURFACE}
-                />
-              </ChromeDividedGridRow>
+                  a step in setup. It no longer grows the box either — its cells are there whether
+                  the choices are showing or not, so opening it moves nothing. */}
+              {runRulesCells}
             </DividedInnerChromeBox>
           </aside>
         ) : null}

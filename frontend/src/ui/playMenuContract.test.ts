@@ -252,8 +252,8 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('<RunDetailContentSceneSlot');
     expect(authoredSceneSlots).toContain('region="run-detail" mode="contents"');
     expect(playMenu).not.toContain("sceneTransitionTargetAttributes('run-detail'");
-    expect(playMenu).toMatch(/choice === 'new'[\s\S]*?<AtaraxiaSelector/);
-    expect(playMenu).toMatch(/<AtaraxiaSelector[\s\S]*?fillSurface=\{CHROME_LEAF_FILL_SURFACE\}/);
+    expect(playMenu).toMatch(/choice === 'new'[\s\S]*?ataraxiaPrepCells\(\{/);
+    expect(playMenu).toMatch(/ataraxiaPrepCells\(\{[\s\S]*?fillSurface: CHROME_LEAF_FILL_SURFACE,/);
     expect(ataraxiaSelector).toContain('fillSurface={fillSurface}');
     expect(ataraxiaSelector).toContain('<HouseSelect');
     expect(ataraxiaSelector).toContain('disabled: locked');
@@ -269,6 +269,8 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // baseline's effect is "Standard rules.", a line spent saying the default is the default.
     expect(ataraxiaSelector).not.toContain('SectionBox');
     expect(ataraxiaSelector).toContain('<span className="run-prep-cell-name" id="run-ataraxia-title">Ataraxia</span>');
+    // The picker FILLS its cell rather than standing framed inside it (see the box's own test).
+    expect(ataraxiaSelector).toMatch(/className="run-prep-plate">[\s\S]*?<HouseSelect\s+seated/);
     expect(ataraxiaSelector).not.toContain('run-ataraxia-effect');
     expect(ataraxiaSelector).not.toContain('ATARAXIA_BY_TIER[value].effect');
     expect(style).not.toContain('.run-ataraxia-effect');
@@ -284,9 +286,13 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // caps from its own grid lines — nothing in this column draws a rule of its own.
     expect(playMenu).toMatch(/<DividedInnerChromeBox[\s\S]*?className="run-prep-box"/);
     expect(playMenu).toMatch(/className="run-prep-box"[\s\S]*?fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
-    expect(playMenu).toMatch(/run-prep-box[\s\S]*?<ChromeDividedGridRow spans="all" className="run-prep-cell">[\s\S]*?<AtaraxiaSelector/);
-    expect(playMenu).toMatch(/<ChromeDividedGridRow spans="all" className="run-prep-cell run-prep-verb">[\s\S]*?data-testid="run-start"/);
-    expect(playMenu).toMatch(/<ChromeDividedGridRow spans="all" className="run-prep-cell run-prep-options">[\s\S]*?<RunRulesSelector/);
+    expect(playMenu).toMatch(/run-prep-box[\s\S]*?ataraxiaPrepCells\(\{/);
+    expect(playMenu).toContain('{runRulesCells}');
+    // A cell that CARRIES something takes the inset and wears the marble; a cell that IS something
+    // takes none, so its control fills the whole area between the rails and the wood reaches them.
+    // That is the difference between a control INSERTED into the box and one standing inside it.
+    expect(style).toMatch(/\.run-prep-plate \{[\s\S]*?padding: 0;/);
+    expect(style).toMatch(/\.run-prep-verb \{[\s\S]*?min-block-size: var\(--run-prep-plate-h\);/);
     // The box takes no padding of its own: a rail has to reach the frame on both sides, and box
     // padding would hold every one of them short of it. Each cell carries the inset instead.
     expect(style).toMatch(/\.run-prep-box \{[\s\S]*?padding: 0;/);
@@ -371,7 +377,11 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('if (run) await abandon();');
     expect(playMenu).toMatch(/await abandon\(\);[\s\S]*?replace\(createRun\([\s\S]*?navigateApp\('\/run'\)/);
     expect(playMenu).toContain("<span>{starting ? 'Starting…' : 'Start Run'}</span>");
-    expect(playMenu).toMatch(/<ChromeButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-start"/);
+    // The verb IS the row: the box's own frame is its edge, so it draws none and the wood fills the
+    // whole cell. A framed button seated in a cell drew a second rail just inside the first.
+    expect(playMenu).toMatch(/<ChromeDividedGridRow\s+as="button"[\s\S]{0,320}?data-testid="run-start"/);
+    expect(playMenu).toMatch(/className="section-box-member-verb run-prep-verb"[\s\S]{0,200}?data-testid="run-start"/);
+    expect(playMenu).not.toMatch(/<ChromeButton[^>]*data-testid="run-start"/);
   });
 
   it('freezes the confirmed Play presentation until the outgoing scene retires', () => {
@@ -397,10 +407,13 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('if (presentedRun) { setArmed(true); return; }');
     expect(playMenu).toContain('data-testid="run-keep"');
     expect(playMenu).toContain('data-testid="run-abandon-and-start"');
-    expect(playMenu).toMatch(/<ChromeButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-keep"/);
-    expect(playMenu).toMatch(/<ChromeButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-abandon-and-start"/);
-    // Danger tone rides the ce-family's registered variant over the shared oak surface.
-    expect(playMenu).toContain("'ce-asset-button', 'is-danger'");
+    // Both answers are verb CELLS, stacked. The box's columns are box-wide, so a second column
+    // declared for one transient row would rule a line down every cell above it.
+    expect(playMenu).toMatch(/className="section-box-member-verb run-prep-verb"[\s\S]{0,200}?data-testid="run-keep"/);
+    expect(playMenu).toMatch(/className="section-box-member-verb run-prep-verb is-danger"[\s\S]{0,200}?data-testid="run-abandon-and-start"/);
+    // An ARRAY, not a fragment: the box flattens arrays into rows and sees a fragment as one child,
+    // so a fragment would put both answers in a single row with no rail between them.
+    expect(playMenu).not.toMatch(/presentedRun && armed \? \(\s*<>/);
     expect(playMenu).toContain('keepRunButtonRef.current?.focus();');
     expect(style).toContain('.run-replace-note');
   });
@@ -412,7 +425,7 @@ describe('Run rule options are a departure from the defaults, not a step in setu
 
   it('starts closed, so a normal Run never has to answer it', () => {
     expect(source).toContain('const [open, setOpen] = useState(false)');
-    expect(source).toContain("data-open={open ? 'true' : 'false'}");
+    expect(source).toContain("const hidden = { 'data-open': open ? 'true' : 'false' } as const;");
     // The SectionBox disclosure — the shape this section used to be — still hides its body outright
     // for every named group that legitimately grows when opened (Settings, the War's Battles).
     expect(prepSection).toContain('hidden={disclosure ? !disclosure.open : undefined}');
@@ -425,9 +438,12 @@ describe('Run rule options are a departure from the defaults, not a step in setu
     // The space is held by keeping the choices LAID OUT and hiding only their paint, so what is
     // reserved is exactly what they need and cannot drift from a number written in the stylesheet.
     // `visibility: hidden` also keeps a closed section out of the tab order and the a11y tree.
-    expect(style).toMatch(/\.run-rules-content\[data-open="false"\] \{\s*visibility: hidden;/);
-    expect(style).not.toMatch(/\.run-rules-content\[data-open="false"\] \{[^}]*display: none/);
-    expect(source).not.toContain('hidden={');
+    expect(style).toMatch(/\.run-rules-cell\[data-open="false"\] \{\s*visibility: hidden;/);
+    expect(style).not.toMatch(/\.run-rules-cell\[data-open="false"\] \{[^}]*display: none/);
+    expect(source).not.toContain('hidden={!');
+    // Each cell carries the closed state itself. A wrapper around them would be ONE row of the
+    // box, and the rails between the choices would go with it.
+    expect(source).not.toMatch(/<div[\s\S]{0,80}className="run-rules-content"/);
   });
 
   it('closed, states only its own name — no reassuring subtitle under it', () => {
@@ -487,8 +503,8 @@ describe('Run rule options are a departure from the defaults, not a step in setu
   });
 
   it('seats below Start Run, so it is not a step between the Ataraxia choice and the verb', () => {
-    expect(playMenu).toMatch(/data-testid="run-start"[\s\S]*?<RunRulesSelector/);
-    expect(playMenu).not.toMatch(/<RunRulesSelector[\s\S]*?data-testid="run-start"/);
+    expect(playMenu).toMatch(/data-testid="run-start"[\s\S]*?\{runRulesCells\}/);
+    expect(playMenu).not.toMatch(/\{runRulesCells\}[\s\S]*?data-testid="run-start"/);
   });
 
   it('states which way it moves, with the shared chevron rather than a second one', () => {
