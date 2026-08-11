@@ -152,10 +152,24 @@ export function HeaderAccountCluster({
     ),
   ];
 
+  // A track is the visible OPENING plus what the rails take back. A rail is drawn ON the grid
+  // line, straddling it, so it covers half its width from the cell on each side — the middle
+  // seat pays that twice and the outer two once each, where the box's own frame is the other
+  // edge and takes nothing. Equal tracks therefore do NOT produce equal compartments: they came
+  // out 34.5 / 31 / 34.5 against a 38 height, none of them square and the gear the odd one out.
+  // Each seat gives the same half-rail back as padding (`.header-account-cluster-seats`), so its
+  // glyph centres in the opening rather than in the cell.
+  const columns = seats.map((_, index) => {
+    const railSides = (index > 0 ? 1 : 0) + (index < seats.length - 1 ? 1 : 0);
+    return railSides === 0
+      ? 'var(--titlebar-control-seat)'
+      : `calc(var(--titlebar-control-seat) + ${railSides} * var(--titlebar-seat-rail-half))`;
+  });
+
   return (
     <DividedInnerChromeBox
       className="header-account-cluster"
-      columns={seats.map(() => 'var(--titlebar-control-seat)')}
+      columns={columns}
       role="group"
       aria-label="Settings and account"
     >

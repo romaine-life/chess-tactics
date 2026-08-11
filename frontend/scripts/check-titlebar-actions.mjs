@@ -96,7 +96,7 @@ if (!/<TitleBarButtonPrimitive[\s\S]*?\bseated\b[\s\S]*?account-avatar-button/.t
 // the persistent divider, which is what separates them from what the app always carries.
 const cluster = readFileSync(join(root, 'shared', 'HeaderAccountCluster.tsx'), 'utf8');
 if (!/<DividedInnerChromeBox[\s\S]*?className="header-account-cluster"/.test(cluster)
-  || !/columns=\{seats\.map\(/.test(cluster)) {
+  || !/const columns = seats\.map\(/.test(cluster)) {
   failures.push('src/ui/shared/HeaderAccountCluster.tsx: the invariant cluster must be one divided box whose columns are its seats.');
 }
 if (/<TitleBar(?:Icon)?ButtonPrimitive(?![^>]*\bseated\b)/.test(cluster)) {

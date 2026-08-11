@@ -48,7 +48,16 @@ it rather than a control standing inside one.**
   `--titlebar-control-seat` is `--titlebar-control-size` minus two inner rails — 38px against the
   52px square — so a seat and a framed control present the same square to the same icon. The box's
   outer height then derives back to the canonical 52px without any title-bar box stating a height,
-  and the cluster comes out 128px wide where three framed squares and two gaps were 172px.
+  and the cluster comes out 142px wide where three framed squares and two gaps were 172px.
+- **A track is that opening PLUS what the rails take back, so the compartments come out square.**
+  A rail is drawn ON the grid line and straddles it, covering half its width from the cell on
+  either side. Equal tracks therefore do not give equal compartments: the middle seat pays that
+  twice and the outer two once each, where the box's own frame is the other edge and takes nothing.
+  Shipped with equal tracks first, and the measured openings were **34.5 / 31 / 34.5 against a 38
+  height** — none of them square and the gear visibly the odd one out, while every cell rect read
+  a tidy 38. Each track now adds `--titlebar-seat-rail-half` for every internal side it has, and
+  each seat gives the same half-rail back as padding so its glyph centres in what can be seen
+  rather than in the cell. All three openings measure 38×38.
 - **The music seat is a real cell, not a boxless wrapper.** `.cluster-bgm-slot` was
   `display: contents` so an unmounted button cost no width in the flex row. As a declared column it
   has to exist from the first frame — before `bgm.js` re-homes its button into it — or every member
@@ -89,13 +98,23 @@ there — divider-to-cluster and cluster-to-viewport-edge are the canonical gap,
 top and bottom with the contributed controls — and measures the **seats** against the box: every
 seat shares the box's top and bottom, no seat escapes it, and **no seat may carry a
 `data-chrome-unit`**, which is the rendered-DOM statement of "no frame inside the frame".
+
+It measures each seat's **opening** rather than its cell — the cell rect minus any rail overlapping
+it — and requires every opening to be square and identical. Cell rects were how the unequal
+compartments shipped in the first place: all three read 38×38 while the eye saw 34.5, 31 and 34.5,
+because the rail that covers a cell is not part of that cell's box. A geometry gate that measures
+the thing nobody looks at is worse than none.
+
 `check-titlebar-actions.mjs` holds `bgm.js` to the seat class, refuses a chrome unit on it, and
-requires the cluster to be a divided box whose columns come from its seat list.
+requires the cluster to be a divided box whose columns are computed from its seat list.
 
 ## Consequences
 
-- One rail between two glyphs instead of two rails and a strip of bar; the cluster is 44px
+- One rail between two glyphs instead of two rails and a strip of bar; the cluster is 30px
   narrower and the top-right reads as one object rather than three.
+- A divided box's compartment is never its cell. Any future consumer laying tracks for
+  equal-looking compartments has to add the rail overlap back the way this one does, or accept the
+  middle ones coming out narrower.
 - Adding or removing a cluster member is a change to one list. The box recomputes its columns,
   rails and junction caps; nothing places a divider.
 - The cluster can no longer light a single member's frame. Any future per-member state in here has

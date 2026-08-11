@@ -72,6 +72,7 @@ try {
     // their edges are the box's rails, which is the whole point of the object.
     const cluster = document.querySelector('.header-account-cluster');
     const seats = [...document.querySelectorAll('.header-account-cluster .titlebar-control')];
+    const clusterRails = [...document.querySelectorAll('.header-account-cluster .chrome-divided-grid__vertical-rail')];
     const framedSeats = [...document.querySelectorAll('.header-account-cluster [data-chrome-unit]')]
       .map((element) => element.getAttribute('aria-label') ?? element.className);
     const controls = [...contributed, cluster];
@@ -104,10 +105,25 @@ try {
         paintIndex: Number(cluster.dataset.titlebarPaintProbeIndex),
         ...rect(cluster),
       },
-      seats: seats.map((element) => ({
-        label: element.getAttribute('aria-label') ?? element.title,
-        ...rect(element),
-      })),
+      seats: seats.map((element) => {
+        const box = rect(element);
+        // What the compartment actually SHOWS. A rail is drawn on the grid line and straddles
+        // it, so it covers half its width from the cell on either side; the cell's own rect
+        // says nothing about that. Measuring the cell is what let the middle seat ship 3.5px
+        // narrower than the two beside it while every rect read a tidy 38.
+        let left = box.left;
+        let right = box.right;
+        for (const rail of clusterRails.map(rect)) {
+          if (rail.right > box.left && rail.right < box.right) left = Math.max(left, rail.right);
+          if (rail.left < box.right && rail.left > box.left) right = Math.min(right, rail.left);
+        }
+        return {
+          label: element.getAttribute('aria-label') ?? element.title,
+          ...box,
+          openingWidth: right - left,
+          openingHeight: box.height,
+        };
+      }),
       framedSeats,
     };
   });
@@ -260,6 +276,11 @@ try {
     if (seat.left < geometry.cluster.left - tolerance || seat.right > geometry.cluster.right + tolerance) {
       failures.push(`cluster seat "${seat.label}" escapes the box it is a compartment of`);
     }
+    // The compartment is what the eye compares, and every one of them is the same SQUARE. A cell
+    // with a rail on both sides shows less of itself than one with a rail on one side, so equal
+    // tracks give unequal compartments — measure the opening, never the cell.
+    near(seat.openingWidth, seat.openingHeight, `cluster seat "${seat.label}" opening is square`);
+    near(seat.openingWidth, geometry.seats[0].openingWidth, `cluster seat "${seat.label}" opening width`);
   }
 
   const summary = {
