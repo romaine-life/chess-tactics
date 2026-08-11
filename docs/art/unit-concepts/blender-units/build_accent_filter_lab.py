@@ -23,7 +23,29 @@ import bpy, os, math, mathutils
 
 # What the accent is called on THIS piece, so a rook does not label its gate CROWN.
 ACCENT_LABEL = os.environ.get("ACCENT_LABEL", "CROWN")
-SPRITE = 51; BLOCK = int(os.environ.get('BLOCK','6'))
+# Per-piece tuning, stated here rather than passed in.
+#
+# These were environment variables, which meant every rebuild had to remember to pass
+# them -- and twice it did not: the rook lost the outline sensitivity of 4.0 on the
+# rebuild for the node layout, and the pawn came back on block 6 when it was tuned at
+# 7. A tuned number that lives only in a shell command is a number you lose.
+#
+# PIECE selects the row. Anything not listed falls back to the defaults.
+PIECE_TUNING = {
+    "pawn":   {"block": 7, "outline_sensitivity": 3.0},
+    "king":   {"block": 6, "outline_sensitivity": 3.0},
+    "rook":   {"block": 5, "outline_sensitivity": 4.0},
+    "queen":  {"block": 7, "outline_sensitivity": 3.0},
+    "bishop": {"block": 7, "outline_sensitivity": 3.0},
+    "knight": {"block": 7, "outline_sensitivity": 3.0},
+}
+PIECE = os.environ.get("PIECE", "")
+_tuning = PIECE_TUNING.get(PIECE, {"block": 7, "outline_sensitivity": 3.0})
+if PIECE and PIECE not in PIECE_TUNING:
+    raise SystemExit("no tuning row for piece %r; add one rather than rendering defaults" % PIECE)
+
+SPRITE = 51
+BLOCK = int(os.environ.get("BLOCK", _tuning["block"]))
 BODY = [(0.00000,"#0d1526"),(0.05139,"#172a4a"),(0.09918,"#223866"),(0.15729,"#2f4a83"),(0.28899,"#415f9c")]
 # Gold for the crown. Same shape as the body ramp -- dark stop first, positions on the
 # render's linear luminance, not on PNG-measured values.
@@ -228,7 +250,7 @@ next(s for s in pix.inputs if s.name=="Size").default_value = BLOCK
 ol = next((n for n in tree.nodes if n.bl_idname=="CompositorNodeGroup" and n.node_tree and n.node_tree.name.startswith("Outline")), None)
 if ol:
     ol.inputs["Fine Adjust"].default_value=1.0
-    ol.inputs["Sensitivity"].default_value=float(os.environ.get("OL_SENS","3.0"))
+    ol.inputs["Sensitivity"].default_value=float(os.environ.get("OL_SENS", _tuning["outline_sensitivity"]))
     ol.inputs["Color"].default_value=(*srgb("#181818"),1)
     # Thickness lives INSIDE the group, on a Dilate/Erode node's Size socket -- not on
     # the group's own inputs, which is why reading the exposed sockets missed it and a
