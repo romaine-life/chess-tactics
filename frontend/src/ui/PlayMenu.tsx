@@ -42,10 +42,10 @@ import {
   type ThumbnailSurfaceState,
 } from './shell/ThumbnailSurface';
 import { useWars, runEligibleOfficialWars } from '../war/store';
-import { useActiveRun } from '../run/store';
+import { useActiveRun, type RunAdoptionConflict } from '../run/store';
 import {
-  ATARAXIA_BY_TIER, DEFAULT_RUN_RULES, createRun, formatGold, snapshotWar, type RunRules,
-  type AtaraxiaTier,
+  ATARAXIA_BY_TIER, DEFAULT_RUN_RULES, createRun, formatArmySize, formatGold, snapshotWar,
+  type RunRules, type AtaraxiaTier,
 } from '../run/model';
 import {
   RUN_PROGRESSION_EVENT,
@@ -55,6 +55,7 @@ import {
 import { InnerChromeBox } from './shared/ChromeBox';
 import { loadMatch, type PersistedMatch } from '../game/matchPersistence';
 import { continueInventory, type ContinueInventory } from './playContinue';
+import { runAdoptionFacts } from './runAdoption';
 import { AtaraxiaSelector } from './AtaraxiaSelector';
 import { RunRulesSelector } from './RunRulesSelector';
 import { ActionList } from './shared/ActionList';
@@ -247,6 +248,35 @@ function RunPanel({
     || !hydrated
     || presentation.syncing
     || eligible.length === 0;
+  // The two candidates in the same shape, so the column renders one list instead of hand-writing
+  // each side. The Run in your hand leads: it is the one you were just playing, and the account's
+  // copy is the thing it collided with. Both verbs begin with Keep — they are the same kind of
+  // answer, and "Adopt" beside "Keep" read as two different kinds of action.
+  const adoptionCandidates = (conflict: RunAdoptionConflict): Array<{
+    label: string;
+    verb: string;
+    testId: string;
+    disabled: boolean;
+    onKeep: () => void;
+    facts: ReturnType<typeof runAdoptionFacts>;
+  }> => [
+    {
+      label: 'This browser',
+      verb: 'Keep browser Run',
+      testId: 'run-adopt-browser',
+      disabled: presentation.syncing,
+      onKeep: () => { void adoptBrowserRun(); },
+      facts: runAdoptionFacts(conflict.browserRun, conflict.accountRun),
+    },
+    {
+      label: 'Your account',
+      verb: 'Keep account Run',
+      testId: 'run-keep-account',
+      disabled: false,
+      onKeep: keepAccountRun,
+      facts: runAdoptionFacts(conflict.accountRun, conflict.browserRun),
+    },
+  ];
 
   useEffect(() => { void hydrate(); }, [hydrate]);
   useEffect(() => {
@@ -377,28 +407,35 @@ function RunPanel({
             <div className="play-detail-body">
               <InnerChromeBox className="play-detail-card" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
                 <div className="run-adoption-conflict" data-testid="run-adoption-conflict">
-                  <div className="run-adoption-conflict-copy">
-                    <p>This browser has {presentation.adoptionConflict.browserRun.war.name}; your account has {presentation.adoptionConflict.accountRun.war.name}. Choose which one the account keeps.</p>
-                  </div>
-                </div>
-                <div className="ce-preview-actions run-adoption-decision">
-                  <ChromeButton unit="inner-text-button"
-                    className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
-                    data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                    data-testid="run-keep-account"
-                    onClick={keepAccountRun}
-                  >
-                    <span>Keep account Run</span>
-                  </ChromeButton>
-                  <ChromeButton unit="inner-text-button"
-                    className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
-                    data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                    data-testid="run-adopt-browser"
-                    disabled={presentation.syncing}
-                    onClick={() => { void adoptBrowserRun(); }}
-                  >
-                    <span>Adopt browser Run</span>
-                  </ChromeButton>
+                  {/* One line of situation, then the two Runs THEMSELVES. Naming each side's War in
+                      a single run-on sentence was the whole statement before, and both sides are
+                      almost always the same War — so it read as a question with no information in
+                      it. Each candidate is a labelled row list ending in its own verb, and the
+                      facts are the ones that actually separate two Runs (ADR-0557). */}
+                  <p className="run-adoption-conflict-lede">Two Runs are active. Keep one; the other is discarded.</p>
+                  {adoptionCandidates(presentation.adoptionConflict).map((candidate) => (
+                    <section className="run-adoption-candidate" key={candidate.testId} aria-label={candidate.label}>
+                      <div className="ce-selected-head"><h2>{candidate.label}</h2></div>
+                      <div className="play-detail-facts">
+                        <dl>
+                          {candidate.facts.map((fact) => (
+                            <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>
+                          ))}
+                        </dl>
+                      </div>
+                      <div className="ce-preview-actions is-single">
+                        <ChromeButton unit="inner-text-button"
+                          className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
+                          data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                          data-testid={candidate.testId}
+                          disabled={candidate.disabled}
+                          onClick={candidate.onKeep}
+                        >
+                          <span>{candidate.verb}</span>
+                        </ChromeButton>
+                      </div>
+                    </section>
+                  ))}
                 </div>
               </InnerChromeBox>
             </div>
@@ -419,7 +456,7 @@ function RunPanel({
                 <div className="play-detail-facts">
                   <dl>
                     <div><dt>Battle</dt><dd>{presentedRun.battleIndex + 1} of {presentedRun.war.battles.length}</dd></div>
-                    <div><dt>Army</dt><dd>{presentedRun.army.length} units</dd></div>
+                    <div><dt>Army</dt><dd>{formatArmySize(presentedRun.army.length)}</dd></div>
                     <div><dt>Gold</dt><dd>{formatGold(presentedRun.goldTenths)}</dd></div>
                     <div><dt>Ataraxia</dt><dd>{ATARAXIA_BY_TIER[presentedRun.ataraxiaTier].label}</dd></div>
                     <div><dt>Deployment</dt><dd>Arrange formations</dd></div>

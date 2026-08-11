@@ -175,9 +175,37 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('index={PLAY_CHOICE_ROW_SEATS.new}');
   });
 
-  it('presents Run adoption as an unboxed decision group', () => {
+  it('presents Run adoption as two labelled candidates, not one run-on sentence', () => {
+    const runAdoption = readFileSync(new URL('./runAdoption.ts', import.meta.url), 'utf8');
     expect(playMenu).toContain('className="run-adoption-conflict"');
     expect(playMenu).toContain('data-testid="run-adoption-conflict"');
+    // The old statement named each side's War in one sentence and stopped there. Both sides are
+    // almost always the same War, so it asked which Run to keep while saying nothing that told
+    // them apart. It is one line of situation now, over two labelled row lists.
+    expect(playMenu).not.toContain('Choose which one the account keeps.');
+    expect(playMenu).not.toContain('run-adoption-conflict-copy');
+    expect(playMenu).toContain('Two Runs are active. Keep one; the other is discarded.');
+    expect(playMenu).toContain("label: 'This browser'");
+    expect(playMenu).toContain("label: 'Your account'");
+    expect(style).toContain('.run-adoption-candidate {');
+    // Both verbs begin with Keep: they are the same kind of answer, and "Adopt" beside "Keep"
+    // read as two different kinds of action.
+    expect(playMenu).toContain("verb: 'Keep browser Run'");
+    expect(playMenu).toContain("verb: 'Keep account Run'");
+    expect(playMenu).not.toContain('<span>Adopt browser Run</span>');
+    // A fact identical on both sides does not tell them apart, so the War is stated only when the
+    // two disagree; where each Run STANDS and which one you last played always are. Ataraxia is
+    // absent entirely — one tier exists, so the row could only repeat itself on both sides.
+    expect(runAdoption).toContain("if (run.war.name !== other.war.name) facts.push({ label: 'War', value: run.war.name });");
+    expect(runAdoption).not.toContain('ATARAXIA_BY_TIER');
+    expect(runAdoption).toContain("facts.push({ label: 'Progress', value: runPhaseLabel(run) });");
+    expect(runAdoption).toContain("facts.push({ label: 'Last played', value: relativeTimeLabel(run.updatedAt, now) });");
+    // Progress and "how long ago" are each written ONCE in the app: Continue's own resume card
+    // says the same two things, and a second copy here would drift from it (ADR-0059).
+    expect(runAdoption).toContain("import { runPhaseLabel } from './playContinue';");
+    expect(runAdoption).toContain("import { relativeTimeLabel } from './relativeTime';");
+    expect(readFileSync(new URL('./levelEditorSessionPresentation.ts', import.meta.url), 'utf8'))
+      .toContain('export const levelEditorSessionTimeLabel = relativeTimeLabel;');
     expect(playMenu).not.toContain('<InnerChromeBox className="play-level-card" role="alert">');
     expect(style).toContain('.run-adoption-conflict {');
     // The question is answered BEHIND Current Run, never in its seat: a card standing where the
@@ -193,10 +221,12 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(runStore).not.toContain('This browser and account each have an active Run.');
     expect(runStore).not.toContain('Choose which active Run this account should keep.');
     expect(runStore.match(/adoptionConflict: \{ browserRun, accountRun \}/g)).toHaveLength(2);
-    // Unboxed does not mean unmaterialed: the two decision buttons are leaf controls over
-    // the live vista, so they carry the same oak as every other Run leaf (ADR-0433).
-    expect(playMenu).toMatch(/<ChromeButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-keep-account"/);
-    expect(playMenu).toMatch(/<ChromeButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-adopt-browser"/);
+    // Each candidate ends in its OWN verb, so the two sides are rendered from one description
+    // rather than hand-written twice — and that one leaf carries the oak every Run leaf carries
+    // (ADR-0433). The identities the rest of the suite drives are the candidates' own.
+    expect(playMenu).toMatch(/<ChromeButton[\s\S]*?data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[\s\S]*?data-testid=\{candidate\.testId\}/);
+    expect(playMenu).toContain("testId: 'run-keep-account'");
+    expect(playMenu).toContain("testId: 'run-adopt-browser'");
   });
 
   it('keeps new-Run setup in the right detail column with one scrollable Ataraxia dropdown', () => {

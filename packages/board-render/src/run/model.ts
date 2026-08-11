@@ -4359,6 +4359,12 @@ export function formatGold(goldTenths: number): string {
   return String(Math.round(goldTenths));
 }
 
+/** How large an army is, said once. An army of one is reachable — the King is not counted —
+ *  and every surface that showed "1 units" wrote its own copy of this string. */
+export function formatArmySize(units: number): string {
+  return `${units} unit${units === 1 ? '' : 's'}`;
+}
+
 /** What a card of `value` points costs, in gold — the price on its coin. */
 export function cardCostGold(value: number): number {
   return value * GOLD_SCALE;

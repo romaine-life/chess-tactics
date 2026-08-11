@@ -23667,12 +23667,22 @@ button.tileset-relationship-cell {
    choice column, in the seat the Current Run row occupies, and paid its own inset for that. */
 .run-adoption-conflict {
   display: grid;
-  gap: var(--ds-stack);
+  gap: var(--ds-gutter);
 }
 
-.run-adoption-conflict-copy {
+/* One line of situation over the two candidates — the question, not the comparison. The
+   comparison is the two labelled row lists under it. */
+.run-adoption-conflict-lede {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+  margin: 0;
+}
+
+/* Each candidate names itself with the SAME head the card's own title uses — no second
+   heading treatment — so the two sides read as headed lists rather than two paragraphs that
+   happen to sit near two buttons. */
+.run-adoption-candidate {
   display: grid;
-  gap: var(--ds-inline-tight);
+  gap: var(--ds-stack);
 }
 
 .run-adoption-conflict p {
@@ -28215,7 +28225,7 @@ button.run-card-formation-cell {
 
 /* A title that earns its place lives INSIDE the card, so it drops the horizontal inset it
    carried as a free-standing head and starts on the same line as the rows beneath it. */
-.play-detail-card > .ce-selected-head {
+.play-detail-card .ce-selected-head {
   padding-inline: 0;
 }
 
