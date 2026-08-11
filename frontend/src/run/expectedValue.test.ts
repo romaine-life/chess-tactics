@@ -7,6 +7,7 @@ import {
   RUN_SECTIO_EARLY_CARD_MAX_VALUE,
   RUN_STARTING_GOLD,
   battleVictoryGoldTenths,
+  sectioPileSize,
 } from './model';
 import {
   HIS_GRACE_VALUE,
@@ -36,11 +37,13 @@ describe('sectio offer expectation', () => {
   it('is the pile quota weighted mean, not a sample', () => {
     const uncapped = sectioOfferExpectation();
     const seats = uncapped.byRarity.reduce((total, band) => total + band.seats, 0);
-    expect(seats).toBe(20);
+    // The pile is derived rather than fixed now -- as many cards as the tiers can fill without
+    // repeating one, capped so a whole Run fits inside a single pile.
+    expect(seats).toBe(sectioPileSize());
     const byHand = uncapped.byRarity
       .reduce((total, band) => total + band.seats * band.meanValue, 0) / seats;
     expect(uncapped.meanOfferValue).toBeCloseTo(byHand, 12);
-    // The pile is 16/3/1 common/uncommon/rare, so the mean sits near the common band.
+    // The quota is 80/15/5, so the mean sits near the common band.
     //
     // That mean is MATERIAL, and it rose when the bands moved from material to price: a card is now
     // Common because it is cheap, and under density pricing the cheap cards are the ones spreading

@@ -14,10 +14,10 @@ import {
   POOL_MODELS,
   POOL_LIVE_RULES,
   POOL_PIECES,
-  POOL_PILE_SLOTS,
   POOL_RUN_OFFERS,
   buildPool,
   poolDistribution,
+  poolPile,
   poolLiveVerdict,
   groupPool,
   poolPriceSteps,
@@ -186,6 +186,7 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
   const summary = useMemo(() => summarizePool(cards), [cards]);
   const verdict = useMemo(() => poolLiveVerdict(cards), [cards]);
   const distribution = useMemo(() => poolDistribution(cards), [cards]);
+  const pile = useMemo(() => poolPile(cards), [cards]);
   // Audited against the market the model's own shape rule leaves, so a shift that is alive on the
   // wide catalog and dead on the narrow one reads as dead here — which is the case that started all
   // of this, and the case a rule stated only in prose can never show you.
@@ -509,7 +510,7 @@ rare      everything above`}
                 <tr key={band}>
                   <td>{band}</td>
                   <td>{summary.byBand[band]} cards</td>
-                  <td>{POOL_PILE_SLOTS[band]} slots</td>
+                  <td>{pile.seats[band]} slots</td>
                   <td>{summary.byBand[band] === 0 ? '—' : `${(summary.perPileShare[band] * 100).toFixed(1)}%`}</td>
                 </tr>
               ))}
@@ -560,7 +561,7 @@ rare      everything above`}
           {BANDS.map((band) => (
             <div className="rcp-stat" key={band}>
               <b>{summary.byBand[band]}</b>
-              <span>{band.toUpperCase()} · {POOL_PILE_SLOTS[band]} SLOTS</span>
+              <span>{band.toUpperCase()} · {pile.seats[band]} SLOTS</span>
             </div>
           ))}
           <div className="rcp-stat"><b>{summary.artOwed}</b><span>ILLUSTRATIONS OWED</span></div>
@@ -604,7 +605,7 @@ rare      everything above`}
             <thead>
               <tr>
                 <th>band</th><th>identities</th><th>seats/pile</th>
-                <th>one card, per pile</th><th>per run</th><th>you meet a given one</th>
+                <th>one card, per pile</th><th>you meet a given one, per run</th>
               </tr>
             </thead>
             <tbody>
@@ -617,27 +618,37 @@ rare      everything above`}
                     {row.identities === 0 ? '—' : `${row.perPile.toFixed(2)}x`}
                     {row.fillsDistinctly ? '' : ' — REPEATS'}
                   </td>
-                  <td>{row.identities === 0 ? '—' : `${row.perRun.toFixed(2)}x`}</td>
                   <td>{row.identities === 0 ? '—' : `${Math.round(row.metPerRun * 100)}%`}</td>
                 </tr>
               ))}
             </tbody>
           </table>
           <p className="rcp-note">
-            A pile is 20 cards holding an exact quota — {POOL_PILE_SLOTS.common} common,
-            {' '}{POOL_PILE_SLOTS.uncommon} uncommon, {POOL_PILE_SLOTS.rare} rare. A QUOTA, not a
-            roll: every pile is that composition rather than converging over a long sample. Each
+            A pile is <b>{pile.size}</b> cards holding an exact quota — {pile.seats.common} common,
+            {' '}{pile.seats.uncommon} uncommon, {pile.seats.rare} rare. Its SIZE is derived, not
+            chosen: as many cards as these tiers can fill <b>without repeating one</b>. A QUOTA, not
+            a roll — every pile is that composition rather than converging over a long sample. Each
             band draws from its own seeded shuffle and the seats are then shuffled together, so the
             order of a row is a surprise and its composition never is. The cursor runs continuously
             and exhausting a pile builds the next one the same way.
           </p>
           <p className="rcp-note">
-            <b>A band holding fewer identities than it has seats does not shrink the pile — it
-            repeats identities to fill them</b>, which is a row of three dealing the same card
-            twice. Above 1.00x per pile is that, stated before it is played.
+            {pile.size >= POOL_RUN_OFFERS
+              ? `And ${pile.size} outlasts the ${POOL_RUN_OFFERS} offers a Run walks, so a Run never
+                 crosses into a second pile. Repetition is not merely rare here — it is unreachable.`
+              : `This pile is shorter than the ${POOL_RUN_OFFERS} offers a Run walks, so a Run crosses
+                 into a second, independently shuffled pile and a row that straddles the boundary can
+                 repeat a card.`}
           </p>
           <p className="rcp-note">
-            Per run assumes {POOL_RUN_OFFERS} offers — ten Sectios of three, the installed
+            <b>A band can never hold fewer identities than it has seats</b>, because the pile is
+            sized to the tiers rather than the tiers cut to fit the pile. Starving a band shrinks the
+            PILE; it can no longer make that band deal one card twice. This is what the market used
+            to do instead, and it is why a Sectio dealt the same card twice in a row of three: the
+            pile was fixed at twenty while the tier under it fell to six.
+          </p>
+          <p className="rcp-note">
+            The per-run figure assumes {POOL_RUN_OFFERS} offers — ten Sectios of three, the installed
             Run-eligible War. It is the one assumption on this page; everything else is arithmetic
             on the pile. A card met in under a few percent of Runs is content that is drawn,
             illustrated and never seen.

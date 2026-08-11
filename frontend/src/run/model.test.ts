@@ -13,7 +13,9 @@ import {
   RUN_EN_PASSANT_BOUNTY_TENTHS,
   RUN_ROYAL_FORK_BOUNTY_TENTHS,
   RUN_ROYAL_FORK_MIN_VICTIM_VALUE,
-  RUN_SECTIO_CARD_PILE_SIZE,
+  RUN_SECTIO_CARD_OFFER_COUNT,
+  RUN_SECTIO_CARD_PILE_MAX,
+  sectioPileSize,
   RUN_SECTIO_EARLY_CARD_MAX_VALUE,
   RUN_CARD_BY_ID,
   RUN_CARD_CATALOG,
@@ -291,13 +293,17 @@ describe('formation card catalog', () => {
     expect(tally(DEFAULT_RUN_RULES)).toEqual({ common: 41, uncommon: 14, rare: 14 });
     expect(tally(material)).toEqual({ common: 6, uncommon: 9, rare: 54 });
 
-    // The option is only worth having if it reaches the market. Six Commons cannot fill sixteen
-    // seats, so the older ladder deals the repeated row it always did -- which is the whole reason
-    // to keep it playable rather than only described.
-    const repeats = sectioCardPile(23, 0, Number.POSITIVE_INFINITY, material);
-    expect(new Set(repeats.map((card) => card.id)).size).toBeLessThan(repeats.length);
-    const distinct = sectioCardPile(23, 0, Number.POSITIVE_INFINITY, DEFAULT_RUN_RULES);
-    expect(new Set(distinct.map((card) => card.id)).size).toBe(distinct.length);
+    // The option is only worth having if it reaches the market, and what it reaches now is the
+    // PILE. A tier no longer repeats to fill its seats; the pile shrinks to what the tiers can
+    // fill, so the older ladder pays for its narrowness in how much market it can show at once.
+    expect(sectioPileSize(Number.POSITIVE_INFINITY, material))
+      .toBeLessThan(sectioPileSize(Number.POSITIVE_INFINITY, DEFAULT_RUN_RULES));
+    // Whichever ladder is chosen, no pile repeats a card. That is a property of the size rule
+    // rather than of the rarity rule, which is why it holds for both.
+    for (const rules of [material, DEFAULT_RUN_RULES]) {
+      const pile = sectioCardPile(23, 0, Number.POSITIVE_INFINITY, rules);
+      expect(new Set(pile.map((card) => card.id)).size, rules.rarity).toBe(pile.length);
+    }
   });
 
   it('reports the older ladder’s footprint shift as dead on the narrow market', () => {
@@ -322,7 +328,7 @@ describe('formation card catalog', () => {
     // THE POINT. A pile draws its sixteen Common seats from one shuffle of the tier, so a tier at
     // least that large fills them with distinct cards and a row cannot deal the same card twice.
     expect(market.filter((card) => card.rarity === 'common').length)
-      .toBeGreaterThanOrEqual(RUN_SECTIO_CARD_PILE_RARITY_COUNT.common);
+      .toBeGreaterThanOrEqual(sectioPileRarityQuota(Number.POSITIVE_INFINITY, DEFAULT_RUN_RULES).common);
   });
 
   it('keeps His Grace on one protected three-unit starter card', () => {
@@ -371,10 +377,14 @@ describe('plain Run creation and acquisition', () => {
     // distinctness here is what stops it coming back the next time the shape rule moves.
     const narrow = RUN_CARD_DECK.filter((card) => cardAllowedByRules(card, DEFAULT_RUN_RULES));
     expect(narrow.filter((card) => card.rarity === 'common').length)
-      .toBeGreaterThanOrEqual(RUN_SECTIO_CARD_PILE_RARITY_COUNT.common);
+      .toBeGreaterThanOrEqual(sectioPileRarityQuota(Number.POSITIVE_INFINITY, DEFAULT_RUN_RULES).common);
     const pile = sectioCardPile(23, 0, Number.POSITIVE_INFINITY, DEFAULT_RUN_RULES);
-    expect(pile).toHaveLength(20);
+    expect(pile).toHaveLength(sectioPileSize(Number.POSITIVE_INFINITY, DEFAULT_RUN_RULES));
     expect(new Set(pile.map((card) => card.id)).size).toBe(pile.length);
+
+    // And the pile outlasts a whole Run's walk of offers, so the row cannot repeat by crossing a
+    // pile boundary either. That is what takes the duplicate from rare to unreachable.
+    expect(pile.length).toBeGreaterThan(RUN_SECTIO_CARD_OFFER_COUNT * 10);
   });
 
   it('deals the first three hidden-pile cards only after Battle 1', () => {
@@ -603,14 +613,16 @@ describe('derived Sectio card pile', () => {
   it('carries the declared rarity quota exactly, not on average', () => {
     for (const seed of [101, 211, 907]) {
       const pile = sectioCardPile(seed, 0);
-      expect(pile).toHaveLength(RUN_SECTIO_CARD_PILE_SIZE);
-      expect(composition(pile)).toEqual({ common: 16, uncommon: 3, rare: 1 });
-      expect(new Set(pile.map((card) => card.id)).size).toBe(RUN_SECTIO_CARD_PILE_SIZE);
+      expect(pile).toHaveLength(sectioPileSize());
+      expect(composition(pile)).toEqual({ common: 32, uncommon: 6, rare: 2 });
+      expect(new Set(pile.map((card) => card.id)).size).toBe(sectioPileSize());
     }
   });
 
   it('re-apportions a tier the cost ceiling empties', () => {
-    expect(sectioPileRarityQuota()).toEqual({ common: 16, uncommon: 3, rare: 1 });
+    // Forty seats at an exact 80/15/5, which is the largest pile no tier has to repeat to fill.
+    expect(sectioPileSize()).toBe(40);
+    expect(sectioPileRarityQuota()).toEqual({ common: 32, uncommon: 6, rare: 2 });
 
     // The opening ceiling is on MATERIAL and the bands are on PRICE, so the tier it empties is the
     // middle one: nothing at six material or less reaches 80 gold, while the minor pairs sit at 60
@@ -622,16 +634,17 @@ describe('derived Sectio card pile', () => {
       card.value <= RUN_SECTIO_EARLY_CARD_MAX_VALUE && card.rarity === 'rare'
     ))).toBe(true);
     expect(sectioPileRarityQuota(RUN_SECTIO_EARLY_CARD_MAX_VALUE)).toEqual({
-      common: 19, uncommon: 0, rare: 1,
+      common: 38, uncommon: 0, rare: 2,
     });
     const capped = sectioCardPile(101, 0, RUN_SECTIO_EARLY_CARD_MAX_VALUE);
-    expect(capped).toHaveLength(RUN_SECTIO_CARD_PILE_SIZE);
+    expect(capped).toHaveLength(sectioPileSize(RUN_SECTIO_EARLY_CARD_MAX_VALUE));
     expect(capped.every((card) => card.value <= RUN_SECTIO_EARLY_CARD_MAX_VALUE)).toBe(true);
-    expect(composition(capped)).toEqual({ common: 19, uncommon: 0, rare: 1 });
+    expect(composition(capped)).toEqual({ common: 38, uncommon: 0, rare: 2 });
 
     // A ceiling low enough to empty two hands both shares on to the tier still standing.
     expect(RUN_CARD_DECK.some((card) => card.value <= 4 && card.rarity !== 'common')).toBe(false);
-    expect(sectioPileRarityQuota(4)).toEqual({ common: 20, uncommon: 0, rare: 0 });
+    expect(sectioPileSize(4)).toBe(15);
+    expect(sectioPileRarityQuota(4)).toEqual({ common: 15, uncommon: 0, rare: 0 });
   });
 
   it('is deterministic and independently shuffles each exhausted pile', () => {

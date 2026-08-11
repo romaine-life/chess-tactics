@@ -83,7 +83,7 @@ export const RUN_BATTLE_RETRY_COST_TENTHS = 3 * GOLD_SCALE;
 export const RUN_DEPLOYMENT_REROLL_COST_TENTHS = GOLD_SCALE;
 export const RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS = 5 * GOLD_SCALE;
 export const RUN_SECTIO_CARD_OFFER_COUNT = 3;
-export const RUN_SECTIO_CARD_PILE_SIZE = 20;
+
 
 /** How often each rarity reaches the market. These are quotas, not roll odds: a pile holds
  * exactly this composition every time, so what a Battle can buy is the same number rather than
@@ -1773,36 +1773,103 @@ export function runSectioCardMaxValue(battleIndex: number): number {
     : Number.POSITIVE_INFINITY;
 }
 
+/** How many distinct identities each tier holds, for a Run playing `rules` under a cost ceiling.
+ *
+ * Cached on the market's identity: the deck is frozen, so an answer for one market never changes,
+ * and the pile size derived from it is asked for on every dealt row. */
+const sectioTierSizeCache = new Map<string, Record<RunCardRarity, number>>();
+
+function marketKey(maxValue: number, rules: RunRules): string {
+  return `${maxValue}:${rules.cardSpan}:${rules.pricing}:${rules.rarity}`;
+}
+
+function sectioTierSizes(maxValue: number, rules: RunRules): Record<RunCardRarity, number> {
+  const key = marketKey(maxValue, rules);
+  const cached = sectioTierSizeCache.get(key);
+  if (cached) return cached;
+  const sizes: Record<RunCardRarity, number> = { common: 0, uncommon: 0, rare: 0 };
+  for (const card of RUN_CARD_DECK) {
+    if (card.value > maxValue || !cardAllowedByRules(card, rules)) continue;
+    sizes[runCardRarityFor(card, rules)] += 1;
+  }
+  sectioTierSizeCache.set(key, sizes);
+  return sizes;
+}
+
 /**
- * How many pile seats each rarity owns under a cost ceiling. A ceiling that empties a tier hands
- * that tier's share to the ones still standing. The live six-gold ceiling empties nothing: cheap
- * Bishop cards are Rare on material a first Battle can afford, so the opening market keeps its
- * whole ladder and only its prices are held down.
- * Seats are handed out by largest remainder, so a pile is always exactly its declared size.
+ * How many pile seats each rarity owns at a given pile size. A tier the market leaves empty hands
+ * its share to the tiers still standing, and seats go by largest remainder, so a pile is always
+ * exactly its declared size.
  */
-export function sectioPileRarityQuota(
-  maxValue = Number.POSITIVE_INFINITY,
-  rules: RunRules = LEGACY_RUN_RULES,
+export function apportionPileSeats(
+  tierSizes: Readonly<Record<RunCardRarity, number>>,
+  pileSize: number,
 ): Record<RunCardRarity, number> {
   const quota: Record<RunCardRarity, number> = { common: 0, uncommon: 0, rare: 0 };
-  // A tier the Run's rules leave empty is not "present": its seats re-apportion to the tiers that
-  // can actually fill them, exactly as a cost ceiling emptying a tier already does.
-  const present = RUN_CARD_RARITIES.filter((rarity) => RUN_CARD_DECK
-    .some((card) => card.value <= maxValue && runCardRarityFor(card, rules) === rarity && cardAllowedByRules(card, rules)));
+  // A tier the market leaves empty is not "present": its seats re-apportion to the tiers that can
+  // actually fill them, exactly as a cost ceiling emptying a tier already does.
+  const present = RUN_CARD_RARITIES.filter((rarity) => tierSizes[rarity] > 0);
   const declared = present.reduce((total, rarity) => total + RUN_CARD_RARITY_PERCENT[rarity], 0);
   if (!declared) return quota;
   const remainders = present.map((rarity) => {
-    const exact = RUN_SECTIO_CARD_PILE_SIZE * RUN_CARD_RARITY_PERCENT[rarity] / declared;
+    const exact = pileSize * RUN_CARD_RARITY_PERCENT[rarity] / declared;
     quota[rarity] = Math.floor(exact);
     return { rarity, remainder: exact - Math.floor(exact) };
   });
-  let seats = RUN_SECTIO_CARD_PILE_SIZE - present.reduce((total, rarity) => total + quota[rarity], 0);
+  let seats = pileSize - present.reduce((total, rarity) => total + quota[rarity], 0);
   for (const { rarity } of [...remainders].sort((left, right) => right.remainder - left.remainder)) {
     if (seats <= 0) break;
     quota[rarity] += 1;
     seats -= 1;
   }
   return quota;
+}
+
+/** The largest pile no tier has to repeat an identity to fill. Exported taking bare tier sizes so
+ * the Card Pool studio sizes a PROPOSED market by the same rule the game sizes its own. */
+export function pileSizeForTiers(tierSizes: Readonly<Record<RunCardRarity, number>>): number {
+  const total = RUN_CARD_RARITIES.reduce((sum, rarity) => sum + tierSizes[rarity], 0);
+  for (let size = Math.min(RUN_SECTIO_CARD_PILE_MAX, total); size > 0; size -= 1) {
+    const quota = apportionPileSeats(tierSizes, size);
+    if (RUN_CARD_RARITIES.every((rarity) => quota[rarity] <= tierSizes[rarity])) return size;
+  }
+  return 0;
+}
+
+export function sectioPileRarityQuota(
+  maxValue = Number.POSITIVE_INFINITY,
+  rules: RunRules = LEGACY_RUN_RULES,
+  pileSize = sectioPileSize(maxValue, rules),
+): Record<RunCardRarity, number> {
+  return apportionPileSeats(sectioTierSizes(maxValue, rules), pileSize);
+}
+
+/**
+ * HOW BIG A PILE IS: the largest one every tier can fill without dealing the same card twice.
+ *
+ * Derived, never written down. A pile's seats are shares of its size, and a tier holds however many
+ * identities the rarity rule swept into it — two numbers with no relation, so any size chosen by
+ * hand is a size that will one day exceed a tier and start repeating. That is the whole of the
+ * duplicate this market shipped with: twenty seats were fixed while the tier under them fell to six.
+ *
+ * Bounded above by `RUN_SECTIO_CARD_PILE_MAX`, which is the only judgement here — enough that a
+ * whole Run's walk of offers fits inside ONE pile, so a Run never crosses a pile boundary and
+ * repetition stops being rare and becomes unreachable.
+ */
+export const RUN_SECTIO_CARD_PILE_MAX = 40;
+
+const sectioPileSizeCache = new Map<string, number>();
+
+export function sectioPileSize(
+  maxValue = Number.POSITIVE_INFINITY,
+  rules: RunRules = LEGACY_RUN_RULES,
+): number {
+  const key = marketKey(maxValue, rules);
+  const cached = sectioPileSizeCache.get(key);
+  if (cached !== undefined) return cached;
+  const answer = pileSizeForTiers(sectioTierSizes(maxValue, rules));
+  sectioPileSizeCache.set(key, answer);
+  return answer;
 }
 
 /**
@@ -1822,12 +1889,12 @@ export function sectioCardPile(
     const pool = RUN_CARD_DECK.filter((card) => (
       card.value <= maxValue && runCardRarityFor(card, rules) === rarity && cardAllowedByRules(card, rules)
     ));
-    const drawn: RunCoreCard[] = [];
-    // A tier smaller than its quota repeats identities rather than shrinking the pile; no live
-    // ceiling reaches that, but a pile is defined by its size and must not silently lose seats.
-    for (let pass = 0; pool.length && drawn.length < quota[rarity]; pass += 1) {
-      drawn.push(...shuffled(pool, mixSeed(seed, `sectio-pile:${rarity}:${pass}`, epoch))
-        .slice(0, quota[rarity] - drawn.length));
+    // One shuffle, one slice. `sectioPileSize` is defined as the largest size no tier has to
+    // repeat to fill, so a second pass over the pool cannot be reached -- and if it ever could,
+    // the size derivation is wrong and should be fixed rather than papered over here.
+    const drawn = shuffled(pool, mixSeed(seed, `sectio-pile:${rarity}:0`, epoch)).slice(0, quota[rarity]);
+    if (drawn.length < quota[rarity]) {
+      throw new Error(`Sectio pile wants ${quota[rarity]} ${rarity} cards and the market holds ${pool.length}.`);
     }
     return drawn;
   });
@@ -1888,11 +1955,15 @@ export function sectioCardOffersAtCursor(
 ): RunCardOffer[] {
   const start = Math.max(0, Math.floor(cursor));
   const maxValue = runSectioCardMaxValue(battleIndex);
+  // Every pile under one ceiling is the same size, so the cursor still divides. The size itself is
+  // derived from the tiers rather than fixed, which is what keeps a pile from outgrowing them.
+  const pileSize = sectioPileSize(maxValue, rules);
+  if (pileSize <= 0) throw new Error('Sectio has no card this market can deal.');
   const piles = new Map<number, RunCoreCard[]>();
   return Array.from({ length: offerCount }, (_, slotIndex) => {
     const absoluteIndex = start + slotIndex;
-    const pileIndex = Math.floor(absoluteIndex / RUN_SECTIO_CARD_PILE_SIZE);
-    const pileCursor = absoluteIndex % RUN_SECTIO_CARD_PILE_SIZE;
+    const pileIndex = Math.floor(absoluteIndex / pileSize);
+    const pileCursor = absoluteIndex % pileSize;
     let pile = piles.get(pileIndex);
     if (!pile) {
       pile = sectioCardPile(seed, pileIndex, maxValue, rules);

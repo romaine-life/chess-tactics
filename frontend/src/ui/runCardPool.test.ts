@@ -13,6 +13,7 @@ import {
   groupPool,
   hasOppositeColourBishopPair,
   poolDistribution,
+  poolPile,
   poolLiveVerdict,
   poolPriceSteps,
   poolRotationContract,
@@ -64,14 +65,20 @@ describe('runCardPool distribution', () => {
     expect(band('rare').metPerRun).toBeGreaterThan(0.05);
   });
 
-  it('calls out a band that cannot fill its seats, which is the duplicate before it is played', () => {
-    const rows = poolDistribution(buildPool({ ...model('shipped-2x2'), bandRule: 'price', commonMaxCost: 20, uncommonMaxCost: 30 }));
-    const common = rows.find((row) => row.band === 'common')!;
-    expect(common.identities).toBeLessThan(common.seats);
-    expect(common.fillsDistinctly).toBe(false);
-    expect(common.perPile).toBeGreaterThan(1);
-    // And the other end of the same failure: a band so large a given card is never met.
-    const rare = rows.find((row) => row.band === 'rare')!;
+  it('cannot produce a band that repeats, however narrow the bands are cut', () => {
+    // The pile is sized to the tiers rather than fixed, so starving a band shrinks the PILE instead
+    // of making that band deal a card twice. Cut Common down to four identities and the whole pile
+    // collapses to what four can carry -- which is the duplicate made unreachable rather than rare.
+    const starved = buildPool({ ...model('shipped-2x2'), bandRule: 'price', commonMaxCost: 20, uncommonMaxCost: 30 });
+    const pile = poolPile(starved);
+    expect(pile.size).toBeLessThan(poolPile(buildPool(model('shipped-2x2'))).size);
+    for (const row of poolDistribution(starved)) {
+      expect(row.fillsDistinctly, row.band).toBe(true);
+      expect(row.perPile, row.band).toBeLessThanOrEqual(1);
+    }
+    // The other end of the same failure survives, because no pile size can fix it: a band so large
+    // that a given card is almost never met.
+    const rare = poolDistribution(starved).find((row) => row.band === 'rare')!;
     expect(rare.identities).toBeGreaterThan(rare.seats * 10);
     expect(rare.metPerRun).toBeLessThan(0.15);
   });

@@ -21,7 +21,9 @@ import {
   DEFAULT_RUN_RULES,
   LEGACY_RUN_RULES,
   RUN_CARD_DECK,
+  apportionPileSeats,
   cardAllowedByRules,
+  pileSizeForTiers,
   runCardCost,
   runCardRarity,
   type AdlectablePieceType,
@@ -1036,7 +1038,16 @@ export type PoolSummary = Readonly<{
   perPileShare: Readonly<Record<PoolBand, number>>;
 }>;
 
-export const POOL_PILE_SLOTS: Readonly<Record<PoolBand, number>> = { common: 16, uncommon: 3, rare: 1 };
+/** The pile a market this shape would deal, sized and apportioned by the GAME's own rule rather
+ * than by a copy of it: as many cards as the tiers can fill without repeating one. */
+export function poolPile(cards: readonly PoolCard[]): Readonly<{
+  size: number; seats: Record<PoolBand, number>;
+}> {
+  const tiers = { common: 0, uncommon: 0, rare: 0 };
+  for (const card of cards) tiers[card.band] += 1;
+  const size = pileSizeForTiers(tiers);
+  return { size, seats: apportionPileSeats(tiers, size) };
+}
 
 /**
  * How many offers one Run walks past. Ten Sectios of three, which is the installed Run-eligible
@@ -1075,24 +1086,23 @@ export type PoolBandDistribution = Readonly<{
 }>;
 
 export function poolDistribution(cards: readonly PoolCard[]): PoolBandDistribution[] {
-  const piles = POOL_RUN_OFFERS / Object.values(POOL_PILE_SLOTS).reduce((total, seats) => total + seats, 0);
+  const pile = poolPile(cards);
+  // A Run walks its offers off the front of one pile, and the pile is drawn WITHOUT replacement, so
+  // this is not a coin flipped once per seat: a card is either in the pile or it is not, and if it
+  // is, its place in the shuffle is uniform. Treating the seats as independent under-reports.
+  const walked = pile.size === 0 ? 0 : Math.min(1, POOL_RUN_OFFERS / pile.size);
+  const runs = pile.size === 0 ? 0 : POOL_RUN_OFFERS / pile.size;
   return (['common', 'uncommon', 'rare'] as const).map((band) => {
     const identities = cards.filter((card) => card.band === band).length;
-    const seats = POOL_PILE_SLOTS[band];
+    const seats = pile.seats[band];
     const perPile = identities === 0 ? 0 : seats / identities;
-    const seatsSeen = seats * piles;
     return {
       band,
       identities,
       seats,
       perPile,
-      perRun: perPile * piles,
-      // Every seat is an independent chance at this identity while the tier can fill them
-      // distinctly; once it cannot, the card is dealt every pile and the question stops being one
-      // of chance at all.
-      metPerRun: identities === 0 ? 0
-        : identities <= seats ? 1
-          : 1 - (1 - 1 / identities) ** seatsSeen,
+      perRun: perPile * Math.max(1, runs),
+      metPerRun: identities === 0 ? 0 : (seats / identities) * walked,
       fillsDistinctly: identities >= seats,
     };
   });
@@ -1100,6 +1110,7 @@ export function poolDistribution(cards: readonly PoolCard[]): PoolBandDistributi
 
 export function summarizePool(cards: readonly PoolCard[]): PoolSummary {
   const bands: PoolBand[] = ['common', 'uncommon', 'rare'];
+  const pileSeats = poolPile(cards).seats;
   const byBand = { common: 0, uncommon: 0, rare: 0 };
   const byVolume = [0, 0, 0, 0, 0];
   const byBandVolume: Record<PoolBand, number[]> = {
@@ -1113,7 +1124,7 @@ export function summarizePool(cards: readonly PoolCard[]): PoolSummary {
   }
   const perPileShare = { common: 0, uncommon: 0, rare: 0 };
   for (const band of bands) {
-    perPileShare[band] = byBand[band] === 0 ? 0 : POOL_PILE_SLOTS[band] / byBand[band];
+    perPileShare[band] = byBand[band] === 0 ? 0 : pileSeats[band] / byBand[band];
   }
   return {
     total: cards.length,
