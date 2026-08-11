@@ -949,10 +949,24 @@ if _wanted:
         _w, _h = _collapse(os.path.join(os.environ["OUT"], _name + ".png"))
         print("SPRITE %s %dx%d" % (_name, _w, _h))
     rig.rotation_euler = (0, 0, 0)
-    print("SPRITES_DONE %s" % os.environ["OUT"])
+    # Check what landed. Mixed sizes shipped once already, silently.
+    _sizes = set()
+    for _name in _wanted:
+        _im = bpy.data.images.load(os.path.join(os.environ["OUT"], _name + ".png"))
+        _sizes.add(tuple(_im.size))
+        bpy.data.images.remove(_im)
+    _want_size = (SPRITE, int(os.environ.get("SPRITE_PY", SPRITE)))
+    if _sizes != {_want_size}:
+        raise SystemExit("sprites came out %s, wanted %s" % (sorted(_sizes), _want_size))
+    print("SPRITES_DONE %s %dx%d" % (os.environ["OUT"], *_want_size))
 
-scene.render.filepath = os.environ["OUT"] if not _wanted else os.path.join(os.environ["OUT"], "south")
-bpy.ops.render.render(write_still=True)
+# The lab's preview render, ONLY when not rendering sprites. It used to run either way
+# and wrote over south.png at full resolution after the loop had collapsed it -- so
+# seven facings shipped at sprite size and south shipped seven times too large, in every
+# piece and every palette. The sizes were mixed and nothing failed.
+if not _wanted:
+    scene.render.filepath = os.environ["OUT"]
+    bpy.ops.render.render(write_still=True)
 if os.environ.get("LAB_OUT"):
     # The file opens on Layout, and factory Layout has no image editor -- so a render
     # pops a separate window, which has to be closed to see the model again. Retype

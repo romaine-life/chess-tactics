@@ -40,7 +40,7 @@ import { UnitRungSprite } from './UnitRungSprite';
  * The folder is gitignored, so an empty set here is the normal state on a fresh
  * checkout; render the matrix before expecting anything.
  */
-const FILTER_MATRIX = new Set(['knight', 'bishop']);
+const FILTER_MATRIX = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
 
 const WHEEL_STRIDE = 1;
 const BUTTON_STRIDE = 1;
