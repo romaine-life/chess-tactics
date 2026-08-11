@@ -231,7 +231,7 @@ scene.render.image_settings.file_format="PNG"; scene.render.image_settings.color
 
 tree = scene.compositing_node_group
 pix = next(n for n in tree.nodes if n.bl_idname=="CompositorNodePixelate")
-pix.label = "BLOCK SIZE (one art pixel)"
+pix.label = "pixelate (driven by BLOCK SIZE)"
 
 # The addon gates each effect behind a SWITCH node, and they default to Off.
 #
@@ -270,7 +270,27 @@ for _n in tree.nodes:
     if _n.node_tree.name.split(".")[0] in {"Flares", "Fog"}:
         _n.mute = not os.environ.get("KEEP_DEMO_EFFECTS")
 
-next(s for s in pix.inputs if s.name=="Size").default_value = BLOCK
+# ONE source for block size.
+#
+# Every stage that works in art pixels had its own Pixelate with the size baked in at
+# build time, so turning the main one down left the masks quantised at the old value --
+# the image went smooth while the accent edge stayed blocky. They all read this Value
+# node now, so the control means what it says.
+block_size = tree.nodes.new("ShaderNodeValue")
+block_size.label = "BLOCK SIZE (one art pixel)"
+block_size.outputs[0].default_value = float(BLOCK)
+
+def _use_block(node, socket="Size", scale=1):
+    if scale == 1:
+        tree.links.new(block_size.outputs[0], node.inputs[socket])
+        return
+    mul = tree.nodes.new("ShaderNodeMath")
+    mul.operation = "MULTIPLY"
+    mul.inputs[1].default_value = float(scale)
+    tree.links.new(block_size.outputs[0], mul.inputs[0])
+    tree.links.new(mul.outputs[0], node.inputs[socket])
+
+_use_block(pix)
 ol = next((n for n in tree.nodes if n.bl_idname=="CompositorNodeGroup" and n.node_tree and n.node_tree.name.startswith("Outline")), None)
 if ol:
     ol.inputs["Fine Adjust"].default_value=1.0
@@ -414,11 +434,11 @@ for _idx in CROWN_INDICES:
 crown_mask = None
 if _crown_cov is not None:
     _cp = tree.nodes.new("CompositorNodePixelate")
-    next(t for t in _cp.inputs if t.name == "Size").default_value = BLOCK
+    _use_block(_cp)
     _cp.location = (80, -900)
     tree.links.new(_crown_cov, _cp.inputs[0])
     _ap = tree.nodes.new("CompositorNodePixelate")
-    next(t for t in _ap.inputs if t.name == "Size").default_value = BLOCK
+    _use_block(_ap)
     _ap.location = (80, -980)
     tree.links.new(rl.outputs["Alpha"], _ap.inputs[0])
     _dv = tree.nodes.new("ShaderNodeMath"); _dv.operation = "DIVIDE"; _dv.use_clamp = True
@@ -458,7 +478,7 @@ for offset, (index, label, stops) in enumerate(ACCENTS):
     coverage = rl.outputs.get("acc%d" % index)
 
     mask_pix = tree.nodes.new("CompositorNodePixelate")
-    next(t for t in mask_pix.inputs if t.name == "Size").default_value = BLOCK
+    _use_block(mask_pix)
     mask_pix.location = (120, -400 - offset * 300)
     tree.links.new(coverage or idm.outputs["Alpha"], mask_pix.inputs[0])
 
@@ -467,7 +487,7 @@ for offset, (index, label, stops) in enumerate(ACCENTS):
     # raw 0.5 cutoff would reject. Dividing by the block's own alpha asks the question
     # that actually decides the colour -- of the ink here, how much is crown.
     alpha_pix = tree.nodes.new("CompositorNodePixelate")
-    next(t for t in alpha_pix.inputs if t.name == "Size").default_value = BLOCK
+    _use_block(alpha_pix)
     alpha_pix.location = (120, -520 - offset * 300)
     tree.links.new(rl.outputs["Alpha"], alpha_pix.inputs[0])
     share = tree.nodes.new("ShaderNodeMath")
@@ -550,7 +570,7 @@ for offset, (index, label, stops) in enumerate(ACCENTS):
     hue_mask = _combine(band_total, sat, "MULTIPLY", 320, -330 - offset * 300)
 
     pixel_mask = tree.nodes.new("CompositorNodePixelate")
-    next(t for t in pixel_mask.inputs if t.name == "Size").default_value = BLOCK
+    _use_block(pixel_mask)
     pixel_mask.location = (380, -330 - offset * 300)
     pixel_mask.label = "%s mask blocks" % label
     tree.links.new(hue_mask, pixel_mask.inputs[0])
@@ -657,7 +677,7 @@ if crown_mask is not None and not os.environ.get("NO_ACCENT_OUTLINE"):
     # are tiny -- a one-pixel inner border took the queen's 15-pixel tiara down to 1,
     # because at that size the border IS the feature. Growing puts the ring on body
     # pixels instead, so the accent keeps every pixel it had.
-    _shrunk.inputs["Size"].default_value = int(os.environ.get("ACCENT_OUTLINE_PX", "1")) * BLOCK
+    _use_block(_shrunk, scale=int(os.environ.get("ACCENT_OUTLINE_PX", "1")))
     tree.links.new(crown_mask, _shrunk.inputs[0])
     _edge = tree.nodes.new("ShaderNodeMath")
     _edge.operation = "SUBTRACT"
@@ -709,10 +729,9 @@ if not os.environ.get("SOFT_ALPHA"):
     _alpha = _cut.outputs["Color"]
 
 if not os.environ.get("NO_STROKE"):
-    _grow_px = int(os.environ.get("STROKE_PX", "1")) * BLOCK
     _fat = tree.nodes.new("CompositorNodeDilateErode")
-    _fat.inputs["Size"].default_value = _grow_px
-    _fat.label = "STROKE width (Size is FULL-RES px: %d = 1 art px)" % BLOCK
+    _use_block(_fat, scale=int(os.environ.get("STROKE_PX", "1")))
+    _fat.label = "STROKE width (Size follows BLOCK SIZE)"
     tree.links.new(_alpha, _fat.inputs[0])
     _ring = tree.nodes.new("ShaderNodeMath")
     _ring.operation = "SUBTRACT"
