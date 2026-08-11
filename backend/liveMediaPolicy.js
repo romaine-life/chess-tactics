@@ -20,6 +20,13 @@ const PREDRAWN_BOARD_PROOF_RENDERER = 'LevelEditor/PredrawnBoardLayer';
 // make every new mark a backend edit, which is how a gate stops being run.
 const MAIN_MENU_MARK_FITTED_EXCEPTION_SCHEMA = 'main-menu-mark-fitted-production-exception-v1';
 const MAIN_MENU_MARK_FITTED_TRANSFORM = 'ink-crop-lanczos-fit-height-52-even-quantize-48-center-64';
+// The list is every mark drawn into a FITTED RAIL SEAT, which is why it is not confined to the
+// main menu's own five. The seat scales the whole 64x64 canvas to a fixed size and lets the
+// asset's transparent padding decide how big the mark reads, so any two marks stacked in one
+// rail must share an ink height or one of them silently reads a different size. That is a
+// property of the seat, not of the screen: the gear is here because the Battle HUD, Settings
+// and `.icon-gear` all draw it, and the Editor's War and Levels marks are here because they
+// stack in the Editor rail beside campaign-editor.png, which is already fitted to 52.
 const MAIN_MENU_MARK_FITTED_SLOTS = Object.freeze([
   'ui/main-menu/icons-carved/solo-skirmish.png',
   'ui/main-menu/icons-carved/campaign-editor.png',
@@ -27,6 +34,8 @@ const MAIN_MENU_MARK_FITTED_SLOTS = Object.freeze([
   'ui/main-menu/icons-carved/enchiridion.png',
   'ui/main-menu/icons-carved/settings.png',
   'ui/kit/icons/gear.png',
+  'ui/kit/icons/war.png',
+  'ui/kit/icons/levels.png',
 ]);
 
 const LIPSANON_ICON_COMPONENT = 'run-lipsanon-icon';

@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { drawableAssets } from '@chess-tactics/board-render';
+import { installedUiMedia } from './installedUiMedia';
 import { useCampaigns } from '../campaign/store';
 import { useWars } from '../war/store';
 import { saveUserWorkspace, publishOfficialWorkspace, userWorkspaceForSave, officialWorkspaceForSave, mapSaveError, tierOf } from '../campaign/save';
@@ -98,6 +99,11 @@ if (campaignMenuModes.length !== 1) {
 }
 const CAMPAIGN_TAB_ICON = campaignMenuModes[0].media.icon?.media.immutableUrl;
 if (!CAMPAIGN_TAB_ICON) throw new Error('installed campaign menu mode has no icon');
+
+// The two workspace libraries carry their own marks. Both are fitted to the rail's 52px ink
+// height, so they read at the same size as the campaign scroll they stack beside.
+const EDITOR_WAR_TAB_ICON = installedUiMedia('ui-kit-icons-war-png');
+const EDITOR_LEVELS_TAB_ICON = installedUiMedia('ui-kit-icons-levels-png');
 
 async function withRecentDraftEditingAuthority<T>(
   document: EditorDocument,
@@ -238,6 +244,7 @@ export function UnassignedRailTab({
   opensAddress,
   title = 'Levels',
   itemName = 'level',
+  iconSrc = CAMPAIGN_TAB_ICON,
 }: {
   count: number;
   active: boolean;
@@ -246,6 +253,14 @@ export function UnassignedRailTab({
   opensAddress: string;
   title?: string;
   itemName?: string;
+  /**
+   * The tab's own mark. Wars and Levels are two different libraries, and both drew the campaign
+   * scroll — so the rail said the same thing three times and the only way to tell the tabs apart
+   * was to read them. A mark here is fitted to the same 52px ink height as the scroll beside it
+   * (see MAIN_MENU_MARK_FITTED_SLOTS): the seat scales the whole 64px canvas, so an unfitted
+   * mark reads at a different size in the same column.
+   */
+  iconSrc?: string;
 }): ReactElement {
   return (
     <EditorCollectionRailTab
@@ -254,7 +269,7 @@ export function UnassignedRailTab({
       index={index}
       onSelect={onSelect}
       opensAddress={opensAddress}
-      iconSrc={CAMPAIGN_TAB_ICON}
+      iconSrc={iconSrc}
       title={title}
       itemName={itemName}
     />
@@ -1092,6 +1107,7 @@ export function CampaignEditor({
                 <UnassignedRailTab
                   title="War"
                   itemName="War"
+                  iconSrc={EDITOR_WAR_TAB_ICON}
                   opensAddress={campaignCollectionHref('/editor', 'wars')}
                   count={wars.length}
                   index={railCampaigns.length}
@@ -1100,6 +1116,7 @@ export function CampaignEditor({
                 />
                 <UnassignedRailTab
                   count={unassignedLevels.length}
+                  iconSrc={EDITOR_LEVELS_TAB_ICON}
                   index={railCampaigns.length + 1}
                   active={isUnassignedSelected}
                   opensAddress={campaignCollectionHref('/editor', 'unassigned')}
