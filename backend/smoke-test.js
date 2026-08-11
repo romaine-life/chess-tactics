@@ -5694,6 +5694,21 @@ async function main() {
   ) {
     throw new Error(`Unexpected admin official write: ${adminOfficialWrite.statusCode} ${adminOfficialWrite.body}`);
   }
+  // A publish answers with the addresses it just baked. Clients hold installed thumbnail URLs for
+  // the life of a page, so a publish that omits them leaves the publisher's own lists rendering
+  // the pre-publish boards until a full reload.
+  if (
+    adminOfficialWriteBody.thumbnail_ready !== true ||
+    !/^\/api\/media\/[0-9a-f]{64}$/.test(adminOfficialWriteBody.thumbnail_urls?.['off-l-test'] || '')
+  ) {
+    throw new Error(`Official publish must answer with its rebaked thumbnail addresses: ${adminOfficialWrite.body}`);
+  }
+  const publishedOfficialManifest = JSON.parse((await get('/api/official-campaigns/default')).body);
+  if (publishedOfficialManifest.thumbnail_urls['off-l-test'] !== adminOfficialWriteBody.thumbnail_urls['off-l-test']) {
+    throw new Error(
+      `A publish answered a different address than the manifest read: ${adminOfficialWriteBody.thumbnail_urls['off-l-test']} vs ${publishedOfficialManifest.thumbnail_urls['off-l-test']}`,
+    );
+  }
   const missingOfficialRevision = await request(
     'PUT', '/api/official-campaigns/default',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
@@ -7888,6 +7903,13 @@ async function main() {
     )
   ) {
     throw new Error(`First Save did not create the canonical Level: ${workspaceWithNewLevel.body}\nbackend output:\n${output}`);
+  }
+  // The Save itself must hand back the address it baked, and it must be the SAME one the manifest
+  // read produces — a client installs whichever it is given and keeps it for the page's lifetime.
+  if (firstNewEditorSaveBody.thumbnail_url !== workspaceWithNewLevelBody.thumbnail_urls.l2) {
+    throw new Error(
+      `Save answered a different thumbnail address than the workspace manifest: ${firstNewEditorSaveBody.thumbnail_url} vs ${workspaceWithNewLevelBody.thumbnail_urls.l2}`,
+    );
   }
   const anonymousStoredListThumbnail = await get(workspaceWithNewLevelBody.thumbnail_urls.l2);
   const storedListThumbnail = await get(
@@ -10827,6 +10849,7 @@ async function main() {
     officialEditorSave.statusCode !== 200 ||
     officialEditorSaveBody.document.saved_revision !== 2 ||
     officialEditorSaveBody.thumbnail_ready !== true ||
+    !/^\/api\/media\/[0-9a-f]{64}$/.test(officialEditorSaveBody.thumbnail_url || '') ||
     officialEditorSaveBody.workspace_revision !== 2
   ) {
     throw new Error(`Official editor Save failed: ${officialEditorSave.statusCode} ${officialEditorSave.body}`);
@@ -10872,6 +10895,14 @@ async function main() {
     officialAfterEditorSaveBody.portfolio.revision !== 2
   ) {
     throw new Error(`Official editor Save did not promote globally: ${officialAfterEditorSave.body}`);
+  }
+  // A client installs whatever address the Save answered with and holds it for the life of the
+  // page, so that answer must be exactly the one a fresh load would have been given. When they can
+  // disagree, a saved level goes on showing its pre-save board until the page is reloaded.
+  if (officialAfterEditorSaveBody.thumbnail_urls['off-l-test'] !== officialEditorSaveBody.thumbnail_url) {
+    throw new Error(
+      `Official Save answered a different thumbnail address than the manifest: ${officialEditorSaveBody.thumbnail_url} vs ${officialAfterEditorSaveBody.thumbnail_urls['off-l-test']}`,
+    );
   }
   const staleOfficialWorkspaceSave = await request(
     'PUT', '/api/official-campaigns/default',

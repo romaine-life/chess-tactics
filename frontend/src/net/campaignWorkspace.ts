@@ -194,7 +194,14 @@ export async function saveOfficialCampaigns(
     }
   }
   if (!res.ok) throw await HttpError.fromResponse('save-official', res);
-  const body = (await res.json()) as { portfolio?: { revision?: unknown; updated_at?: unknown } };
+  const body = (await res.json()) as {
+    portfolio?: { revision?: unknown; updated_at?: unknown };
+    thumbnail_urls?: unknown;
+  };
+  // The publish baked a derivative for every official level it wrote. Install the addresses it
+  // answered with: the publisher's own lists are already mounted and would otherwise keep the
+  // pre-publish pictures for the rest of the page session.
+  installLevelThumbnailUrls(body.thumbnail_urls);
   return {
     revision: safeRevision(body.portfolio?.revision),
     updated_at: safeUpdatedAt(body.portfolio?.updated_at),

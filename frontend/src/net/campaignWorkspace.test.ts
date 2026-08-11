@@ -8,6 +8,7 @@ import {
   saveWorkspace,
   type Workspace,
 } from './campaignWorkspace';
+import { levelThumbnailUrl } from './levelThumbnails';
 
 const workspace: Workspace = { campaigns: [], wars: [], levels: {} };
 
@@ -106,6 +107,19 @@ describe('official campaign workspace revisions', () => {
     await saveOfficialCampaigns(workspace, 12);
 
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ data: workspace, revision: 12 });
+  });
+
+  it('installs the derivatives the publish rebaked, so mounted lists stop showing the old boards', async () => {
+    const published = `/api/media/${'a'.repeat(64)}`;
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, {
+      portfolio: { revision: 13, updated_at: null },
+      thumbnail_urls: { 'off-l-published': published, 'off-l-refused': 'https://example.invalid/thumb.png' },
+    }));
+
+    await saveOfficialCampaigns(workspace, 12);
+
+    expect(levelThumbnailUrl('off-l-published')).toBe(published);
+    expect(levelThumbnailUrl('off-l-refused')).toBeNull();
   });
 
   it('carries the current portfolio on a stale publish and does not retry', async () => {

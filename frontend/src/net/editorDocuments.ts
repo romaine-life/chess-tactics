@@ -1,5 +1,6 @@
 import type { Level } from '../core/level';
 import { HttpError } from './http';
+import { installLevelThumbnailUrl } from './levelThumbnails';
 
 export type EditorDocumentWorkspaceKind = 'user' | 'official';
 
@@ -164,6 +165,7 @@ export interface EditorDocumentRevisionListResult {
 interface EditorDocumentResponse {
   document: EditorDocument;
   workspace_revision?: unknown;
+  thumbnail_url?: unknown;
 }
 
 export interface EditorDocumentSaveResult {
@@ -652,6 +654,10 @@ export async function saveEditorDocument(
   const document = await documentFromResponse('save-editor-document', response);
   const metadata = await metadataResponse.json() as EditorDocumentResponse;
   const workspaceRevision = metadata.workspace_revision;
+  // The Save that changed the canonical Level also baked its list derivative. Install the address
+  // it answered with so every mounted list swaps to the position just saved instead of holding the
+  // one it was hydrated with (which needed a full page reload to move).
+  installLevelThumbnailUrl(document.level_id, metadata.thumbnail_url);
   return {
     document,
     workspace_revision: typeof workspaceRevision === 'number'
