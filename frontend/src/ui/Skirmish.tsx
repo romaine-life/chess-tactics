@@ -28,6 +28,7 @@ import { TitleBarControlContribution, TitleBarStatusTip } from './shell/TitleBar
 import { shouldStartFreshSkirmish, type RunBattleTransformSink, type RunBattleUndoAdapter } from '../game/store';
 import { reviewGameOf } from '../game/moveReview';
 import { MoveReviewControls } from './shared/MoveReviewControls';
+import { CHROME_STRUCTURAL_FILL_ROLE } from './shared/chromeSurfacePolicy';
 import { SkirmishStoreProvider, useSkirmish, useSkirmishStoreApi } from '../game/SkirmishStoreContext';
 import {
   loadMatch,
@@ -1598,7 +1599,15 @@ function SkirmishSession(props: SkirmishProps = {}) {
             // box the chrome cannot reach holds the plate out of the battlefield's flow, so it
             // cannot take a grid row and squash the board it is describing.
             <div className="skirmish-review-seat">
-              <InnerChromeBox className="skirmish-status-chip skirmish-review-plate" role="status" data-testid="move-review-plate">
+              <InnerChromeBox
+                className="skirmish-status-chip skirmish-review-plate"
+                // The plate ESTABLISHES a region — a heading over a row of controls — so it
+                // wears the structural marble, and the transport inside it wears the oak every
+                // trigger wears (ADR-0433).
+                fillRole={CHROME_STRUCTURAL_FILL_ROLE}
+                role="status"
+                data-testid="move-review-plate"
+              >
                 <span className="skirmish-review-plate-heading">
                   <strong>Reviewing</strong>
                   <small>The game underneath is still running</small>

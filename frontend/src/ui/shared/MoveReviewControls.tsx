@@ -1,7 +1,7 @@
 import { type ReactElement } from 'react';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
 import { ChromeButton } from './ChromeButton';
-import { leafSurfacePhase } from './chromeSurfacePolicy';
+import { CHROME_LEAF_FILL_SURFACE, leafSurfacePhase } from './chromeSurfacePolicy';
 import {
   ReviewFirstGlyph,
   ReviewLastGlyph,
@@ -69,6 +69,9 @@ export function MoveReviewControls({
     <ChromeButton
       unit="inner-text-button"
       className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'move-review-key')}
+      // A transport key ENDS the interaction tree, so it takes the leaf oak, phased by its
+      // place in the row so four identical keys are cut from one plank run (ADR-0433).
+      data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
       style={leafSurfacePhase(phase)}
       aria-label={name}
       title={name}
@@ -97,6 +100,7 @@ export function MoveReviewControls({
         <ChromeButton
           unit="inner-text-button"
           className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active', 'move-review-live')}
+          data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
           style={leafSurfacePhase(4)}
           onClick={() => reviewPosition(null)}
         >
