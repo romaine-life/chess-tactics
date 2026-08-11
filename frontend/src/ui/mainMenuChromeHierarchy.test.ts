@@ -90,11 +90,11 @@ describe('Main Menu chrome hierarchy', () => {
       expect(source).not.toMatch(/className=\{?.*?(?<![\w-])settings-tab(?![\w-])/);
       expect(source).toContain('<ApparatusRailTab');
     }
-    expectTaggedLegacyControls(playMenu, 'ce-link-button');
-    // Both editors are off the legacy class entirely: their preview verbs are CELLS of the
-    // preview column's divided box now, so the box's own frame and column line are those
-    // controls' edges and there is no button box to register.
-    for (const source of [editor, warEditor]) expect(source).not.toContain('ce-link-button');
+    // Every one of these is off the legacy class entirely: their verbs are CELLS of a divided
+    // box now, so the box's own frame and column line are those controls' edges and there is no
+    // button box left to register. Play was the last holdout — Start New Run's column became one
+    // box whose verbs close it through ChromeVerbRow, like every card beside it.
+    for (const source of [playMenu, editor, warEditor]) expect(source).not.toContain('ce-link-button');
     expectTaggedLegacyControls(lobbies, 'utility-button', 'utilityButtonClassNames(');
     expect(lobbies).toMatch(/utilityButtonClassNames[\s\S]*?chromeUnitClassNames\('inner-text-button'/);
 

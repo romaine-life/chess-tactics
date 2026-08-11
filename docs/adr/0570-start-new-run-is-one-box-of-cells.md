@@ -9,7 +9,7 @@ refines:
   - "[ADR-0556](0556-run-preparation-chooses-in-a-tab-column-of-one-line-rows.md)"
 ---
 
-# ADR-0567: Start New Run is one box of cells, and its one disclosure reserves its space
+# ADR-0570: Start New Run is one box of cells, and its one disclosure reserves its space
 
 ## Context
 
