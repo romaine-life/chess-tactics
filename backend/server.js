@@ -22978,7 +22978,7 @@ function formationRunRulesIssue(rules) {
   if (!ACTIVE_RUN_CARD_SPANS.has(rules.cardSpan)) return 'run.rules.cardSpan is invalid';
   if (!ACTIVE_RUN_CARD_PRICING.has(rules.pricing)) return 'run.rules.pricing is invalid';
   if (typeof rules.mayRotate !== 'boolean') return 'run.rules.mayRotate is invalid';
-  // Absent is valid: rarity was global and derived before ADR-0567, so a Run saved without it is
+  // Absent is valid: rarity was global and derived before ADR-0568, so a Run saved without it is
   // not malformed -- it predates the field and reads the default.
   if (rules.rarity !== undefined && !ACTIVE_RUN_RARITY_RULES.has(rules.rarity)) return 'run.rules.rarity is invalid';
   return null;
@@ -23250,9 +23250,25 @@ function validateFormationRunBody(run) {
     return 'run.commendatio is invalid outside Commendatio';
   }
 
-  if (run.phase === 'aftermath') {
-    if (!isObjectRecord(run.aftermath) || !Array.isArray(run.aftermath.survivingUnitIds)
-      || !Array.isArray(run.aftermath.fallenUnits)) return 'run.aftermath is invalid';
+  // A Battle's report outlives its own screen: the Bona Vacantia and Sectio that follow spend the
+  // gold it reports, so it stays with them and the Sectio can hand the player back to the Victory
+  // screen (ADR-0568). It may only ever describe the Battle that screen followed, and leaving for
+  // the next Deployment retires it.
+  if (run.phase === 'aftermath' || run.phase === 'bona-vacantia' || run.phase === 'sectio') {
+    if (run.phase === 'aftermath' || run.aftermath !== null) {
+      if (!isObjectRecord(run.aftermath) || !Array.isArray(run.aftermath.survivingUnitIds)
+        || !Array.isArray(run.aftermath.fallenUnits)) return 'run.aftermath is invalid';
+    }
+    if (run.phase !== 'aftermath' && run.aftermath !== null) {
+      const followed = run.phase === 'sectio'
+        ? (isObjectRecord(run.sectio) ? run.sectio.afterBattleIndex : null)
+        : (isObjectRecord(run.vacantia) && run.vacantia.kind === 'post-battle'
+          ? run.vacantia.afterBattleIndex
+          : null);
+      if (followed === null || run.aftermath.battleIndex !== followed) {
+        return `run.aftermath does not report the Battle this ${run.phase === 'sectio' ? 'Sectio' : 'Bona Vacantia'} followed`;
+      }
+    }
   } else if (run.aftermath !== null) return 'run.aftermath is invalid outside Aftermath';
 
   if (run.phase === 'bona-vacantia') {
@@ -23268,7 +23284,14 @@ function validateFormationRunBody(run) {
     if (grantOffers.some((id) => !known(id))) return 'run.vacantia is invalid';
   } else if (run.vacantia !== null) return 'run.vacantia is invalid outside Bona Vacantia';
 
-  if (run.phase === 'sectio') {
+  // A Sectio STANDS behind its own Victory report while that report is being reviewed: reaching
+  // back to it is a review and never a rewind, so the Sectio it will return to is untouched and
+  // still fully valid (ADR-0568). Every other phase still forbids one outright.
+  const sectioStands = run.phase === 'sectio'
+    || (run.phase === 'aftermath' && run.sectio !== null
+      && isObjectRecord(run.aftermath) && isObjectRecord(run.sectio)
+      && run.sectio.afterBattleIndex === run.aftermath.battleIndex);
+  if (sectioStands) {
     const sectio = run.sectio;
     if (!isObjectRecord(sectio) || Object.keys(sectio).some((field) => !ACTIVE_RUN_SECTIO_FIELDS.has(field))) {
       return 'run.sectio is invalid';
@@ -23302,11 +23325,20 @@ function validateFormationRunBody(run) {
   // The aftermath report is the Battle just fought, still being read: closeBattle carries its
   // runtime across and only leaving for the Sectio retires it (ADR-0377, ADR-0452). Requiring
   // the runtime to be null there rejected the saved report of every won Battle.
-  if (run.phase === 'battle' || run.phase === 'aftermath') {
+  //
+  // A report REVIEWED back from the Sectio is the exception: the Sectio retired that runtime on
+  // the way past, and returning to read the report does not resurrect it (ADR-0568). That is
+  // exactly the case `sectioStands` names, so the report and the standing Sectio agree.
+  const reviewedReport = run.phase === 'aftermath' && sectioStands;
+  if (run.phase === 'battle' || (run.phase === 'aftermath' && !reviewedReport)) {
     if (!isObjectRecord(run.battleRuntime) || run.battleRuntime.battleIndex !== run.battleIndex) {
       return `run.battleRuntime is invalid during ${run.phase === 'battle' ? 'Battle' : 'Aftermath'}`;
     }
-  } else if (run.battleRuntime !== null) return 'run.battleRuntime is invalid outside Battle';
+  } else if (run.battleRuntime !== null) {
+    return reviewedReport
+      ? 'run.battleRuntime is invalid during a reviewed Aftermath'
+      : 'run.battleRuntime is invalid outside Battle';
+  }
   return null;
 }
 

@@ -51,6 +51,8 @@ import {
   prepareDeployment,
   rerollDeployment,
   resetSectio,
+  reviewSectioBattleReport,
+  sectioBattleReport,
   RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS,
   RUN_BATTLE_RETRY_COST_TENTHS,
   RUN_CARD_BY_ID,
@@ -376,6 +378,7 @@ function RunMetaControls({
   const replace = useActiveRun((state) => state.replace);
   const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
   const sectio = run.phase === 'sectio' ? run.sectio : null;
+  const battleReport = sectioBattleReport(run);
   const canLeave = canLeaveSectio(run);
   // Nothing inside the Sectio blocks Continue any more: the Conflict's lipsanon is taken on
   // Bona Vacantia, before the Sectio is even built.
@@ -424,10 +427,31 @@ function RunMetaControls({
           <div className="skirmish-view-group">
             <span className="skirmish-eyebrow">Sectio</span>
             <div className="run-meta-navigation">
+              {/* The way back out of the Sectio, seated with the way forward because they are the
+                  same pair the Victory screen itself offers. Pressing it REVIEWS the report: the
+                  Sectio stands exactly as it is left — gold banked, cards admitted, offers locked
+                  — and its Continue lands back here (ADR-0568). A Sectio crafted or migrated
+                  before the report was retained has none to turn back to, and says so by being
+                  unpressable rather than by dropping a control out of the rail. */}
               <ChromeButton unit="inner-text-button"
                 data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
                 style={{ ['--chrome-leaf-surface-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 1 } as CSSProperties}
+                disabled={!battleReport}
+                data-testid="review-run-victory"
+                title={battleReport ? undefined : 'This Sectio kept no report of the Battle it followed.'}
+                onClick={() => {
+                  replace(reviewSectioBattleReport(run));
+                  onNavigate('primary');
+                }}
+              >
+                <RunControlMark control="victory" />
+                Back to Victory
+              </ChromeButton>
+              <ChromeButton unit="inner-text-button"
+                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+                style={{ ['--chrome-leaf-surface-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 2 } as CSSProperties}
                 disabled={!sectioHasChanges(run)}
                 data-testid="reset-run-sectio"
                 onClick={() => {
@@ -441,11 +465,15 @@ function RunMetaControls({
               <ChromeButton unit="inner-text-button"
                 data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-                style={{ ['--chrome-leaf-surface-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 2 } as CSSProperties}
+                style={{ ['--chrome-leaf-surface-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 3 } as CSSProperties}
                 disabled={!canLeave}
                 data-testid="continue-run-sectio"
                 title={!canLeave && continueHint ? continueHint : undefined}
                 onClick={() => {
+                  // The Battle is finally over here, so this is where its retained won-board
+                  // review is retired -- one screen later than ADR-0455 put it, because the
+                  // report itself is reachable until now (ADR-0568).
+                  clearMatch();
                   replace(prepareDeployment(leaveSectio(run)));
                   onNavigate('primary');
                 }}
@@ -464,7 +492,7 @@ function RunMetaControls({
               <ChromeButton unit="inner-text-button"
                 data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
-                style={{ ['--chrome-leaf-surface-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 3 } as CSSProperties}
+                style={{ ['--chrome-leaf-surface-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 4 } as CSSProperties}
                 data-testid="abandon-run"
                 disabled={abandoning}
                 onClick={() => { void requestAbandon(); }}
@@ -1462,8 +1490,10 @@ function AftermathPanel({
       label: 'Continue',
       testId: 'run-aftermath-continue',
       onPress: (): void => {
+        // The won-board review is NOT retired here any more: the report stays reachable from
+        // the Sectio this opens, so the snapshot it reads has to outlast this press and is
+        // retired when the Sectio is finally left (ADR-0568 refining ADR-0455).
         replace(leaveAftermath(run));
-        clearMatch();
       },
     },
   ];

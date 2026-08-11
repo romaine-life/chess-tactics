@@ -154,7 +154,7 @@ export type RunRules = Readonly<{
    * Which ladder sorts the catalog into Common, Uncommon and Rare — see `RUN_RARITY_RULES`.
    *
    * `price-shifts` is the game: a flat cut on the printed price, then the shifts it declares.
-   * `material-bands` is what the market ran on before ADR-0567, kept selectable because the
+   * `material-bands` is what the market ran on before ADR-0568, kept selectable because the
    * difference between the two is the whole argument and a rule you cannot play is a rule nobody
    * can judge. It leaves six Common identities against sixteen pile seats under a two-by-two
    * market, so a Sectio row deals the same card twice; that is what it is FOR.
@@ -2335,6 +2335,39 @@ function normalizedArmyIdentity(run: RunDocument): {
   return { army, sectio, nextArmyUnitNumberByType, changed };
 }
 
+/**
+ * The phases a Battle's own report outlives the report screen for.
+ *
+ * A won Battle is not finished when Continue is pressed: the Conflict's Bona Vacantia and the
+ * Sectio are where its gold is actually spent, and the player reading a card's price is exactly
+ * the player who wants to check what the fight paid. So the report stays with them, and the
+ * Sectio can hand them back to the Victory screen they came from (ADR-0568). Leaving for the
+ * next Deployment is what ends the Battle, and retires it.
+ */
+export function runPhaseKeepsBattleReport(phase: RunPhase): boolean {
+  return phase === 'aftermath' || phase === 'bona-vacantia' || phase === 'sectio';
+}
+
+/** The Battle a non-aftermath screen's retained report must belong to, or null when none may. */
+function retainedBattleReportIndex(run: RunDocument): number | null {
+  if (run.phase === 'sectio') return run.sectio?.afterBattleIndex ?? null;
+  if (run.phase === 'bona-vacantia') {
+    return run.vacantia?.kind === 'post-battle' ? run.vacantia.afterBattleIndex : null;
+  }
+  return null;
+}
+
+/**
+ * The Victory report the Sectio may hand the player back to, or null when it has none.
+ *
+ * A Sectio crafted or migrated before the report was retained simply has nothing to go back to;
+ * that is an absent review, not a broken one.
+ */
+export function sectioBattleReport(run: RunDocument): RunAftermathState | null {
+  if (run.phase !== 'sectio' || !run.sectio || !run.aftermath) return null;
+  return run.aftermath.battleIndex === run.sectio.afterBattleIndex ? run.aftermath : null;
+}
+
 export function normalizeRunDocument(run: RunDocument): RunDocument {
   const raw = run as Omit<RunDocument, 'phase'> & {
     phase: RunPhase | 'draft';
@@ -2405,10 +2438,20 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   if (next.vacantia && !Array.isArray(next.vacantia.cardOffers)) {
     next = { ...next, vacantia: { ...next.vacantia, cardOffers: [] } };
   }
-  // The aftermath report belongs to the Battle it closed, so it is not carried into any
-  // later phase. Repair an incomplete current save rather than leaking the report forward.
-  if (next.aftermath === undefined || (next.phase !== 'aftermath' && next.aftermath !== null)) {
-    next = { ...next, aftermath: next.phase === 'aftermath' ? next.aftermath ?? null : null };
+  // The aftermath report belongs to the Battle it closed, and is kept for exactly as long as
+  // that Battle's own result is still on screen: the report, the Conflict's Bona Vacantia, and
+  // the Sectio the Battle's gold is spent in are one moment, so the Sectio can hand the player
+  // back to the Victory it came from (ADR-0568). Leaving for the next Deployment retires it.
+  // Repair an incomplete or forward-leaked current save rather than trusting the stored field.
+  if (next.aftermath === undefined || (!runPhaseKeepsBattleReport(next.phase) && next.aftermath !== null)) {
+    next = { ...next, aftermath: runPhaseKeepsBattleReport(next.phase) ? next.aftermath ?? null : null };
+  }
+  // A retained report only ever describes the Battle the screen holding it followed. One that
+  // names a different Battle is a document that leaked a report forward, so it is dropped
+  // rather than shown against the wrong fight.
+  if (next.aftermath && next.phase !== 'aftermath'
+    && next.aftermath.battleIndex !== retainedBattleReportIndex(next)) {
+    next = { ...next, aftermath: null };
   }
   // A report whose standing count is missing or nonsense surrendered nothing, which is the
   // reading that keeps Continue banking the total this screen already showed.
@@ -4205,10 +4248,32 @@ export function closeBattle(run: RunDocument, report: RunBattleReport): RunDocum
   });
 }
 
-/** Leave the aftermath report; whatever follows the Battle opens now. */
+/**
+ * Leave the aftermath report; whatever follows the Battle opens now.
+ *
+ * A report REACHED BACK TO from the Sectio it already opened leaves for that same Sectio, exactly
+ * as it stands: the gold was banked, the offers were drawn and something may already have been
+ * bought there. Re-running the transition would bank the reward twice and deal a second row of
+ * cards, so the review's way out is a return and never a repeat (ADR-0568).
+ */
 export function leaveAftermath(run: RunDocument): RunDocument {
   if (run.phase !== 'aftermath' || !run.aftermath) return run;
+  if (run.sectio && run.sectio.afterBattleIndex === run.aftermath.battleIndex) {
+    return touch({ ...run, phase: 'sectio' });
+  }
   return openSectio(run, run.aftermath.survivingUnitIds, run.aftermath.standingEnemyValue);
+}
+
+/**
+ * Reopen the Victory report of the Battle this Sectio followed, without disturbing the Sectio.
+ *
+ * This is a REVIEW and not a rewind: the Run stays exactly as the Sectio left it — gold banked,
+ * cards admitted, offers locked — and Continue puts the player back where they pressed Back.
+ * Reversing the document into a fought Battle would be the wrong repair for the same reason
+ * ADR-0455 gave when the report gained its own Back to the board.
+ */
+export function reviewSectioBattleReport(run: RunDocument): RunDocument {
+  return sectioBattleReport(run) ? touch({ ...run, phase: 'aftermath' }) : run;
 }
 
 /**
@@ -4232,12 +4297,14 @@ export function openSectio(
   if (finalBattle) {
     return touch({ ...run, phase: 'victory', sectio: null, deployment: null, battleRuntime: null, aftermath: null });
   }
+  // The report is CARRIED rather than retired: the Bona Vacantia and Sectio this opens are where
+  // the Battle's gold is spent, so the player can turn back to what the fight paid while they are
+  // deciding what to spend it on (ADR-0568). Leaving the Sectio for the next Deployment ends it.
   const banked: RunDocument = {
     ...run,
     goldTenths: run.goldTenths + victoryGoldTenths + rifleTenths + speedGoldTenths + deditioTenths,
     deployment: null,
     battleRuntime: null,
-    aftermath: null,
   };
   // A loot Battle closes a Conflict, so the next one opens here -- before the Sectio, so the
   // player inherits the lipsanon and then decides what to spend on. The Battle's gold is
@@ -4499,7 +4566,7 @@ export function takeVacantiaLipsanon(run: RunDocument, lipsanon: LipsanonId): Ru
   if (acquired === run) return run;
   const vacantia = run.vacantia;
   const opened = vacantia.kind === 'opening'
-    ? { ...acquired, phase: 'deployment' as const, vacantia: null, sectio: null }
+    ? { ...acquired, phase: 'deployment' as const, vacantia: null, sectio: null, aftermath: null }
     : openPostBattleSectio(acquired, vacantia.victoryGoldTenths);
   return touch(opened);
 }
@@ -4604,6 +4671,8 @@ export function leaveSectio(run: RunDocument): RunDocument {
     deployment: null,
     battleRuntime: null,
     sectio: null,
+    // The Battle whose report this was is over the moment the next one is being deployed for.
+    aftermath: null,
   });
 }
 
