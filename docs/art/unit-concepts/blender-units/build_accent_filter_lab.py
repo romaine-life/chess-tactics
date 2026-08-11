@@ -19,6 +19,17 @@ Accents chain: each is a Pass Index and the palette that index wears, so any num
 of them stack. The king runs three -- navy body, gold crown, red velvet -- after
 `split_crown_materials.py` divides the crown mesh on its own region map.
 """
+# The crown's four PBR maps live in LIVE MEDIA, not in this tree.
+#
+# They were unpacked references into Windows Temp, which got emptied, so the crown
+# rendered as flat missing-texture magenta and no compositor work could touch it. I
+# then committed them here, which CI rightly refused -- media is storage-backed in this
+# repo, and 3.8MB of PNG in git is exactly what check-no-committed-media guards.
+#
+# They are uploaded as unit-art sources at
+#   docs/art/unit-concepts/blender-units/king-crown/textures/*.png
+# and PACKED into the lab blend, so a lab carries its own pixels and a moved or emptied
+# folder cannot break it again.
 import bpy, os, math, mathutils
 import numpy as np
 
