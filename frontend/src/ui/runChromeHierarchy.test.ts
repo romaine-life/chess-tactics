@@ -610,9 +610,13 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).not.toMatch(/\.(?:campaign-result-actions|run-aftermath-actions)[^}]*:nth-child/);
 
     // The Run's last action is a button, not a band: the workspace lane stretches its grid
-    // children, which only became conspicuous once it wore a plank.
+    // children, which only became conspicuous once it wore a plank. It sits in an actions row
+    // now — the same one the Battle's Aftermath uses — so the row holds it to its own width and
+    // the lone `justify-self` that used to do that job is retired rather than left dead.
     expect(runScreen).toContain("'active', 'run-victory-finish'");
-    expect(styleCss).toMatch(/\.run-victory-finish\s*\{[\s\S]*?justify-self:\s*start;/);
+    expect(runScreen).toContain('<div className="run-victory-actions">');
+    expect(styleCss).toMatch(/\.run-aftermath-actions,\s*\.run-victory-actions\s*\{[\s\S]*?justify-content:\s*center;/);
+    expect(styleCss).not.toContain('.run-victory-finish {');
   });
 
   it('keeps Expunctio card-first and removes only complete held formations', () => {
@@ -680,7 +684,11 @@ describe('Run chrome hierarchy', () => {
     // A junction caps a rail where it meets the box's own FRAME. Unframed there is no such frame,
     // so a boundary cap caps nothing and sits on the host's chrome as a stray atom.
     expect(chromeDividedGrid).toContain("nodes.filter((node) => node.inlineBoundary === 'internal')");
-    expect(chromeDividedGrid).toContain('const blockBoundaryNodes = framed ? topology : { ...topology, topNodes: [], bottomNodes: [] };');
+    // A vertical rail's frame caps also require a rail to actually ARRIVE at that edge — a grid
+    // whose first or last row spans every column has none, and the cap became an ornament sitting
+    // in a rail with nothing running through it.
+    expect(chromeDividedGrid).toContain('topNodes: framed && !rowSpansAllColumns(rows[0]) ? topology.topNodes : [],');
+    expect(chromeDividedGrid).toContain('bottomNodes: framed && !rowSpansAllColumns(rows[rows.length - 1]) ? topology.bottomNodes : [],');
     expect(styleCss).toMatch(
       /\.chrome-divided-grid\[data-chrome-grid-framed="false"\]\s*\{\s*overflow: hidden;/,
     );
@@ -1015,10 +1023,23 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('replace(leaveAftermath(run));');
     expect(runScreen).not.toContain('run-aftermath-eyebrow');
     expect(runScreen).not.toContain('Conflict {progress.conflict} · Battle');
-    expect(styleCss).toMatch(/\.run-aftermath-workspace\s*\{[\s\S]*?container-type:\s*size;/);
-    expect(styleCss).toMatch(/\.run-aftermath-workspace-content\s*\{[\s\S]*?grid-template-rows:\s*minmax\(0, 1fr\) auto minmax\(0, 1fr\);/);
-    expect(styleCss).toMatch(/\.run-aftermath-head,[\s\S]*?\.run-aftermath-report,[\s\S]*?\.run-aftermath-actions\s*\{[\s\S]*?translate:\s*0 -5cqh;/);
+    // A Battle's Aftermath and a War's Victory are the same moment at two scales, so ONE set of
+    // rules composes both and the optical placement cannot drift apart between them (ADR-0456).
+    expect(styleCss).toMatch(/\.run-aftermath-workspace,\s*\.run-victory-workspace\s*\{[\s\S]*?container-type:\s*size;/);
+    expect(styleCss).toMatch(/\.run-aftermath-workspace-content,\s*\.run-victory-workspace-content\s*\{[\s\S]*?grid-template-rows:\s*minmax\(0, 1fr\) auto minmax\(0, 1fr\);/);
+    expect(styleCss).toMatch(/\.run-aftermath-head,\s*\.run-victory-head,\s*\.run-aftermath-report,\s*\.run-victory-report,\s*\.run-aftermath-actions,\s*\.run-victory-actions\s*\{[\s\S]*?translate:\s*0 -5cqh;/);
     expect(styleCss).toMatch(/\.run-aftermath-report\s*\{[\s\S]*?grid-row:\s*2;/);
+    expect(styleCss).toMatch(/\.run-victory-report\s*\{[\s\S]*?grid-row:\s*2;/);
+    // Only the display heading may stand on the artwork; every factual line moved into the
+    // report box, because Victory's backdrop is a bright daylight sky.
+    expect(runScreen).toMatch(/<InnerChromeBox as="div" className="run-victory-report"[\s\S]*?run\.war\.description[\s\S]*?<\/InnerChromeBox>/);
+    expect(runScreen).not.toMatch(/<h2>\{run\.war\.name\}<\/h2>/);
+    // Both report boxes name the structural marble. Naming no fill drops a box onto the inner
+    // role's TINT — a translucent field rather than an installed material, and unapproved paint
+    // no gate catches, because it arrives from the generated role CSS and not from style.css.
+    expect(runScreen).toMatch(/className="run-victory-report" fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
+    // The aftermath report's own fill is pinned above, against the wrapping this file already
+    // expects. Asserting it a second time here only pinned a line break.
     expect(styleCss).toMatch(/\.run-screen\.has-lipsana \.run-aftermath-workspace-content\s*\{[\s\S]*?padding-block-start:\s*0;/);
 
     // The reward is reported in aftermath; restating it in Sectio remains retired.

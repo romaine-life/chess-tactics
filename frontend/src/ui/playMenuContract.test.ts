@@ -107,7 +107,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toMatch(/<ApparatusRailTab[\s\S]*?label="Current Run"/);
     expect(playMenu).toContain('to={PLAY_RUN_CURRENT_SELECTOR_HREF}');
     expect(playMenu).not.toContain('play-choice-row');
-    expect(playMenu).toContain('<ApparatusRailColumn className="play-run-choice-rail"');
+    expect(playMenu).toContain('<ApparatusRailColumn opens="panel-beside" className="play-run-choice-rail"');
     expect(playMenu).toContain('data-testid="run-detail-current"');
     expect(playMenu).toContain('to="/run"><span>Play</span></ChromeNavButton>');
     // Every leaf control on the Run surface carries the oak leaf material (ADR-0433).
@@ -189,6 +189,11 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toMatch(/<ApparatusRailTab[\s\S]*?label="Start New Run"/);
     expect(playMenu).toContain('to={PLAY_RUN_NEW_SELECTOR_HREF}');
     expect(playMenu).toContain('data-testid="run-detail-new"');
+    // No heading over it. The rail tab that opened the column already says Start New Run and the
+    // verb at the bottom says it again, so a title there only spends a row repeating the press
+    // that got you here. The aside's own label keeps the name for the landmark.
+    expect(playMenu).not.toMatch(/<div className="ce-selected-head"><h2>Start New Run<\/h2><\/div>/);
+    expect(playMenu).toMatch(/aria-label="Start New Run" data-testid="run-detail-new"/);
     expect(playMenu).toContain('<RunDetailContentSceneSlot');
     expect(authoredSceneSlots).toContain('region="run-detail" mode="contents"');
     expect(playMenu).not.toContain("sceneTransitionTargetAttributes('run-detail'");
@@ -202,8 +207,15 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // baseline's label, so renumbering the ladder cannot leave a stale sentence here.
     expect(ataraxiaSelector).toContain('Complete ${ATARAXIA_BY_TIER[(tier - 1) as AtaraxiaTier].label} to unlock');
     expect(ataraxiaSelector).not.toContain("'Complete Ataraxia 0 to unlock'");
-    expect(ataraxiaSelector).toContain('<p className="run-ataraxia-effect">{ATARAXIA_BY_TIER[value].effect}</p>');
     expect(ataraxiaSelector).not.toContain('role="radiogroup"');
+    // Ataraxia is a section box like Options, not a heading over a loose picker: the same frame
+    // states the same ownership, and the tier's `effect` is no longer restated under it. The
+    // picker already shows the selected tier, and the baseline's effect is "Standard rules." — a
+    // line spent saying the default is the default, floating on live board artwork.
+    expect(ataraxiaSelector).toMatch(/<SectionBox[\s\S]*?title="Ataraxia"/);
+    expect(ataraxiaSelector).not.toContain('run-ataraxia-effect');
+    expect(ataraxiaSelector).not.toContain('ATARAXIA_BY_TIER[value].effect');
+    expect(style).not.toContain('.run-ataraxia-effect');
     const detailBodyRule = style.match(/\.play-detail-body\s*\{([^}]*)\}/)?.[1] ?? '';
     expect(detailBodyRule).toContain('flex: 0 0 auto');
     expect(detailBodyRule).not.toContain('flex: 1 1 auto');
@@ -304,7 +316,9 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // arms an explicit Keep Run / Abandon and Start pair in the same actions row.
     expect(playMenu).not.toContain('useConfirm');
     expect(playMenu).toContain('data-testid="run-replace-warning"');
-    expect(playMenu).toMatch(/<InnerChromeBox[^>]*fillSurface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-replace-warning"/);
+    // Marble, not oak: nothing in this box takes a click, and the oak is what says a surface does
+    // (ADR-0433). Its neighbours above and below it are both pressable and both wear the wood.
+    expect(playMenu).toMatch(/<InnerChromeBox[^>]*fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}[^>]*data-testid="run-replace-warning"/);
     expect(playMenu).toContain('This cannot be undone.');
     expect(playMenu).toContain('if (presentedRun) { setArmed(true); return; }');
     expect(playMenu).toContain('data-testid="run-keep"');
@@ -320,14 +334,56 @@ describe('unified Play menu contract (ADR-0074)', () => {
 
 describe('Run rule options are a departure from the defaults, not a step in setup', () => {
   const source = readFileSync(new URL('./RunRulesSelector.tsx', import.meta.url), 'utf8');
+  const prepSection = readFileSync(new URL('./shared/SectionBox.tsx', import.meta.url), 'utf8');
 
   it('starts closed, so a normal Run never has to answer it', () => {
     expect(source).toContain('const [open, setOpen] = useState(false)');
-    expect(source).toContain('hidden={!open}');
+    expect(prepSection).toContain('hidden={disclosure ? !disclosure.open : undefined}');
   });
 
-  it('says the defaults are already right while it is closed', () => {
-    expect(source).toContain('Standard formations and pricing. Most Runs want these.');
+  it('closed, states only its own name — no reassuring subtitle under it', () => {
+    // "Standard formations and pricing. Most Runs want these." said nothing a Run is bound by and
+    // nothing about the cost of changing one, so the box carries its name and the chevron alone.
+    expect(source).not.toContain('Standard formations and pricing');
+    expect(source).not.toContain('run-rules-summary');
+    expect(style).not.toContain('.run-rules-summary');
+  });
+
+  it('is one box that grows, with the box itself as the thing you press', () => {
+    // The name row fills the accepted InnerChromeBox rather than being a framed control seated
+    // inside it, so the box's own frame is the button's edge and its name rides in it.
+    expect(prepSection).toContain('const boxClassName = `section-box ${className}`.trim();');
+    expect(prepSection).toMatch(/<button[\s\S]*?className="section-box-head"[\s\S]*?aria-expanded=\{disclosure\.open\}/);
+    expect(prepSection).toContain('<span className="section-box-title" id={titleId}>{title}</span>');
+    expect(source).toMatch(/<SectionBox[\s\S]*?title="Options"/);
+    expect(source).not.toContain("unit=\"inner-text-button\"");
+    // Its inset is the box's whole content padding, so the pressable area reaches the frame.
+    expect(style).toMatch(/\.section-box-head \{[\s\S]*?padding: var\(--ds-inset\);/);
+  });
+
+  it('cannot be handed a rail to place itself — the box owns the space between members', () => {
+    // A box of several things takes a typed member list, never children, so no caller can author
+    // the gap where a rail would go. A hand-placed rail cannot know where its ends meet the frame,
+    // and one shipped into Settings with no junction caps on either end. Now it is unsayable:
+    // ChromeDivider has no `junctions` prop at all, and the parts that suppress caps are private.
+    expect(prepSection).toContain('members: readonly SectionBoxMember[]');
+    expect(prepSection).toContain('children?: never');
+    // A box's members can be split into compartments, and the rail between them is the BOX's
+    // column line — so it crosses every row boundary as a junction the grid places, instead of a
+    // rail drawn inside a row capping itself as though it met a frame.
+    expect(prepSection).toMatch(/<DividedInnerChromeBox[\s\S]*?columns=\{shape\.columns \?\? \['minmax\(0, 1fr\)'\]\}/);
+    expect(prepSection).toContain('columns?: readonly string[];');
+    const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url), 'utf8');
+    expect(chromeBox).not.toContain('junctions?:');
+    expect(chromeBox).toContain('data-chrome-divider-junctions="endpoints"');
+    expect(existsSync(new URL('../../scripts/check-chrome-rails.mjs', import.meta.url))).toBe(true);
+  });
+
+  it('is marble holding oak, like every box that holds other people\'s controls', () => {
+    // Opened, this is a box of pickers rather than a control itself, and a wood field behind
+    // wooden pickers gives them nothing to read against (ADR-0433).
+    expect(prepSection).toMatch(/<InnerChromeBox[\s\S]*?fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
+    expect(source).toMatch(/<HouseSelect[\s\S]*?fillSurface=\{fillSurface\}/);
   });
 
   it('seats below Start Run, so it is not a step between the Ataraxia choice and the verb', () => {
@@ -338,22 +394,31 @@ describe('Run rule options are a departure from the defaults, not a step in setu
   });
 
   it('states which way it moves, with the shared chevron rather than a second one', () => {
-    expect(source).toContain("stepper-chevron-${open ? 'up' : 'down'}");
+    expect(prepSection).toContain("stepper-chevron-${disclosure.open ? 'up' : 'down'}");
     expect(style).toMatch(/\.stepper-chevron-down\s*\{[\s\S]*?transform:\s*rotate\(-90deg\);/);
     expect(style).toMatch(/\.stepper-chevron-up\s*\{[\s\S]*?transform:\s*rotate\(90deg\);/);
   });
 
-  it('is cut to its widest verb, so pressing it never resizes it', () => {
-    // Both verbs are in the DOM at once, stacked in one cell; only the current one is visible.
-    expect(source).toContain("<span className={open ? 'is-shown' : undefined}>Hide</span>");
-    expect(source).toContain("<span className={open ? undefined : 'is-shown'}>Change</span>");
-    expect(style).toMatch(/\.run-rules-toggle-label > span \{[\s\S]*?grid-area: 1 \/ 1;/);
-    expect(style).toMatch(/\.run-rules-toggle-label > span\.is-shown \{[\s\S]*?visibility: visible;/);
+  it('gives the chevron only to a section that opens, since that is what it means', () => {
+    // Ataraxia is the same box and never closes, so it takes no disclosure and gets no chevron —
+    // one mark distinguishes the two, and spending it on both would erase the distinction.
+    expect(prepSection).toMatch(/\{disclosure \? \(\s*<span\s+className=\{`stepper-glyph/);
+    expect(ataraxiaSelector).not.toContain('disclosure');
+    expect(ataraxiaSelector).not.toContain('stepper-chevron');
+  });
+
+  it('holds its own name in both states, so pressing it never relabels the control', () => {
+    // The verb pair that used to be stacked in one cell to lock the control's width is gone with
+    // the Change button itself: the box is named after what it holds, and only the chevron moves.
+    expect(source).not.toContain('>Hide<');
+    expect(source).not.toContain('>Change<');
+    expect(style).not.toContain('.run-rules-toggle-label');
   });
 
   it('is reachable and announced, because a Run is bound to these for its life', () => {
-    expect(source).toContain('aria-expanded={open}');
-    expect(source).toContain('aria-controls="run-rules-content"');
+    expect(prepSection).toContain('aria-expanded={disclosure.open}');
+    expect(prepSection).toContain('aria-controls={contentId}');
+    expect(source).toContain('contentId="run-rules-content"');
   });
 
   it('does not call the weighted option "by density", which it is not', () => {

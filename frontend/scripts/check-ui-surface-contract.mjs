@@ -68,6 +68,25 @@ const APPROVED_FRAMELESS_SURFACE_RESETS = new Map([
     'background:none',
     'border:0',
   ])],
+  // A Run-preparation section makes the BOX the disclosure — its name row fills the accepted
+  // InnerChromeBox so the box's frame is the button's edge and pressing the slab is what opens
+  // it. These declarations remove the shell's native button chrome from that row; a second frame
+  // there would draw a control sitting IN the box instead of the box being the control.
+  // A section box's closing verb IS the section: the grid row itself is the button, so the box's
+  // own frame is its edge. These declarations remove the shell's native button chrome from that
+  // row; a control nested inside it would draw a second rail just inside the first.
+  ['src/style.css|.section-box-member-verb', new Set([
+    'background:none',
+    'border:0',
+    'border-radius:0',
+    'box-shadow:none',
+  ])],
+  ['src/style.css|.section-box-head', new Set([
+    'background:none',
+    'border:0',
+    'border-radius:0',
+    'box-shadow:none',
+  ])],
 ]);
 
 function normalize(value) {

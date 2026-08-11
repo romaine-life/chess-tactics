@@ -339,16 +339,21 @@ describe('Level Editor chrome hierarchy', () => {
     expect(houseSelect).toMatch(/<ChromeButton unit="inner-dropdown"\s+ref=\{buttonRef\}\s+className=\{triggerClass\}/);
     expect(houseSelect).not.toContain('<div ref={rootRef} data-chrome-unit="inner-dropdown"');
     expect(houseSelect).toContain('if (option.value !== value) onChange(option.value);');
-    expect(houseSelect).toContain("import { KitScroll } from '../KitScroll';");
-    expect(houseSelect).toMatch(/<KitScroll\s+className="house-select-menu-scroll"/);
+    // The menu IS the divided box, so its scroll and its gutter are the grid's own rather than a
+    // KitScroll this file places and an apron it computes by hand.
+    expect(houseSelect).not.toContain("import { KitScroll } from '../KitScroll';");
+    expect(houseSelect).toMatch(/<DividedInnerChromeBox[\s\S]*?scroll[\s\S]*?className="house-select-menu-box"/);
 
     expectRegisteredFamily(paletteSelect, 'palette-select-option', 'inner-list-row');
     expect(houseSelect).toContain('className="house-select-menu chrome-family-surface"');
-    expect(houseSelect).toContain('<InnerChromeBox');
     expect(houseSelect).toContain('className="house-select-menu-box"');
-    expect(houseSelect).toContain('className="house-select-option-group" role="group"');
+    expect(houseSelect).toContain('className="house-select-option-group"');
+    expect(houseSelect).toContain('role="group"');
     expect(houseSelect).toContain('className="house-select-option-group-label"');
-    expect(houseSelect).toContain('{optionIndex > 0 ? <ChromeDivider role="inner" /> : null}');
+    // Every rail in the menu belongs to the grid. A divider written HERE could only cap its ends as
+    // though they met a frame, and the ends it actually has are row boundaries the grid owns.
+    expect(houseSelect).not.toContain('<ChromeDivider');
+    expect(houseSelect).toMatch(/<ChromeDividedGridRow\s+key=\{option\.value\}\s+as="button"/);
     expect(houseSelect).toContain('className={`house-select-option ${index === activeIndex ? \'is-active\' : \'\'}`.trim()}');
     expect(houseSelect).not.toContain("chromeUnitClassNames('inner-list-row', 'house-select-option'");
     expect(houseSelect).not.toContain('data-chrome-unit="inner-list-row"');
@@ -357,7 +362,8 @@ describe('Level Editor chrome hierarchy', () => {
     expect(houseSelect).toContain("paintOverhang('--le-inner-atom-top-overhang')");
     expect(houseSelect).toContain("paintOverhang('--le-inner-atom-bottom-overhang')");
     expect(houseSelect).not.toContain('data-disabled=');
-    expect(styleCss).toMatch(/\.house-select-menu-scroll > \.kit-scroll-rail\s*\{[\s\S]*?bottom:\s*0;[\s\S]*?right:\s*calc\(var\(--house-select-clip-apron-right\) - var\(--le-chrome-inner-rail-w, 7px\)\);[\s\S]*?top:\s*0;[\s\S]*?z-index:\s*5;/);
+    expect(styleCss).toMatch(/\.house-select-menu-box > \.chrome-divided-grid__scroll\s*\{[\s\S]*?max-block-size:\s*calc\(var\(--house-select-menu-max-height, 260px\) - \(var\(--le-chrome-inner-rail-w, 7px\) \* 2\)\);/);
+    expect(styleCss).not.toContain('--house-select-clip-apron-right');
     expect(styleCss).not.toMatch(/\.house-select[^\n{]*(?:disabled|data-disabled)[^\n{]*::after/);
   });
 

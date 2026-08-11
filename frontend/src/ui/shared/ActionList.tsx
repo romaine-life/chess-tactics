@@ -1,6 +1,6 @@
 import { type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
 import type { ChromeRole } from '../chromeCandidateSources';
-import { ChromeDivider, InnerChromeBox } from './ChromeBox';
+import { InnerChromeBox } from './ChromeBox';
 import { IconButton, IconNavButton, InnerTextButton, InnerTextNavButton, type ChromeButtonTone } from './ChromeButton';
 import { NavButton } from './NavButton';
 
@@ -39,13 +39,17 @@ export type ActionListItem = {
   leading?: ReactNode;
   leadingClassName?: string;
   leadingChrome?: boolean;
-  /** Register the kit's 9-slice divider between the leading slot and the copy, so the leading
-   *  content reads as a compartment of this box rather than a second box floating inside it. */
-  leadingDivider?: boolean;
   selected?: boolean;
   disabled?: boolean;
   readOnly?: boolean;
   neutral?: boolean;
+  /**
+   * False for a row that is a MEMBER of a list box rather than a slab standing on its own: the
+   * box around it is already the frame and already wears the material, so framing the row again
+   * draws the same stuff inside itself. Members are told apart by the rail the list puts between
+   * them. Defaults true, so every existing list keeps its per-row frame.
+   */
+  framed?: boolean;
   className?: string;
   copyClassName?: string;
   actionsClassName?: string;
@@ -108,12 +112,14 @@ export function ActionListRow({ item }: { item: ActionListItem }): ReactElement 
     </InnerChromeBox>
   );
   const primary = item.primaryAction;
+  const framed = item.framed !== false;
+  const Frame = framed ? InnerChromeBox : 'div';
+  const frameProps = framed ? { fillRole: item.fillRole, fillSurface: item.fillSurface } : {};
 
   return (
-    <InnerChromeBox
-      className={`settings-row action-list-row ${item.className ?? ''} ${item.selected ? 'active is-active is-selected' : ''} ${item.disabled ? 'is-disabled' : ''} ${item.readOnly ? 'is-read-only' : ''} ${item.neutral ? 'is-neutral' : ''}`.replace(/\s+/g, ' ').trim()}
-      fillRole={item.fillRole}
-      fillSurface={item.fillSurface}
+    <Frame
+      {...frameProps}
+      className={`settings-row action-list-row ${framed ? '' : 'action-list-row-member'} ${item.className ?? ''} ${item.selected ? 'active is-active is-selected' : ''} ${item.disabled ? 'is-disabled' : ''} ${item.readOnly ? 'is-read-only' : ''} ${item.neutral ? 'is-neutral' : ''}`.replace(/\s+/g, ' ').trim()}
       role={interactive ? 'button' : undefined}
       tabIndex={interactive ? 0 : undefined}
       aria-label={interactive ? item.ariaLabel : undefined}
@@ -125,9 +131,10 @@ export function ActionListRow({ item }: { item: ActionListItem }): ReactElement 
       }}
     >
       {leading}
-      {leading && item.leadingDivider ? (
-        <ChromeDivider role="inner" orientation="vertical" className="action-list-leading-rule" />
-      ) : null}
+      {/* No rule between the leading slot and the copy. A compartment inside a row is a COLUMN of
+          whichever box holds the row, and that box lays the rail and its caps from its own grid
+          lines — see DividedInnerChromeBox. A rule drawn here could only terminate as though it
+          met a frame, which is not what its ends meet. */}
       <div className={`settings-row-copy action-list-copy ${item.copyClassName ?? ''}`.trim()}>
         {item.heading ?? <h4 id={item.headingId}>{item.title}</h4>}
         {item.description !== undefined ? <div id={item.descriptionId} className="action-list-description">{item.description}</div> : null}
@@ -158,7 +165,7 @@ export function ActionListRow({ item }: { item: ActionListItem }): ReactElement 
           {item.actions?.map((action) => <ActionControl key={action.id} action={action} />)}
         </div>
       ) : null}
-    </InnerChromeBox>
+    </Frame>
   );
 }
 

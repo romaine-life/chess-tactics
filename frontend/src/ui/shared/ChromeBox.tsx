@@ -187,12 +187,19 @@ export function ShellControlsPanel({
   titleActions,
   titleClassName = '',
   titleContent = null,
+  fixed = null,
   children,
   ...props
 }: ComponentPropsWithoutRef<'aside'> & {
   titleActions?: ReactNode;
   titleClassName?: string;
   titleContent?: ReactNode;
+  /**
+   * Content pinned above the scrolling body. The panel lays the rail between the two itself,
+   * because the rail's ends are meetings with THIS panel's frame and nothing inside the panel
+   * can see where those are. A caller that placed its own got a bar stopping in mid-air.
+   */
+  fixed?: ReactNode;
 }): ReactElement {
   return (
     <OuterChromeBox
@@ -211,6 +218,12 @@ export function ShellControlsPanel({
       >
         {titleContent}
       </OuterChromeHeader>
+      {fixed}
+      {fixed ? (
+        <div className="le-control-divider-host shell-controls-break" aria-hidden="true">
+          <ChromeDivider role="outer" />
+        </div>
+      ) : null}
       {children}
     </OuterChromeBox>
   );
@@ -254,46 +267,35 @@ export function InnerChromeBox({
   );
 }
 
-export type ChromeJunctionSides = 'nes' | 'nsw' | 'esw' | 'new' | 'nesw';
-
+/**
+ * A rail, with its own ends capped.
+ *
+ * There is deliberately NO way to ask for one without its junction atoms. A rail's ends are
+ * meetings with the frame around it, and only the element that owns that frame knows where they
+ * are — so a caller who could say "no caps" would be deciding something it cannot see. The one
+ * consumer that legitimately caps rails itself is DividedInnerChromeBox, which computes the whole
+ * junction graph from its grid lines; it draws its rails with the internal parts in
+ * `chromeRailInternals`, which nothing else may import (check-chrome-rails.mjs).
+ *
+ * If you are reaching for this to separate items INSIDE a box, you want the box to do it: give it
+ * typed members and it lays the rails and the caps for you. See SectionBox.
+ */
 export function ChromeDivider({
   role,
   orientation = 'horizontal',
-  junctions = 'endpoints',
   className = '',
   ...props
 }: HTMLAttributes<HTMLDivElement> & {
   role: ChromeRole;
   orientation?: 'horizontal' | 'vertical';
-  junctions?: 'endpoints' | 'none';
 }): ReactElement {
   return (
     <div
       {...props}
       data-chrome-divider-role={role}
       data-chrome-divider-orientation={orientation}
-      data-chrome-divider-junctions={junctions}
+      data-chrome-divider-junctions="endpoints"
       className={`kit-divider chrome-divider ${className}`.trim()}
-      aria-hidden="true"
-    />
-  );
-}
-
-export function ChromeJunction({
-  role,
-  sides,
-  className = '',
-  ...props
-}: HTMLAttributes<HTMLSpanElement> & {
-  role: ChromeRole;
-  sides: ChromeJunctionSides;
-}): ReactElement {
-  return (
-    <span
-      {...props}
-      data-chrome-junction-role={role}
-      data-chrome-junction-sides={sides}
-      className={`chrome-junction ${className}`.trim()}
       aria-hidden="true"
     />
   );

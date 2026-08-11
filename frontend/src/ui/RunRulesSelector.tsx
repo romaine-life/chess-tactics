@@ -1,18 +1,22 @@
 import { useState, type ReactElement } from 'react';
 import { RUN_CARD_SPANS, type RunRules } from '../run/model';
-import { chromeUnitClassNames } from './chromeUnitRegistry';
-import { ChromeButton } from './shared/ChromeButton';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
+import { SectionBox } from './shared/SectionBox';
 
 // Start New Run → the rules the Run is bound to, behind a disclosure that starts closed.
 //
 // The defaults ARE the game. Everything in here changes what the market deals or what may be done
 // with a card, and almost nobody should touch it -- it exists to play the alternatives against
-// each other, not to be configured before a normal Run. So it is collapsed, and the closed state
-// says the defaults are already what you want rather than inviting a decision.
+// each other, not to be configured before a normal Run. So it is collapsed, and closed it states
+// nothing but its own name: a reassuring subtitle there could only repeat that the defaults are
+// the defaults, which is what being closed already says.
 //
 // Not hidden, though: a Run is bound to these for its whole life, so a player who did change one
 // has to be able to see what they are about to start.
+//
+// The BOX is the control -- see SectionBox, which owns that decision for every section of Run
+// preparation. This is the one section given a disclosure, so its name row is the trigger: closed,
+// the whole slab is pressable, and opening it grows the same box downward around the choices.
 //
 // It seats BELOW Start Run in the detail column, after the verb rather than before it — see the
 // comment at its mount in PlayMenu.
@@ -93,38 +97,17 @@ export function RunRulesSelector({
   }));
 
   return (
-    <section className="run-rules-selector" aria-labelledby="run-rules-title">
-      <div className="run-rules-head">
-        <h3 id="run-rules-title">Rule options</h3>
-        <ChromeButton
-          unit="inner-text-button"
-          className={chromeUnitClassNames('inner-text-button', 'run-rules-toggle')}
-          data-chrome-fill-surface={fillSurface}
-          aria-expanded={open}
-          aria-controls="run-rules-content"
-          data-testid="run-rules-toggle"
-          onClick={() => setOpen((wasOpen) => !wasOpen)}
-        >
-          <span className="run-rules-toggle-copy">
-            {/* BOTH verbs are always rendered, stacked in one cell, so the control is cut to its
-                widest state once and holds that width through every flip. A control that measured
-                only its current word would resize under the pointer the moment it was pressed. */}
-            <span className="run-rules-toggle-label">
-              <span className={open ? 'is-shown' : undefined}>Hide</span>
-              <span className={open ? undefined : 'is-shown'}>Change</span>
-            </span>
-            <span
-              className={`stepper-glyph stepper-chevron stepper-chevron-${open ? 'up' : 'down'}`}
-              aria-hidden="true"
-            />
-          </span>
-        </ChromeButton>
-      </div>
-      {!open ? (
-        <p className="run-rules-effect">Standard formations and pricing. Most Runs want these.</p>
-      ) : null}
-
-      <div id="run-rules-content" hidden={!open}>
+    <SectionBox
+      title="Options"
+      titleId="run-rules-title"
+      className="run-rules-selector"
+      contentId="run-rules-content"
+      disclosure={{
+        open,
+        onToggle: () => setOpen((wasOpen) => !wasOpen),
+        testId: 'run-rules-toggle',
+      }}
+    >
       <h4>Formations</h4>
 
       <HouseSelect
@@ -160,7 +143,6 @@ export function RunRulesSelector({
         fillSurface={fillSurface}
       />
       <p className="run-rules-effect">{PRICING_COPY[value.pricing].effect}</p>
-      </div>
-    </section>
+    </SectionBox>
   );
 }

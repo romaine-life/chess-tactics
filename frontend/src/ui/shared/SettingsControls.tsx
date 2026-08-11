@@ -4,6 +4,7 @@ import type { ChromeRole } from '../chromeCandidateSources';
 import { InnerChromeBox } from './ChromeBox';
 import { InnerTextButton, InnerTextNavButton, type ChromeButtonTone } from './ChromeButton';
 import { CHROME_LEAF_FILL_SURFACE, CHROME_STRUCTURAL_FILL_ROLE } from './chromeSurfacePolicy';
+import { SectionBox, type SectionBoxMember } from './SectionBox';
 
 // The shared settings/menu "rail + content" control primitives (ADR-0059): a section
 // (uppercase eyebrow + grouped rows), a row (copy · value · control grid), and a chrome
@@ -82,6 +83,7 @@ export function SettingsRow({
   description,
   value,
   tall = false,
+  framed = true,
   className = '',
   role,
   fillRole = CHROME_STRUCTURAL_FILL_ROLE,
@@ -93,6 +95,13 @@ export function SettingsRow({
   description?: string;
   value?: ReactNode;
   tall?: boolean;
+  /**
+   * False for a row that is a MEMBER of a SectionBox rather than a slab standing on its own. The
+   * box around it is already the frame and already wears the marble; framing the row again would
+   * draw the same material inside itself. Members are told apart by the kit's inner divider the
+   * group puts between them.
+   */
+  framed?: boolean;
   className?: string;
   role?: AriaRole;
   /** Borrow another role's installed fill under this row's inner frame — `outer` is the
@@ -102,14 +111,10 @@ export function SettingsRow({
   fillSurface?: string;
   children?: ReactNode;
 }): ReactElement {
-  return (
-    <InnerChromeBox
-      as="section"
-      className={`settings-row ${tall ? 'settings-row-tall' : ''} ${className}`.replace(/\s+/g, ' ').trim()}
-      role={role}
-      fillRole={fillRole}
-      fillSurface={fillSurface}
-    >
+  const classes = `settings-row ${tall ? 'settings-row-tall' : ''} ${framed ? '' : 'settings-row-member'} ${className}`
+    .replace(/\s+/g, ' ').trim();
+  const body = (
+    <>
       <div className="settings-row-copy">
         {eyebrow ? <span className="settings-row-eyebrow">{eyebrow}</span> : null}
         <h4>{title}</h4>
@@ -117,23 +122,70 @@ export function SettingsRow({
       </div>
       {value ? <div className="settings-row-value">{value}</div> : null}
       {children ? <div className="settings-row-control">{children}</div> : null}
+    </>
+  );
+  if (!framed) return <section className={classes} role={role}>{body}</section>;
+  return (
+    <InnerChromeBox
+      as="section"
+      className={classes}
+      role={role}
+      fillRole={fillRole}
+      fillSurface={fillSurface}
+    >
+      {body}
     </InnerChromeBox>
   );
 }
 
-// A labeled cluster of rows. Purely organizational: a small uppercase eyebrow
-// (h3, between the tab's h2 and each row's h4) plus its grouped rows, so a long
-// settings list reads as scannable sections instead of one undifferentiated stack.
+/**
+ * A SectionBox whose members are settings rows: one box, named, with the kit's rails between rows.
+ * Reach for it when a group genuinely holds several settings — a group of ONE is its own row, and
+ * naming it twice is a label that says what the row below already says.
+ *
+ * The rows arrive as a typed member list rather than as children, so the space between them is the
+ * box's to lay and nobody else's. That is not ceremony: a rail hand-placed between children cannot
+ * know where its ends meet the frame, and the first version of this component shipped one with no
+ * junction caps at all.
+ */
+export function SettingsGroup({
+  title,
+  titleId,
+  className = '',
+  members,
+}: {
+  title: string;
+  titleId: string;
+  className?: string;
+  members: readonly SectionBoxMember[];
+}): ReactElement {
+  return (
+    <SectionBox
+      title={title}
+      titleId={titleId}
+      className={`settings-group ${className}`.trim()}
+      members={members}
+    />
+  );
+}
+
+// A cluster of rows, optionally named. The name is a small uppercase eyebrow (h3, between the
+// tab's h2 and each row's h4).
+//
+// `title` is OPTIONAL, and on a screen standing over live artwork the honest answer is usually to
+// omit it: the eyebrow is bare text with nothing behind it, and most of these groups were one row
+// whose eyebrow restated the row's own name. Where a group genuinely holds several settings, reach
+// for SettingsGroup instead — that gives the name a box to live in rather than a patch of sky.
 export function SettingsSection({
   title,
   children,
 }: {
-  title: string;
+  title?: string;
   children: ReactNode;
 }): ReactElement {
   return (
     <section className="settings-section">
-      <h3 className="settings-section-title">{title}</h3>
+      {title ? <h3 className="settings-section-title">{title}</h3> : null}
       <div className="settings-section-rows">{children}</div>
     </section>
   );

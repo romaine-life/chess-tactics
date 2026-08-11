@@ -156,6 +156,7 @@ export function MainMenu({
       >
         <ArtRouteChrome className="settings-shell">
           <ApparatusRailColumn
+            opens="panel-beside"
             className="settings-frame settings-rail-frame"
             placement="framed"
             aria-label="Game modes"

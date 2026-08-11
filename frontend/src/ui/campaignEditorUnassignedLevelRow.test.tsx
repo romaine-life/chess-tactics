@@ -23,7 +23,9 @@ describe('Campaign Editor unassigned level row', () => {
     );
 
     expect(markup).not.toContain('<div role="button"');
-    expect(markup).toContain('data-chrome-unit="inner-box" class="inner-box inner-chrome-box has-chrome-surface-fill settings-row action-list-row ce-editor-level-row active is-active is-selected is-neutral"');
+    // The frame is the row's OWN one-row divided box: the rail between the preview and the copy is
+    // its column line, so the box lays it and caps both ends against its own frame.
+    expect(markup).toContain('data-chrome-unit="inner-box" class="inner-box inner-chrome-box has-chrome-surface-fill chrome-divided-grid ce-editor-level-row-box ce-editor-level-row active is-active is-selected is-neutral"');
     expect(markup).toContain('aria-label="Preview Standalone map"');
     expect(markup).toContain('aria-current="true"');
     expect(markup).toContain('role="group" aria-label="Actions for Standalone map"');
@@ -45,7 +47,7 @@ describe('Campaign Editor unassigned level row', () => {
       />,
     );
 
-    expect(markup).toContain('data-chrome-unit="inner-box" class="inner-box inner-chrome-box has-chrome-surface-fill settings-row action-list-row ce-editor-level-row is-read-only is-neutral"');
+    expect(markup).toContain('data-chrome-unit="inner-box" class="inner-box inner-chrome-box has-chrome-surface-fill chrome-divided-grid ce-editor-level-row-box ce-editor-level-row is-read-only is-neutral"');
     expect(markup).toContain('aria-label="Preview Standalone map"');
     expect(markup).not.toContain('role="group"');
     expect(markup).not.toContain('Edit board for Standalone map');

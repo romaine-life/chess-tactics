@@ -210,6 +210,7 @@ function CampaignRailTab({
       locked={locked}
       iconSrc={CAMPAIGN_TAB_ICON}
       className="ce-campaign-tab"
+      opensAddress={editorCampaignHref('/editor', campaign.id)}
       onSelect={selectCampaign}
       trailing={locked ? (
         <span className="ce-tab-trail ce-row-lock" aria-label={`${campaign.name} locked`} role="img">
@@ -234,17 +235,17 @@ export function UnassignedRailTab({
   active,
   index,
   onSelect,
-  title = 'Unassigned levels',
+  opensAddress,
+  title = 'Levels',
   itemName = 'level',
-  hasUnsavedDrafts = false,
 }: {
   count: number;
   active: boolean;
   index: number;
   onSelect: () => void;
+  opensAddress: string;
   title?: string;
   itemName?: string;
-  hasUnsavedDrafts?: boolean;
 }): ReactElement {
   return (
     <EditorCollectionRailTab
@@ -252,10 +253,10 @@ export function UnassignedRailTab({
       active={active}
       index={index}
       onSelect={onSelect}
+      opensAddress={opensAddress}
       iconSrc={CAMPAIGN_TAB_ICON}
       title={title}
       itemName={itemName}
-      hasAttention={hasUnsavedDrafts}
     />
   );
 }
@@ -1033,6 +1034,7 @@ export function CampaignEditor({
     <>
       {/* ── RAIL: the campaigns navigator (fold 1 of the old 3-panel layout) ── */}
       <ApparatusRailColumn
+        opens="panel-beside"
         className={embedded ? 'menu-dest-col menu-dest-tabs ce-editor-rail' : 'settings-frame settings-rail-frame ce-editor-rail'}
         placement={embedded ? 'open' : 'framed'}
         aria-label="Campaigns"
@@ -1082,12 +1084,15 @@ export function CampaignEditor({
                     ))}
                   </>
                 ) : null}
-                <p className="campaign-rail-group">Workspace</p>
-                {/* Continue the stone slice past both content libraries and through the
-                    workspace collections; the pinned footer is reserved for verbs. */}
+                {/* No "Workspace" eyebrow. It was bare text on the night vista naming a group of
+                    two tabs that already say what they are, on a rail that carries no other group
+                    unless a campaign is addressed. Continue the stone slice past both content
+                    libraries and through the workspace collections; the pinned footer is reserved
+                    for verbs. */}
                 <UnassignedRailTab
-                  title="Wars"
+                  title="War"
                   itemName="War"
+                  opensAddress={campaignCollectionHref('/editor', 'wars')}
                   count={wars.length}
                   index={railCampaigns.length}
                   active={isWarsSelected}
@@ -1097,7 +1102,7 @@ export function CampaignEditor({
                   count={unassignedLevels.length}
                   index={railCampaigns.length + 1}
                   active={isUnassignedSelected}
-                  hasUnsavedDrafts={recentDrafts.length > 0}
+                  opensAddress={campaignCollectionHref('/editor', 'unassigned')}
                   onSelect={selectUnassignedCollection}
                 />
               </div>

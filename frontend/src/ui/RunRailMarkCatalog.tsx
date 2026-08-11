@@ -141,7 +141,7 @@ async function bindApplicationUiRole(role: string, slot: string): Promise<void> 
  *  mark is drawn by the same seat, at the same size, over the same material as it ships. */
 function MarkInRailTab({ src, label }: { src: string; label: string }): ReactElement {
   return (
-    <ApparatusRailColumn className="run-rail-mark-preview" aria-label={`${label} tab preview`}>
+    <ApparatusRailColumn opens="no-panel" className="run-rail-mark-preview" aria-label={`${label} tab preview`}>
       <ApparatusRailTab label={label} index={0} iconSrc={src} onSelect={() => undefined} />
     </ApparatusRailColumn>
   );

@@ -12,19 +12,32 @@ describe('Campaign and War Editor libraries', () => {
 
     expect(mainMenu).toContain('<CampaignEditor embedded path={path} search={search} sceneInstanceKey={sceneInstanceKey} />');
     expect(mainMenu).not.toContain("path === '/editor/wars' ? <WarEditor");
-    expect(campaign).toContain('title="Wars"');
+    // "War", singular: there is one, and the tab states what it opens rather than a category.
+    expect(campaign).toContain('title="War"');
     expect(campaign).toContain('active={isWarsSelected}');
     expect(campaign).toContain('onSelect={selectWarsCollection}');
     expect(campaign).toContain('{isWarsSelected ? <WarEditor embedded /> : <>');
     expect(campaign).toContain('<EditorContentSceneSlot');
     expect(campaign).toContain("navigateApp(editorCampaignHref('/editor', campaignId))");
     expect(campaign).not.toContain('setSelectedCollection');
-    expect(campaign.indexOf('<p className="campaign-rail-group">Workspace</p>')).toBeLessThan(campaign.indexOf('title="Wars"'));
+    // No "Workspace" eyebrow over the collection tabs — bare text on the vista naming a group of
+    // two tabs that already say what they are.
+    expect(campaign).not.toContain('>Workspace</p>');
     // Wars, then the Unassigned catch-all. Skirmish profiles is retired (ADR-0529).
-    expect(campaign.indexOf('title="Wars"')).toBeLessThan(campaign.indexOf('count={unassignedLevels.length}'));
+    expect(campaign.indexOf('title="War"')).toBeLessThan(campaign.indexOf('count={unassignedLevels.length}'));
     expect(campaign).not.toContain('Skirmish profiles');
 
-    expect(war).toContain('<SettingsSection title="Wars">');
+    // No War picker inside the War editor. There is one War and the store lands on it, so a list
+    // to choose from — plus New War, plus New official War — was three slabs above the work that
+    // only ever restated "this one". The rail's own Wars entry is what navigates here.
+    // (It does carry a "War" SECTION — the box holding the War's own settings. What is gone is
+    // the picker: nothing in here selects between Wars or mints another.)
+    // The hydrate effect still lands on the one War (asserted below); what is gone is any control
+    // that picks BETWEEN Wars or mints another.
+    expect(war).not.toContain('useWars.getState().selectWar(war.id)');
+    expect(war).not.toContain('newWar(');
+    expect(war).not.toContain('+ New War');
+    expect(war).not.toContain('+ New Official War');
     expect(war).not.toContain('ce-editor-rail');
     expect(war).not.toContain('ce-rail-actions');
   });

@@ -112,14 +112,21 @@ describe('MM_LIVE mirrors the baked menu/settings-rail chrome in style.css', () 
   it('label stroke: the label boxes do not clip it away', () => {
     // A stroke paints outside the text box and the ink starts flush against that box's left edge,
     // so `overflow: hidden` here shears the outline off the first letter of every word — the exact
-    // defect this pairing exists to prevent. The Campaign rail keeps its ellipsis and buys room
-    // with padding instead, so it is checked on its own terms.
+    // defect this pairing exists to prevent. A one-line label does not clip at all; a two-line one
+    // must, or a long campaign name runs out of its tab, so it buys room with an apron instead.
     expect(firstBlock('.settings-tab-label')).toContain('overflow: visible');
     expect(firstBlock('.settings-tab-label strong')).toContain('overflow: visible');
-    const campaign = firstBlock('.ce-campaign-tab .apparatus-tab-copy > strong');
-    expect(campaign).toContain('text-overflow: ellipsis');
-    expect(campaign).toContain('padding-inline-start: var(--menu-label-stroke-w)');
-    expect(campaign).toContain('margin-inline-start: calc(-1 * var(--menu-label-stroke-w))');
+    // The apron belongs to the shared copy block and to its children TOGETHER. It lived on the
+    // Campaign rail's label alone once and was defeated anyway: the copy block above it is the
+    // outer clipper and had no room of its own, so the Editor's War and Levels tabs still lost the
+    // left of every word. Both halves, or neither works.
+    const copy = firstBlock('.apparatus-tab-copy');
+    expect(copy).toContain('overflow: hidden');
+    expect(copy).toContain('padding-inline-start: var(--tab-label-stroke-apron)');
+    expect(copy).toContain('margin-inline-start: calc(-1 * var(--tab-label-stroke-apron))');
+    const line = firstBlock('.apparatus-tab-copy > strong');
+    expect(line).toContain('padding-inline-start: var(--tab-label-stroke-apron)');
+    expect(line).toContain('margin-inline-start: calc(-1 * var(--tab-label-stroke-apron))');
   });
 
   it('gap: a representative value inside the rail clamp()', () => {

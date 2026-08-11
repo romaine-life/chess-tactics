@@ -102,7 +102,11 @@ describe('Main Menu chrome hierarchy', () => {
   it('registers selectable levels and settings option rows as inner boxes', () => {
     // SettingsRow no longer hand-tags the unit. It composes the shared InnerChromeBox, which is
     // what registers `inner-box` and carries the borrowed-fill plumbing the Editor column uses.
-    expect(settingsControls).toMatch(/function SettingsRow[\s\S]*?<InnerChromeBox[\s\S]*?settings-row/);
+    // A row that is a MEMBER of a SettingsGroup takes no frame — the group's box is already the
+    // frame and already wears the marble — so the class list is built before the element and the
+    // unframed branch returns a plain section instead.
+    expect(settingsControls).toMatch(/function SettingsRow[\s\S]*?`settings-row [\s\S]*?<InnerChromeBox/);
+    expect(settingsControls).toContain('if (!framed) return <section className={classes} role={role}>{body}</section>;');
     expect(chromeBox).toContain('data-chrome-unit="inner-box"');
     expect(playMenu.match(/<ActionList\b/g)).toHaveLength(2);
     expect(playMenu).toContain('className: `campaign-level-row ${!unlocked ? \'is-disabled\' : \'\'}`.trim()');

@@ -1,17 +1,25 @@
 import type { ReactElement } from 'react';
 import { ATARAXIA_BY_TIER, ATARAXIA_TIERS, type AtaraxiaTier } from '../run/model';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
+import { SectionBox } from './shared/SectionBox';
 
 export function AtaraxiaSelector({
   value,
   highestUnlockedTier,
   onChange,
   fillSurface,
+  framed = true,
 }: {
   value: AtaraxiaTier;
   highestUnlockedTier: AtaraxiaTier;
   onChange: (tier: AtaraxiaTier) => void;
   fillSurface?: string;
+  /**
+   * False where this is one setting inside somebody else's box — the War editor's War group. Its
+   * own box there would draw the same marble twice, so it renders as the bare picker and the row
+   * around it supplies the name.
+   */
+  framed?: boolean;
 }): ReactElement {
   const options: readonly HouseSelectOption[] = ATARAXIA_TIERS.map((tier) => {
     const definition = ATARAXIA_BY_TIER[tier];
@@ -33,19 +41,25 @@ export function AtaraxiaSelector({
     };
   });
 
+  // The selected tier's `effect` is not restated under the picker. Every tier the ladder installs
+  // says it in the option the picker is already showing, and the baseline's -- the only rung there
+  // is -- reads "Standard rules.", which is a line of copy spent saying that the default is the
+  // default. The Enchiridion's Ataraxia reference is where the ladder is explained in full.
+  const picker = (
+    <HouseSelect
+      value={String(value)}
+      options={options}
+      onChange={(next) => onChange(Number(next) as AtaraxiaTier)}
+      ariaLabel="Ataraxia"
+      className="run-ataraxia-select"
+      testId="run-ataraxia-select"
+      fillSurface={fillSurface}
+    />
+  );
+  if (!framed) return picker;
   return (
-    <section className="run-ataraxia-selector" aria-labelledby="run-ataraxia-title">
-      <h3 id="run-ataraxia-title">Ataraxia</h3>
-      <HouseSelect
-        value={String(value)}
-        options={options}
-        onChange={(next) => onChange(Number(next) as AtaraxiaTier)}
-        ariaLabel="Ataraxia"
-        className="run-ataraxia-select"
-        testId="run-ataraxia-select"
-        fillSurface={fillSurface}
-      />
-      <p className="run-ataraxia-effect">{ATARAXIA_BY_TIER[value].effect}</p>
-    </section>
+    <SectionBox title="Ataraxia" titleId="run-ataraxia-title" className="run-ataraxia-selector">
+      {picker}
+    </SectionBox>
   );
 }
