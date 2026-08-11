@@ -174,6 +174,19 @@ export function SceneBoundary({
   onFailed,
 }: SceneBoundaryProps): ReactElement {
   const { preparing, revealing, deactivating } = sceneBoundaryLifecycle(directorPhase, visualRole);
+  // Reachability tracks VISIBILITY, not commit. A hidden scene must not take a click; a scene the
+  // player can see must. The entrance is the one place those came apart: `preparing` spans the whole
+  // reveal, so the destination spent its entire fade — and ~120ms beyond it, waiting on the commit
+  // render — painted at full opacity with every control dead. Nothing distinguished the last inert
+  // frame from the first live one, so a press landed on a finished-looking screen and vanished: no
+  // dialog, no status line, no request. The Level Editor's Publish is how this was found.
+  //
+  // This does NOT hand an entering scene permission to perform. ADR-0421 governs functional time,
+  // motion and entered actions; those stay with SceneActivity and `useSceneActivation()`, which
+  // remain false until commit. A screen that genuinely must refuse early input says so itself —
+  // Skirmish gates the board's `interactive` and its clock on activation — rather than leaning on
+  // this attribute to do it. See ADR-0572.
+  const unreachable = preparing && !revealing && !preserveHost;
   const rootRef = useRef<HTMLDivElement | null>(null);
   const sceneActivity = useMemo(
     () => createSceneActivityAuthority(),
@@ -233,8 +246,10 @@ export function SceneBoundary({
     return () => target.removeAttribute('data-scene-transition-active');
   }, [generation, mountedKey, preserveHost, transitionRegion]);
 
+  // The host-preserving half of the same rule: only the replaced REGION stands down, and it stands
+  // back up when its own reveal begins rather than one commit after it finishes.
   useLayoutEffect(() => {
-    if (!preparing || !preserveHost || !transitionRegion || !rootRef.current) return undefined;
+    if (!preparing || revealing || !preserveHost || !transitionRegion || !rootRef.current) return undefined;
     const region = rootRef.current.querySelector<HTMLElement>(
       sceneTransitionTargetSelector(transitionRegion),
     );
@@ -245,7 +260,7 @@ export function SceneBoundary({
       region.inert = false;
       region.removeAttribute('aria-hidden');
     };
-  }, [mountedKey, preparing, preserveHost, transitionRegion]);
+  }, [mountedKey, preparing, preserveHost, revealing, transitionRegion]);
 
   useLayoutEffect(() => {
     if (!deactivating || !rootRef.current) return undefined;
@@ -341,8 +356,8 @@ export function SceneBoundary({
           data-scene-unresolved={unresolvedParticipants.join(',')}
           data-transition-region={transitionRegion ?? undefined}
           data-scene-visual-role={visualRole}
-          inert={preparing && !preserveHost ? true : undefined}
-          aria-hidden={preparing && !preserveHost || undefined}
+          inert={unreachable ? true : undefined}
+          aria-hidden={unreachable || undefined}
           >
             {children}
           </div>

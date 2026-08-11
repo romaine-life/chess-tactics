@@ -10551,7 +10551,6 @@ body { font-size: 17px; }
 }
 .scene-boundary.is-preparing {
   opacity: 0;
-  pointer-events: none;
 }
 .scene-boundary[data-scene-visual-role="outgoing"] {
   opacity: 1;
@@ -10569,25 +10568,34 @@ body { font-size: 17px; }
 }
 .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active] {
   opacity: 0;
-  pointer-events: none;
-}
-/* Children that opt back into the pointer (e.g. .strategikon-slot > *) must not
-   punch through the preparing silence — a parent's pointer-events: none does not
-   bind children that declare their own. */
-.scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active] > * {
-  pointer-events: none;
 }
 .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > * {
   opacity: 0;
-  pointer-events: none;
 }
 .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > [data-scene-transition-target][data-scene-transition-mode="contents"] > * {
   opacity: 0;
-  pointer-events: none;
 }
 .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-content > *,
 .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-status {
   opacity: 0;
+}
+/* Preparing silences the pointer only while it also means UNSEEN. Once the entrance begins, the
+   destination is on screen, so it takes the click that lands on it — the fade is the only thing
+   still in progress (ADR-0572). Before that, `inert` alone is not enough: children that opt back
+   into the pointer (e.g. .strategikon-slot > *) are not bound by an ancestor's silence, which is
+   why each descendant level is named.
+
+   Scoped by `.scene-director:not(.is-entering)` rather than overridden with `pointer-events: auto`
+   during the entrance: `auto` would blanket-revive decorative layers that declare their own `none`,
+   handing them 350ms of click-stealing on every navigation. Withdrawing the rule leaves every
+   child with the value it actually declared. */
+.scene-director:not(.is-entering) .scene-boundary.is-preparing,
+.scene-director:not(.is-entering) .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active],
+.scene-director:not(.is-entering) .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active] > *,
+.scene-director:not(.is-entering) .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > *,
+.scene-director:not(.is-entering) .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > [data-scene-transition-target][data-scene-transition-mode="contents"] > *,
+.scene-director:not(.is-entering) .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-content > *,
+.scene-director:not(.is-entering) .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-status {
   pointer-events: none;
 }
 .scene-director.is-entering [data-scene-transition-target][data-scene-transition-active] {

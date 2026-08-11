@@ -414,6 +414,31 @@ describe('professional loading architecture guards', () => {
     expect(read('./ui/TilePreview.tsx')).not.toMatch(/allStudioAssets\.flatMap[\s\S]{0,300}new Image\(/);
   });
 
+  it('lets a VISIBLE scene take the click that lands on it (ADR-0572)', () => {
+    const boundary = read('./ui/shell/SceneBoundary.tsx');
+    const styles = read('./style.css');
+    const skirmish = read('./ui/Skirmish.tsx');
+    // Reachability tracks visibility, not commit. `preparing` spans the whole entrance, so gating
+    // the DOM on it left the destination fully opaque and dead for the last ~120ms of every
+    // navigation — a press on Publish produced no dialog, no status line and no request.
+    expect(boundary).toContain('const unreachable = preparing && !revealing && !preserveHost;');
+    expect(boundary).toContain('inert={unreachable ? true : undefined}');
+    expect(boundary).toContain('aria-hidden={unreachable || undefined}');
+    expect(boundary).not.toContain('inert={preparing && !preserveHost ? true : undefined}');
+    // The host-preserving region lifts on the same signal, not one commit later.
+    expect(boundary).toContain('if (!preparing || revealing || !preserveHost || !transitionRegion');
+    // The pointer silence is WITHDRAWN during the entrance, never overridden with `auto`: an
+    // override would revive decorative children that declare their own `none` for 350ms.
+    expect(styles).toMatch(/\.scene-boundary\.is-preparing \{\s*opacity: 0;\s*\}/);
+    expect(styles).toContain('.scene-director:not(.is-entering) .scene-boundary.is-preparing,');
+    expect(styles).not.toMatch(/\.scene-director\.is-entering [^{]*\{[^}]*pointer-events: auto/);
+    // ADR-0421 is untouched: activation — functional time, motion, entered actions — still waits
+    // for commit, and the screens that must refuse early input keep saying so themselves.
+    expect(boundary).toContain('<SceneActivationContext.Provider value={!preparing || preserveHost}>');
+    expect(skirmish).toContain('const sceneActivated = useSceneActivation()');
+    expect(skirmish).toContain('&& sceneActivated && (!net || (netSeatInteractive && !netRelayFrozen))');
+  });
+
   it('makes incomplete player surfaces inert as well as visually hidden', () => {
     expect(read('./render/SkirmishBoard.tsx')).toContain('inert={!boardVisible && !boardFrame.error ? true : undefined}');
     expect(read('./ui/shell/ThumbnailSurface.tsx')).toContain('inert={!complete || failure ? true : undefined}');
