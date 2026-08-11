@@ -810,8 +810,12 @@ describe('Run chrome hierarchy', () => {
     expect(levelInfoCompact).toContain('flagSrc={flagIconSrc(palettes.enemy)}');
     expect(levelInfoCompact).toContain("installedUiMedia('ui-kit-icons-game-wait-png')");
     expect(levelInfoCompact).toContain('useStrategikonCardsIcon()');
-    // The tile mark is a tile: the same installed grass surface the Level Editor paints.
-    expect(levelInfoCompact).toMatch(/studioFamilies\.find\(\(family\) => family\.id === 'grass'\)/);
+    // There is no tile mark, because there is no tile census: most levels are drawn from
+    // whole-board artwork, where a count of painted squares and a chip per terrain type describe
+    // nothing the reader can see. Board states its size and stops.
+    expect(levelInfoCompact).not.toMatch(/studioFamilies\.find\(\(family\) => family\.id === 'grass'\)/);
+    expect(levelInfoCompact).not.toContain('ce-li-chips');
+    expect(levelInfoCompact).not.toContain('ce-li-tile-icon');
     // The Battle mark is the Run's registered Battle icon, not a second drawing of a Battle.
     expect(runBattlePreview).toContain('<RunProgressIcon variant="battle"');
 

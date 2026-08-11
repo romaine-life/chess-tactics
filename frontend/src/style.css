@@ -10798,34 +10798,6 @@ body { font-size: 17px; }
   font-weight: 400;
 }
 
-.ce-li-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 2px;
-}
-
-.ce-li-chip {
-  align-items: center;
-  background: transparent;
-  border: 6px solid transparent;
-  border-image: var(--media-ui-kit-field-input-png) 14 fill / 6px stretch;
-  color: var(--ce-slate);
-  display: inline-flex;
-  font-size: var(--ds-text-xs);
-  gap: 5px;
-  padding: 2px 6px;
-}
-
-.ce-li-chip b { color: var(--ce-ink); font-weight: 400; }
-
-.ce-li-swatch {
-  display: inline-block;
-  height: 9px;
-  outline: 1px solid rgba(0, 0, 0, .5);
-  width: 9px;
-}
-
 .ce-li-rosters {
   display: grid;
   gap: 12px;
@@ -10886,27 +10858,6 @@ body { font-size: 17px; }
   max-block-size: 100%;
   max-inline-size: 100%;
   object-fit: contain;
-}
-
-/* Board art is pixel art; a mark cut from it keeps its pixels rather than being smoothed into
-   mush at icon scale. The kit's own icons are authored at their seat size and need no such say. */
-.ce-li-tile-icon > img { image-rendering: pixelated; }
-
-/* A surface tile ships in the whole 96x180 TILE frame, whose diamond is one band across the
-   equator at 68/180. Contained in a square seat that band shrinks to a sliver, so the frame is
-   sized by height and hung with its equator on the seat's centre line, overflowing the seat
-   instead of shrinking inside it. The seat keeps its 1.6em for layout, so the row does not grow. */
-.ce-li-tile-icon { overflow: visible; position: relative; }
-
-.ce-li-tile-icon > img {
-  block-size: 3.4em;
-  inline-size: auto;
-  inset-block-start: 50%;
-  inset-inline-start: 50%;
-  max-block-size: none;
-  max-inline-size: none;
-  position: absolute;
-  translate: -50% -37.8%;
 }
 
 /* The label rows are flex; a label that carries a mark becomes a flex line of its own so the
@@ -10982,17 +10933,6 @@ body { font-size: 17px; }
   gap: var(--ds-inline-tight);
 }
 
-.terrain-grass { background: #6a9b3f; }
-.terrain-water { background: #3a78c8; }
-.terrain-bridge { background: #b08750; }
-.terrain-road { background: #9a8b6a; }
-.terrain-stone { background: #8aa0ab; }
-.terrain-rock { background: #7c8a96; }
-.terrain-cliff { background: #5b6b76; }
-.terrain-dirt { background: #7d6a4a; }
-.terrain-pebble { background: #9aa6ad; }
-.terrain-sand { background: #c8b87e; }
-.terrain-void { background: #1f2430; }
 /* ===== end Compact Level Info ===== */
 
 /* The selected-level live preview uses the canonical 4:3 board window shared with Play's
