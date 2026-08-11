@@ -5768,6 +5768,14 @@ body.loading-bootstrap .app-startup-status {
   z-index: 40000;
 }
 
+/* Deliberately NO `position` and no inset here. The callout's placement rides its inline
+   `transform`, translating from its own static position — the anchor seated on the promotion
+   square — so it lands identically whether the box computes to static, relative or absolute.
+   It used to say `position: absolute` and place itself with `right`/`left`/`top`, which the
+   registered inner frame silently took away: any inner box carrying a surface fill is given
+   `position: relative` further down this file, so those insets became nudges from a flow
+   position 296 BOARD units wide, and the callout swung further right the more the player
+   zoomed in — straight under the Controls panel (ADR-0570). */
 .skirmish-promotion-picker {
   color: #eff9ff;
   display: grid;
@@ -5775,7 +5783,6 @@ body.loading-bootstrap .app-startup-status {
   inline-size: 296px;
   padding: 8px;
   pointer-events: auto;
-  position: absolute;
 }
 
 .skirmish-promotion-options [data-chrome-fill-surface] {
