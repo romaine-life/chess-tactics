@@ -13,6 +13,9 @@ const victoryConditions = readFileSync(new URL('./VictoryConditionsEditor.tsx', 
 const stepper = readFileSync(new URL('./shared/Stepper.tsx', import.meta.url), 'utf8');
 const houseSelect = readFileSync(new URL('./shared/HouseSelect.tsx', import.meta.url), 'utf8');
 const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url), 'utf8');
+const chromeDividedGrid = readFileSync(new URL('./shared/ChromeDividedGrid.tsx', import.meta.url), 'utf8');
+const chromeSeatGrid = readFileSync(new URL('./shared/ChromeSeatGrid.tsx', import.meta.url), 'utf8');
+const headerAccountCluster = readFileSync(new URL('./shared/HeaderAccountCluster.tsx', import.meta.url), 'utf8');
 const confirmDialog = readFileSync(new URL('./shared/ConfirmDialog.tsx', import.meta.url), 'utf8');
 const titleBarControls = readFileSync(new URL('./shell/TitleBarControls.tsx', import.meta.url), 'utf8');
 const cyclePicker = readFileSync(new URL('./shared/CyclePicker.tsx', import.meta.url), 'utf8');
@@ -315,9 +318,36 @@ describe('Level Editor chrome hierarchy', () => {
     expect(levelEditor).not.toContain('selectedTown.sections.length > 1 ?');
   });
 
-  it('registers both facing-cell implementations as tool squares', () => {
-    expectRegisteredFamily(levelEditor, 'unit-facing-cell', 'inner-tool-square');
-    expectRegisteredFamily(studioBoard, 'unit-facing-cell', 'inner-tool-square');
+  it('seats both facing pads in one divided box instead of framing every key', () => {
+    // A key is a COMPARTMENT of the pad, so it must not bring a frame of its own: the unit is what
+    // brings one, and the box already drew one around all nine (ADR-0570). Neither pad may state a
+    // track, a gap or a compartment size either — the grid derives all of it from one opening.
+    for (const source of [levelEditor, studioBoard]) {
+      expect(source).toContain('<ChromeSeatGrid');
+      expect(source).toContain("seatClassName=\"unit-facing-cell\"");
+      expect(source).not.toContain("'unit-facing-cell'");
+      expect(source).not.toMatch(/chromeUnitClassNames\([^)]*unit-facing-cell/);
+    }
+    expect(styleCss).not.toMatch(/\.unit-facing-cell \{[^}]*\b(?:background|border|box-shadow):/);
+    expect(styleCss).not.toMatch(/\.unit-facing-compass \{/);
+    // Both pads are the SAME object, so neither may declare its own opening — the default is the
+    // opening a framed tool square gives its glyph, derived once on the grid.
+    expect(chromeSeatGrid).toContain("opening = 'var(--chrome-seat-opening)'");
+    expect(styleCss).toMatch(/--chrome-seat-opening:\s*\r?\n?\s*calc\(var\(--le-inner-square, 38px\) - 2 \* var\(--le-chrome-inner-rail-w, 7px\)\)/);
+    expect(levelEditor).not.toContain('opening=');
+    expect(studioBoard).not.toContain('opening=');
+  });
+
+  it('derives every divided pad track and inset from one rail-overlap rule', () => {
+    // Equal tracks do NOT give equal compartments: a rail straddles its grid line, so a middle
+    // cell pays half of it twice and an outer one once (ADR-0569). Stating that in two places is
+    // how it shipped wrong; the grid owns both halves now and every pad asks it.
+    expect(chromeDividedGrid).toContain('export function chromeDividedSeatAxis(');
+    expect(chromeDividedGrid).toContain('const internal = Number(start) + Number(end);');
+    expect(chromeSeatGrid).toContain('const columns = chromeDividedSeatAxis(columnCount, opening);');
+    expect(chromeSeatGrid).toContain('const bands = chromeDividedSeatAxis(rows.length, opening);');
+    expect(headerAccountCluster).toMatch(/const columns = chromeDividedSeatAxis\(\s*seats\.length,/);
+    expect(headerAccountCluster).not.toMatch(/const railSides =/);
   });
 
   it('offers only complete eight-way artwork and keeps its facing control in the source brush panel', () => {

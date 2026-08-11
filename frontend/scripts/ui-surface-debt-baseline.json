@@ -1222,30 +1222,6 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": ".le-direction-cell.is-empty",
-      "surfaceHash": "75e53f4588a4edcb2cb93e38243223e0baa552f504ad0d35e1104051e75874ae",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
-      "selector": ".le-direction-cell",
-      "surfaceHash": "cba06c5a71ca726575ccc00b2b1ef51de56defdcbf35744f97c8488072327e26",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
-      "selector": ".le-direction-menu",
-      "surfaceHash": "8e1a7312c4ced6566c405b61cea100f70d97a1a65126f6d7ee15d7eb2fee0f0e",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
       "selector": ".le-direction-trigger",
       "surfaceHash": "80d7a1c30f1c58ca1c77b65a7f2a34594b23412a4423251bea3831113c83fd82",
       "occurrence": 1
@@ -4622,30 +4598,6 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": ".unit-facing-cell:hover:not(:disabled)",
-      "surfaceHash": "e17abe6a76853951005acc66144e0a7eb4940f58835c678fbbc72d39678f241f",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
-      "selector": ".unit-facing-cell.is-active",
-      "surfaceHash": "a526fd46f1c47faacbc529f894980e52709600e4a67a18f30371f6d7825dd2cc",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
-      "selector": ".unit-facing-cell",
-      "surfaceHash": "a716f4c0c38ebd154ef6a77e92084324bbeae15c04bc2ca3681ce2bff3677ae2",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
       "selector": ".unit-portrait.has-backdrop",
       "surfaceHash": "8341059c79db95926fdd3f39e93199f417b9ff431cad9868c40d00e4882577cd",
       "occurrence": 1
@@ -5158,14 +5110,6 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": "/* The field is stripped separately from the frame, because the guard above is aimed at a raw-CSS background — not at a box whose own INSTALLED image is the point of it. A unit portrait's painted scene arrives from the drawable catalog and is part of the portrait, so stripping it left every framed bust (the roster thumbnails, the Selected Unit seat) on flat fill while the same unit's unframed portrait kept its scene. */ :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .inner-box:not(.has-backdrop)",
-      "surfaceHash": "f9d51ffd9dbbc3fbfc13afc50c6e9c9f634dcfb4b4cc87b41b40ff318df691ee",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
       "selector": "/* An inspector property whose value is a link into the Glossary (e.g. Layering). */ .tileset-inline-link",
       "surfaceHash": "7581fde9a3ddfa554cd58d22ba74dc79927f42b5f93eddfa0d0caeb98281227b",
       "occurrence": 1
@@ -5464,6 +5408,14 @@
       "context": "",
       "selector": "/* The door is the action — a bare icon button (no fabricated surface), labelled for screen readers + a hover tooltip, brightening on hover/focus. */ .account-menu-exit",
       "surfaceHash": "7581fde9a3ddfa554cd58d22ba74dc79927f42b5f93eddfa0d0caeb98281227b",
+      "occurrence": 1
+    },
+    {
+      "kind": "css",
+      "file": "src/style.css",
+      "context": "",
+      "selector": "/* The field is stripped separately from the frame, because the guard above is aimed at a raw-CSS background — not at a box whose own INSTALLED image is the point of it. A unit portrait's painted scene arrives from the drawable catalog and is part of the portrait, so stripping it left every framed bust (the roster thumbnails, the Selected Unit seat) on flat fill while the same unit's unframed portrait kept its scene. */ :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .inner-box:not(.has-backdrop)",
+      "surfaceHash": "f9d51ffd9dbbc3fbfc13afc50c6e9c9f634dcfb4b4cc87b41b40ff318df691ee",
       "occurrence": 1
     },
     {

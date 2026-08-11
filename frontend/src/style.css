@@ -6468,28 +6468,16 @@ body.loading-bootstrap .app-startup-status {
   min-width: var(--le-inner-square);
   width: var(--le-inner-square);
 }
+/* The default-facing menu is the same divided pad as the compass, floated under its trigger. It
+   paints no panel of its own — the pad's installed frame IS the menu's chrome (ADR-0570) — so all
+   that is left here is where it hangs. The float stays on this wrapper rather than moving onto the
+   pad: a divided grid positions itself relative for its own rail layer, and the registry's inner-box
+   rule restates that at a specificity a class on the box cannot reliably beat. */
 .le-direction-menu {
-  background: rgba(3, 10, 17, .97);
-  border: 1px solid rgba(93, 160, 211, .42);
-  border-radius: 6px;
-  box-shadow: 0 10px 22px rgba(0, 0, 0, .46), inset 0 0 0 1px rgba(221, 237, 255, .05);
-  display: grid;
-  gap: 4px;
-  grid-template-columns: repeat(3, 32px);
-  grid-template-rows: repeat(3, 32px);
-  padding: 6px;
   position: absolute;
   right: 0;
   top: calc(100% + 4px);
   z-index: 80;
-}
-.le-direction-cell { border-radius: 4px; font-size: var(--ds-text-xs); height: 32px; width: 32px; }
-.le-direction-cell.is-empty {
-  background: rgba(2, 8, 13, .24);
-  border-color: rgba(67, 127, 179, .16);
-  cursor: default;
-  opacity: .55;
-  pointer-events: none;
 }
 .le-board-warning { color: #f0bd55; font-size: var(--ds-text-sm); line-height: 1.3; margin: 0; text-shadow: 0 0 8px rgba(240, 189, 85, .22); }
 
@@ -7452,6 +7440,64 @@ body.loading-bootstrap .app-startup-status {
   --chrome-divided-grid-junction-y:
     var(--chrome-divided-grid-boundary-node-offset);
   align-self: end;
+}
+
+/* A pad of equal compartments — the facing compass, the default-facing menu (ADR-0570). Every
+   size comes from the grid, which derives its tracks and each seat's inset from this one opening
+   on both axes; a consumer that stated its own would be restating a rule it cannot see the whole
+   of. The default is exactly what a framed tool square gives its glyph — the square minus its own
+   two inner rails — so a seat and a framed control present the same square to the same letter. */
+.chrome-seat-grid {
+  --chrome-seat-opening:
+    calc(var(--le-inner-square, 38px) - 2 * var(--le-chrome-inner-rail-w, 7px));
+  /* A pad is exactly as wide as its compartments. Left to stretch, it filled the control column
+     and the rails stopped a third of the way across it, because a rail spans the DECLARED tracks
+     and there is nothing to divide past the last one. */
+  inline-size: max-content;
+  justify-self: start;
+}
+
+/* A seat of a divided box paints NOTHING: the box's installed frame is its outer edge and the
+   box's rail is the edge it shares with the seat beside it. The four reset declarations below
+   REMOVE the shell's native button chrome and put nothing in its place — the same reset
+   .section-box-member-verb and .titlebar-control--seat make — so check-ui-surface-contract.mjs
+   carries them as an approved frameless reset, keyed on the bare selector, which is why no
+   comment sits directly above it. The leaf oak still arrives, named on the seat itself. */
+.chrome-seat-grid__row {
+  box-sizing: border-box;
+}
+
+.chrome-seat {
+  appearance: none;
+  -webkit-appearance: none;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  box-sizing: border-box;
+  color: inherit;
+  display: grid;
+  font: inherit;
+  min-block-size: 0;
+  min-inline-size: 0;
+  /* Zeroed so the ONLY inset a seat carries is the half-rail the grid gives it. The shell's base
+     button padding is 9px 10px, which ate two thirds of a compartment's height and left the
+     letters in a 24x6 slot. */
+  padding: 0;
+  place-items: center;
+  text-shadow: inherit;
+}
+
+/* The focus ring goes INSIDE the compartment. The shell's +2px offset puts it on the rails this
+   seat shares with its neighbours, so tabbing to one key outlined the edges of the keys around it. */
+.chrome-seat:focus-visible {
+  outline-offset: -2px;
+}
+
+/* A compartment with nothing in it — the direction menu's hollow centre. It is a real cell, so
+   the box's own field shows through it; what it is not is pressable. */
+.chrome-seat--empty {
+  pointer-events: none;
 }
 
 .le-pal-group { margin: 0 0 4px; }
@@ -16698,59 +16744,38 @@ button.tileset-relationship-cell {
   color: #5f748a;
 }
 
-.unit-facing-compass {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(3, 1fr);
-  gap: 4px;
-  width: 138px;
-  aspect-ratio: 1;
-}
-
+/* The 8-way facing pad is ONE divided box (ADR-0570), so it states no tracks, no gap, no width
+   and no compartment size: the seat grid lays all of it from the shared opening. What is left
+   here is the type. */
 .unit-facing-cell {
-  min-height: 0;
-  min-width: 0;
-  padding: 0;
-  display: grid;
-  place-items: center;
+  color: #aebfd2;
+  cursor: pointer;
   font-size: 17px;
+  font-weight: 700;
   line-height: 1;
 }
 
-.unit-facing-center {
-  display: grid;
-  place-items: center;
-}
-
-.unit-facing-cell {
-  color: #aebfd2;
-  background: rgba(2, 8, 13, 0.45);
-  border: 1px solid rgba(67, 127, 179, 0.32);
-  border-radius: 5px;
-  cursor: pointer;
-  font-weight: 700;
+/* A compartment has no frame of its own to light, so the current facing is carried by its GLYPH.
+   Nothing is lost: the lit background this used to declare was painted over by the installed leaf
+   surface long before the frame went, and the brighter letter was already the only difference the
+   eye could find. */
+.unit-facing-cell.is-active {
+  color: #f3fbff;
 }
 
 .unit-facing-cell:hover:not(:disabled) {
-  border-color: rgba(67, 127, 179, 0.6);
   color: #d7e6f5;
-}
-
-.unit-facing-cell.is-active {
-  color: #f3fbff;
-  background: rgba(25, 94, 132, 0.95);
-  border-color: rgba(67, 127, 179, 0.6);
 }
 
 .unit-facing-cell.is-unavailable,
 .unit-facing-cell:disabled {
-  opacity: 0.4;
   cursor: default;
+  opacity: 0.4;
 }
 
 .unit-facing-rotate {
-  font-size: 19px;
   color: #9ec7ff;
+  font-size: 19px;
 }
 
 .unit-scene-empty {
@@ -26936,16 +26961,6 @@ button.tileset-relationship-cell {
 
 :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .list-row {
   min-block-size: var(--le-inner-row-h, var(--le-inner-control-h, 38px));
-}
-
-/* The compass is a grid of canonical tool squares; its container follows the
-   inherited square token instead of squeezing those controls into a local 138px
-   diagram. */
-.level-editor-screen .unit-facing-compass {
-  aspect-ratio: auto;
-  grid-template-columns: repeat(3, var(--le-inner-square, 38px));
-  grid-template-rows: repeat(3, var(--le-inner-square, 38px));
-  width: calc(var(--le-inner-square, 38px) * 3 + 8px);
 }
 
 /* Owner-operated, level-driven source image for pre-drawn whole-board generation. The dark
