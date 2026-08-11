@@ -8,8 +8,7 @@ import {
   type StudioFamilyId,
 } from '@chess-tactics/board-render/ui/studioBoard';
 import { directionCompassCells, rookDirectionLabel, type Direction } from './unitCatalog';
-import { chromeUnitClassNames } from './chromeUnitRegistry';
-import { ChromeButton } from './shared/ChromeButton';
+import { ChromeSeatGrid, type ChromeSeat } from './shared/ChromeSeatGrid';
 
 export {
   assetFrameSrc,
@@ -36,6 +35,13 @@ export function useAnimationClock(isPlaying = true, frameCount = 9, frameMs = 15
   return animationFrame;
 }
 
+/**
+ * The 8-way facing pad, as ONE divided box: nine compartments of one frame, parted by the box's
+ * own rails, rather than nine framed squares in a grid with the panel showing through between
+ * every pair of them. A seat is not a registered chrome unit — the unit is what brings a frame,
+ * and the box already drew one (ADR-0570) — so the current facing is told by its GLYPH, which is
+ * the only thing that ever distinguished it here anyway.
+ */
 export function FacingCompass({ direction, onSelect, onRotate, available, ariaLabel = 'Unit facing (8-way)' }: {
   direction: Direction;
   onSelect: (dir: Direction) => void;
@@ -43,36 +49,32 @@ export function FacingCompass({ direction, onSelect, onRotate, available, ariaLa
   available?: (dir: Direction) => boolean;
   ariaLabel?: string;
 }): ReactElement {
+  const seats = directionCompassCells.map((cell): ChromeSeat => cell === 'center'
+    ? {
+      // The centre is an ACTION, not one of the eight choices, so it reports no pressed state.
+      id: 'rotate',
+      content: '↻',
+      className: 'unit-facing-rotate',
+      title: 'Rotate clockwise',
+      ariaLabel: 'Rotate clockwise',
+      onPress: onRotate,
+    }
+    : {
+      id: cell,
+      content: rookDirectionLabel[cell],
+      selected: direction === cell,
+      disabled: available ? !available(cell) : false,
+      className: available && !available(cell) ? 'is-unavailable' : undefined,
+      title: `Face ${cell}`,
+      ariaLabel: `Face ${cell}`,
+      onPress: () => onSelect(cell),
+    });
   return (
-    <div className="unit-facing-compass" aria-label={ariaLabel}>
-      {directionCompassCells.map((cell) =>
-        cell === 'center' ? (
-          <ChromeButton unit="inner-tool-square"
-            key="center"
-            className={chromeUnitClassNames('inner-tool-square', 'unit-facing-cell', 'unit-facing-rotate')}
-            onClick={onRotate}
-            title="Rotate clockwise"
-            aria-label="Rotate clockwise"
-          >↻</ChromeButton>
-        ) : (
-          <ChromeButton unit="inner-tool-square"
-            key={cell}
-            className={chromeUnitClassNames(
-              'inner-tool-square',
-              'unit-facing-cell',
-              direction === cell ? 'is-active' : '',
-              available && !available(cell) ? 'is-unavailable' : '',
-            )}
-            disabled={available ? !available(cell) : false}
-            onClick={() => onSelect(cell)}
-            title={`Face ${cell}`}
-            aria-label={`Face ${cell}`}
-            aria-pressed={direction === cell}
-          >
-            {rookDirectionLabel[cell]}
-          </ChromeButton>
-        ),
-      )}
-    </div>
+    <ChromeSeatGrid
+      className="unit-facing-compass"
+      seatClassName="unit-facing-cell"
+      rows={[seats.slice(0, 3), seats.slice(3, 6), seats.slice(6, 9)]}
+      ariaLabel={ariaLabel}
+    />
   );
 }

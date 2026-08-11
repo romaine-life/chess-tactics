@@ -5,7 +5,7 @@ import { reportAuthSessionFailure, updateAuthSessionUser, useAuthSession } from 
 import { normalizeRoutePath } from '../navigation';
 import { TITLE_BAR_CLUSTER_LEAF_PHASE, TitleBarIconButtonPrimitive } from '../shell/TitleBarControls';
 import { AccountMenu } from './AccountMenu';
-import { ChromeDividedGridRow, DividedInnerChromeBox } from './ChromeDividedGrid';
+import { ChromeDividedGridRow, DividedInnerChromeBox, chromeDividedSeatAxis } from './ChromeDividedGrid';
 import { installedUiMedia } from '../installedUiMedia';
 
 // The shared trailing-edge "settings + user" cluster for the standard app title
@@ -157,14 +157,14 @@ export function HeaderAccountCluster({
   // seat pays that twice and the outer two once each, where the box's own frame is the other
   // edge and takes nothing. Equal tracks therefore do NOT produce equal compartments: they came
   // out 34.5 / 31 / 34.5 against a 38 height, none of them square and the gear the odd one out.
-  // Each seat gives the same half-rail back as padding (`.header-account-cluster-seats`), so its
+  // The grid owns that derivation, so this box states only its members and its opening; each
+  // seat gives the matching half-rail back as padding (`.header-account-cluster-seats`) so its
   // glyph centres in the opening rather than in the cell.
-  const columns = seats.map((_, index) => {
-    const railSides = (index > 0 ? 1 : 0) + (index < seats.length - 1 ? 1 : 0);
-    return railSides === 0
-      ? 'var(--titlebar-control-seat)'
-      : `calc(var(--titlebar-control-seat) + ${railSides} * var(--titlebar-seat-rail-half))`;
-  });
+  const columns = chromeDividedSeatAxis(
+    seats.length,
+    'var(--titlebar-control-seat)',
+    'var(--titlebar-seat-rail-half)',
+  ).tracks;
 
   return (
     <DividedInnerChromeBox

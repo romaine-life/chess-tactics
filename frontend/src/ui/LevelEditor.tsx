@@ -362,6 +362,7 @@ import { PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import { effectiveLevelEvents, normalizeLevelEvents } from '../core/levelEvents';
 import { editorCandidateLevel, guardRulesSeed, levelRulesSeed, seededBaselineLevel, type AuthoredRulesField, type LevelRulesSeed } from './levelEditorRulesSeed';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
+import { ChromeSeatGrid } from './shared/ChromeSeatGrid';
 
 type BoardUnitPlacement = {
   unitId: string;
@@ -2319,6 +2320,14 @@ function DirectionPopover({ value, label, describe, onChange }: {
     onChange(direction);
     setOpen(false);
   };
+  const directionMenuSeats = directionCompassCells.map((cell) => cell === 'center' ? null : {
+    id: cell,
+    content: rookDirectionLabel[cell],
+    selected: value === cell,
+    title: `Face ${cell}`,
+    ariaLabel: `Face ${cell}`,
+    onPress: () => choose(cell),
+  });
   return (
     <div
       className="le-direction-popover"
@@ -2343,23 +2352,17 @@ function DirectionPopover({ value, label, describe, onChange }: {
         {rookDirectionLabel[value]}
       </ChromeButton>
       {open ? (
-        <div className="le-direction-menu" role="radiogroup" aria-label={label}>
-          {directionCompassCells.map((cell) =>
-            cell === 'center' ? (
-              <span key="center" className="unit-facing-cell le-direction-cell is-empty" aria-hidden="true" />
-            ) : (
-              <ChromeButton unit="inner-tool-square"
-                key={cell}
-                className={chromeUnitClassNames('inner-tool-square', 'unit-facing-cell', 'le-direction-cell', value === cell && 'is-active')}
-                role="radio"
-                aria-checked={value === cell}
-                title={`Face ${cell}`}
-                onClick={() => choose(cell)}
-              >
-                {rookDirectionLabel[cell]}
-              </ChromeButton>
-            ),
-          )}
+        // The same divided pad the facing compass is, with a hollow centre: this one sets a
+        // DEFAULT rather than turning the selected unit, so it has nothing to rotate. The
+        // compartment stays — it is a real cell of the grid, and dropping it would move the
+        // three southern directions one column to the left.
+        <div className="le-direction-menu">
+          <ChromeSeatGrid
+            seatClassName="unit-facing-cell"
+            rows={[directionMenuSeats.slice(0, 3), directionMenuSeats.slice(3, 6), directionMenuSeats.slice(6, 9)]}
+            ariaLabel={label}
+            selection="radio"
+          />
         </div>
       ) : null}
     </div>

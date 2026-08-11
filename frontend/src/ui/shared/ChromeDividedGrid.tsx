@@ -88,6 +88,60 @@ export function chromeDividedGridTopology(
   };
 }
 
+/**
+ * Half of one inner rail — what a rail drawn ON a grid line takes off the cell on either side of
+ * it. The rail straddles the line, so each neighbour pays half its width.
+ */
+export const CHROME_DIVIDED_GRID_RAIL_HALF = 'calc(var(--le-chrome-inner-rail-w, 7px) / 2)';
+
+/**
+ * One axis of a box whose compartments must all present the SAME opening.
+ *
+ * `tracks` are what the grid is laid with; `insets` are what each seat gives back so its content
+ * centres in the opening rather than in the cell.
+ */
+export type ChromeDividedSeatAxis = {
+  tracks: readonly string[];
+  insets: readonly { start: string; end: string }[];
+};
+
+/**
+ * The tracks and seat insets for `count` compartments of one declared `opening`.
+ *
+ * Equal tracks do NOT give equal compartments. A rail covers half its width from the cell on each
+ * side, so a middle cell pays that twice and an outer one once, where the box's own frame is the
+ * other edge and takes nothing: three equal tracks measured 34.5 / 31 / 34.5 against a 38 height
+ * the first time this shipped, none of them square (ADR-0569). Every track therefore adds one
+ * half-rail for each INTERNAL side it has, and the matching inset takes the same amount back off
+ * the seat's content box — so the opening comes out exactly `opening`, on every axis, always.
+ *
+ * Both halves come from here on purpose. They were derived independently once — the tracks in TSX
+ * and the insets in CSS — which is a rule stated twice and therefore a rule that can drift.
+ */
+export function chromeDividedSeatAxis(
+  count: number,
+  opening: string,
+  railHalf: string = CHROME_DIVIDED_GRID_RAIL_HALF,
+): ChromeDividedSeatAxis {
+  if (!Number.isInteger(count) || count < 1) {
+    throw new Error('A divided seat axis requires at least one compartment.');
+  }
+  const sides = Array.from({ length: count }, (_, index) => ({
+    start: index > 0,
+    end: index < count - 1,
+  }));
+  return {
+    tracks: sides.map(({ start, end }) => {
+      const internal = Number(start) + Number(end);
+      return internal === 0 ? opening : `calc(${opening} + ${internal} * ${railHalf})`;
+    }),
+    insets: sides.map(({ start, end }) => ({
+      start: start ? railHalf : '0px',
+      end: end ? railHalf : '0px',
+    })),
+  };
+}
+
 function linePlacement(line: number, trackCount: number): CSSProperties {
   if (line > trackCount) {
     return { gridColumn: trackCount, justifySelf: 'end' };
