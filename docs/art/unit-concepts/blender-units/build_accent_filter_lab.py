@@ -662,6 +662,28 @@ tree.links.new(feeder, sep.inputs[0])
 #
 # Grown by whole art pixels, since a stroke half a pixel wide is not a stroke.
 _alpha = sep.outputs.get("Alpha") or sep.outputs[-1]
+
+# Make the alpha BINARY first.
+#
+# The render's alpha is antialiased, so grown-minus-original comes out fractional at
+# the boundary -- and a fractional mix factor part-mixes ink with what was underneath,
+# which is a fade rather than a stroke. That is the soft spot: pixels in neither
+# palette sitting inside the outline.
+#
+# Pixel art wants a hard edge anyway; a half-covered pixel is either in the sprite or
+# it is not.
+if not os.environ.get("SOFT_ALPHA"):
+    _cut = tree.nodes.new("ShaderNodeValToRGB")
+    _cut.color_ramp.interpolation = "CONSTANT"
+    _cut.label = "ALPHA cutoff"
+    _els = _cut.color_ramp.elements
+    while len(_els) > 1:
+        _els.remove(_els[-1])
+    _els[0].position, _els[0].color = 0.0, (0, 0, 0, 1)
+    _els.new(float(os.environ.get("ALPHA_CUTOFF", "0.5"))).color = (1, 1, 1, 1)
+    tree.links.new(_alpha, _cut.inputs["Fac"])
+    _alpha = _cut.outputs["Color"]
+
 if not os.environ.get("NO_STROKE"):
     _grow_px = int(os.environ.get("STROKE_PX", "1")) * BLOCK
     _fat = tree.nodes.new("CompositorNodeDilateErode")
