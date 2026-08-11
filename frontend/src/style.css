@@ -28334,10 +28334,13 @@ button.run-card-formation-cell {
   justify-content: space-between;
   min-block-size: var(--run-prep-name-h);
   /* The inset is measured to the OAK, not to the frame around it. The key's 9-slice rails live
-     inside it, so the key seats itself one rail shallower and its wood starts exactly as far from
-     this cell's edge as the title's text does. It also keeps the seat at one plate plus the inset:
-     a 44px key with 9px above and below is the same 62px as a line of text with 16px. */
+     inside it, so the key seats itself one rail shallower on every side its frame meets — which is
+     three of them, the fourth being the leading edge where the title's text sits and text has no
+     frame to discount. Its wood then stops exactly as far from this cell's trailing edge as the
+     title's letters start from the leading one, and the seat still comes out at one plate plus the
+     inset: a 44px key with 9px above and below is the same 62px as a line of text with 16px. */
   padding-block: calc(var(--ds-inset) - var(--le-chrome-inner-rail-w, 7px));
+  padding-inline-end: calc(var(--ds-inset) - var(--le-chrome-inner-rail-w, 7px));
 }
 
 .run-prep-cell-name {

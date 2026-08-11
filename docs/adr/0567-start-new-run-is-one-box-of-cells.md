@@ -71,12 +71,18 @@ Two more things followed from being four boxes rather than one:
   cell was shrunk to the oak a framed button paints. The size is set on `--le-inner-square`, the
   token the registered unit already reads; that token is scoped to the Level Editor's screen and
   never reached the menu shell, where the unit fell back to 38px.
-- **The inset is measured to the OAK.** A framed control's rails live inside it, so the key seats
-  itself one rail shallower and its wood starts exactly as far from the cell's edge as the title's
-  text does. That also makes **one name-cell seat** come out the same either way — a 44px key with
-  9px above and below is the same 62px as a line of text with 16px — which matters because
-  Ataraxia's cell holds only text, and left to itself it stood shorter than Options and put the two
-  titles at different heights in what is meant to be the same treatment.
+- **The inset is measured to the OAK**, on every side a frame meets — three of the key's four, the
+  fourth being the cell's leading edge where the title's text sits, and text has no frame to
+  discount. The key's wood therefore stops exactly as far from the cell's trailing edge as the
+  title's letters start from its leading one (both 23px from the box's frame, measured live). That
+  also makes **one name-cell seat** come out the same either way — a 44px key with 9px above and
+  below is the same 62px as a line of text with 16px — which matters because Ataraxia's cell holds
+  only text, and left to itself it stood shorter than Options and put the two titles at different
+  heights in what is meant to be the same treatment.
+- What this does NOT do is line the key up with the bars above it. Their oak reaches the box's own
+  frame because they ARE cells; the key is a control seated in one, so it keeps the cell's inset.
+  Aligning their wood would mean the key's frame overhanging into the box's, which draws two rails
+  touching.
 - **A cell that CARRIES something** — a name, a sentence — takes `--ds-inset` and wears the box's
   marble. The replacement warning is one of these, and being bare marble is now what tells you it
   cannot be pressed, in a column where the cells either side of it are solid wood.

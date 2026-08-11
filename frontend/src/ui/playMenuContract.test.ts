@@ -306,7 +306,12 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // OAK, so the key seats itself one rail shallower and the seat comes out the same either way.
     expect(style).toMatch(/--run-prep-name-h: calc\(var\(--run-prep-plate-h\) \+ 2 \* var\(--ds-inset\)\);/);
     expect(style).toMatch(/\.run-prep-name \{[\s\S]*?min-block-size: var\(--run-prep-name-h\);/);
+    // Every side the key's FRAME meets, which is three of them — the fourth is the leading edge
+    // where the title's text sits, and text has no frame to discount. Measured live: the key's oak
+    // stops 23px from the box's trailing frame and the title's letters start 23px from its leading
+    // one. Left off the inline axis, the key's wood sat 7px deeper than the title's ink.
     expect(style).toMatch(/\.run-prep-name \{[\s\S]*?padding-block: calc\(var\(--ds-inset\) - var\(--le-chrome-inner-rail-w, 7px\)\);/);
+    expect(style).toMatch(/\.run-prep-name \{[\s\S]*?padding-inline-end: calc\(var\(--ds-inset\) - var\(--le-chrome-inner-rail-w, 7px\)\);/);
     // The box takes no padding of its own: a rail has to reach the frame on both sides, and box
     // padding would hold every one of them short of it. Each cell carries the inset instead.
     expect(style).toMatch(/\.run-prep-box \{[\s\S]*?padding: 0;/);
