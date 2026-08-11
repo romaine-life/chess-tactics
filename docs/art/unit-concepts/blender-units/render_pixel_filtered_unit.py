@@ -1,4 +1,16 @@
-"""Render one unit through the approved pixel filter at a chosen sprite size.
+"""SUPERSEDED -- use build_accent_filter_lab.py, which now renders sprites too.
+
+This was the second of two scripts that had to agree about the filter, and they did not.
+Every fix made while tuning the roster went into the lab builder: the outer stroke, hard
+alpha, the addon's Outline switch, per-piece block size and slider positions, accent
+masks, live piece proportions. None of it was here, and a whole roster of 96 sprites was
+rendered from a recipe nobody had tuned.
+
+The lab builder takes DIRECTIONS now and writes the same sprites, so there is one path
+from a tuned lab to a shipped PNG. Kept for its history rather than its use.
+
+Original documentation follows.
+Render one unit through the approved pixel filter at a chosen sprite size.
 
 The subject is appended into Blender To Pixels' demo scene so its compositor stays
 exactly as its author left it, the camera is put on the game's true-isometric

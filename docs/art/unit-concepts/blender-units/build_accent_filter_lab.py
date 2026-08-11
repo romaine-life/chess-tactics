@@ -20,6 +20,7 @@ of them stack. The king runs three -- navy body, gold crown, red velvet -- after
 `split_crown_materials.py` divides the crown mesh on its own region map.
 """
 import bpy, os, math, mathutils
+import numpy as np
 
 # What the accent is called on THIS piece, so a rook does not label its gate CROWN.
 ACCENT_LABEL = os.environ.get("ACCENT_LABEL", "CROWN")
@@ -32,15 +33,15 @@ ACCENT_LABEL = os.environ.get("ACCENT_LABEL", "CROWN")
 #
 # PIECE selects the row. Anything not listed falls back to the defaults.
 PIECE_TUNING = {
-    "pawn":   {"block": 7, "outline_sensitivity": 3.0, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
-    "king":   {"block": 6, "outline_sensitivity": 3.0, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
-    "rook":   {"block": 5, "outline_sensitivity": 4.0, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
-    "queen":  {"block": 6, "outline_sensitivity": 3.0, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
-    "bishop": {"block": 7, "outline_sensitivity": 3.0, "positions": [0.00000, 0.04837, 0.10824, 0.16031, 0.25274]},
-    "knight": {"block": 3, "outline_sensitivity": 3.0, "positions": [0.00000, 0.05139, 0.09428, 0.16715, 0.22410]},
+    "pawn":   {"block": 7, "outline_sensitivity": 3.0, "height": 2.147, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
+    "king":   {"block": 6, "outline_sensitivity": 3.0, "height": 3.006, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
+    "rook":   {"block": 5, "outline_sensitivity": 4.0, "height": 2.770, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
+    "queen":  {"block": 6, "outline_sensitivity": 3.0, "height": 2.856, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]},
+    "bishop": {"block": 7, "outline_sensitivity": 3.0, "height": 3.157, "positions": [0.00000, 0.04837, 0.10824, 0.16031, 0.25274]},
+    "knight": {"block": 3, "outline_sensitivity": 3.0, "height": 2.963, "positions": [0.00000, 0.05139, 0.09428, 0.16715, 0.22410]},
 }
 PIECE = os.environ.get("PIECE", "")
-_tuning = PIECE_TUNING.get(PIECE, {"block": 7, "outline_sensitivity": 3.0, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]})
+_tuning = PIECE_TUNING.get(PIECE, {"block": 7, "outline_sensitivity": 3.0, "height": 2.147, "positions": [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]})
 if PIECE and PIECE not in PIECE_TUNING:
     raise SystemExit("no tuning row for piece %r; add one rather than rendering defaults" % PIECE)
 
@@ -283,6 +284,30 @@ if rig is None:
     for o in meshes:
         if o.parent is None:
             o.parent = rig; o.matrix_parent_inverse = rig.matrix_world.inverted()
+
+# Scale to the piece's live on-board size, via the rig everything hangs off.
+#
+# Heights are the game's own proportions, measured from the delivery raster rather than
+# from sourceFootprintPx -- that field is the CONTACT circle, labelled "Contact px" in
+# the asset manager, and reading it as the draw size put the king SHORTER than the pawn.
+# Pawn 1.00, rook 1.29, queen 1.33, knight 1.38, king 1.40, bishop 1.47.
+#
+# Scaling each root object individually does not work: parts hang off empties in some
+# blends, so a per-object pass covers a different set in each. One rig, one scale, and a
+# check after -- a scale that half-applies reads as art that was modelled wrong.
+if _tuning.get("height") and meshes:
+    def _piece_height():
+        bpy.context.view_layer.update()
+        zs = [(o.matrix_world @ v.co).z for o in meshes for v in o.data.vertices]
+        return max(zs) - min(zs)
+    _h0 = _piece_height()
+    if _h0 > 0:
+        _f = float(_tuning["height"]) / _h0
+        rig.scale = tuple(c * _f for c in rig.scale)
+        _h1 = _piece_height()
+        if abs(_h1 - _tuning["height"]) > 0.02 * _tuning["height"]:
+            raise SystemExit("piece height did not take: wanted %.3f, got %.3f" % (_tuning["height"], _h1))
+        print("HEIGHT %.3f -> %.3f" % (_h0, _h1))
 
 E=math.radians(35.264389682754654); D=5.0; c=math.cos(E)*D/math.sqrt(2)
 cam = scene.camera or next(o for o in bpy.data.objects if o.type=="CAMERA")
@@ -881,7 +906,52 @@ seta.location = (940, 80)
 # keeps the current layout instead of adopting the file's. Do not re-attempt the
 # scripted versions.
 
-scene.render.filepath = os.environ["OUT"]
+# Render.
+#
+# One script builds the lab AND the shipped sprites, deliberately. They were two, and
+# they drifted: every fix of today's -- the stroke, hard alpha, the outline switch, the
+# per-piece table, accents -- went into the lab while the renderer that actually
+# produces PNGs kept none of it. A whole roster was rendered from a recipe nobody had
+# tuned. Two scripts that must agree will not stay agreeing.
+#
+# DIRECTIONS renders the roster; without it, one frame for the lab's preview.
+def _collapse(path):
+    """Block centres. One Pixelate block is one art pixel, so the sprite is the centre
+    of each block -- skipping this leaves a sprite BLOCK times too large, which then
+    gets resampled by whatever displays it and undoes the whole filter."""
+    img = bpy.data.images.load(path)
+    w, h = img.size
+    px = np.array(img.pixels[:], dtype=np.float32).reshape(h, w, 4)
+    half = int(BLOCK) // 2
+    small = px[half::int(BLOCK), half::int(BLOCK)]
+    out = bpy.data.images.new("sprite", width=small.shape[1], height=small.shape[0], alpha=True)
+    out.pixels = small.reshape(-1)
+    out.file_format = "PNG"
+    out.filepath_raw = path
+    out.save()
+    bpy.data.images.remove(img)
+    bpy.data.images.remove(out)
+    return small.shape[1], small.shape[0]
+
+
+DIRECTIONS = {"south": 0, "south-west": -45, "west": -90, "north-west": -135,
+              "north": 180, "north-east": 135, "east": 90, "south-east": 45}
+_wanted = [d for d in os.environ.get("DIRECTIONS", "").split(",") if d]
+for _d in _wanted:
+    if _d not in DIRECTIONS:
+        raise SystemExit("unknown direction %r" % _d)
+
+if _wanted:
+    for _name in _wanted:
+        rig.rotation_euler = (0, 0, math.radians(DIRECTIONS[_name]))
+        scene.render.filepath = os.path.join(os.environ["OUT"], _name)
+        bpy.ops.render.render(write_still=True)
+        _w, _h = _collapse(os.path.join(os.environ["OUT"], _name + ".png"))
+        print("SPRITE %s %dx%d" % (_name, _w, _h))
+    rig.rotation_euler = (0, 0, 0)
+    print("SPRITES_DONE %s" % os.environ["OUT"])
+
+scene.render.filepath = os.environ["OUT"] if not _wanted else os.path.join(os.environ["OUT"], "south")
 bpy.ops.render.render(write_still=True)
 if os.environ.get("LAB_OUT"):
     # The file opens on Layout, and factory Layout has no image editor -- so a render
