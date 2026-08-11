@@ -6,7 +6,7 @@ amends:
   - "[ADR-0076](0076-scaling-is-calibration-production-art-is-native-1x.md)"
 ---
 
-# ADR-0549: A supersampled render downscale is native generation, not resampling
+# ADR-0575: A supersampled render downscale is native generation, not resampling
 
 ## Context and Problem Statement
 

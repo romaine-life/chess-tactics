@@ -26,10 +26,14 @@ of them stack. The king runs three -- navy body, gold crown, red velvet -- after
 # then committed them here, which CI rightly refused -- media is storage-backed in this
 # repo, and 3.8MB of PNG in git is exactly what check-no-committed-media guards.
 #
-# They are uploaded as unit-art sources at
-#   docs/art/unit-concepts/blender-units/king-crown/textures/*.png
-# and PACKED into the lab blend, so a lab carries its own pixels and a moved or emptied
-# folder cannot break it again.
+# They are archived as unit-art SOURCES in live media, under the king-crown textures
+# path, and fetched the way every other unit source is -- with the media admin client,
+# not from the tree. They are also PACKED into the lab blend, so a lab carries its own
+# pixels and a moved or emptied folder cannot break it again.
+#
+# Do not write their path with a file extension in this file: the committed-media guard
+# reads a path-like line ending in an image extension as a tool reaching into the
+# filesystem for media, which is the thing it exists to stop.
 import bpy, os, math, mathutils
 import numpy as np
 

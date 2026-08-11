@@ -10,6 +10,7 @@ import { tileAssets } from '../art/tileset';
 import { fetchAdminUnitCatalog } from '../net/unitAssets';
 import { zoomForTier } from '../game/zoomTiers';
 import { UnitRungSprite } from './UnitRungSprite';
+import { replaceAppHistoryState } from './navigation';
 
 /**
  * The camera's own tiers, not an inspection magnifier.
@@ -128,8 +129,11 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
     if (tierIndex === 0) params.delete('tier');
     else params.set('tier', String(tierIndex));
     const next = `${window.location.pathname}?${params.toString()}`;
+    // Through ui/navigation.ts rather than history directly: the app owns its address,
+    // and a surface writing straight to window.history is the seam that lets a view
+    // desynchronise from what the router believes is current.
     if (next !== `${window.location.pathname}${window.location.search}`) {
-      window.history.replaceState(window.history.state, '', next);
+      replaceAppHistoryState(window.history.state, next);
     }
   }, [palette, allPalettes, showFiltered, showBefore, compareRungs, tierIndex]);
 
