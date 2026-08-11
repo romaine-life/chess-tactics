@@ -456,6 +456,14 @@ function preserveCardLayoutRouteParams(params: URLSearchParams, route: TilesetSt
   });
 }
 
+// Card Pool addresses its selected MODEL as ?poolModel=, so a handed-over link opens on the position
+// under discussion rather than on the head of the list. Same shape as the keys above.
+function preserveCardPoolRouteParams(params: URLSearchParams, route: TilesetStudioRouteState): void {
+  if (route.category !== 'cardpool') return;
+  const value = new URLSearchParams(window.location.search).get('poolModel');
+  if (value) params.set('poolModel', value);
+}
+
 function preserveCardIconFittingRouteParams(params: URLSearchParams, route: TilesetStudioRouteState): void {
   if (route.viewerKind !== 'cardicons') return;
   const value = new URLSearchParams(window.location.search).get('iconPair');
@@ -568,6 +576,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   preserveChromeLabRouteParams(params, route);
   preserveCardLayoutRouteParams(params, route);
   preserveCardIconFittingRouteParams(params, route);
+  preserveCardPoolRouteParams(params, route);
   preserveDeploymentLabRouteParams(params, route);
   preserveMainMenuTunerRouteParams(params, route);
   const nextHref = `${STUDIO_PATH}?${params.toString()}`;

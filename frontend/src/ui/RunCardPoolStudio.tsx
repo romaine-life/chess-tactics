@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState, type ReactElement } from 'react';
+import { navigateApp } from './navigation';
 import {
   DEFAULT_POOL_MODEL,
   POOL_GROUPINGS,
@@ -19,6 +20,7 @@ import {
   type PoolCell,
   type PoolGrouping,
   type PoolKnobs,
+  type PoolModel,
   type PoolPiece,
   type PoolTerm,
 } from './runCardPool';
@@ -33,8 +35,35 @@ import {
 // one number. GROUPS are a register in the Prosopography sense: choose a dimension and read who is
 // actually in each bucket, because a tier count answers "how many" and never answers "which".
 //
-// Defaults reproduce the shipped generator, with one known gap: `rr-vertical` is a named card
-// injected past the material cap, so this lands on 268 where the live catalog carries 269.
+// The two `Shipped rule` models are the position every proposal is arguing against, and they are the
+// game rather than a likeness of it: the pool admits both over-cap named cards, the price chain
+// rounds where `runCardCost` rounds, and the tier is read straight out of `runCardRarity`. Read one
+// of them first. A proposal compared against a baseline the studio could not draw is not compared
+// against anything, which is how the Bishop pair came to be discussed as a card to PROMOTE into Rare
+// while the shipped rule already had it there.
+
+// Which MODEL is on screen is the whole content of this page, so it is addressed rather than
+// clicked to: `?poolModel=<id>` opens straight on a position instead of on the head of the list with
+// a dropdown still to find. The Studio's route encoder rebuilds the query from its own model, so
+// preserveCardPoolRouteParams in TilePreview keeps this alive across that rebuild — the same shape
+// the Chrome Lab and the Main Menu tuner use for their own sub-state. The head of the list is the
+// default and is written as an ABSENT param, so a plain catalog link stays plain.
+export const POOL_MODEL_PARAM = 'poolModel';
+
+function readPoolModel(): PoolModel {
+  if (typeof window === 'undefined') return DEFAULT_POOL_MODEL;
+  const id = new URLSearchParams(window.location.search).get(POOL_MODEL_PARAM);
+  return POOL_MODELS.find((model) => model.id === id) ?? DEFAULT_POOL_MODEL;
+}
+
+function writePoolModel(id: string): void {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  if (id === DEFAULT_POOL_MODEL.id) url.searchParams.delete(POOL_MODEL_PARAM);
+  else url.searchParams.set(POOL_MODEL_PARAM, id);
+  const query = url.searchParams.toString();
+  navigateApp(`${url.pathname}${query ? `?${query}` : ''}${url.hash}`, { replace: true, scroll: false });
+}
 
 const BANDS: readonly PoolBand[] = ['common', 'uncommon', 'rare'];
 const MAX_ROWS_PER_GROUP = 60;
@@ -111,8 +140,9 @@ function CardTable({ cards }: { cards: readonly PoolCard[] }): ReactElement {
 }
 
 export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactElement {
-  const [modelId, setModelId] = useState<string>(DEFAULT_POOL_MODEL.id);
-  const [knobs, setKnobs] = useState<PoolKnobs>(DEFAULT_POOL_MODEL.knobs);
+  const opened = readPoolModel();
+  const [modelId, setModelId] = useState<string>(opened.id);
+  const [knobs, setKnobs] = useState<PoolKnobs>(opened.knobs);
   const [bandFilter, setBandFilter] = useState<PoolBand | 'all'>('all');
   const [volumeFilter, setVolumeFilter] = useState<number | 'all'>('all');
   const [pieceFilter, setPieceFilter] = useState<PoolPiece | 'all'>('all');
@@ -133,6 +163,7 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
     if (!model) return;
     setModelId(id);
     setKnobs(model.knobs);
+    writePoolModel(id);
   }, []);
 
   const activeModel = POOL_MODELS.find((model) => model.id === modelId) ?? null;
@@ -199,6 +230,8 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
         .rcp-row-label { opacity: 0.85; }
         .rcp-row input[type=number] { width: calc(var(--rcp-fs) * 6); padding: 4px 8px; font: inherit; font-size: var(--rcp-fs); }
         .rcp-check { display: flex; align-items: center; gap: 9px; margin: 8px 0; font-size: var(--rcp-fs); }
+        .rcp-select-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; font-size: var(--rcp-fs); }
+        .rcp-select-row select { font: inherit; font-size: var(--rcp-fs); padding: 4px 6px; min-width: 0; flex: 1 1 auto; }
         .rcp-check input { width: calc(var(--rcp-fs) * 1.05); height: calc(var(--rcp-fs) * 1.05); }
         .rcp-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--rcp-fs) * 10), 1fr)); gap: 10px; margin-bottom: 16px; }
         .rcp-stat { border: 1px solid rgba(255,255,255,0.16); border-radius: 6px; padding: 12px 14px; }
@@ -282,10 +315,22 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
             <input type="checkbox" checked={knobs.oneOrientationPerShape} onChange={(e) => set('oneOrientationPerShape', e.target.checked)} />
             <span>One orientation per shape</span>
           </label>
-          <label className="rcp-check">
-            <input type="checkbox" checked={knobs.allowQueenPawnOverCap} onChange={(e) => set('allowQueenPawnOverCap', e.target.checked)} />
-            <span>Queen+Pawn exempt from cap</span>
+          <label className="rcp-select-row">
+            <span>Over-cap named cards</span>
+            <select
+              value={knobs.overCapNamedCards}
+              onChange={(e) => set('overCapNamedCards', e.target.value as PoolKnobs['overCapNamedCards'])}
+            >
+              <option value="none">none — generator only</option>
+              <option value="queen-pawn">Queen+Pawn</option>
+              <option value="live-catalog">the live catalog’s two</option>
+            </select>
           </label>
+          <p className="rcp-note">
+            The live catalog injects two ten-material pairs past the cap by hand: `pq-front` and
+            `rr-vertical`. Exempting the Queen+Pawn alone lands one card short of the game, and the
+            card it drops is the Rook pair.
+          </p>
 
           <div className="rcp-contract">
             <div className="rcp-contract-row">
@@ -363,16 +408,43 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
 
         <div className="rcp-panel">
           <h3>Rarity formula</h3>
-          <div className="rcp-term">
-            <div className="rcp-term-head">Bands on price</div>
-            <code className="rcp-term-formula">
-              {`common    cost <= ${knobs.commonMaxCost}
+          <label className="rcp-select-row">
+            <span>Tier decided by</span>
+            <select value={knobs.bandRule} onChange={(e) => set('bandRule', e.target.value as PoolKnobs['bandRule'])}>
+              <option value="price">price — two cuts</option>
+              <option value="shipped">the shipped rule</option>
+            </select>
+          </label>
+          {knobs.bandRule === 'shipped' ? (
+            <div className="rcp-term">
+              <div className="rcp-term-head">The rule the game is running</div>
+              <code className="rcp-term-formula">
+                {`material  P 1  N 3  B 3  R 5  Q 9
+
+common    material <= 4
+uncommon  material 5-6
+rare      material >= 7
+
+then  Z S T J L footprint   -> down one tier
+then  card carries a Bishop -> up one tier`}
+              </code>
+              <p className="rcp-note">
+                Price is not read at all. This is `runCardRarity` itself, asked the same question the
+                catalog asks it, so a tier here is the tier the card has in a Run.
+              </p>
+            </div>
+          ) : (
+            <div className="rcp-term">
+              <div className="rcp-term-head">Bands on price</div>
+              <code className="rcp-term-formula">
+                {`common    cost <= ${knobs.commonMaxCost}
 uncommon  cost <= ${knobs.uncommonMaxCost}
 rare      everything above`}
-            </code>
-            <NumberRow label="common ≤" value={knobs.commonMaxCost} onChange={(v) => set('commonMaxCost', v)} step={5} />
-            <NumberRow label="uncommon ≤" value={knobs.uncommonMaxCost} onChange={(v) => set('uncommonMaxCost', v)} step={5} />
-          </div>
+              </code>
+              <NumberRow label="common ≤" value={knobs.commonMaxCost} onChange={(v) => set('commonMaxCost', v)} step={5} />
+              <NumberRow label="uncommon ≤" value={knobs.uncommonMaxCost} onChange={(v) => set('uncommonMaxCost', v)} step={5} />
+            </div>
+          )}
           <table>
             <tbody>
               {BANDS.map((band) => (
@@ -386,9 +458,9 @@ rare      everything above`}
             </tbody>
           </table>
           <p className="rcp-note">
-            Rarity here is derived entirely from price — two cuts, nothing else. That is one proposal
-            rather than a fact: a cut cannot separate cards that price the same, which is why rung 90
-            holds RB and RN alongside the triple-minor cards.
+            {knobs.bandRule === 'shipped'
+              ? 'The shipped rule reads material and shape and never reads price, so it separates cards that cost the same — the Bishop step is what puts the Bishop pair in Rare while the Knight pair stays Uncommon at identical material. What it cannot do is notice that a shape rule has deleted every card the footprint demotion was feeding into Common.'
+              : 'Rarity here is derived entirely from price — two cuts, nothing else. That is one proposal rather than a fact: a cut cannot separate cards that price the same, which is why rung 90 holds RB and RN alongside the triple-minor cards.'}
           </p>
         </div>
       </div>
@@ -519,8 +591,9 @@ rare      everything above`}
         })}
 
         <p className="rcp-note">
-          At shipped generation rules this pool holds 268 where the live catalog holds 269: `rr-vertical` is a
-          named card injected past the material cap, and this generator exempts the Queen+Pawn pair alone.
+          {knobs.overCapNamedCards === 'live-catalog'
+            ? 'Over-cap named cards are set to the live catalog’s two, so this pool holds every card the game can deal and none it cannot.'
+            : 'This pool is short of the live catalog by the over-cap named cards it is not admitting: `rr-vertical`, the Rook pair at ten material, and — set to none — `pq-front` with it. Both reach the game only through the named-card injection.'}
         </p>
       </div>
     </div>

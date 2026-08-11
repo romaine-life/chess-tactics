@@ -3,13 +3,27 @@
  * design is actually stuck on — how big is common, what does a cost band admit, what does dropping
  * rotation collapse cost — can be asked and answered live instead of one probe script at a time.
  *
- * This deliberately does NOT read `runCardRarity` or `createRunCardOffer`. The shipped rules are
- * one point in the space; the point of the studio is to stand somewhere else and look. Defaults
- * reproduce the shipped generator (4x2 grid, <=4 units, <=9 material, rotation-canonical), so a
- * fresh load lands on the live catalog and every knob moves away from a known position.
+ * Pricing is re-derived rather than imported, because a price formula is the thing being proposed
+ * and a proposal has to be able to stand somewhere the game does not. Defaults reproduce the
+ * shipped generator (4x2 grid, <=4 units, <=9 material, rotation-canonical), so a fresh load lands
+ * on the live catalog and every knob moves away from a known position.
+ *
+ * RARITY is the exception, and `bandRule: 'shipped'` READS `runCardRarity` instead of restating it.
+ * The shipped rule is not a cut on price at all — it is a material band with the five awkward
+ * footprints stepped down and any Bishop card stepped up — so the cost thresholds every other model
+ * uses cannot express it, and for a long time the studio simply had no way to show the rule the game
+ * was running. A second copy of it here would drift from the catalog the first time either moved;
+ * calling the game's own function cannot.
  */
 
+import { runCardRarity, type AdlectablePieceType, type RunCardFormationCell } from '../run/model';
+
 export type PoolPiece = 'P' | 'N' | 'B' | 'R' | 'Q';
+
+/** Studio letters to the game's own piece names, so the shipped rarity rule can be asked directly. */
+const POOL_PIECE_TO_GAME: Readonly<Record<PoolPiece, AdlectablePieceType>> = {
+  P: 'pawn', N: 'knight', B: 'bishop', R: 'rook', Q: 'queen',
+};
 
 export const POOL_PIECES: readonly PoolPiece[] = ['P', 'N', 'B', 'R', 'Q'];
 
@@ -45,9 +59,12 @@ export type PoolKnobs = Readonly<{
   rows: number;
   /** Largest footprint the generator will emit. */
   maxCells: number;
-  /** Material ceiling. The shipped generator exempts a completed Queen+Pawn pair. */
+  /** Material ceiling. The shipped generator stops here and the live catalog then INJECTS two
+   * named ten-material pairs past it by hand: `pq-front` and `rr-vertical`. A generator that
+   * exempts neither lands two short of the catalog; one that exempts the Queen+Pawn alone lands
+   * one short, which is why the Rook pair went missing from the rare tier for as long as it did. */
   maxValue: number;
-  allowQueenPawnOverCap: boolean;
+  overCapNamedCards: 'none' | 'queen-pawn' | 'live-catalog';
   /** Rotation-canonical identity (shipped) vs every orientation and seating distinct. */
   collapseRotation: boolean;
   /**
@@ -71,7 +88,18 @@ export type PoolKnobs = Readonly<{
    * of the formula has to be per-model too, not just its numbers.
    */
   terms: readonly PoolTerm[];
-  /** Cost bands. */
+  /**
+   * What decides a card's tier.
+   *
+   * `price` is the proposal every model in this studio was written to explore: two cuts on the
+   * card's own cost, so rarity follows whatever the price formula says a card is worth.
+   *
+   * `shipped` is the rule the game is actually running, read from `runCardRarity`. It ignores price
+   * entirely. Keep it selectable rather than merely described, because a proposal is only worth
+   * anything against the position it replaces, and the tier counts below are the comparison.
+   */
+  bandRule: 'price' | 'shipped';
+  /** Cost bands. Read only under `bandRule: 'price'`. */
   commonMaxCost: number;
   uncommonMaxCost: number;
 }>;
@@ -82,16 +110,29 @@ export const DEFAULT_POOL_KNOBS: PoolKnobs = {
   rows: 2,
   maxCells: 4,
   maxValue: 9,
-  allowQueenPawnOverCap: true,
+  overCapNamedCards: 'queen-pawn',
   collapseRotation: true,
   oneOrientationPerShape: false,
   terms: [
     { kind: 'density', power: 0.5, scale: 10 },
     { kind: 'round', to: 5 },
   ],
+  bandRule: 'price',
   commonMaxCost: 35,
   uncommonMaxCost: 90,
 };
+
+/**
+ * The live pricing chain, at the game's own rounding.
+ *
+ * `runCardCost` rounds to whole gold and the face prints ten times it, so every live price is a
+ * multiple of ten. The studio's usual `round: 5` is half a step finer, which is harmless while
+ * comparing proposals and wrong when the model claims to BE the game.
+ */
+const SHIPPED_PRICE_TERMS: readonly PoolTerm[] = Object.freeze([
+  { kind: 'density', power: 0.5, scale: 10 },
+  { kind: 'round', to: 10 },
+]);
 
 export type PoolBand = 'common' | 'uncommon' | 'rare';
 
@@ -477,6 +518,29 @@ export function poolPriceSteps(
   };
 }
 
+/**
+ * The tier a card lands in, by whichever rule the model declares.
+ *
+ * Under `shipped` this ASKS the game — same function the catalog is built with, so a card's tier
+ * here is the tier it has in a Run, not a reconstruction that agrees until one of them is edited.
+ */
+export function poolCardBand(
+  cells: readonly PoolCell[],
+  pieces: readonly PoolPiece[],
+  knobs: PoolKnobs,
+  cost: number,
+): PoolBand {
+  if (knobs.bandRule === 'shipped') {
+    return runCardRarity(
+      pieces.map((piece) => POOL_PIECE_TO_GAME[piece]),
+      cells as readonly RunCardFormationCell[],
+    );
+  }
+  return cost <= knobs.commonMaxCost
+    ? 'common'
+    : cost <= knobs.uncommonMaxCost ? 'uncommon' : 'rare';
+}
+
 export function priceCard(
   cells: readonly PoolCell[],
   pieces: readonly PoolPiece[],
@@ -485,10 +549,28 @@ export function priceCard(
   const {
     value, volume, density, hasBishopPair, defences, blockedPawns, cost,
   } = poolPriceSteps(cells, pieces, knobs);
-  const band: PoolBand = cost <= knobs.commonMaxCost
-    ? 'common'
-    : cost <= knobs.uncommonMaxCost ? 'uncommon' : 'rare';
+  const band: PoolBand = poolCardBand(cells, pieces, knobs, cost);
   return { value, volume, density, cost, band, hasBishopPair, defences, blockedPawns };
+}
+
+/**
+ * Whether a two-cell roster may finish above the material cap, because the live catalog hand-injects
+ * it. Both are ten material: `pq-front` is the Queen with her Pawn, `rr-vertical` the Rook pair.
+ * Written as a pair test rather than a card list because the generator has no card ids — it is
+ * mid-walk, holding a seat and a piece.
+ */
+function completesOverCapPair(
+  knobs: PoolKnobs,
+  volume: number,
+  index: number,
+  seated: PoolPiece | undefined,
+  piece: PoolPiece,
+): boolean {
+  if (knobs.overCapNamedCards === 'none') return false;
+  if (volume !== 2 || index !== 1) return false;
+  const pair = `${seated}${piece}`;
+  if (pair === 'QP' || pair === 'PQ') return true;
+  return knobs.overCapNamedCards === 'live-catalog' && pair === 'RR';
 }
 
 export function buildPool(knobs: PoolKnobs): PoolCard[] {
@@ -511,11 +593,7 @@ export function buildPool(knobs: PoolKnobs): PoolCard[] {
       }
       for (const piece of POOL_PIECES) {
         const next = value + knobs.pieceValue[piece];
-        const completesQueenPawn = knobs.allowQueenPawnOverCap
-          && footprint.length === 2
-          && index === 1
-          && ((pieces[0] === 'Q' && piece === 'P') || (pieces[0] === 'P' && piece === 'Q'));
-        if (next > knobs.maxValue && !completesQueenPawn) continue;
+        if (next > knobs.maxValue && !completesOverCapPair(knobs, footprint.length, index, pieces[0], piece)) continue;
         pieces.push(piece);
         walk(index + 1, next);
         pieces.pop();
@@ -617,6 +695,30 @@ export const POOL_MODELS: readonly PoolModel[] = Object.freeze([
     },
   },
   {
+    id: 'shipped-2x2',
+    label: 'Shipped rule · the 2x2 market',
+    note: 'The game as it stands. DEFAULT_RUN_RULES caps a formation at two cells on its longest side and prices by density, and rarity comes from runCardRarity rather than from price: a material band (Common through 4, Uncommon 5-6, Rare above), the five awkward footprints stepped DOWN one, any Bishop card stepped UP one. Read this before judging any proposal — it is the position a proposal has to beat, and until now the studio could not show it. Common is six identities against sixteen pile seats, which is why a Sectio row repeats itself.',
+    knobs: {
+      ...DEFAULT_POOL_KNOBS,
+      cols: 2,
+      rows: 2,
+      overCapNamedCards: 'live-catalog',
+      terms: SHIPPED_PRICE_TERMS,
+      bandRule: 'shipped',
+    },
+  },
+  {
+    id: 'shipped-4x2',
+    label: 'Shipped rule · full catalog',
+    note: 'The same rarity rule over the whole four-by-two catalog — the market as it stood before the two-by-two default, and the catalog ADR-0523 and ADR-0532 were measured against. Compare its Common tier with the 2x2 model above: the awkward-footprint demotion is what stocks Common, all five of those shapes are three cells long, and a two-by-two rule deletes every one of them. Nothing about rarity changed to cause that; the shape rule moved out from under it.',
+    knobs: {
+      ...DEFAULT_POOL_KNOBS,
+      overCapNamedCards: 'live-catalog',
+      terms: SHIPPED_PRICE_TERMS,
+      bandRule: 'shipped',
+    },
+  },
+  {
     id: 'synergy',
     label: 'Synergy priced',
     note: 'The density curve plus what material cannot express: the opposite-colour Bishop pair, defences, and a penalty for a Pawn stuck directly behind a friendly piece. Pawn shelter counts as a defence here.',
@@ -634,7 +736,7 @@ export const POOL_MODELS: readonly PoolModel[] = Object.freeze([
   {
     id: 'material-bands',
     label: 'Material bands',
-    note: 'cost = material, nothing else, and rarity by raw value. NOT the shipped rarity: that also steps any Bishop card up a band and steps awkward footprints down one, which is what puts 23 four-cell cards into common.',
+    note: 'cost = material, nothing else, and rarity by raw value — the material band on its own, without the two steps the game applies after it. Not the shipped rule and not an approximation of it: `Shipped rule · full catalog` is the real thing, and the difference between the two is exactly what the footprint demotion and the Bishop step are worth.',
     knobs: { ...DEFAULT_POOL_KNOBS, terms: [], commonMaxCost: 4, uncommonMaxCost: 6 },
   },
   {

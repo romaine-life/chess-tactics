@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { allRunCards } from '../run/model';
+import {
+  allRunCards, cardAllowedByRules, DEFAULT_RUN_RULES, type RunCoreCard,
+} from '../run/model';
 import {
   DEFAULT_POOL_KNOBS,
   DEFAULT_POOL_MODEL,
@@ -16,6 +18,7 @@ import {
   priceCard,
   sameKnobs,
   summarizePool,
+  type PoolKnobs,
   type PoolPiece,
 } from './runCardPool';
 
@@ -39,6 +42,57 @@ describe('runCardPool generation', () => {
     const small = buildPool({ ...DEFAULT_POOL_KNOBS, maxCells: 2 });
     expect(small.filter((card) => card.volume === 1)).toHaveLength(5);
     expect(small.filter((card) => card.volume === 2)).toHaveLength(10);
+  });
+});
+
+describe('runCardPool shipped rule', () => {
+  const model = (id: string) => POOL_MODELS.find((candidate) => candidate.id === id)!.knobs;
+  const liveBands = (cards: readonly RunCoreCard[]) => cards.reduce(
+    (tally, card) => ({ ...tally, [card.rarity]: tally[card.rarity] + 1 }),
+    { common: 0, uncommon: 0, rare: 0 },
+  );
+
+  it('holds every card the live catalog holds, and none it does not', () => {
+    expect(buildPool(model('shipped-4x2'))).toHaveLength(allRunCards().length);
+  });
+
+  it('lands every card in the tier the game gives it', () => {
+    // Band-for-band over the whole catalog. A different card set, a dropped adjustment, or a stray
+    // price cut would all move at least one of these three numbers.
+    expect(summarizePool(buildPool(model('shipped-4x2'))).byBand).toEqual(liveBands(allRunCards()));
+  });
+
+  it('reproduces the market a default Run actually shops in', () => {
+    const market = allRunCards().filter((card) => cardAllowedByRules(card, DEFAULT_RUN_RULES));
+    const pool = buildPool(model('shipped-2x2'));
+    expect(pool).toHaveLength(market.length);
+    expect(summarizePool(pool).byBand).toEqual(liveBands(market));
+    // The starved tier, pinned as a number: six identities against sixteen pile seats is why a
+    // Sectio row deals the same card twice.
+    expect(summarizePool(pool).byBand.common).toBe(6);
+  });
+
+  it('keeps the Rook pair, which exempting the Queen+Pawn alone drops', () => {
+    const rookPair = (knobs: PoolKnobs) => buildPool(knobs).find((card) => card.pieces.join('') === 'RR');
+    const shipped = rookPair(model('shipped-2x2'));
+    expect(shipped?.band).toBe('rare');
+    expect(shipped?.cost).toBe(130);
+    expect(rookPair({ ...model('shipped-2x2'), overCapNamedCards: 'queen-pawn' })).toBeUndefined();
+  });
+
+  it('prices where the game prices, so the model is the game and not a likeness', () => {
+    // `runCardCost` rounds to whole gold and the face prints ten times it, so no live price can
+    // land between two tens. The studio's usual round-to-5 can, which is why these models say 10.
+    for (const card of buildPool(model('shipped-2x2'))) expect(card.cost % 10, card.key).toBe(0);
+  });
+
+  it('separates cards that price the same, which a cut on price cannot', () => {
+    const pool = buildPool(model('shipped-2x2'));
+    const pair = (letters: string) => pool.find((card) => card.pieces.join('') === letters);
+    // Identical material and identical price; the Bishop step is the whole difference.
+    expect(pair('BB')?.cost).toBe(pair('NN')?.cost);
+    expect(pair('BB')?.band).toBe('rare');
+    expect(pair('NN')?.band).toBe('uncommon');
   });
 });
 
