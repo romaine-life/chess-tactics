@@ -388,7 +388,11 @@ describe('professional loading architecture guards', () => {
 
   it('uses persistent derivatives for canonical list thumbnails', () => {
     const source = read('./render/LevelThumbnail.tsx');
-    expect(source).toContain('levelThumbnailUrl(level.id)');
+    // Subscribed, not sampled: a Save installs the derivative it just baked, and a mounted row
+    // that only read the map at hydration would hold the pre-save picture until a full reload.
+    expect(source).toContain('useLevelThumbnailUrl(level.id)');
+    expect(source).toContain('useSyncExternalStore(');
+    expect(source).toContain('subscribeLevelThumbnailUrls');
     expect(source).toContain('const canonicalDerivative = !authoringPreview');
     expect(source).not.toContain('const canonicalLevel =');
     expect(source).not.toContain('/assets/level-list-thumb/');

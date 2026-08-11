@@ -1,7 +1,7 @@
 import { type ReactElement, type ReactNode } from 'react';
 import { MODE_NAME } from '../../core/objectives';
 import type { Level } from '../../core/level';
-import { levelThumbnailUrl } from '../../net/levelThumbnails';
+import { useLevelThumbnailUrl } from '../../render/LevelThumbnail';
 import { levelObjectiveLine } from '../LevelInfoCompact';
 import { installedUiMedia } from '../installedUiMedia';
 import { GatedLevelThumbnail } from '../shell/ThumbnailSurface';
@@ -130,6 +130,10 @@ export function EditorLevelRow({
   // The full level doc drives a direction-aware goal line (King Assault reads "Protect
   // your King" when the player holds the King); before it hydrates, fall back to the
   // ref's objective as a mode name only.
+  // Whether a canonical derivative exists has to be re-read, not sampled once: a Save installs the
+  // address it just baked, and a row still holding "there is none" would keep baking the board
+  // locally instead of showing the picture the rest of the game now uses.
+  const canonicalDerivative = useLevelThumbnailUrl(levelId);
   const rowName = displayName ?? level?.name ?? levelId;
   const goalLine = description ?? (level ? levelObjectiveLine(level) : MODE_NAME[objective ?? 'capture-all']);
   const hasDefaultActions = !readOnly && Boolean(onInfo || editHref || onMoveUp || onMoveDown || onDelete);
@@ -155,7 +159,7 @@ export function EditorLevelRow({
     <GatedLevelThumbnail
       level={level}
       width={levelRowPreviewWidth(framed)}
-      authoringPreview={!levelThumbnailUrl(level.id)}
+      authoringPreview={!canonicalDerivative}
     />
   ) : (
     <span className="settings-row-thumb-empty" />
