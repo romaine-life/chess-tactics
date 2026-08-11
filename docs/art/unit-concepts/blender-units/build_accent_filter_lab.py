@@ -146,12 +146,87 @@ for _wm in bpy.data.window_managers:
         _win.scene = _appended[0]
 scene = _appended[0]
 existing = {o.name for o in bpy.data.objects}
-with bpy.data.libraries.load(os.environ["SRC"], link=False) as (src, dst):
-    dst.objects = list(src.objects)
+# The knight ships as an OBJ rather than a blend, and arrives in an arbitrary
+# orientation. Same solve as the batch renderer and the piece's own canonical renderer
+# -- guessing an axis convention gives a piece that renders cleanly facing the wrong
+# way, which reads as a filter fault rather than an import one.
+if os.environ["SRC"].lower().endswith(".obj"):
+    import numpy as _np
+    print("PRE_IMPORT scene=%s nodes=%s" % (scene.name, len(scene.compositing_node_group.nodes) if scene.compositing_node_group else None))
+    bpy.ops.wm.obj_import(filepath=os.environ["SRC"])
+    print("POST_IMPORT scene=%s nodes=%s scenes=%s" % (
+        scene.name, len(scene.compositing_node_group.nodes) if scene.compositing_node_group else None,
+        [x.name for x in bpy.data.scenes]))
+    _ms = [o for o in bpy.context.scene.objects if o.type == "MESH" and o.name not in existing]
+    for _o in _ms:
+        _o.select_set(True)
+    bpy.context.view_layer.objects.active = _ms[0]
+    if len(_ms) > 1:
+        bpy.ops.object.join()
+    _kn = bpy.context.view_layer.objects.active
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+
+    def _co():
+        n = len(_kn.data.vertices); a = _np.empty(n * 3)
+        _kn.data.vertices.foreach_get("co", a)
+        return a.reshape(-1, 3)
+
+    c = _co()
+    _up = int(_np.argmax(c.max(0) - c.min(0)))
+    if _up == 0:
+        _kn.rotation_euler = (0, math.radians(-90), 0)
+    elif _up == 1:
+        _kn.rotation_euler = (math.radians(90), 0, 0)
+    bpy.ops.object.transform_apply(rotation=True)
+    c = _co()
+    _zr = c[:, 2].max() - c[:, 2].min()
+    _sp = lambda pts: _np.sqrt(((pts[:, :2] - pts[:, :2].mean(0)) ** 2).sum(1)).mean()
+    if _sp(c[c[:, 2] > c[:, 2].max() - 0.2 * _zr]) > _sp(c[c[:, 2] < c[:, 2].min() + 0.2 * _zr]):
+        _kn.rotation_euler = (math.radians(180), 0, 0)
+        bpy.ops.object.transform_apply(rotation=True)
+    c = _co()
+    _zmin, _zmax = c[:, 2].min(), c[:, 2].max()
+    _cen = c[:, :2].mean(0)
+    _head = c[c[:, 2] > _zmin + 0.58 * (_zmax - _zmin)]
+    _hr = _np.linalg.norm(_head[:, :2] - _cen, axis=1)
+    _md = (_head[_hr > _np.percentile(_hr, 88)][:, :2] - _cen).mean(0)
+    _kn.rotation_euler = (0, 0, (math.pi / 2) - math.atan2(_md[1], _md[0]))
+    bpy.ops.object.transform_apply(rotation=True)
+    c = _co()
+    _k = float(os.environ.get("OBJ_HEIGHT", "2.15")) / (c[:, 2].max() - c[:, 2].min())
+    _kn.scale = (_k, _k, _k)
+    bpy.ops.object.transform_apply(scale=True)
+    # Centre it over the origin and stand it on the floor. Without this the knight
+    # imported three units off to the side, out of the camera's view entirely, and the
+    # lab rendered an empty frame -- which reads as a broken compositor rather than a
+    # piece parked off screen.
+    c = _co()
+    _kn.location = (-(c[:, 0].min() + c[:, 0].max()) / 2,
+                    -(c[:, 1].min() + c[:, 1].max()) / 2,
+                    -c[:, 2].min())
+    bpy.ops.object.transform_apply(location=True)
+    # The wood diffuse enters the ramp as brightness variation and gets quantised into
+    # extra stops -- 15 colours where the plain-material pieces sit at 12. The piece's
+    # own canonical renderer discards it for the same reason.
+    _plain = bpy.data.materials.new("navy stone")
+    _plain.use_nodes = True
+    _b = _plain.node_tree.nodes.get("Principled BSDF")
+    if _b is not None:
+        _b.inputs["Base Color"].default_value = (*srgb("#354d69"), 1)
+        if "Roughness" in _b.inputs:
+            _b.inputs["Roughness"].default_value = 0.82
+    _kn.data.materials.clear()
+    _kn.data.materials.append(_plain)
+    print("POST_OBJ scene=%s nodes=%s" % (scene.name, len(scene.compositing_node_group.nodes) if scene.compositing_node_group else None))
+else:
+    with bpy.data.libraries.load(os.environ["SRC"], link=False) as (src, dst):
+        dst.objects = list(src.objects)
 added = [o for o in bpy.data.objects if o.name not in existing]
 meshes = [o for o in added if o.type=="MESH"]
 for o in added:
-    if o.type in {"MESH","EMPTY"}: scene.collection.objects.link(o)
+    # obj_import links what it creates; appending from a blend does not.
+    if o.type in {"MESH","EMPTY"} and o.name not in scene.collection.objects:
+        scene.collection.objects.link(o)
 for o in bpy.data.objects:
     if o.name in existing and o.type=="MESH": o.hide_render = o.hide_viewport = True
 
@@ -1011,6 +1086,24 @@ if os.environ.get("LAB_OUT"):
         _n.parent = _frame
     print("TUNE_COLUMN", [n.label for n in _tune])
 
+    # Keep the compositor alive across the save.
+    #
+    # scene.compositing_node_group does not always count as a user, and on the OBJ path
+    # -- the one that never calls libraries.load -- the group was dropped on write: 55
+    # nodes in memory, 0 in the file, and a lab that opened with an empty graph and
+    # rendered nothing. A fake user makes it a datablock worth writing.
+    if scene.compositing_node_group is not None:
+        scene.compositing_node_group.use_fake_user = True
+    _n_before = len(scene.compositing_node_group.nodes) if scene.compositing_node_group else 0
     bpy.ops.wm.save_as_mainfile(filepath=os.environ["LAB_OUT"])
+    # Read it straight back. A lab that saves without its graph is silently useless,
+    # and the only way to know is to look at what landed on disk.
+    bpy.ops.wm.open_mainfile(filepath=os.environ["LAB_OUT"])
+    _sc = next((x for x in bpy.data.scenes if getattr(x, "compositing_node_group", None)), None)
+    _n_after = len(_sc.compositing_node_group.nodes) if _sc else 0
+    if _n_after != _n_before:
+        raise SystemExit("lab saved without its compositor: %d nodes in memory, %d on disk"
+                         % (_n_before, _n_after))
+    print("SAVED_VERIFIED %d nodes" % _n_after)
     print("LAB_SAVED", os.environ["LAB_OUT"])
 print("ACCENT_DONE", [(m.name, m.pass_index) for m in bpy.data.materials])
