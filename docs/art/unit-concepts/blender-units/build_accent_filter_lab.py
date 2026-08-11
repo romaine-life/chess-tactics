@@ -54,7 +54,7 @@ CROWN = [(0.00000, "#2a0709"), (0.03628, "#5a1013"), (0.07803, "#8a1c1c"), (0.17
 # Iron banding and oak planks, lit from the same direction as the stone. Positions
 # start on the body's shared ladder rather than the crown's, since a gate is a surface
 # in the wall and not a jewel sitting on top of it.
-GATE = [(0.00000, "#1a1206"), (0.05139, "#33240f"), (0.10824, "#4d3a1c"), (0.13614, "#6b5330"), (0.25274, "#8a6f45")]
+GATE = [(0.03323, "#1a1206"), (0.07254, "#33240f"), (0.12637, "#4d3a1c"), (0.38992, "#6b5330"), (0.87009, "#8a6f45")]
 
 # A tiara is gilt, so it does start from the crown's warm end, without the cushion red.
 TIARA = [(0.00000, "#241a06"), (0.05139, "#463410"), (0.10824, "#6b5219"), (0.13614, "#9c7a2b"), (0.25274, "#d8b45c")]
@@ -224,7 +224,7 @@ next(s for s in pix.inputs if s.name=="Size").default_value = BLOCK
 ol = next((n for n in tree.nodes if n.bl_idname=="CompositorNodeGroup" and n.node_tree and n.node_tree.name.startswith("Outline")), None)
 if ol:
     ol.inputs["Fine Adjust"].default_value=1.0
-    ol.inputs["Sensitivity"].default_value=3.0
+    ol.inputs["Sensitivity"].default_value=float(os.environ.get("OL_SENS","3.0"))
     ol.inputs["Color"].default_value=(*srgb("#181818"),1)
     # Thickness lives INSIDE the group, on a Dilate/Erode node's Size socket -- not on
     # the group's own inputs, which is why reading the exposed sockets missed it and a
