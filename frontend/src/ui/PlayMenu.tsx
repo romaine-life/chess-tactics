@@ -1007,13 +1007,9 @@ export function PlayMenu({
           level={selectedLevel}
           title={selectedTitle}
           embedded
-          actions={
-            <div className="ce-preview-actions is-single">
-              {selectedUnlocked
-                ? <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE} to={selectedPlayHref}><span>Play</span></ChromeNavButton>
-                : <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE} disabled><span>Locked</span></ChromeButton>}
-            </div>
-          }
+          verbs={[selectedUnlocked
+            ? { id: 'play', label: 'Play', to: selectedPlayHref }
+            : { id: 'locked', label: 'Locked', disabled: true }]}
         />
       ) : null}
       </PlayContentSceneSlot>

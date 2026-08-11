@@ -3,7 +3,6 @@ import {
   kingSideForLevel,
   levelBattleDealLine,
   levelObjectiveLine,
-  levelShowsTerrainTypeCounts,
 } from './LevelInfoCompact';
 import {
   createBlankLevel,
@@ -13,8 +12,6 @@ import {
 } from '../core/level';
 import { MODE_NAME } from '../core/objectives';
 import type { PieceType, Side } from '../core/types';
-import { encodeBoard } from './boardCode';
-import { levelToEditorBoard } from '../core/levelBoard';
 
 // These are the shared, no-React helpers the level-select surfaces (Campaign / CampaignEditor)
 // import so the mode label + direction-aware goal copy has ONE implementation (ADR-0050).
@@ -135,21 +132,5 @@ describe('levelBattleDealLine — how many cards a Battle deals, in the readout'
     expect(levelBattleDealLine(battle({ cardsDealt: LEVEL_BATTLE_CARDS_DEALT_MAX + 1 }))).toBe('Not set');
     expect(levelBattleDealLine(battle({ cardsDealt: 3.5 }))).toBe('Not set');
     expect(levelBattleDealLine(battle({ cardsDealt: '3' }))).toBe('Not set');
-  });
-});
-
-describe('levelShowsTerrainTypeCounts', () => {
-  it('keeps type counts for levels rendered from individual tiles', () => {
-    expect(levelShowsTerrainTypeCounts(fixedLevel([]))).toBe(true);
-  });
-
-  it('hides logical terrain types when AI artwork owns the whole environment', () => {
-    const level = fixedLevel([]);
-    level.boardCode = encodeBoard({
-      ...levelToEditorBoard(level),
-      backgroundMode: 'ai',
-    });
-
-    expect(levelShowsTerrainTypeCounts(level)).toBe(false);
   });
 });

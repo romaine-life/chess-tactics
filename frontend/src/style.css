@@ -10690,16 +10690,9 @@ body { font-size: 17px; }
   white-space: nowrap;
 }
 
-/* Force composition for the selected level — the allies/enemies counts read off
-   the level's board, so they live with the level, not the global title bar.
-   The line is seated on its own inner box so its marks have a surface to read against instead of
-   whatever the night sky is showing. It runs the column's full width like the board frame and the
-   facts box: the column is a stack of boxes sharing one pair of edges, and a box that hugged its
-   own content broke that line. */
-.ce-force-readout-box {
-  padding: 6px 10px;
-}
-
+/* Force composition for the selected level — the allies/enemies counts read off the level's
+   board, so they live with the level, not the global title bar. It takes no box of its own: it
+   is a ROW of the preview column's one divided box, whose marble is already under it. */
 .ce-force-readout {
   align-items: center;
   display: flex;
@@ -10798,34 +10791,6 @@ body { font-size: 17px; }
   font-weight: 400;
 }
 
-.ce-li-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 2px;
-}
-
-.ce-li-chip {
-  align-items: center;
-  background: transparent;
-  border: 6px solid transparent;
-  border-image: var(--media-ui-kit-field-input-png) 14 fill / 6px stretch;
-  color: var(--ce-slate);
-  display: inline-flex;
-  font-size: var(--ds-text-xs);
-  gap: 5px;
-  padding: 2px 6px;
-}
-
-.ce-li-chip b { color: var(--ce-ink); font-weight: 400; }
-
-.ce-li-swatch {
-  display: inline-block;
-  height: 9px;
-  outline: 1px solid rgba(0, 0, 0, .5);
-  width: 9px;
-}
-
 .ce-li-rosters {
   display: grid;
   gap: 12px;
@@ -10886,27 +10851,6 @@ body { font-size: 17px; }
   max-block-size: 100%;
   max-inline-size: 100%;
   object-fit: contain;
-}
-
-/* Board art is pixel art; a mark cut from it keeps its pixels rather than being smoothed into
-   mush at icon scale. The kit's own icons are authored at their seat size and need no such say. */
-.ce-li-tile-icon > img { image-rendering: pixelated; }
-
-/* A surface tile ships in the whole 96x180 TILE frame, whose diamond is one band across the
-   equator at 68/180. Contained in a square seat that band shrinks to a sliver, so the frame is
-   sized by height and hung with its equator on the seat's centre line, overflowing the seat
-   instead of shrinking inside it. The seat keeps its 1.6em for layout, so the row does not grow. */
-.ce-li-tile-icon { overflow: visible; position: relative; }
-
-.ce-li-tile-icon > img {
-  block-size: 3.4em;
-  inline-size: auto;
-  inset-block-start: 50%;
-  inset-inline-start: 50%;
-  max-block-size: none;
-  max-inline-size: none;
-  position: absolute;
-  translate: -50% -37.8%;
 }
 
 /* The label rows are flex; a label that carries a mark becomes a flex line of its own so the
@@ -10982,17 +10926,6 @@ body { font-size: 17px; }
   gap: var(--ds-inline-tight);
 }
 
-.terrain-grass { background: #6a9b3f; }
-.terrain-water { background: #3a78c8; }
-.terrain-bridge { background: #b08750; }
-.terrain-road { background: #9a8b6a; }
-.terrain-stone { background: #8aa0ab; }
-.terrain-rock { background: #7c8a96; }
-.terrain-cliff { background: #5b6b76; }
-.terrain-dirt { background: #7d6a4a; }
-.terrain-pebble { background: #9aa6ad; }
-.terrain-sand { background: #c8b87e; }
-.terrain-void { background: #1f2430; }
 /* ===== end Compact Level Info ===== */
 
 /* The selected-level live preview uses the canonical 4:3 board window shared with Play's
@@ -11003,13 +10936,6 @@ body { font-size: 17px; }
   container-type: inline-size;
 }
 
-.ce-preview-frame {
-  position: relative;
-  flex: none;
-  block-size: auto;
-  inline-size: 100%;
-  min-height: 0;
-}
 /* Position the world viewport in the canonical inner role's content box. The registered rail
    remains visible around it while the board covers the complete interior; transparent board
    corners reveal the level world, never a transparency checkerboard (ADR-0067). */
@@ -11049,22 +10975,6 @@ body { font-size: 17px; }
 
 .ce-preview-actions .ce-link-button {
   min-width: 0;
-}
-
-.ce-preview-actions.has-assign .ce-assign-field {
-  grid-column: 1 / -1;
-}
-
-/* This field held a native <select> with its own kit frame, an OS-drawn menu, and a
-   hand-painted option list. It is the house dropdown now, which brings its own registered
-   frame, chevron, menu and fill — so the field states nothing but where it sits. */
-.ce-assign-field {
-  display: grid;
-  min-width: 0;
-}
-
-.ce-link-button-ghost {
-  border-image-source: var(--media-ui-kit-button-neutral-png);
 }
 
 .ce-footer {
@@ -19774,9 +19684,11 @@ button.tileset-relationship-cell {
   gap: clamp(14px, calc(var(--layout-vw, 100vw) * .013), 22px);
 }
 
-/* ── Preview column (col 4, top-right): the selected level's head · map preview · level info ·
-   verbs, stacked in its own fixed-width column. Only mounted when a level is selected
-   (CampaignEditor gates it), so there's never an empty frame or placeholder art here. ── */
+/* ── Preview column (col 4, top-right): ONE divided box — the selected level's name · forces ·
+   map · level info · verbs — in its own fixed-width column. Only mounted when a level is
+   selected (CampaignEditor gates it), so there's never an empty frame or placeholder art here.
+   Every separation inside it is a rail the box lays from its own grid lines; nothing here draws
+   a rule, and nothing shows the page through between the parts. ── */
 .menu-dest-preview {
   display: flex;
   flex-direction: column;
@@ -19794,29 +19706,109 @@ button.tileset-relationship-cell {
   gap: 8px;
   min-width: 0;
 }
-/* Two-line head: the level name gets its OWN line (full width, no truncation), with the
-   ally/enemy force counts on a second line beneath it. The shared head rule's horizontal padding
-   is dropped here: the counts are a framed box now, and that inset held it 8px inside the board
-   frame and facts box under it, so the column's three boxes did not share an edge. */
-.ce-preview-col .ce-selected-head {
-  align-items: stretch;
-  flex-direction: column;
-  gap: 4px;
-  padding-inline: 0;
+/* The box is the column's whole content, sized by what it holds. Stretching it to the column and
+   packing its rows from the top is what left a slab of empty marble under the last row.
+   NO padding: the map is a compartment that reaches the frame, and every rail has to reach it
+   too. The rows that carry text take the inset instead. */
+.ce-preview-box {
+  /* The height a verb takes in this column, sized so its PAINTED plate matches the editor's
+     framed buttons — Delete War, Save, Start Run — standing beside it.
+     A framed button is a 40px box whose own 9-slice eats ~10px a side, so ~26px of it is oak.
+     A cell has no frame of its own (the box's rail is its edge), so at 40px it painted 37px of
+     oak and read half again as heavy as every button on the screen. 30px is the same plate.
+     Stated here because `--le-inner-control-compact-h` is scoped to the Level Editor screen and
+     does not reach the menu shell's columns. */
+  --ce-preview-verb-h: 30px;
+  flex: 0 0 auto;
+  min-inline-size: 0;
+  padding: 0;
 }
-.ce-preview-col .ce-selected-head h2 {
+
+.ce-preview-box > .chrome-divided-grid__rows {
+  display: grid;
+  min-block-size: 0;
+}
+
+/* A row that is one thing across the box is ONE column, whatever the verb row below it split
+   the box into. Without this it inherits the box's tracks and huddles into the first of them. */
+.ce-preview-name,
+.ce-preview-forces,
+.ce-preview-board,
+.ce-preview-facts,
+.ce-preview-field {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ce-preview-name,
+.ce-preview-forces,
+.ce-preview-facts,
+.ce-preview-field {
+  padding: var(--ds-inset);
+}
+
+/* The box's own name — the same eyebrow the floating heading wore, now with the box behind it.
+   It wraps rather than truncating: the column is narrow and a Battle's name is the one thing
+   here that says WHICH level this is. */
+.ce-preview-name h2 {
+  color: var(--ce-eyebrow);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-2xs);
+  font-weight: 400;
+  letter-spacing: .14em;
+  line-height: 1.55;
+  margin: 0;
   overflow: visible;
   text-overflow: clip;
+  text-shadow: 0 2px 0 #010508, 0 0 10px rgba(0, 0, 0, .75);
+  text-transform: uppercase;
   white-space: normal;
 }
+
 .ce-preview-col .ce-force-readout { justify-content: flex-start; }
-/* Level info fills the column's otherwise-empty lower half. One column (this column is narrow);
-   LevelInfoCompact declares the registered inner-box role, which owns its frame and fill. */
+
+/* The map is a COMPARTMENT: it reaches the box's frame on both sides and its rails above and
+   below, the way a level row's thumbnail reaches its box. Hence no inset, and the clip so a
+   board wider than the column cannot push past the frame. */
+.ce-preview-board {
+  min-inline-size: 0;
+  overflow: hidden;
+}
+
+/* The readout is a row of the box now, so it carries neither frame, fill nor padding of its own —
+   the row above supplies the inset and the box supplies the marble. One column: this is narrow. */
 .ce-preview-col .ce-level-info {
-  flex: 1 1 auto;
   grid-template-columns: 1fr;
   height: auto;
   min-height: 0;
+  overflow: visible;
+  padding: 0;
+}
+
+/* Each verb IS its compartment — pressable edge to edge, so the box's frame and its column line
+   are this control's edges and there is no second frame a few pixels inside them. The row takes
+   no inset; the verb's own padding is the whole cell's.
+
+   It is still a VERB in the editor's chrome family, so it keeps the height and the label size
+   `.ce-link-button` gave it. The section verb's symmetric `--ds-inset` sizes a row by its text,
+   which here made the plate taller than every other verb on the screen while shrinking the word
+   on it — so this out-specifies that padding rather than inheriting it. */
+.ce-preview-verbs .ce-preview-verb {
+  display: grid;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xs);
+  min-block-size: var(--ce-preview-verb-h);
+  padding: 0 var(--ds-inset);
+  text-transform: uppercase;
+}
+
+.ce-preview-verb:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.ce-preview-verb:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: -2px;
 }
 
 /* A selectable level row (a role=button div over the shared .settings-row).

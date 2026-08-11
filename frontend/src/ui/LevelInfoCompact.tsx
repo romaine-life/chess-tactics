@@ -27,7 +27,6 @@ import { PieceTypeIcon } from './shared/PieceTypeIcon';
 import { installedUiMedia, installedUiMediaIfPresent } from './installedUiMedia';
 import { STRATEGIKON_CARD_MARK_CLASS, useStrategikonCardsIcon } from './strategikonNavigation';
 import { levelToEditorBoard } from '../core/levelBoard';
-import { assetFrameSrc, isPredrawnBackgroundActive, studioFamilies } from '@chess-tactics/board-render';
 
 const PIECE_ORDER: PieceType[] = ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn', 'rock', 'random-rock'];
 const PIECE_LABEL: Record<PieceType, string> = {
@@ -37,11 +36,6 @@ const ZONE_ORDER: ZoneType[] = ['region', 'player-spawn', 'player-king-spawn', '
 const ZONE_LABEL: Record<ZoneType, string> = {
   region: 'Named regions', 'player-spawn': 'Ally deployment', 'player-king-spawn': 'King deployment', 'enemy-spawn': 'Enemy deployment', 'enemy-threat': 'Threat markers', objective: 'Goal markers', 'falling-rock': 'Rockfall markers', 'pawn-promotion': 'Promotion markers',
 };
-const TERRAIN_LABEL: Record<string, string> = {
-  grass: 'Grass', water: 'Water', bridge: 'Bridge', road: 'Road', stone: 'Stone', rock: 'Rock', cliff: 'Cliff', dirt: 'Dirt', pebble: 'Pebble', sand: 'Sand',
-  void: 'Gap',
-};
-
 /**
  * A row's mark: installed art at the row's own scale, beside the label it belongs to. Every one
  * of these resolves a real game asset — the objective flag, the Run's Battle drum, the card back
@@ -130,16 +124,6 @@ function UnframedLevelInfo({
   return <div {...props} className={className}>{children}</div>;
 }
 
-/**
- * The empty grass surface, exactly as the Level Editor paints it. "Tiles" counts squares of
- * board, so its mark is a square of board.
- */
-function grassSurfaceIconSrc(): string {
-  const asset = studioFamilies.find((family) => family.id === 'grass')?.assets[0];
-  if (!asset) throw new Error('the grass terrain family has no installed surface');
-  return assetFrameSrc(asset, 0);
-}
-
 function countMap<K extends string>(keys: K[]): Partial<Record<K, number>> {
   const out: Partial<Record<K, number>> = {};
   for (const k of keys) out[k] = (out[k] ?? 0) + 1;
@@ -220,12 +204,6 @@ export function levelBattleDealLine(level: Level): string | null {
     return 'Not set';
   }
   return String(dealt);
-}
-
-/** Whole-board AI artwork owns the environment pixels, so its logical terrain cannot be
- * presented as a roster of individually rendered tile types. */
-export function levelShowsTerrainTypeCounts(level: Level): boolean {
-  return !isPredrawnBackgroundActive(levelToEditorBoard(level));
 }
 
 /**
@@ -334,12 +312,6 @@ export function LevelInfoCompact({
   const cardsIconSrc = useStrategikonCardsIcon();
   const hourglassIconSrc = installedUiMedia('ui-kit-icons-game-wait-png');
   const { cols, rows } = level.board;
-  const total = cols * rows;
-  const filled = level.layers.terrain.filter((tile) => tile.terrain !== 'void').length;
-  const showsTerrainTypeCounts = levelShowsTerrainTypeCounts(level);
-  const terrainMix = showsTerrainTypeCounts
-    ? Object.entries(countMap(level.layers.terrain.map((t) => t.terrain))).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
-    : [];
   const allies = forceCountsForSide(level, 'player');
   const enemies = forceCountsForSide(level, 'enemy');
   const palettes = boardPalettes(level);
@@ -369,20 +341,12 @@ export function LevelInfoCompact({
       data-testid="level-info-compact"
     >
       {titleBar}
+      {/* Size only. A tile census — how many squares are painted, and how many of each terrain —
+          describes a board drawn from individually rendered tiles, and most levels are drawn from
+          whole-board artwork instead, where those counts describe nothing the reader can see. */}
       <section className="ce-li-board">
         <span className="ce-li-title">Board</span>
         <div className="ce-li-stat"><span>Size</span><strong>{cols} × {rows}</strong></div>
-        <div className="ce-li-stat">
-          <span><RowIcon src={grassSurfaceIconSrc()} className="ce-li-tile-icon" />Tiles</span>
-          <strong>{filled} / {total}</strong>
-        </div>
-        {showsTerrainTypeCounts ? (
-          <div className="ce-li-chips">
-            {terrainMix.map(([t, n]) => (
-              <span key={t} className="ce-li-chip"><i className={`ce-li-swatch terrain-${t}`} />{TERRAIN_LABEL[t] ?? t} <b>{n}</b></span>
-            ))}
-          </div>
-        ) : null}
       </section>
 
       <section className="ce-li-forces">
