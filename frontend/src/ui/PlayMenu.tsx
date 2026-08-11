@@ -42,10 +42,10 @@ import {
   type ThumbnailSurfaceState,
 } from './shell/ThumbnailSurface';
 import { useWars, runEligibleOfficialWars } from '../war/store';
-import { useActiveRun } from '../run/store';
+import { useActiveRun, type RunAdoptionConflict } from '../run/store';
 import {
-  ATARAXIA_BY_TIER, DEFAULT_RUN_RULES, createRun, formatGold, snapshotWar, type RunRules,
-  type AtaraxiaTier,
+  ATARAXIA_BY_TIER, DEFAULT_RUN_RULES, createRun, formatCardCount, formatGold, runHeldCardCount,
+  snapshotWar, type RunRules, type AtaraxiaTier,
 } from '../run/model';
 import {
   RUN_PROGRESSION_EVENT,
@@ -55,6 +55,7 @@ import {
 import { InnerChromeBox } from './shared/ChromeBox';
 import { loadMatch, type PersistedMatch } from '../game/matchPersistence';
 import { continueInventory, type ContinueInventory } from './playContinue';
+import { runAdoptionFacts } from './runAdoption';
 import { AtaraxiaSelector } from './AtaraxiaSelector';
 import { RunRulesSelector } from './RunRulesSelector';
 import { ActionList } from './shared/ActionList';
@@ -134,21 +135,30 @@ function ContinuePanel({ inventory }: { inventory: ContinueInventory }): ReactEl
   return (
     <ActionColumn>
       <div className="settings-panel-content continue-selector-panel">
-        <section className="settings-section">
-          <h3 className="settings-section-title">Continue</h3>
+        {/* No eyebrow over the one group in the column, and none over the card either: an
+            eyebrow distinguishes a group from the ones beside it, and this column holds exactly
+            one (ADR-0556). It also ran a hairline rule straight across the live vista. The card
+            names the activity and its verb says Continue; the section keeps the landmark. */}
+        <section className="settings-section" aria-label="Continue">
           {selected ? (
             <div className="continue-resume" data-testid="continue-detail" aria-label={selected.title}>
-              <div className="ce-selected-head"><h2>{selected.title}</h2></div>
-              <InnerChromeBox className="play-detail-facts">
-                <dl>
-                  {selected.facts.map((fact) => (
-                    <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>
-                  ))}
-                </dl>
+              {/* The same one-field card Run's detail uses: facts and the verb that completes them
+                  inside one structural stone region, with the oak plaque as its only leaf. Which
+                  activity is being resumed is the one fact the rows do not carry, so the name goes
+                  INSIDE the field as its first line — it never stands outside on the vista. */}
+              <InnerChromeBox className="play-detail-card" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
+                <div className="ce-selected-head"><h2>{selected.title}</h2></div>
+                <div className="play-detail-facts">
+                  <dl>
+                    {selected.facts.map((fact) => (
+                      <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>
+                    ))}
+                  </dl>
+                </div>
+                <div className="ce-preview-actions is-single">
+                  <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE} to={selected.playHref}><span>Continue</span></ChromeNavButton>
+                </div>
               </InnerChromeBox>
-              <div className="ce-preview-actions is-single">
-                <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE} to={selected.playHref}><span>Continue</span></ChromeNavButton>
-              </div>
             </div>
           ) : (
             <div className="settings-section-rows">
@@ -238,6 +248,35 @@ function RunPanel({
     || !hydrated
     || presentation.syncing
     || eligible.length === 0;
+  // The two candidates in the same shape, so the column renders one list instead of hand-writing
+  // each side. The Run in your hand leads: it is the one you were just playing, and the account's
+  // copy is the thing it collided with. Both verbs begin with Keep — they are the same kind of
+  // answer, and "Adopt" beside "Keep" read as two different kinds of action.
+  const adoptionCandidates = (conflict: RunAdoptionConflict): Array<{
+    label: string;
+    verb: string;
+    testId: string;
+    disabled: boolean;
+    onKeep: () => void;
+    facts: ReturnType<typeof runAdoptionFacts>;
+  }> => [
+    {
+      label: 'This browser',
+      verb: 'Keep browser Run',
+      testId: 'run-adopt-browser',
+      disabled: presentation.syncing,
+      onKeep: () => { void adoptBrowserRun(); },
+      facts: runAdoptionFacts(conflict.browserRun, conflict.accountRun),
+    },
+    {
+      label: 'Your account',
+      verb: 'Keep account Run',
+      testId: 'run-keep-account',
+      disabled: false,
+      onKeep: keepAccountRun,
+      facts: runAdoptionFacts(conflict.accountRun, conflict.browserRun),
+    },
+  ];
 
   useEffect(() => { void hydrate(); }, [hydrate]);
   useEffect(() => {
@@ -362,50 +401,75 @@ function RunPanel({
             question (ADR-0557). */}
         {choice === 'current' && presentation.adoptionConflict ? (
           <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Two active Runs" data-testid="run-detail-current">
-            <div className="ce-selected-head"><h2>Two active Runs</h2></div>
+            {/* No heading. "Two active Runs" only renamed the sentence directly under it, which
+                already states both Runs and the question — so it was a line of text standing on
+                the live vista for nothing. The aside's label keeps the name as a landmark. */}
             <div className="play-detail-body">
-              <div className="run-adoption-conflict" data-testid="run-adoption-conflict">
-                <div className="run-adoption-conflict-copy">
-                  <p>This browser has {presentation.adoptionConflict.browserRun.war.name}; your account has {presentation.adoptionConflict.accountRun.war.name}. Choose which one the account keeps.</p>
+              <InnerChromeBox className="play-detail-card" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
+                <div className="run-adoption-conflict" data-testid="run-adoption-conflict">
+                  {/* One line of situation, then the two Runs THEMSELVES. Naming each side's War in
+                      a single run-on sentence was the whole statement before, and both sides are
+                      almost always the same War — so it read as a question with no information in
+                      it. Each candidate is a labelled row list ending in its own verb, and the
+                      facts are the ones that actually separate two Runs (ADR-0557). */}
+                  <p className="run-adoption-conflict-lede">Two Runs are active. Keep one; the other is discarded.</p>
+                  {adoptionCandidates(presentation.adoptionConflict).map((candidate) => (
+                    <section className="run-adoption-candidate" key={candidate.testId} aria-label={candidate.label}>
+                      <div className="ce-selected-head"><h2>{candidate.label}</h2></div>
+                      <div className="play-detail-facts">
+                        <dl>
+                          {candidate.facts.map((fact) => (
+                            <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>
+                          ))}
+                        </dl>
+                      </div>
+                      <div className="ce-preview-actions is-single">
+                        <ChromeButton unit="inner-text-button"
+                          className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
+                          data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                          data-testid={candidate.testId}
+                          disabled={candidate.disabled}
+                          onClick={candidate.onKeep}
+                        >
+                          <span>{candidate.verb}</span>
+                        </ChromeButton>
+                      </div>
+                    </section>
+                  ))}
                 </div>
-              </div>
-            </div>
-            <div className="ce-preview-actions run-adoption-decision">
-              <ChromeButton unit="inner-text-button"
-                className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
-                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                data-testid="run-keep-account"
-                onClick={keepAccountRun}
-              >
-                <span>Keep account Run</span>
-              </ChromeButton>
-              <ChromeButton unit="inner-text-button"
-                className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
-                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                data-testid="run-adopt-browser"
-                disabled={presentation.syncing}
-                onClick={() => { void adoptBrowserRun(); }}
-              >
-                <span>Adopt browser Run</span>
-              </ChromeButton>
+              </InnerChromeBox>
             </div>
           </aside>
         ) : choice === 'current' && presentedRun ? (
+          /* No heading, for the same reason the sibling column has none: the rail tab that
+             opened this column already says Current Run, so a title there spends a row
+             restating the press that got you here. The aside keeps the name as a landmark. */
           <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Current Run" data-testid="run-detail-current">
-            <div className="ce-selected-head"><h2>Current Run</h2></div>
             <div className="play-detail-body">
-              <InnerChromeBox className="play-detail-facts">
-                <dl>
-                  <div><dt>Battle</dt><dd>{presentedRun.battleIndex + 1} of {presentedRun.war.battles.length}</dd></div>
-                  <div><dt>Army</dt><dd>{presentedRun.army.length} units</dd></div>
-                  <div><dt>Gold</dt><dd>{formatGold(presentedRun.goldTenths)}</dd></div>
-                  <div><dt>Ataraxia</dt><dd>{ATARAXIA_BY_TIER[presentedRun.ataraxiaTier].label}</dd></div>
-                  <div><dt>Deployment</dt><dd>Arrange formations</dd></div>
-                </dl>
+              {/* One field, not a stack of floats. The facts and the verb that completes them
+                  share a single structural stone card, so neither stands as bare text on the live
+                  vista. The card is teal because it establishes a region; the Play plaque inside
+                  it is oak because it is the one thing here that takes a click (ADR-0433). The
+                  verb still directly follows the facts it completes (ADR-0475) — it is inside the
+                  same field now rather than under it. */}
+              <InnerChromeBox className="play-detail-card" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
+                <div className="play-detail-facts">
+                  <dl>
+                    <div><dt>Battle</dt><dd>{presentedRun.battleIndex + 1} of {presentedRun.war.battles.length}</dd></div>
+                    {/* Cards, not units: Deployment deals the CHARTULARY, one whole card at a
+                        time, and a card that overruns the level's band takes none of its units
+                        onto the board — so a unit count states a force this Run may never
+                        field. The unit roster is the Army ledger's subject, not this row's. */}
+                    <div><dt>Army</dt><dd>{formatCardCount(runHeldCardCount(presentedRun))}</dd></div>
+                    <div><dt>Gold</dt><dd>{formatGold(presentedRun.goldTenths)}</dd></div>
+                    <div><dt>Ataraxia</dt><dd>{ATARAXIA_BY_TIER[presentedRun.ataraxiaTier].label}</dd></div>
+                    <div><dt>Deployment</dt><dd>Arrange formations</dd></div>
+                  </dl>
+                </div>
+                <div className="ce-preview-actions is-single">
+                  <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE} to="/run"><span>Play</span></ChromeNavButton>
+                </div>
               </InnerChromeBox>
-            </div>
-            <div className="ce-preview-actions is-single">
-              <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE} to="/run"><span>Play</span></ChromeNavButton>
             </div>
           </aside>
         ) : null}

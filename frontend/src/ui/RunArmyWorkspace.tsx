@@ -4,6 +4,7 @@ import {
   PIECE_LABEL,
   PIECE_VALUE,
   LIPSANON_BY_ID,
+  formatArmySize,
   hasLipsanon,
   type RunArmyPieceType,
   type RunArmyUnit,
@@ -446,7 +447,7 @@ export function RunArmyWorkspace({
     >
         <header className="run-self-inspection-head">
           <h2 id="run-army-workspace-title">{title}</h2>
-          <span>{run.army.length} units</span>
+          <span>{formatArmySize(run.army.length)}</span>
         </header>
         <RunRosterFilters filters={filters} onChange={onFiltersChange} />
         <DividedInnerChromeBox

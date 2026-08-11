@@ -96,6 +96,10 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // Any other Continue address is stale by construction and canonicalizes onto the one.
     expect(playMenu).toContain('if (path !== canonicalHref) navigateApp(canonicalHref, { replace: true, scroll: false });');
     // An empty Continue says so once instead of listing modes.
+    // And no eyebrow over the column's one group — it named the column after the only thing in it
+    // and drew a hairline across the live vista to do it (ADR-0556). The section keeps the label.
+    expect(playMenu).not.toContain('<h3 className="settings-section-title">Continue</h3>');
+    expect(playMenu).toContain('<section className="settings-section" aria-label="Continue">');
     expect(playMenu).toContain('data-testid="continue-empty"');
     expect(playMenu).toContain('<h4>Nothing to continue</h4>');
   });
@@ -114,6 +118,21 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // The Current Run detail's Play sits where Start Run sits on the sibling tab; a bare
     // one there frames the live vista instead of a button.
     expect(playMenu).toMatch(/<ChromeNavButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*to="\/run">/);
+    // Facts and verb share ONE structural field — no bare text and no loose plaque on the live
+    // vista. The card is teal because it establishes a region; the plaque inside it is the only
+    // oak (ADR-0433), and the verb still follows the facts it completes (ADR-0475). No heading
+    // over it either — same reason the sibling column has none, the rail tab already said it.
+    expect(playMenu.match(/<InnerChromeBox className="play-detail-card" fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}>/g)).toHaveLength(3);
+    expect(playMenu).not.toMatch(/<InnerChromeBox className="play-detail-facts"/);
+    expect(playMenu).toMatch(/className="play-detail-card"[\s\S]*?to="\/run"><span>Play<\/span><\/ChromeNavButton>[\s\S]*?<\/InnerChromeBox>/);
+    expect(playMenu).not.toMatch(/<div className="ce-selected-head"><h2>Current Run<\/h2><\/div>/);
+    // Nothing at all stands outside a card in these columns: a title either says something the
+    // rows do not — and then it goes INSIDE the field — or it is discarded. No head is left
+    // sitting on the live vista above a box.
+    expect(playMenu).not.toMatch(/<div className="ce-selected-head"><h2>Two active Runs<\/h2><\/div>/);
+    expect(playMenu).toMatch(/className="play-detail-card"[\s\S]*?<div className="ce-selected-head"><h2>\{selected\.title\}<\/h2><\/div>[\s\S]*?<\/InnerChromeBox>/);
+    expect(style).toContain('.play-detail-card {');
+    expect(style).not.toMatch(/\.play-detail-facts \{\s*padding:/);
     expect(playMenu).not.toContain('run-current-summary');
     expect(playMenu).not.toContain('>Continue Run<');
     // The Current Run row is an availability surface, not an existence surface: with
@@ -156,9 +175,43 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('index={PLAY_CHOICE_ROW_SEATS.new}');
   });
 
-  it('presents Run adoption as an unboxed decision group', () => {
+  it('presents Run adoption as two labelled candidates, not one run-on sentence', () => {
+    const runAdoption = readFileSync(new URL('./runAdoption.ts', import.meta.url), 'utf8');
     expect(playMenu).toContain('className="run-adoption-conflict"');
     expect(playMenu).toContain('data-testid="run-adoption-conflict"');
+    // The old statement named each side's War in one sentence and stopped there. Both sides are
+    // almost always the same War, so it asked which Run to keep while saying nothing that told
+    // them apart. It is one line of situation now, over two labelled row lists.
+    expect(playMenu).not.toContain('Choose which one the account keeps.');
+    expect(playMenu).not.toContain('run-adoption-conflict-copy');
+    expect(playMenu).toContain('Two Runs are active. Keep one; the other is discarded.');
+    expect(playMenu).toContain("label: 'This browser'");
+    expect(playMenu).toContain("label: 'Your account'");
+    expect(style).toContain('.run-adoption-candidate {');
+    // Both verbs begin with Keep: they are the same kind of answer, and "Adopt" beside "Keep"
+    // read as two different kinds of action.
+    expect(playMenu).toContain("verb: 'Keep browser Run'");
+    expect(playMenu).toContain("verb: 'Keep account Run'");
+    expect(playMenu).not.toContain('<span>Adopt browser Run</span>');
+    // A fact identical on both sides does not tell them apart, so the War is stated only when the
+    // two disagree; where each Run STANDS and which one you last played always are. Ataraxia is
+    // absent entirely — one tier exists, so the row could only repeat itself on both sides.
+    expect(runAdoption).toContain("if (run.war.name !== other.war.name) facts.push({ label: 'War', value: run.war.name });");
+    expect(runAdoption).not.toContain('ATARAXIA_BY_TIER');
+    // The row counts CARDS. Deployment deals the Chartulary a whole card at a time, so a unit
+    // count states a force the Run may never field (resolveDeploymentCapacity).
+    expect(runAdoption).toContain("facts.push({ label: 'Army', value: formatCardCount(runHeldCardCount(run)) });");
+    expect(playMenu).not.toContain('formatArmySize');
+    expect(readFileSync(new URL('./playContinue.ts', import.meta.url), 'utf8'))
+      .toContain("{ label: 'Army', value: formatCardCount(runHeldCardCount(run)) },");
+    expect(runAdoption).toContain("facts.push({ label: 'Progress', value: runPhaseLabel(run) });");
+    expect(runAdoption).toContain("facts.push({ label: 'Last played', value: relativeTimeLabel(run.updatedAt, now) });");
+    // Progress and "how long ago" are each written ONCE in the app: Continue's own resume card
+    // says the same two things, and a second copy here would drift from it (ADR-0059).
+    expect(runAdoption).toContain("import { runPhaseLabel } from './playContinue';");
+    expect(runAdoption).toContain("import { relativeTimeLabel } from './relativeTime';");
+    expect(readFileSync(new URL('./levelEditorSessionPresentation.ts', import.meta.url), 'utf8'))
+      .toContain('export const levelEditorSessionTimeLabel = relativeTimeLabel;');
     expect(playMenu).not.toContain('<InnerChromeBox className="play-level-card" role="alert">');
     expect(style).toContain('.run-adoption-conflict {');
     // The question is answered BEHIND Current Run, never in its seat: a card standing where the
@@ -174,10 +227,12 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(runStore).not.toContain('This browser and account each have an active Run.');
     expect(runStore).not.toContain('Choose which active Run this account should keep.');
     expect(runStore.match(/adoptionConflict: \{ browserRun, accountRun \}/g)).toHaveLength(2);
-    // Unboxed does not mean unmaterialed: the two decision buttons are leaf controls over
-    // the live vista, so they carry the same oak as every other Run leaf (ADR-0433).
-    expect(playMenu).toMatch(/<ChromeButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-keep-account"/);
-    expect(playMenu).toMatch(/<ChromeButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-adopt-browser"/);
+    // Each candidate ends in its OWN verb, so the two sides are rendered from one description
+    // rather than hand-written twice — and that one leaf carries the oak every Run leaf carries
+    // (ADR-0433). The identities the rest of the suite drives are the candidates' own.
+    expect(playMenu).toMatch(/<ChromeButton[\s\S]*?data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[\s\S]*?data-testid=\{candidate\.testId\}/);
+    expect(playMenu).toContain("testId: 'run-keep-account'");
+    expect(playMenu).toContain("testId: 'run-adopt-browser'");
   });
 
   it('keeps new-Run setup in the right detail column with one scrollable Ataraxia dropdown', () => {
