@@ -15,7 +15,9 @@ import {
   POOL_LIVE_RULES,
   POOL_PIECES,
   POOL_PILE_SLOTS,
+  POOL_RUN_OFFERS,
   buildPool,
+  poolDistribution,
   poolLiveVerdict,
   groupPool,
   poolPriceSteps,
@@ -183,6 +185,7 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
   const cards = useMemo(() => buildPool(knobs), [knobs]);
   const summary = useMemo(() => summarizePool(cards), [cards]);
   const verdict = useMemo(() => poolLiveVerdict(cards), [cards]);
+  const distribution = useMemo(() => poolDistribution(cards), [cards]);
   // Audited against the market the model's own shape rule leaves, so a shift that is alive on the
   // wide catalog and dead on the narrow one reads as dead here — which is the case that started all
   // of this, and the case a rule stated only in prose can never show you.
@@ -260,6 +263,7 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
         .rcp-shift-head b { font-size: var(--rcp-fs); }
         .rcp-shift-head em { font-style: normal; font-size: calc(var(--rcp-fs) * 0.85); opacity: 0.75; }
         .rcp-shift.is-dead .rcp-shift-head em { color: #e6a3a3; opacity: 1; }
+        .rcp-row-alarm td { color: #e6a3a3; }
         .rcp-shift-moved { font-size: calc(var(--rcp-fs) * 0.84); opacity: 0.72; }
         .rcp-select-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; font-size: var(--rcp-fs); }
         .rcp-select-row select { font: inherit; font-size: var(--rcp-fs); padding: 4px 6px; min-width: 0; flex: 1 1 auto; }
@@ -580,9 +584,63 @@ rare      everything above`}
             </tbody>
           </table>
           <p className="rcp-note">
-            Share of a pile slot is how often ONE card of that band reaches a 20-card pile at the shipped
-            16/3/1 quota. Under 1% means the player never learns to recognise it. Illustrations owed counts
-            uncommon + rare only, on the rule that commons are templated.
+            Volumes are how many cells a card occupies. Illustrations owed counts uncommon + rare
+            only, on the rule that commons are templated. What a tier's SIZE actually costs the
+            player is the panel below.
+          </p>
+        </div>
+
+        {/*
+          The distribution, and it leads with the sentence the tier counts do not say.
+          A tier is a label; the shuffle is what makes a card rare. The seats are a fixed quota and
+          the identities are whatever the rule swept in, and nothing holds those two in any
+          relation -- so the same word can mean "dealt to you three times a pile" and "you will
+          finish the Run without meeting it". Both pathologies were live on this page at once, and
+          neither was visible from the tier counts that were.
+        */}
+        <div className="rcp-panel">
+          <h3>What a card's rarity actually is</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>band</th><th>identities</th><th>seats/pile</th>
+                <th>one card, per pile</th><th>per run</th><th>you meet a given one</th>
+              </tr>
+            </thead>
+            <tbody>
+              {distribution.map((row) => (
+                <tr key={row.band} className={row.fillsDistinctly ? undefined : 'rcp-row-alarm'}>
+                  <td>{row.band}</td>
+                  <td>{row.identities}</td>
+                  <td>{row.seats}</td>
+                  <td>
+                    {row.identities === 0 ? '—' : `${row.perPile.toFixed(2)}x`}
+                    {row.fillsDistinctly ? '' : ' — REPEATS'}
+                  </td>
+                  <td>{row.identities === 0 ? '—' : `${row.perRun.toFixed(2)}x`}</td>
+                  <td>{row.identities === 0 ? '—' : `${Math.round(row.metPerRun * 100)}%`}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="rcp-note">
+            A pile is 20 cards holding an exact quota — {POOL_PILE_SLOTS.common} common,
+            {' '}{POOL_PILE_SLOTS.uncommon} uncommon, {POOL_PILE_SLOTS.rare} rare. A QUOTA, not a
+            roll: every pile is that composition rather than converging over a long sample. Each
+            band draws from its own seeded shuffle and the seats are then shuffled together, so the
+            order of a row is a surprise and its composition never is. The cursor runs continuously
+            and exhausting a pile builds the next one the same way.
+          </p>
+          <p className="rcp-note">
+            <b>A band holding fewer identities than it has seats does not shrink the pile — it
+            repeats identities to fill them</b>, which is a row of three dealing the same card
+            twice. Above 1.00x per pile is that, stated before it is played.
+          </p>
+          <p className="rcp-note">
+            Per run assumes {POOL_RUN_OFFERS} offers — ten Sectios of three, the installed
+            Run-eligible War. It is the one assumption on this page; everything else is arithmetic
+            on the pile. A card met in under a few percent of Runs is content that is drawn,
+            illustrated and never seen.
           </p>
         </div>
 

@@ -12,6 +12,7 @@ import {
   countDefences,
   groupPool,
   hasOppositeColourBishopPair,
+  poolDistribution,
   poolLiveVerdict,
   poolPriceSteps,
   poolRotationContract,
@@ -43,6 +44,36 @@ describe('runCardPool generation', () => {
     const small = buildPool({ ...DEFAULT_POOL_KNOBS, maxCells: 2 });
     expect(small.filter((card) => card.volume === 1)).toHaveLength(5);
     expect(small.filter((card) => card.volume === 2)).toHaveLength(10);
+  });
+});
+
+describe('runCardPool distribution', () => {
+  const model = (id: string) => POOL_MODELS.find((candidate) => candidate.id === id)!.knobs;
+
+  it('reports what the shipped market actually shows a player', () => {
+    const rows = poolDistribution(buildPool(model('shipped-2x2')));
+    const band = (key: string) => rows.find((row) => row.band === key)!;
+    // 41 identities over 16 seats: every band fills its seats without repeating one, which is the
+    // whole fix. Nothing here may read above 1.00x per pile.
+    for (const row of rows) {
+      expect(row.fillsDistinctly, row.band).toBe(true);
+      expect(row.perPile, row.band).toBeLessThanOrEqual(1);
+    }
+    expect(band('rare').identities).toBe(14);
+    // A Rare is met in a decent share of Runs rather than in a couple of percent of them.
+    expect(band('rare').metPerRun).toBeGreaterThan(0.05);
+  });
+
+  it('calls out a band that cannot fill its seats, which is the duplicate before it is played', () => {
+    const rows = poolDistribution(buildPool({ ...model('shipped-2x2'), bandRule: 'price', commonMaxCost: 20, uncommonMaxCost: 30 }));
+    const common = rows.find((row) => row.band === 'common')!;
+    expect(common.identities).toBeLessThan(common.seats);
+    expect(common.fillsDistinctly).toBe(false);
+    expect(common.perPile).toBeGreaterThan(1);
+    // And the other end of the same failure: a band so large a given card is never met.
+    const rare = rows.find((row) => row.band === 'rare')!;
+    expect(rare.identities).toBeGreaterThan(rare.seats * 10);
+    expect(rare.metPerRun).toBeLessThan(0.15);
   });
 });
 

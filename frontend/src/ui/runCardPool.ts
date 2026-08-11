@@ -1038,6 +1038,66 @@ export type PoolSummary = Readonly<{
 
 export const POOL_PILE_SLOTS: Readonly<Record<PoolBand, number>> = { common: 16, uncommon: 3, rare: 1 };
 
+/**
+ * How many offers one Run walks past. Ten Sectios of three, which is the installed Run-eligible
+ * War. It is the ONE number on this page that is an assumption rather than a derivation, and it is
+ * stated on screen for that reason: everything else here is arithmetic on the pile.
+ */
+export const POOL_RUN_OFFERS = 30;
+
+/**
+ * A CARD'S ACTUAL RARITY, which is not the word printed on it.
+ *
+ * The tier is a label; what makes a card rare is the shuffle. A pile is a fixed quota of seats, so a
+ * tier's seats are shared among however many identities it happens to hold — and nothing keeps those
+ * two numbers in any relation. 54 identities behind one seat and 6 identities over sixteen both wear
+ * a one-word label that says nothing about either, which is exactly how a market came to deal the
+ * same card twice in a row of three while calling it Common.
+ *
+ * So this is the number to read: how often ONE card of a band reaches the player.
+ *
+ * `perPile` above 1 is the pathology at the crowded end — the tier cannot fill its seats without
+ * repeating, so a single row can deal the same card twice. `metPerRun` near zero is the pathology at
+ * the empty end: content that exists, is drawn, is illustrated, and is never seen.
+ */
+export type PoolBandDistribution = Readonly<{
+  band: PoolBand;
+  identities: number;
+  seats: number;
+  /** Expected appearances of ONE card of this band in a 20-card pile. */
+  perPile: number;
+  /** The same over a whole Run. */
+  perRun: number;
+  /** Chance a Run shows you a GIVEN card of this band at least once. */
+  metPerRun: number;
+  /** Whether the tier can fill its seats without dealing an identity twice. */
+  fillsDistinctly: boolean;
+}>;
+
+export function poolDistribution(cards: readonly PoolCard[]): PoolBandDistribution[] {
+  const piles = POOL_RUN_OFFERS / Object.values(POOL_PILE_SLOTS).reduce((total, seats) => total + seats, 0);
+  return (['common', 'uncommon', 'rare'] as const).map((band) => {
+    const identities = cards.filter((card) => card.band === band).length;
+    const seats = POOL_PILE_SLOTS[band];
+    const perPile = identities === 0 ? 0 : seats / identities;
+    const seatsSeen = seats * piles;
+    return {
+      band,
+      identities,
+      seats,
+      perPile,
+      perRun: perPile * piles,
+      // Every seat is an independent chance at this identity while the tier can fill them
+      // distinctly; once it cannot, the card is dealt every pile and the question stops being one
+      // of chance at all.
+      metPerRun: identities === 0 ? 0
+        : identities <= seats ? 1
+          : 1 - (1 - 1 / identities) ** seatsSeen,
+      fillsDistinctly: identities >= seats,
+    };
+  });
+}
+
 export function summarizePool(cards: readonly PoolCard[]): PoolSummary {
   const bands: PoolBand[] = ['common', 'uncommon', 'rare'];
   const byBand = { common: 0, uncommon: 0, rare: 0 };
