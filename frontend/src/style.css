@@ -24356,8 +24356,10 @@ button.tileset-relationship-cell {
    a stacking context, and the row boundaries inside it carry the junction atoms at z-index 3
    precisely so they land on top of the vertical rails at 2 — trapped under a level-1 parent, every
    four-way crossing is buried under the rail it is supposed to cap. The grid's own rule says this
-   in as many words; the lift out-specified it. */
-.inner-chrome-box.has-chrome-surface-fill > .chrome-divided-grid__rows {
+   in as many words; the lift out-specified it. Paired with the scroll layer exactly as the grid's
+   own rule pairs them, because a scrolling box puts that layer in the rows layer's place. */
+.inner-chrome-box.has-chrome-surface-fill > .chrome-divided-grid__rows,
+.inner-chrome-box.has-chrome-surface-fill > .chrome-divided-grid__scroll {
   z-index: auto;
 }
 
