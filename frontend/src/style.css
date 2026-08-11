@@ -24319,9 +24319,22 @@ button.tileset-relationship-cell {
 /* The divided grid's rail layer is a lifted OVERLAY, not a row of the box. The lift above sets
    every non-fill child to `position: relative` so content clears the fill; applied to this layer
    it drops the rails into the flow, where they take a whole grid row and push the rows layer off
-   the bottom of the box. It is already above the fill by z-index, so it stays absolute. */
+   the bottom of the box. It stays absolute, and it keeps its own layer: the lift's `z-index: 1`
+   tied it with the rows layer, which then won on DOM order and painted the seats' wood straight
+   over every vertical rail. */
 .inner-chrome-box.has-chrome-surface-fill > .chrome-divided-grid__fixed-rails {
   position: absolute;
+  z-index: 2;
+}
+
+/* The rows layer takes the lift's POSITION and refuses its LAYER, which is the other half of the
+   same bug. `position: relative` alone already clears the fill; naming a z-index as well makes this
+   a stacking context, and the row boundaries inside it carry the junction atoms at z-index 3
+   precisely so they land on top of the vertical rails at 2 — trapped under a level-1 parent, every
+   four-way crossing is buried under the rail it is supposed to cap. The grid's own rule says this
+   in as many words; the lift out-specified it. */
+.inner-chrome-box.has-chrome-surface-fill > .chrome-divided-grid__rows {
+  z-index: auto;
 }
 
 .run-expunctio-card,

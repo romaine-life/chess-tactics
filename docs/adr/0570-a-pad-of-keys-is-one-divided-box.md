@@ -73,6 +73,33 @@ meets the frame — the same reason `ChromeVerbRow` takes verbs rather than chil
 `FacingCompass` is shared, so this reaches every surface that mounts it: the Level Editor's Unit,
 Placed Art and Forest facing pads, `TilePreview`, `UnitArtLab` and `SourceArtTurntableStudio`.
 
+### A filled divided box was painting its rows over its own vertical rails
+
+The first build of this shipped with the horizontal rails visible and the vertical ones **not** —
+the seats' wood ran straight through where each column line should be. The owner saw it in the
+handed-over capture; the agent looked at the same pixels and read a lattice into the junction studs
+that were still landing at the crossings. Sampling the scanline settled it: at the two column
+lines the luma stayed in the wood's range, where the frame's ink signature appeared at both edges.
+
+`.inner-chrome-box.has-chrome-surface-fill > :not(.inner-chrome-box-fill)` lifts every non-fill
+child to `position: relative; z-index: 1` so content clears the fill. It out-specifies the divided
+grid's own rules and hit both of its layers:
+
+- `.chrome-divided-grid__fixed-rails` lost its `z-index: 2` and tied with the rows layer, which
+  then won on DOM order — so the seats painted over every vertical rail.
+- `.chrome-divided-grid__rows` gained a z-index, which makes it a **stacking context**, trapping the
+  row boundaries' junction atoms (z-index 3) inside it. The grid's own rule says this in as many
+  words — *"deliberately NO z-index … trapping them under a level-1 parent buries every four-way
+  crossing under the rail it is supposed to cap"* — and the lift defeated it from outside.
+
+Both are exempted now, beside the `position: absolute` exemption that was already there. Nothing
+had caught it because **no consumer had this combination before**: a surface fill, more than one
+column, and no row spanning every column. `SectionBox` declares one column, so it has no vertical
+rails; `LevelPreviewColumn` has a spanning name row, which suppresses the fixed layer in favour of
+per-row segments; the title-bar cluster has vertical rails and paints them correctly because it
+takes no fill at all. This pad is the first box to need all three at once, and the primitive was
+wrong for it.
+
 ## Consequences
 
 - One rail between two keys instead of two rails and a strip of panel, twelve times over. The pad
@@ -83,6 +110,9 @@ Placed Art and Forest facing pads, `TilePreview`, `UnitArtLab` and `SourceArtTur
   glyph or by the seat's installed surface, as in ADR-0569.
 - `ChromeSeatGrid` is now the answer for any grid of small controls that belong together. Anything
   building one as N framed buttons in a CSS grid is rebuilding what this replaced.
+- Any filled divided box with vertical rails now draws them. Nothing else in the app had the
+  combination that exposed the bug, so nothing else changes — but a future consumer that would have
+  hit it silently gets a working box instead.
 - The seat's focus ring is inset (`outline-offset: -2px`), because the shell's +2px offset lands on
   the rails a key shares with its neighbours and outlines the keys around it.
 - `--chrome-seat-opening` falls back to 38px/7px outside `.level-editor-screen`, so the Studio pads
