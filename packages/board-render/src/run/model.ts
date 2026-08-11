@@ -4359,7 +4359,9 @@ export function formatGold(goldTenths: number): string {
   return String(Math.round(goldTenths));
 }
 
-/** How large an army is, said once. An army of one is reachable — the King is not counted —
+/** How large an army is, said once. This counts UNITS — individual pieces, the King among
+ *  them — not the formation cards that seat them; `run.cards` is that other number, and one
+ *  card seats up to four units. An army of one is the King alone, so the singular is reachable
  *  and every surface that showed "1 units" wrote its own copy of this string. */
 export function formatArmySize(units: number): string {
   return `${units} unit${units === 1 ? '' : 's'}`;
