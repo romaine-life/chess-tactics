@@ -4,7 +4,7 @@
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
-import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, MAXIMUM_AUTHORED_CAMERA_ZOOM_IN, normalizeBoardCameraBounds, normalizeCameraZoomIn, predrawnEnvironmentGeometryFingerprintInputV2, predrawnRenderSurface, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, worldViewportForCamera, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
+import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, largestBoxInsideBoardCameraPolygon, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, MAXIMUM_AUTHORED_CAMERA_ZOOM_IN, normalizeBoardCameraBounds, normalizeCameraZoomIn, predrawnEnvironmentGeometryFingerprintInputV2, predrawnRenderSurface, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, worldViewportForCamera, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
 import { boardLabCellPosition, boardLabMetrics, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
 import { projectBoardPoint, unprojectBoardPoint, type BoardForest, type BoardForestSection, type BoardForestTree, type BoardTown, type BoardTownSection } from '@chess-tactics/board-render';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
@@ -160,7 +160,9 @@ import {
   predrawnBoardPlateForEditorReview,
   predrawnReviewGridCells,
   predrawnBoardPreviewRegistration,
+  largestPaintedPlateRect,
   predrawnBoardPreviewSrc,
+  runtimePredrawnBoardPlate,
   serializePredrawnBoardPreviewRegistration,
   storedPredrawnBoardRegistration,
   type PredrawnBoardCornerRegistration,
@@ -2788,6 +2790,27 @@ const clearEditorSignInRecoveryIntent = (): void => {
   try { window.sessionStorage.removeItem(EDITOR_SIGN_IN_RECOVERY_INTENT_KEY); } catch { /* blocked storage */ }
 };
 
+/**
+ * The painted rectangle of the active plate, as fractions of its frame. Measuring it needs the
+ * decoded image, so it resolves after the plate loads and is null until then; every caller must
+ * treat that as "not measured yet" rather than "the paint fills the frame".
+ */
+function usePaintedPlateRect(
+  src: string | undefined,
+): { left: number; top: number; right: number; bottom: number } | null {
+  const [rect, setRect] = useState<
+    { left: number; top: number; right: number; bottom: number } | null
+  >(null);
+  useEffect(() => {
+    if (!src) { setRect(null); return undefined; }
+    let live = true;
+    setRect(null);
+    largestPaintedPlateRect(src).then((measured) => { if (live) setRect(measured); });
+    return () => { live = false; };
+  }, [src]);
+  return rect;
+}
+
 export function LevelEditor(): ReactElement {
   const animationFrame = useAnimationClock(true, 8, 150);
   // The Studio routes here with ?from=studio (show a "back to catalog" link), ?kind=<brush-kind>,
@@ -3183,13 +3206,30 @@ export function LevelEditor(): ReactElement {
       : undefined,
     [editorPredrawnPlate, predrawnCoverCells],
   );
+  /**
+   * What this page draws must be the boundary the PLAYER actually gets, or the instrument
+   * is lying about the one thing it exists to show. An unauthored level is governed at
+   * runtime by what it paints, not by the snap default, so an unauthored pre-drawn level
+   * shows its accepted pixels here and Snap/drag remain how a tighter box gets authored.
+   */
   const resolvedCameraBoundary = useMemo(
-    () => resolvedBoardCameraBounds({
-      cols: boardCols,
-      rows: boardRows,
-      cameraBounds: boardCameraBounds,
-    }),
-    [boardCameraBounds, boardCols, boardRows],
+    () => {
+      const authored = { cols: boardCols, rows: boardRows, cameraBounds: boardCameraBounds };
+      if (boardCameraBounds || !predrawnCoverPolygon?.length) {
+        return resolvedBoardCameraBounds(authored);
+      }
+      const xs = predrawnCoverPolygon.map((point) => point.x);
+      const ys = predrawnCoverPolygon.map((point) => point.y);
+      const minX = Math.min(...xs);
+      const minY = Math.min(...ys);
+      return {
+        minX,
+        minY,
+        width: Math.max(...xs) - minX,
+        height: Math.max(...ys) - minY,
+      };
+    },
+    [boardCameraBounds, boardCols, boardRows, predrawnCoverPolygon],
   );
   const {
     markViewInteraction: markBoardViewInteraction,
@@ -3308,17 +3348,29 @@ export function LevelEditor(): ReactElement {
     isPlacedArtBrushKind(initialBrushKind) ? initialBrushKind : 'artwork',
   );
   const [layer, setLayer] = useState<LayerKey>(initialLayer);
-  const cameraLayerEntryFramedRef = useRef(false);
+  const cameraLayerEntryFramedRef = useRef<string | null>(null);
   useEffect(() => {
     if (layer !== 'camera') {
-      cameraLayerEntryFramedRef.current = false;
+      cameraLayerEntryFramedRef.current = null;
       return;
     }
-    if (cameraLayerEntryFramedRef.current || !viewViewportSize) return;
-    cameraLayerEntryFramedRef.current = true;
+    if (!viewViewportSize) return;
+    // Frame the boundary that is actually THERE, not the one that was there on arrival.
+    // Landing on this page by URL frames it seconds before the accepted artwork resolves, so
+    // an unauthored level was framed against its placeholder and never re-framed once its real
+    // boundary appeared. Once a box is authored the author owns the camera, and Snap and the
+    // panel's own control are the ways back to it.
+    const identity = boardCameraBounds
+      ? `${provisionalClientScope}|authored`
+      : `${provisionalClientScope}|${resolvedCameraBoundary.width}x${resolvedCameraBoundary.height}`
+        + `@${resolvedCameraBoundary.minX},${resolvedCameraBoundary.minY}`;
+    if (cameraLayerEntryFramedRef.current === identity) return;
+    cameraLayerEntryFramedRef.current = identity;
     frameCameraBoundary(resolvedCameraBoundary);
   }, [
+    boardCameraBounds,
     layer,
+    provisionalClientScope,
     resolvedCameraBoundary.height,
     resolvedCameraBoundary.minX,
     resolvedCameraBoundary.minY,
@@ -4362,6 +4414,50 @@ export function LevelEditor(): ReactElement {
     commitCameraBoundary(bounds);
     setCameraBoundaryInteractionMode('edit');
     frameCameraBoundary(bounds);
+  };
+  /**
+   * The largest rectangle that stays inside this level's PAINT. Only offered where there is
+   * artwork; a tiled level's backdrop follows the camera and has no edge to fit to.
+   *
+   * Measured from the plate's alpha, not from the polygon: the polygon is the raster frame,
+   * and a painting with a ragged edge does not fill its own frame, so fitting to the frame
+   * hands the player unpainted world — which is the one thing the boundary is for.
+   */
+  const paintedPlateRect = usePaintedPlateRect(editorPredrawnPlate?.src);
+  const cameraBoundaryFitToArtwork = (() => {
+    if (!predrawnCoverPolygon?.length) return undefined;
+    const frame = largestBoxInsideBoardCameraPolygon(predrawnCoverPolygon);
+    if (!frame || !paintedPlateRect) return frame;
+    return {
+      minX: frame.minX + frame.width * paintedPlateRect.left,
+      minY: frame.minY + frame.height * paintedPlateRect.top,
+      width: frame.width * (paintedPlateRect.right - paintedPlateRect.left),
+      height: frame.height * (paintedPlateRect.bottom - paintedPlateRect.top),
+    };
+  })();
+  /**
+   * Artwork ASSIGNMENT refits the box to the new painting. Keyed on the surface identity and
+   * skipped on the first one seen, so opening a level never rewrites a box an author set — only
+   * actually changing the artwork does, and then the old edge is gone anyway.
+   */
+  const lastFittedSurfaceRef = useRef<string | null>(null);
+  useEffect(() => {
+    const identity = editorPredrawnPlate?.src ?? null;
+    if (lastFittedSurfaceRef.current === null) { lastFittedSurfaceRef.current = identity; return; }
+    if (identity === lastFittedSurfaceRef.current) return;
+    lastFittedSurfaceRef.current = identity;
+    // commitCameraBoundary is the one that refuses on a read-only page; nothing to repeat here.
+    if (!identity || !cameraBoundaryFitToArtwork) return;
+    commitCameraBoundary(cameraBoundaryFitToArtwork);
+  }, [cameraBoundaryFitToArtwork, editorPredrawnPlate?.src]);
+  const fitCameraBoundaryToArtwork = (): void => {
+    if (!cameraBoundaryFitToArtwork) {
+      reportStatus('This level has no artwork to fit the camera to.', 'warning');
+      return;
+    }
+    commitCameraBoundary(cameraBoundaryFitToArtwork);
+    setCameraBoundaryInteractionMode('edit');
+    frameCameraBoundary(cameraBoundaryFitToArtwork);
   };
   const setCameraBoundaryFromView = (): void => {
     if (!viewViewportSize) {
@@ -11158,6 +11254,27 @@ export function LevelEditor(): ReactElement {
             </div>
             <p className="le-board-note">Balanced is the default: ten percent padding with a two projected-tile-step minimum per axis.</p>
           </section>
+          {cameraBoundaryFitToArtwork ? (
+            <section className="skirmish-card skirmish-view-card" aria-label="Camera boundary artwork fit">
+              <h2>Fit to artwork</h2>
+              <div className="skirmish-view-row">
+                <ChromeButton
+                  unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  onClick={fitCameraBoundaryToArtwork}
+                  disabled={!editorSessionCanWrite}
+                  title="Set the boundary to the largest rectangle that stays inside this level's artwork."
+                >Fit to artwork</ChromeButton>
+                <span className="le-board-note">
+                  {Math.round(cameraBoundaryFitToArtwork.width)}
+                  {' × '}
+                  {Math.round(cameraBoundaryFitToArtwork.height)}
+                  {' world px'}
+                </span>
+              </div>
+              <p className="le-board-note">The furthest the camera can go without leaving the painting.</p>
+            </section>
+          ) : null}
           </>
         ) : layer === 'generate' ? (<>
           <section className="skirmish-card le-generate">

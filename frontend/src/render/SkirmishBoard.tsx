@@ -29,7 +29,7 @@ import {
   sizeCanvasForBounds,
 } from './BoardCanvasLayer';
 import { objectBaseZIndex } from './sceneDepth';
-import { ViewPane, minimumZoomToCoverViewport, type ViewPaneViewportSize } from '../ui/shared/ViewPane';
+import { ViewPane, boardZoomFloor, type ViewPaneViewportSize } from '../ui/shared/ViewPane';
 import { PawnPromotionPicker } from '../ui/PawnPromotionPicker';
 import { BattleGoldNoticeMarker } from '../ui/BattleGoldNotice';
 import { useBoardCameraFraming } from '../ui/shared/BoardViewFraming';
@@ -53,7 +53,7 @@ import {
   BOARD_PREVIEW_ASPECT,
   boardBounds,
   boardContentHash,
-  boardDrawOps,
+  boardDrawOps,
   effectiveBoardCameraCoverPolygon,
   boardVisualFeatures,
   boardVisualTerrainCells,
@@ -2016,20 +2016,18 @@ export function SkirmishBoard({
   useEffect(() => {
     setAuthoredZoomIn(normalizeCameraZoomIn(exactBoard?.cameraZoomIn) ?? null);
   }, [exactBoard?.cameraZoomIn, setAuthoredZoomIn]);
+  const cameraBoundsSubject = exactBoard ?? { cols: game.size.cols, rows: game.size.rows };
   const cameraCoverPolygon = useMemo(
-    () => effectiveBoardCameraCoverPolygon(
-      exactBoard ?? { cols: game.size.cols, rows: game.size.rows },
-      predrawnCoverPolygon,
-    ),
-    [exactBoard, game.size.cols, game.size.rows, predrawnCoverPolygon],
+    () => effectiveBoardCameraCoverPolygon(cameraBoundsSubject),
+    [exactBoard, game.size.cols, game.size.rows],
   );
   const boardViewKey = surfaceState?.viewKey
     ?? storedActivityId
     ?? `${storedLevelId ?? 'free'}:${storedBoardViewEpoch}`;
   const preparedMinimumZoom = useMemo(() => viewViewportSize
-    ? minimumZoomToCoverViewport({
+    ? boardZoomFloor({
         viewport: viewViewportSize,
-        polygon: cameraCoverPolygon,
+        coverPolygon: cameraCoverPolygon,
         minZoom: PLAYER_TECHNICAL_MINIMUM_ZOOM,
         maxZoom: 16,
       })
@@ -2622,7 +2620,7 @@ export function SkirmishBoard({
         maxZoom={boardMaxZoom}
         onZoomChange={setZoom}
         onPanChange={setBoardPan}
-        coverPolygon={cameraCoverPolygon}
+        coverPolygon={cameraCoverPolygon}
         onMinimumZoomChange={setMinZoom}
         onViewportSizeChange={setViewViewportSize}
         onViewInteraction={markViewInteraction}

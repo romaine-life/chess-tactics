@@ -4,6 +4,7 @@ date: 2026-08-01
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0302](0302-camera-authoring-is-a-dedicated-level-editor-page.md)"
+  - "[ADR-0574](0574-a-stated-camera-boundary-governs-how-far-out-the-camera-goes.md)"
 partially_supersedes:
   - "[ADR-0190](0190-accepted-art-zoom-floor-uses-the-full-feasible-pan-region.md)'s no additional level-relative zoom-out restriction clause"
   - "[ADR-0189](0189-board-facing-views-open-on-playable-geometry.md)'s accepted-raster-only zoom/pan safety boundary clause"
@@ -33,6 +34,12 @@ world pixels. Every possible player viewport must remain completely inside that 
 viewport dimensions and the boundary derive the stable zoom-out floor; pan stops where a viewport
 edge reaches the boundary. The former global 55% floor is removed. A 5% technical renderer floor
 remains only as a defensive numerical limit for exceptionally large authored boxes.
+
+The zoom-out floor and pan clamp above are refined by
+[ADR-0574](0574-a-stated-camera-boundary-governs-how-far-out-the-camera-goes.md): coverage remains this
+hard limit, but it is one of two limits rather than the only one, it is measured on the rectangle
+art is visible in rather than on the board's measured stage, and an unauthored level resolves its
+boundary from what it actually paints rather than from the snap default described below.
 
 The boundary must contain the canonical playable-contact-surface opening frame, including its
 existing five-percent opening margin. Opening and Reset continue to use that board-owned frame;

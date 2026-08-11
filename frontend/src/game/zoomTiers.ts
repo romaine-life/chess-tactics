@@ -78,13 +78,17 @@ export function clampToRange(zoom: number, range: ZoomTierRange): number {
 }
 
 /**
- * The slice of the ladder a level offers.
+ * The slice of the ladder a level offers, on USEFULNESS alone.
  *
- * `outer` is the first tier at which the entire level box fits inside the viewport,
- * so zooming out always ends with the whole level visible and never further — the
- * old floor asked the opposite question ("is the viewport still COVERED by art"),
- * which is why it clamped inward and produced a cramped range on exactly the levels
- * whose art stopped at the board edge.
+ * `outer` is the first tier at which the entire level box fits inside the viewport, so
+ * zooming out ends with the whole level visible and never further. That is the right
+ * question for "is there any point going further out", and it is the only question this
+ * answers — it says nothing about whether the world it reveals has been painted.
+ *
+ * Safety is the separate, harder limit: `coverageTier` below. A camera obeys BOTH, and
+ * the floor is whichever binds. Collapsing the two into this one is what let a player
+ * zoom out into unpainted world, because a box that FITS INSIDE the viewport is by
+ * definition surrounded by whatever lies beyond it (ADR-0301).
  *
  * `inner` is the tier showing `CLOSEST_TIER_CELLS` across the narrow axis. A level
  * smaller than that gets a degenerate slice, so the inner tier is never allowed
@@ -120,9 +124,42 @@ export function zoomTierRange({
 }
 
 /**
+ * The SAFETY floor: the furthest-out tier at which the visible rectangle is still
+ * entirely inside `boundary`, so no zoom can reach world the level never promised to
+ * paint (ADR-0301).
+ *
+ * Where `zoomTierRange.outer` asks whether the level fits in the viewport, this asks the
+ * opposite — whether the viewport fits in the boundary — and the two are not
+ * interchangeable. Rounding goes UP for the same reason contain rounds down: the chosen
+ * rung has to land on the safe side of the constraint, and safe here means further IN. A
+ * single rung of slack outside the boundary is exposed black at the screen edge.
+ *
+ * A boundary is only meaningful when coverage is FINITE. A level whose backdrop is locked
+ * to the viewport paints wherever the camera goes and has no such limit; it passes no
+ * boundary and is governed by usefulness alone.
+ */
+export function coverageTier({
+  viewport,
+  boundary,
+}: {
+  viewport: { width: number; height: number };
+  boundary: { width: number; height: number };
+}): number {
+  const safe = (value: number) => (Number.isFinite(value) && value > 0 ? value : 1);
+  const coverRatio = Math.max(
+    safe(viewport.width) / safe(boundary.width),
+    safe(viewport.height) / safe(boundary.height),
+  );
+  return Math.max(WIDEST_TIER, zoomForTier(Math.ceil(
+    Math.log(coverRatio) / Math.log(ZOOM_TIER_RATIO),
+  )));
+}
+
+/**
  * Where a level opens. The whole level visible is the honest default for a tactics
  * board — you are choosing a move against the whole position — and it is a tier, so
  * it is a zoom the ladder actually holds rather than a number derived per window.
+ * A level whose coverage cannot reach that far opens at its safety floor instead.
  */
 export function openingTier(range: ZoomTierRange): number {
   return range.outer;

@@ -28,16 +28,9 @@ export interface BoardViewCamera {
   pan: { x: number; y: number };
 }
 
-/** Resolve the level camera box, intersected with accepted immutable pixels when AI is active. */
+/** The level's camera box: the furthest a view of this board may reach. */
 export function boardCameraCoverPolygon(board: EditorBoard): { x: number; y: number }[] {
-  const acceptedArtPolygon = isPredrawnBackgroundActive(board) && board.surface
-    ? predrawnBoardCoverPolygon(
-        runtimePredrawnBoardPlate(board.surface),
-        Array.from({ length: board.rows }, (_, y) =>
-          Array.from({ length: board.cols }, (__, x) => ({ x, y }))).flat(),
-      )
-    : undefined;
-  return effectiveBoardCameraCoverPolygon(board, acceptedArtPolygon);
+  return effectiveBoardCameraCoverPolygon(board);
 }
 
 /**
