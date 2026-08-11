@@ -407,13 +407,17 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('if (presentedRun) { setArmed(true); return; }');
     expect(playMenu).toContain('data-testid="run-keep"');
     expect(playMenu).toContain('data-testid="run-abandon-and-start"');
-    // Both answers are verb CELLS, stacked. The box's columns are box-wide, so a second column
-    // declared for one transient row would rule a line down every cell above it.
+    // The one verb SPLITS: each answer is its own compartment of the same row, divided by the
+    // BOX's column line — so that line crosses the row boundaries above and below as capped tees
+    // rather than being a rule drawn between two buttons with nothing to terminate against. The
+    // second column exists only while the question is open, and every other cell spans.
+    expect(playMenu).toMatch(/columns=\{presentedRun && armed\s*\?\s*\['minmax\(0, 1fr\)', 'minmax\(0, 1fr\)'\]\s*:\s*\['minmax\(0, 1fr\)'\]\}/);
+    expect(playMenu).toMatch(/<ChromeDividedGridRow className="run-prep-verbs">[\s\S]*?data-testid="run-keep"[\s\S]*?data-testid="run-abandon-and-start"[\s\S]*?<\/ChromeDividedGridRow>/);
     expect(playMenu).toMatch(/className="section-box-member-verb run-prep-verb"[\s\S]{0,200}?data-testid="run-keep"/);
     expect(playMenu).toMatch(/className="section-box-member-verb run-prep-verb is-danger"[\s\S]{0,200}?data-testid="run-abandon-and-start"/);
-    // An ARRAY, not a fragment: the box flattens arrays into rows and sees a fragment as one child,
-    // so a fragment would put both answers in a single row with no rail between them.
-    expect(playMenu).not.toMatch(/presentedRun && armed \? \(\s*<>/);
+    // A row of identical controls is cut from one plank run rather than stamping one grain twice.
+    expect(playMenu).toMatch(/style=\{leafSurfacePhase\(1\)\}[\s\S]{0,200}?data-testid="run-abandon-and-start"/);
+    expect(style).toMatch(/\.run-prep-verbs \{[\s\S]*?padding: 0;/);
     expect(playMenu).toContain('keepRunButtonRef.current?.focus();');
     expect(style).toContain('.run-replace-note');
   });
@@ -440,6 +444,11 @@ describe('Run rule options are a departure from the defaults, not a step in setu
     // `visibility: hidden` also keeps a closed section out of the tab order and the a11y tree.
     expect(style).toMatch(/\.run-rules-cell\[data-open="false"\] \{\s*visibility: hidden;/);
     expect(style).not.toMatch(/\.run-rules-cell\[data-open="false"\] \{[^}]*display: none/);
+    // Closed, the section is reserved SPACE rather than compartments, so the box's rails stop at
+    // the Options name row — a rail divides two things, and there is nothing down there to divide
+    // yet. Matched by ADJACENCY, so the grid stays the only thing deciding where a rail IS and
+    // this only says when one is showing.
+    expect(style).toMatch(/\.chrome-divided-grid__row-boundary:has\(\+ \.run-rules-cell\[data-open="false"\]\) \{\s*visibility: hidden;/);
     expect(source).not.toContain('hidden={!');
     // Each cell carries the closed state itself. A wrapper around them would be ONE row of the
     // box, and the rails between the choices would go with it.

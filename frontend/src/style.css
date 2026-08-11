@@ -28318,7 +28318,16 @@ button.run-card-formation-cell {
   font-size: var(--ds-text-md);
 }
 
-/* The verb IS the row (section-box-member-verb owns the frameless reset); this sizes the plate and
+/* Armed, the verb splits into two compartments of one row. The row takes no inset — each verb's
+   own padding is its whole cell's — and the line between them is the BOX's column line, so it
+   crosses the row boundaries above and below as capped tees rather than a rule drawn between two
+   buttons with nothing to terminate against. */
+.run-prep-verbs {
+  min-block-size: var(--run-prep-plate-h);
+  padding: 0;
+}
+
+/* The verb IS the cell (section-box-member-verb owns the frameless reset); this sizes the plate and
    gives its label the same display treatment every other verb cell in the menu shell wears. */
 .run-prep-verb {
   font-family: var(--ds-font-display);
@@ -28353,6 +28362,15 @@ button.run-card-formation-cell {
    closed. The RAILS stay drawn either way — they belong to the box, and closed the section shows
    the compartments its choices are about to fill. */
 .run-rules-cell[data-open="false"] {
+  visibility: hidden;
+}
+
+/* Closed, the section is reserved SPACE rather than compartments, so the box's rails stop at the
+   Options name row: a rail divides two things, and there is nothing down there yet to divide. The
+   boundary the grid lays immediately before each closed cell goes with that cell's paint — matched
+   by adjacency rather than by a class the row carries, so the grid stays the only thing that
+   decides WHERE a rail is and this only says when one is showing. */
+.run-prep-box .chrome-divided-grid__row-boundary:has(+ .run-rules-cell[data-open="false"]) {
   visibility: hidden;
 }
 

@@ -62,7 +62,7 @@ import { useRunRulesCells } from './RunRulesSelector';
 import { ActionList } from './shared/ActionList';
 import { SettingsRow, SettingsSection } from './shared/SettingsControls';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
-import { CHROME_LEAF_FILL_SURFACE, CHROME_STRUCTURAL_FILL_ROLE } from './shared/chromeSurfacePolicy';
+import { CHROME_LEAF_FILL_SURFACE, CHROME_STRUCTURAL_FILL_ROLE, leafSurfacePhase } from './shared/chromeSurfacePolicy';
 import {
   CAMPAIGN_RAIL_START_INDEX,
   PLAY_MODE_ENTRY_ENABLED,
@@ -498,7 +498,15 @@ function RunPanel({
                 its choices are two halves of one cell, not two things, so no rail divides them. */}
             <DividedInnerChromeBox
               className="run-prep-box"
-              columns={['minmax(0, 1fr)']}
+              /* Two columns only while the replacement question is open, because that is the only
+                 row with a compartment in it. Every other cell spans, so the box suppresses its
+                 full-height rail and the armed row carries the one vertical segment itself —
+                 capped at both ends by the tees the boundary layer places where it meets the rows
+                 above and below (ChromeDividedGrid). A hand-placed rule between two buttons could
+                 not know where its ends met anything. */
+              columns={presentedRun && armed
+                ? ['minmax(0, 1fr)', 'minmax(0, 1fr)']
+                : ['minmax(0, 1fr)']}
               fillRole={CHROME_STRUCTURAL_FILL_ROLE}
               aria-label="Run preparation"
             >
@@ -524,22 +532,15 @@ function RunPanel({
                 </ChromeDividedGridRow>
               ) : null}
 
-              {/* The verb IS the cell: the row is the button, the wood fills the whole area
-                  between the rails, and the box's own frame is its edge. A framed button seated in
-                  a cell draws a second rail a few pixels inside the first — see
-                  `section-box-member-verb`, which owns this reset. Armed, the two answers stack as
-                  two such cells rather than sharing a row: the box's columns are box-wide, and a
-                  second column declared for one transient row would rule a line down every cell
-                  above it. */}
+              {/* The verb IS the cell: the wood fills the whole area between the rails and the
+                  box's own frame is its edge. A framed button seated in a cell draws a second rail
+                  a few pixels inside the first — see `section-box-member-verb`, which owns this
+                  reset. Armed, the one verb SPLITS into two, each answer its own compartment of the
+                  same row, divided by the box's own column line. */}
               {presentedRun && armed ? (
-                /* An ARRAY, not a fragment: the box flattens arrays into rows and sees a fragment
-                   as one child, so a fragment here would put both answers in a single row with no
-                   rail between them. */
-                [
-                  <ChromeDividedGridRow
-                    key="run-keep"
-                    as="button"
-                    spans="all"
+                <ChromeDividedGridRow className="run-prep-verbs">
+                  <button
+                    type="button"
                     ref={keepRunButtonRef}
                     className="section-box-member-verb run-prep-verb"
                     data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
@@ -548,11 +549,11 @@ function RunPanel({
                     onClick={() => setArmed(false)}
                   >
                     <span>Keep Run</span>
-                  </ChromeDividedGridRow>,
-                  <ChromeDividedGridRow
-                    key="run-abandon-and-start"
-                    as="button"
-                    spans="all"
+                  </button>
+                  {/* The plank steps rather than stamping the same grain twice in one row. */}
+                  <button
+                    type="button"
+                    style={leafSurfacePhase(1)}
                     className="section-box-member-verb run-prep-verb is-danger"
                     data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                     data-testid="run-abandon-and-start"
@@ -560,8 +561,8 @@ function RunPanel({
                     onClick={() => { void start(); }}
                   >
                     <span>{starting ? 'Starting…' : 'Abandon and Start'}</span>
-                  </ChromeDividedGridRow>,
-                ]
+                  </button>
+                </ChromeDividedGridRow>
               ) : (
                 <ChromeDividedGridRow
                   as="button"

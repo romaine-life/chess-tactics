@@ -77,8 +77,13 @@ Two more things followed from being four boxes rather than one:
   only their paint (`visibility: hidden` on `.run-rules-cell[data-open="false"]`), so what is
   reserved is exactly what they need and cannot drift from a number written in the stylesheet.
   `visibility` also keeps a closed section out of the tab order and the accessibility tree, so it
-  is no more reachable than it was when it was `display: none`. The RAILS stay drawn either way —
-  they belong to the box, and closed the section shows the compartments it is about to fill.
+  is no more reachable than it was when it was `display: none`. **The rails go with the paint**:
+  closed, the section is reserved SPACE rather than compartments, so the box's rails stop at the
+  Options name row — a rail divides two things, and there is nothing down there to divide yet. The
+  boundary is matched by ADJACENCY
+  (`.chrome-divided-grid__row-boundary:has(+ .run-rules-cell[data-open="false"])`) rather than by a
+  class the row carries, so the grid stays the only thing deciding where a rail IS and the section
+  only says when one is showing.
 - **Each rule states its own name.** The section's two group headings ("Formations", "Pricing")
   are gone: three rules do not need grouping, and each is now one marble cell naming the rule and
   what the current answer does, followed by its picker's plate. On screen they were three
@@ -89,8 +94,7 @@ Two more things followed from being four boxes rather than one:
   rows is one child, so its rows would land with no rails between them. Ataraxia and the rule
   options therefore contribute ARRAYS of cells (`ataraxiaPrepCells`, `useRunRulesCells`) rather
   than rendering as components — `Children.toArray` flattens arrays, and the box's topology sees
-  every row. The armed Keep Run / Abandon and Start pair is an array for the same reason: a
-  fragment is one child, and both answers would have shared a single row.
+  every row. A fragment would not do: the box sees one child through it.
 - **`SectionBox` is unchanged.** It still owns the named-group box for Settings groups and the War
   editor's Battles, and there the box still IS the disclosure. This ADR does not retire that shape;
   it says Run preparation is not one of them.
@@ -107,9 +111,14 @@ Two more things followed from being four boxes rather than one:
 - `AtaraxiaSelector` splits: the component is now only the bare picker for a row that already names
   it (the War editor's War group), and `ataraxiaPrepCells` is the box's pair of cells. The `framed`
   prop is gone rather than renamed — neither shape draws a frame, so it was describing nothing.
-- The armed replacement pair — Keep Run / Abandon and Start — STACKS as two verb cells rather than
-  sharing a row. The box's columns are box-wide, and a second column declared for one transient row
-  would rule a line down every cell above it.
+- The armed replacement pair — Keep Run / Abandon and Start — is the one verb SPLITTING into two
+  compartments of the same row. The box declares its second column only while that question is
+  open; every other cell spans, which is what makes the box suppress its full-height rail and let
+  the armed row carry the one vertical segment itself, capped at both ends by the tees the boundary
+  layer places where it meets the rows above and below. Stacking them was tried first, on the
+  mistaken belief that box-wide columns would rule a line down every cell above — they do not, and
+  the split is what the control had before this ADR and what reads as one question with two
+  answers.
 - `HouseSelect` gains `seated`, and a seated trigger is the one picker in the app that names no
   registered unit. That is the point rather than an exception to be regretted: `inner-dropdown` IS
   the 9-slice frame, and a cell whose edges are the box's rails has no room for one. Every
