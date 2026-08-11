@@ -430,7 +430,7 @@ function RunMetaControls({
               {/* The way back out of the Sectio, seated with the way forward because they are the
                   same pair the Victory screen itself offers. Pressing it REVIEWS the report: the
                   Sectio stands exactly as it is left — gold banked, cards admitted, offers locked
-                  — and its Continue lands back here (ADR-0567). A Sectio crafted or migrated
+                  — and its Continue lands back here (ADR-0568). A Sectio crafted or migrated
                   before the report was retained has none to turn back to, and says so by being
                   unpressable rather than by dropping a control out of the rail. */}
               <ChromeButton unit="inner-text-button"
@@ -472,7 +472,7 @@ function RunMetaControls({
                 onClick={() => {
                   // The Battle is finally over here, so this is where its retained won-board
                   // review is retired -- one screen later than ADR-0455 put it, because the
-                  // report itself is reachable until now (ADR-0567).
+                  // report itself is reachable until now (ADR-0568).
                   clearMatch();
                   replace(prepareDeployment(leaveSectio(run)));
                   onNavigate('primary');
@@ -515,6 +515,7 @@ function ArrangedDeploymentControls({
   availableRotations,
   dealProgress,
   onDealProgress,
+  onDeckDeparture,
   onStepCard,
   onSelectCard,
   onTurn,
@@ -529,6 +530,7 @@ function ArrangedDeploymentControls({
   availableRotations: ReadonlySet<RunFormationRotation>;
   dealProgress: number;
   onDealProgress: (count: number) => void;
+  onDeckDeparture: (count: number) => void;
   onStepCard: (step: 1 | -1) => void;
   onSelectCard: (cardId: string) => void;
   onTurn: (direction: FormationTurnDirection) => void;
@@ -574,6 +576,7 @@ function ArrangedDeploymentControls({
             run={run}
             dealProgress={dealProgress}
             onDealProgress={onDealProgress}
+            onDeckDeparture={onDeckDeparture}
             onDealComplete={onDealComplete}
             onRevealComplete={() => undefined}
             onDiscardComplete={() => undefined}
@@ -744,6 +747,9 @@ function useRunDeploymentPresentation({
   const options = useMemo(() => deploymentOptions(prepared, level), [level, prepared]);
   const stage = deploymentInteractionStage(prepared, options);
   const [dealProgress, setDealProgress] = useState(0);
+  // Cards that have LEFT the deck. Separate from dealProgress, which counts the hand arriving in
+  // Controls two and a half seconds later: the deck empties as it deals, not as the hand lands.
+  const [deckDeparted, setDeckDeparted] = useState(0);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [arrangementRotation, setArrangementRotation] = useState<RunFormationRotation>(0);
   // Where the mouse is. ONLY the pointer may clear it — pointerenter does not fire again for a
@@ -912,7 +918,9 @@ function useRunDeploymentPresentation({
   }, [prepared, replace, run]);
 
   useEffect(() => {
-    if (prepared.deployment?.stage === 'awaiting-deal') setDealProgress(0);
+    if (prepared.deployment?.stage !== 'awaiting-deal') return;
+    setDealProgress(0);
+    setDeckDeparted(0);
   }, [prepared.deployment?.battleIndex, prepared.deployment?.stage]);
 
   useEffect(() => {
@@ -1176,6 +1184,7 @@ function useRunDeploymentPresentation({
         availableRotations={availableArrangementRotations}
         dealProgress={dealProgress}
         onDealProgress={setDealProgress}
+        onDeckDeparture={setDeckDeparted}
         onStepCard={stepArrangementCard}
         onSelectCard={selectArrangementCard}
         onTurn={turnArrangement}
@@ -1189,7 +1198,7 @@ function useRunDeploymentPresentation({
       <>
         <RunDeploymentDeckDeal
           run={prepared}
-          dealtCount={dealProgress}
+          departedCount={deckDeparted}
           onBeginDeal={beginDeal}
           disabled={departureActive}
         />
@@ -1483,7 +1492,7 @@ function AftermathPanel({
       onPress: (): void => {
         // The won-board review is NOT retired here any more: the report stays reachable from
         // the Sectio this opens, so the snapshot it reads has to outlast this press and is
-        // retired when the Sectio is finally left (ADR-0567 refining ADR-0455).
+        // retired when the Sectio is finally left (ADR-0568 refining ADR-0455).
         replace(leaveAftermath(run));
       },
     },

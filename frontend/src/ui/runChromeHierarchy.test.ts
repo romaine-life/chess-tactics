@@ -455,6 +455,24 @@ describe('Run chrome hierarchy', () => {
     expect(runDeploymentCardStack).not.toContain('SkirmishBoard');
     expect(runDeploymentCardStack).toContain('Draw automatically');
     expect(runDeploymentCardStack).toContain('data-deployment-center-deck');
+    // The deck empties as it DEALS. It used to count the hand arriving in Controls, two and a half
+    // seconds after the cards left, so it stood at full height and full number while the whole
+    // hand flew out of it and the last card never appeared to take it with it.
+    expect(runDeploymentCardStack).toContain('run.cards.length - departedCount');
+    expect(runDeploymentCardStack).not.toContain('run.cards.length - dealtCount');
+    expect(runScreen).toContain('departedCount={deckDeparted}');
+    expect(runScreen).toContain('onDeckDeparture={setDeckDeparted}');
+    expect(runScreen).not.toContain('dealtCount={dealProgress}');
+    // A pile with nothing in it draws nothing — the floor of one layer is what left a phantom deck
+    // standing on the table after its last card had gone.
+    expect(runDeploymentCardStack).toContain('if (layers < 1) return null;');
+    expect(runDeploymentCardStack).not.toContain('Math.max(1, centerCount)');
+    // Departures ride the deal's own timeline, not a wall clock a throttled tab would drift from.
+    expect(runDeploymentCardStack).toContain('onDeckDeparture(index + 1)');
+    expect(runDeploymentCardStack).not.toContain('scene.after(index * stagger');
+    expect(runDeploymentCardStack).toContain('const expectedAnimationCount = cards.length * 4 + 1');
+    // The swept remainder IS the deck, not a single card standing in for it.
+    expect(runDeploymentCardStack).toContain('<RunDeckPile count={undealtCardCount}');
     expect(runDeploymentCardStack).toContain('data-testid="deployment-deal"');
     expect(runDeploymentCardStack).toContain("deployment?.stage === 'awaiting-deal' || deployment?.stage === 'dealing'");
     expect(runDeploymentCardStack).toContain('data-deployment-discard-flight-card');
@@ -1021,7 +1039,7 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain("? { ...shellRun, phase: 'battle', aftermath: null }");
     expect(runScreen).toContain('clearMatch();');
     // The won-board snapshot outlives the report's Continue, because the report itself is
-    // reachable from the Sectio it opens; the Sectio's Continue is what retires it (ADR-0567).
+    // reachable from the Sectio it opens; the Sectio's Continue is what retires it (ADR-0568).
     expect(runScreen).toMatch(/data-testid="continue-run-sectio"[\s\S]{0,400}?clearMatch\(\);/);
     expect(runScreen).not.toMatch(/replace\(leaveAftermath\(run\)\);\s*\n\s*clearMatch\(\);/);
     // Back to Victory is seated with Continue, and reopens the report without touching the

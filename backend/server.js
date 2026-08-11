@@ -22862,7 +22862,8 @@ const ACTIVE_RUN_PHASES = new Set([
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
 const ACTIVE_RUN_CARD_SPANS = new Set([2, 4]);
 const ACTIVE_RUN_CARD_PRICING = new Set(['material', 'density']);
-const ACTIVE_RUN_RULES_FIELDS = new Set(['cardSpan', 'pricing', 'mayRotate']);
+const ACTIVE_RUN_RARITY_RULES = new Set(['price-shifts', 'material-bands']);
+const ACTIVE_RUN_RULES_FIELDS = new Set(['cardSpan', 'pricing', 'mayRotate', 'rarity']);
 const ACTIVE_RUN_UNIT_SOURCES = new Set(['king', 'starting', 'adlectio']);
 const ACTIVE_RUN_SECTIO_FIELDS = new Set([
   'afterBattleIndex',
@@ -22977,6 +22978,9 @@ function formationRunRulesIssue(rules) {
   if (!ACTIVE_RUN_CARD_SPANS.has(rules.cardSpan)) return 'run.rules.cardSpan is invalid';
   if (!ACTIVE_RUN_CARD_PRICING.has(rules.pricing)) return 'run.rules.pricing is invalid';
   if (typeof rules.mayRotate !== 'boolean') return 'run.rules.mayRotate is invalid';
+  // Absent is valid: rarity was global and derived before ADR-0568, so a Run saved without it is
+  // not malformed -- it predates the field and reads the default.
+  if (rules.rarity !== undefined && !ACTIVE_RUN_RARITY_RULES.has(rules.rarity)) return 'run.rules.rarity is invalid';
   return null;
 }
 
@@ -23248,7 +23252,7 @@ function validateFormationRunBody(run) {
 
   // A Battle's report outlives its own screen: the Bona Vacantia and Sectio that follow spend the
   // gold it reports, so it stays with them and the Sectio can hand the player back to the Victory
-  // screen (ADR-0567). It may only ever describe the Battle that screen followed, and leaving for
+  // screen (ADR-0568). It may only ever describe the Battle that screen followed, and leaving for
   // the next Deployment retires it.
   if (run.phase === 'aftermath' || run.phase === 'bona-vacantia' || run.phase === 'sectio') {
     if (run.phase === 'aftermath' || run.aftermath !== null) {
@@ -23282,7 +23286,7 @@ function validateFormationRunBody(run) {
 
   // A Sectio STANDS behind its own Victory report while that report is being reviewed: reaching
   // back to it is a review and never a rewind, so the Sectio it will return to is untouched and
-  // still fully valid (ADR-0567). Every other phase still forbids one outright.
+  // still fully valid (ADR-0568). Every other phase still forbids one outright.
   const sectioStands = run.phase === 'sectio'
     || (run.phase === 'aftermath' && run.sectio !== null
       && isObjectRecord(run.aftermath) && isObjectRecord(run.sectio)
@@ -23323,7 +23327,7 @@ function validateFormationRunBody(run) {
   // the runtime to be null there rejected the saved report of every won Battle.
   //
   // A report REVIEWED back from the Sectio is the exception: the Sectio retired that runtime on
-  // the way past, and returning to read the report does not resurrect it (ADR-0567). That is
+  // the way past, and returning to read the report does not resurrect it (ADR-0568). That is
   // exactly the case `sectioStands` names, so the report and the standing Sectio agree.
   const reviewedReport = run.phase === 'aftermath' && sectioStands;
   if (run.phase === 'battle' || (run.phase === 'aftermath' && !reviewedReport)) {

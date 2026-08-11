@@ -2634,8 +2634,11 @@ async function validateGeneratedFormationRunMigration63() {
       runSaveVersion: 24, phase: 'sectio', deployment: null, battleRuntime: null, aftermath: null,
       sectio: {
         cardOffers: [
+          // One card per tier, so the re-read proves it reaches the whole ladder. The middle seat
+          // is Rook-and-Bishop rather than a lone Rook: the bands are cut on PRICE, and five
+          // material on one square is 60 gold and Common.
           offer('p', 'p', ['pawn'], [{ x: 0, y: 0 }], 1),
-          offer('r', 'r', ['rook'], [{ x: 0, y: 0 }], 5),
+          offer('f-0111-rb', 'rb', ['rook', 'bishop'], [{ x: 0, y: 0 }, { x: 0, y: 1 }], 8),
           offer('bb-vertical', 'bb', ['bishop', 'bishop'], [{ x: 0, y: 0 }, { x: 0, y: 1 }], 6),
         ],
       },
@@ -6539,7 +6542,7 @@ async function main() {
     phase: 'deployment',
     sectio: null,
     // Leaving the Sectio for the next Battle retires that Battle's report along with the Sectio
-    // it was reachable from (ADR-0567) -- so a Deployment derived from this fixture drops both,
+    // it was reachable from (ADR-0568) -- so a Deployment derived from this fixture drops both,
     // exactly as leaveSectio does.
     aftermath: null,
     deployment: {
@@ -6853,7 +6856,7 @@ async function main() {
   }
   // A Sectio turned back to the Victory it came from is the one document whose phase does not
   // determine its own sub-state: the report is being read while the Sectio stands behind it,
-  // and the Battle's runtime was retired on the way past (ADR-0567). It is reached by pressing
+  // and the Battle's runtime was retired on the way past (ADR-0568). It is reached by pressing
   // a control on a durable Run, so the server has to store it.
   const reviewedReportRun = {
     ...boardRender.reviewSectioBattleReport(boardRender.craftRunDocument(

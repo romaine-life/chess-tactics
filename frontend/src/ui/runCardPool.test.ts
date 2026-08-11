@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { allRunCards } from '../run/model';
+import {
+  allRunCards, cardAllowedByRules, DEFAULT_RUN_RULES, type RunCoreCard,
+} from '../run/model';
 import {
   DEFAULT_POOL_KNOBS,
   DEFAULT_POOL_MODEL,
@@ -10,12 +12,16 @@ import {
   countDefences,
   groupPool,
   hasOppositeColourBishopPair,
+  poolDistribution,
+  poolPile,
+  poolLiveVerdict,
   poolPriceSteps,
   poolRotationContract,
   poolShapeSignature,
   priceCard,
   sameKnobs,
   summarizePool,
+  type PoolKnobs,
   type PoolPiece,
 } from './runCardPool';
 
@@ -39,6 +45,143 @@ describe('runCardPool generation', () => {
     const small = buildPool({ ...DEFAULT_POOL_KNOBS, maxCells: 2 });
     expect(small.filter((card) => card.volume === 1)).toHaveLength(5);
     expect(small.filter((card) => card.volume === 2)).toHaveLength(10);
+  });
+});
+
+describe('runCardPool distribution', () => {
+  const model = (id: string) => POOL_MODELS.find((candidate) => candidate.id === id)!.knobs;
+
+  it('reports what the shipped market actually shows a player', () => {
+    const rows = poolDistribution(buildPool(model('shipped-2x2')));
+    const band = (key: string) => rows.find((row) => row.band === key)!;
+    // 41 identities over 16 seats: every band fills its seats without repeating one, which is the
+    // whole fix. Nothing here may read above 1.00x per pile.
+    for (const row of rows) {
+      expect(row.fillsDistinctly, row.band).toBe(true);
+      expect(row.perPile, row.band).toBeLessThanOrEqual(1);
+    }
+    expect(band('rare').identities).toBe(14);
+    // A Rare is met in a decent share of Runs rather than in a couple of percent of them.
+    expect(band('rare').metPerRun).toBeGreaterThan(0.05);
+  });
+
+  it('cannot produce a band that repeats, however narrow the bands are cut', () => {
+    // The pile is sized to the tiers rather than fixed, so starving a band shrinks the PILE instead
+    // of making that band deal a card twice. Cut Common down to four identities and the whole pile
+    // collapses to what four can carry -- which is the duplicate made unreachable rather than rare.
+    const starved = buildPool({ ...model('shipped-2x2'), bandRule: 'price', commonMaxCost: 20, uncommonMaxCost: 30 });
+    const pile = poolPile(starved);
+    expect(pile.size).toBeLessThan(poolPile(buildPool(model('shipped-2x2'))).size);
+    for (const row of poolDistribution(starved)) {
+      expect(row.fillsDistinctly, row.band).toBe(true);
+      expect(row.perPile, row.band).toBeLessThanOrEqual(1);
+    }
+    // The other end of the same failure survives, because no pile size can fix it: a band so large
+    // that a given card is almost never met.
+    const rare = poolDistribution(starved).find((row) => row.band === 'rare')!;
+    expect(rare.identities).toBeGreaterThan(rare.seats * 10);
+    expect(rare.metPerRun).toBeLessThan(0.15);
+  });
+});
+
+describe('runCardPool live verdict', () => {
+  const model = (id: string) => POOL_MODELS.find((candidate) => candidate.id === id)!.knobs;
+
+  it('calls the two live rule sets the game, and names which one', () => {
+    expect(poolLiveVerdict(buildPool(model('shipped-2x2'))).is).toBe('default');
+    expect(poolLiveVerdict(buildPool(model('shipped-4x2'))).is).toBe('legacy');
+  });
+
+  it('calls every proposal a proposal, however it is labelled', () => {
+    for (const candidate of POOL_MODELS) {
+      const live = candidate.id === 'shipped-2x2' || candidate.id === 'shipped-4x2';
+      expect(poolLiveVerdict(buildPool(candidate.knobs)).is === null, candidate.id).toBe(!live);
+    }
+  });
+
+  it('stops calling it the game the moment any one knob moves', () => {
+    // The verdict is the reason to trust the page, so it has to break on the smallest edit — not
+    // on a change big enough that the reader would have noticed anyway.
+    const live = model('shipped-2x2');
+    const nudged: Partial<PoolKnobs>[] = [
+      { bandRule: 'price' },
+      { overCapNamedCards: 'queen-pawn' },
+      { maxCells: 3 },
+      { collapseRotation: false },
+      { pieceValue: { ...live.pieceValue, B: 4 } },
+      { terms: [{ kind: 'density', power: 0.5, scale: 10 }, { kind: 'round', to: 5 }] },
+    ];
+    for (const edit of nudged) {
+      const verdict = poolLiveVerdict(buildPool({ ...live, ...edit }));
+      expect(verdict.is, JSON.stringify(edit)).toBeNull();
+      expect(verdict.diff.total, JSON.stringify(edit)).toBeGreaterThan(0);
+    }
+  });
+
+  it('says what a proposal costs against the nearest live position, rather than only that it differs', () => {
+    const priced = poolLiveVerdict(buildPool({ ...model('shipped-2x2'), bandRule: 'price', commonMaxCost: 70, uncommonMaxCost: 100 }));
+    expect(priced.nearest).toBe('default');
+    // Same cards at the same prices — the tiers are the entire disagreement, which is the whole
+    // argument for moving rarity off the material band.
+    expect(priced.diff.absentFromGame).toBe(0);
+    expect(priced.diff.missingFromPool).toBe(0);
+    expect(priced.diff.differentPrice).toBe(0);
+    expect(priced.diff.differentTier).toBeGreaterThan(0);
+  });
+});
+
+describe('runCardPool shipped rule', () => {
+  const model = (id: string) => POOL_MODELS.find((candidate) => candidate.id === id)!.knobs;
+  const liveBands = (cards: readonly RunCoreCard[]) => cards.reduce(
+    (tally, card) => ({ ...tally, [card.rarity]: tally[card.rarity] + 1 }),
+    { common: 0, uncommon: 0, rare: 0 },
+  );
+
+  it('holds every card the live catalog holds, and none it does not', () => {
+    expect(buildPool(model('shipped-4x2'))).toHaveLength(allRunCards().length);
+  });
+
+  it('lands every card in the tier the game gives it', () => {
+    // Band-for-band over the whole catalog. A different card set, a dropped adjustment, or a stray
+    // price cut would all move at least one of these three numbers.
+    expect(summarizePool(buildPool(model('shipped-4x2'))).byBand).toEqual(liveBands(allRunCards()));
+  });
+
+  it('reproduces the market a default Run actually shops in', () => {
+    const market = allRunCards().filter((card) => cardAllowedByRules(card, DEFAULT_RUN_RULES));
+    const pool = buildPool(model('shipped-2x2'));
+    expect(pool).toHaveLength(market.length);
+    expect(summarizePool(pool).byBand).toEqual(liveBands(market));
+    // The tier that was starved, pinned as a number: 41 identities against 16 pile seats, so the
+    // pile fills them with distinct cards. It read 6 before the bands moved off material.
+    expect(summarizePool(pool).byBand.common).toBe(41);
+  });
+
+  it('keeps the Rook pair, which exempting the Queen+Pawn alone drops', () => {
+    const rookPair = (knobs: PoolKnobs) => buildPool(knobs).find((card) => card.pieces.join('') === 'RR');
+    const shipped = rookPair(model('shipped-2x2'));
+    expect(shipped?.band).toBe('rare');
+    expect(shipped?.cost).toBe(130);
+    expect(rookPair({ ...model('shipped-2x2'), overCapNamedCards: 'queen-pawn' })).toBeUndefined();
+  });
+
+  it('prices where the game prices, so the model is the game and not a likeness', () => {
+    // `runCardCost` rounds to whole gold and the face prints ten times it, so no live price can
+    // land between two tens. The studio's usual round-to-5 can, which is why these models say 10.
+    for (const card of buildPool(model('shipped-2x2'))) expect(card.cost % 10, card.key).toBe(0);
+  });
+
+  it('separates cards that price the same, which a cut on price alone cannot', () => {
+    const pool = buildPool(model('shipped-2x2'));
+    const card = (letters: string) => pool.find((entry) => entry.pieces.join('') === letters);
+    // 60 gold each, and so is a lone Rook. The minor-cluster shift is what tells them apart, and a
+    // shift is the only way anything can: the price cuts see one number and these three share it.
+    expect(card('BB')?.cost).toBe(60);
+    expect(card('NN')?.cost).toBe(60);
+    expect(card('R')?.cost).toBe(60);
+    expect(card('BB')?.band).toBe('rare');
+    expect(card('NN')?.band).toBe('rare');
+    expect(card('R')?.band).toBe('common');
   });
 });
 

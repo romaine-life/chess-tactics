@@ -620,7 +620,7 @@ function fightBattle(run: RunDocument): RunDocument {
   //
   // It is CLOSED and then left, rather than fast-forwarded straight into the Sectio, so the
   // Sectio a craft link lands on carries the Victory report it followed and can hand the player
-  // back to it (ADR-0567). The accounting is unchanged: nothing was taken, so nothing surrendered
+  // back to it (ADR-0568). The accounting is unchanged: nothing was taken, so nothing surrendered
   // and the clock reads the same instant openSectio would have read. Only the turn count is
   // dressed, and turns pay nothing — par is a benchmark and the bonus is the clock (ADR-0539).
   const closed = closeBattle(started, {

@@ -8,7 +8,7 @@ refines:
   - "[ADR-0455](0455-aftermath-retains-a-reversible-terminal-board-review.md)"
 ---
 
-# ADR-0567: The Sectio hands the player back to its Victory
+# ADR-0568: The Sectio hands the player back to its Victory
 
 ## Context
 

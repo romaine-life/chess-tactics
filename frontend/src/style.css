@@ -23582,6 +23582,14 @@ button.tileset-relationship-cell {
   inline-size: 100%;
 }
 
+/* The swept remainder carries the deck's own pile, so its top card must take the flight box
+   exactly the way the top card takes the deck box — the JS gives this element the deck's rect,
+   and anything short of filling it would make the pile change size at the handover. */
+.run-deployment-deal-flight.is-remainder > .run-deployment-center-card {
+  block-size: 100%;
+  inline-size: 100%;
+}
+
 .run-deployment-stack-card {
   block-size: 100%;
   inset: 0;

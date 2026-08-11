@@ -1,5 +1,5 @@
 import { useState, type ReactElement } from 'react';
-import { RUN_CARD_SPANS, type RunRules } from '../run/model';
+import { RUN_CARD_SPANS, RUN_RARITY_RULE_IDS, type RunRarityRuleId, type RunRules } from '../run/model';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 import { SectionBox } from './shared/SectionBox';
 
@@ -56,6 +56,22 @@ const PRICING_COPY: Readonly<Record<'material' | 'density', { label: string; eff
   },
 };
 
+// Rarity is here because ADR-0567 made it a rule a Run is bound to rather than a global property of
+// the catalog. The two are not a preference and a fallback: they sort the same 69 cards two
+// different ways, and the older one is kept playable because a rule nobody can play is a rule nobody
+// can judge. Its effect line says what it does rather than what it is — the repeated row IS the
+// thing, and a player who picks it should not be surprised by it.
+const RARITY_COPY: Readonly<Record<RunRarityRuleId, { label: string; effect: string }>> = {
+  'price-shifts': {
+    label: 'Priced',
+    effect: 'A card is rare because it is dear, and then a few named exceptions move: a card of nothing but minor pieces is Rare whatever it costs.',
+  },
+  'material-bands': {
+    label: 'By material',
+    effect: 'Rarity from raw material, the way it worked before. Under the two-by-two market this leaves six Common cards for sixteen pile seats, so a Sectio row will deal the same card twice.',
+  },
+};
+
 export function RunRulesSelector({
   value,
   onChange,
@@ -85,6 +101,15 @@ export function RunRulesSelector({
   }));
 
   const rotationKey = value.mayRotate ? 'on' : 'off';
+
+  const rarityOptions: readonly HouseSelectOption[] = RUN_RARITY_RULE_IDS.map((key) => ({
+    value: key,
+    label: (
+      <span className="run-rules-option-copy">
+        <span>{RARITY_COPY[key].label}</span>
+      </span>
+    ),
+  }));
 
   // Default first, as the span and facing lists above are ordered.
   const pricingOptions: readonly HouseSelectOption[] = (['density', 'material'] as const).map((key) => ({
@@ -143,6 +168,18 @@ export function RunRulesSelector({
         fillSurface={fillSurface}
       />
       <p className="run-rules-effect">{PRICING_COPY[value.pricing].effect}</p>
+
+      <h4>Rarity</h4>
+      <HouseSelect
+        value={value.rarity}
+        options={rarityOptions}
+        onChange={(next) => onChange({ ...value, rarity: next as RunRarityRuleId })}
+        ariaLabel="Card rarity"
+        className="run-rules-select"
+        testId="run-rules-rarity"
+        fillSurface={fillSurface}
+      />
+      <p className="run-rules-effect">{RARITY_COPY[value.rarity].effect}</p>
     </SectionBox>
   );
 }
