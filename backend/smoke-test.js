@@ -6538,6 +6538,10 @@ async function main() {
     ...activeRunDocument,
     phase: 'deployment',
     sectio: null,
+    // Leaving the Sectio for the next Battle retires that Battle's report along with the Sectio
+    // it was reachable from (ADR-0567) -- so a Deployment derived from this fixture drops both,
+    // exactly as leaveSectio does.
+    aftermath: null,
     deployment: {
       battleIndex: 0,
       seed: 1709,
