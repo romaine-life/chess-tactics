@@ -56,8 +56,12 @@ CROWN = [(0.00000, "#2a0709"), (0.03628, "#5a1013"), (0.07803, "#8a1c1c"), (0.17
 # in the wall and not a jewel sitting on top of it.
 GATE = [(0.03323, "#1a1206"), (0.07254, "#33240f"), (0.12637, "#4d3a1c"), (0.38992, "#6b5330"), (0.87009, "#8a6f45")]
 
-# A tiara is gilt, so it does start from the crown's warm end, without the cushion red.
-TIARA = [(0.00000, "#241a06"), (0.05139, "#463410"), (0.10824, "#6b5219"), (0.13614, "#9c7a2b"), (0.25274, "#d8b45c")]
+# Crystal, not gilt. The material is called "tiara gold" and its base colour is
+# #e7e7e7 -- near white, metallic 0. Building the ramp off the NAME produced a gold
+# tiara on a piece whose art has no gold in it; the colour is what to read. Cool
+# near-white with grey-blue shadow, so it separates from navy stone by being colder and
+# lighter rather than by hue.
+TIARA = [(0.00000, "#2b333d"), (0.05139, "#4d5966"), (0.10824, "#7d8b98"), (0.13614, "#b3c0cb"), (0.25274, "#eef3f8")]
 
 ACCENT_RAMPS = {"CROWN": CROWN, "GATE": GATE, "TIARA": TIARA}
 
