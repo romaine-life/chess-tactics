@@ -4,9 +4,11 @@ import {
   DEFAULT_POOL_MODEL,
   POOL_GROUPINGS,
   POOL_MODELS,
+  POOL_LIVE_RULES,
   POOL_PIECES,
   POOL_PILE_SLOTS,
   buildPool,
+  poolLiveVerdict,
   groupPool,
   poolPriceSteps,
   poolRotationContract,
@@ -172,6 +174,7 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
   const rotation = useMemo(() => poolRotationContract(knobs), [knobs]);
   const cards = useMemo(() => buildPool(knobs), [knobs]);
   const summary = useMemo(() => summarizePool(cards), [cards]);
+  const verdict = useMemo(() => poolLiveVerdict(cards), [cards]);
 
   const shown = useMemo(() => cards.filter((card) => (
     (bandFilter === 'all' || card.band === bandFilter)
@@ -230,6 +233,12 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
         .rcp-row-label { opacity: 0.85; }
         .rcp-row input[type=number] { width: calc(var(--rcp-fs) * 6); padding: 4px 8px; font: inherit; font-size: var(--rcp-fs); }
         .rcp-check { display: flex; align-items: center; gap: 9px; margin: 8px 0; font-size: var(--rcp-fs); }
+        .rcp-verdict { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 14px; padding: 12px 16px; border: 1px solid #7a3b3b; border-left-width: 5px; background: rgba(122, 59, 59, 0.16); }
+        .rcp-verdict.is-live { border-color: #2f6f4a; border-left-color: #3f9c66; background: rgba(47, 111, 74, 0.16); }
+        .rcp-verdict b { font-size: calc(var(--rcp-fs) * 1.15); letter-spacing: 0.09em; text-transform: uppercase; color: #e6a3a3; }
+        .rcp-verdict.is-live b { color: #8fd9ae; }
+        .rcp-verdict span { font-size: calc(var(--rcp-fs) * 0.92); opacity: 0.86; flex: 1 1 320px; line-height: 1.5; }
+        .rcp-verdict span b { font-size: inherit; letter-spacing: 0; text-transform: none; color: inherit; }
         .rcp-select-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; font-size: var(--rcp-fs); }
         .rcp-select-row select { font: inherit; font-size: var(--rcp-fs); padding: 4px 6px; min-width: 0; flex: 1 1 auto; }
         .rcp-check input { width: calc(var(--rcp-fs) * 1.05); height: calc(var(--rcp-fs) * 1.05); }
@@ -383,6 +392,9 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
               {term.kind === 'blockedPawn' ? (
                 <NumberRow label="penalty" value={term.penalty} onChange={(v) => setTerm(index, { ...term, penalty: v })} step={0.05} />
               ) : null}
+              {term.kind === 'scale' ? (
+                <NumberRow label="by" value={term.by} onChange={(v) => setTerm(index, { ...term, by: v })} step={1} min={0} />
+              ) : null}
               {term.kind === 'round' ? (
                 <NumberRow label="to" value={term.to} onChange={(v) => setTerm(index, { ...term, to: Math.max(0, v) })} step={1} min={0} />
               ) : null}
@@ -466,6 +478,31 @@ rare      everything above`}
       </div>
 
       <div>
+        {/*
+          The verdict leads the page, before a single number, because every number under it means
+          something different depending on this one answer. It is computed against RUN_CARD_DECK
+          card for card — not read off the model's name — so a model cannot call itself the game
+          and be believed, and an edited one stops being the game the moment a knob moves.
+        */}
+        <div className={`rcp-verdict${verdict.is ? ' is-live' : ''}`}>
+          <b>{verdict.is ? 'THIS IS THE GAME' : 'THIS IS A PROPOSAL'}</b>
+          {verdict.is ? (
+            <span>
+              {POOL_LIVE_RULES[verdict.is].label} — {POOL_LIVE_RULES[verdict.is].note}. Every card,
+              tier and price below matches the live catalog exactly.
+            </span>
+          ) : (
+            <span>
+              Not the rules any Run is dealt under. What it costs against
+              {' '}{POOL_LIVE_RULES[verdict.nearest].label}, the nearest live position — different
+              tier: <b>{verdict.diff.differentTier}</b> · priced differently:
+              {' '}<b>{verdict.diff.differentPrice}</b> · not dealt by the game:
+              {' '}<b>{verdict.diff.absentFromGame}</b> · dealt but missing here:
+              {' '}<b>{verdict.diff.missingFromPool}</b>
+            </span>
+          )}
+        </div>
+
         <div className="rcp-active-model">
           <span>Model</span>
           <b>{activeModel?.label ?? 'Custom'}</b>

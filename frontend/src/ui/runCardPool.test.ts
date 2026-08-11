@@ -12,6 +12,7 @@ import {
   countDefences,
   groupPool,
   hasOppositeColourBishopPair,
+  poolLiveVerdict,
   poolPriceSteps,
   poolRotationContract,
   poolShapeSignature,
@@ -42,6 +43,52 @@ describe('runCardPool generation', () => {
     const small = buildPool({ ...DEFAULT_POOL_KNOBS, maxCells: 2 });
     expect(small.filter((card) => card.volume === 1)).toHaveLength(5);
     expect(small.filter((card) => card.volume === 2)).toHaveLength(10);
+  });
+});
+
+describe('runCardPool live verdict', () => {
+  const model = (id: string) => POOL_MODELS.find((candidate) => candidate.id === id)!.knobs;
+
+  it('calls the two live rule sets the game, and names which one', () => {
+    expect(poolLiveVerdict(buildPool(model('shipped-2x2'))).is).toBe('default');
+    expect(poolLiveVerdict(buildPool(model('shipped-4x2'))).is).toBe('legacy');
+  });
+
+  it('calls every proposal a proposal, however it is labelled', () => {
+    for (const candidate of POOL_MODELS) {
+      const live = candidate.id === 'shipped-2x2' || candidate.id === 'shipped-4x2';
+      expect(poolLiveVerdict(buildPool(candidate.knobs)).is === null, candidate.id).toBe(!live);
+    }
+  });
+
+  it('stops calling it the game the moment any one knob moves', () => {
+    // The verdict is the reason to trust the page, so it has to break on the smallest edit — not
+    // on a change big enough that the reader would have noticed anyway.
+    const live = model('shipped-2x2');
+    const nudged: Partial<PoolKnobs>[] = [
+      { bandRule: 'price' },
+      { overCapNamedCards: 'queen-pawn' },
+      { maxCells: 3 },
+      { collapseRotation: false },
+      { pieceValue: { ...live.pieceValue, B: 4 } },
+      { terms: [{ kind: 'density', power: 0.5, scale: 10 }, { kind: 'round', to: 5 }] },
+    ];
+    for (const edit of nudged) {
+      const verdict = poolLiveVerdict(buildPool({ ...live, ...edit }));
+      expect(verdict.is, JSON.stringify(edit)).toBeNull();
+      expect(verdict.diff.total, JSON.stringify(edit)).toBeGreaterThan(0);
+    }
+  });
+
+  it('says what a proposal costs against the nearest live position, rather than only that it differs', () => {
+    const priced = poolLiveVerdict(buildPool({ ...model('shipped-2x2'), bandRule: 'price', commonMaxCost: 70, uncommonMaxCost: 100 }));
+    expect(priced.nearest).toBe('default');
+    // Same cards at the same prices — the tiers are the entire disagreement, which is the whole
+    // argument for moving rarity off the material band.
+    expect(priced.diff.absentFromGame).toBe(0);
+    expect(priced.diff.missingFromPool).toBe(0);
+    expect(priced.diff.differentPrice).toBe(0);
+    expect(priced.diff.differentTier).toBeGreaterThan(0);
   });
 });
 

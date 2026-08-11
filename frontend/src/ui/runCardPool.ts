@@ -16,7 +16,18 @@
  * calling the game's own function cannot.
  */
 
-import { runCardRarity, type AdlectablePieceType, type RunCardFormationCell } from '../run/model';
+import {
+  DEFAULT_RUN_RULES,
+  LEGACY_RUN_RULES,
+  RUN_CARD_DECK,
+  cardAllowedByRules,
+  runCardCost,
+  runCardRarity,
+  type AdlectablePieceType,
+  type RunCardFormationCell,
+  type RunCoreCard,
+  type RunRules,
+} from '../run/model';
 
 export type PoolPiece = 'P' | 'N' | 'B' | 'R' | 'Q';
 
@@ -24,6 +35,14 @@ export type PoolPiece = 'P' | 'N' | 'B' | 'R' | 'Q';
 const POOL_PIECE_TO_GAME: Readonly<Record<PoolPiece, AdlectablePieceType>> = {
   P: 'pawn', N: 'knight', B: 'bishop', R: 'rook', Q: 'queen',
 };
+
+const GAME_PIECE_TO_POOL: Readonly<Record<AdlectablePieceType, PoolPiece>> = {
+  pawn: 'P', knight: 'N', bishop: 'B', rook: 'R', queen: 'Q',
+};
+
+/** `runCardCost` answers in whole points and the card face prints ten times it (ADR-0547), which is
+ * the scale every price on this page is written at. */
+const GOLD_PER_POINT = 10;
 
 export const POOL_PIECES: readonly PoolPiece[] = ['P', 'N', 'B', 'R', 'Q'];
 
@@ -48,6 +67,9 @@ export type PoolTerm =
   | Readonly<{ kind: 'defences'; bonus: number; countPawnSupport: boolean }>
   /** x (1 - blocked x penalty). A Pawn directly behind a friendly piece can never advance. */
   | Readonly<{ kind: 'blockedPawn'; penalty: number }>
+  /** x `by`, weighting nothing. Material pricing is this and only this: the flat conversion from
+   * points to the gold a card face prints, with no term deciding what the material is worth. */
+  | Readonly<{ kind: 'scale'; by: number }>
   /** Round to the nearest `to`. Normally last. */
   | Readonly<{ kind: 'round'; to: number }>;
 
@@ -195,7 +217,7 @@ function rotate(cells: readonly PoolCell[], turns: number): PoolCell[] {
  * assignment rides with the cell — which is why `NP` and `PN` are the same offer today. With it
  * off, every orientation and every seating is its own card, and front/back becomes a purchase.
  */
-function cardIdentity(
+export function cardIdentity(
   cells: readonly PoolCell[],
   pieces: readonly PoolPiece[],
   collapseRotation: boolean,
@@ -419,6 +441,7 @@ export function poolTermFormula(term: PoolTerm): string {
     return `x (1 + defences x ${term.bonus})${term.countPawnSupport ? '' : ', Pawn shelter not counted'}`;
   }
   if (term.kind === 'blockedPawn') return `x (1 - blocked Pawns x ${term.penalty})`;
+  if (term.kind === 'scale') return `x ${term.by}, weighting nothing`;
   return `rounded to the nearest ${term.to}`;
 }
 
@@ -427,6 +450,7 @@ export function poolTermLabel(term: PoolTerm): string {
   if (term.kind === 'bishopPair') return 'Bishop pair';
   if (term.kind === 'defences') return 'Defences';
   if (term.kind === 'blockedPawn') return 'Blocked pawns';
+  if (term.kind === 'scale') return 'Flat scale';
   return 'Rounding';
 }
 
@@ -467,6 +491,9 @@ function runTerms(
         cost = before * (1 - blockedPawns * term.penalty);
         worked = `x (1 - ${blockedPawns} x ${term.penalty})`;
       }
+    } else if (term.kind === 'scale') {
+      cost = before * term.by;
+      worked = `x ${term.by}`;
     } else {
       cost = roundTo(before, term.to);
       worked = `-> ${cost}`;
@@ -571,6 +598,98 @@ function completesOverCapPair(
   const pair = `${seated}${piece}`;
   if (pair === 'QP' || pair === 'PQ') return true;
   return knobs.overCapNamedCards === 'live-catalog' && pair === 'RR';
+}
+
+/**
+ * IS WHAT IS ON SCREEN THE GAME?
+ *
+ * The one question this page has to answer before any other, and the one it could not answer for
+ * most of its life: it drew thirteen positions that all looked equally authoritative, and the reader
+ * had no way to tell a proposal from the rules a Run is actually dealt under. A model LABELLED
+ * `Shipped rule` is not an answer — a label is a claim, and this page's claims had already been
+ * wrong. So the verdict is COMPUTED, card for card, against `RUN_CARD_DECK` itself.
+ *
+ * There are exactly two live positions, because `RunRules` has exactly two instances a Run can be
+ * created under. Everything else on the dropdown is a proposal, however plausibly it is named.
+ */
+export type PoolLiveRules = 'default' | 'legacy';
+
+export const POOL_LIVE_RULES: Readonly<Record<PoolLiveRules, Readonly<{
+  label: string; rules: RunRules; note: string;
+}>>> = Object.freeze({
+  default: Object.freeze({
+    label: 'DEFAULT_RUN_RULES',
+    rules: DEFAULT_RUN_RULES,
+    note: 'what every new Run is created under',
+  }),
+  legacy: Object.freeze({
+    label: 'LEGACY_RUN_RULES',
+    rules: LEGACY_RUN_RULES,
+    note: 'what a Run written before rules existed is still playing',
+  }),
+});
+
+export type PoolLiveDiff = Readonly<{
+  /** Cards here that the game does not deal under these rules. */
+  absentFromGame: number;
+  /** Cards the game deals under these rules that are not here. */
+  missingFromPool: number;
+  /** Shared cards this model puts in a different tier than the game does. */
+  differentTier: number;
+  /** Shared cards this model prices differently than the game does. */
+  differentPrice: number;
+  total: number;
+}>;
+
+export type PoolLiveVerdict = Readonly<{
+  /** The live rule set this pool IS, verified card for card. Null makes it a proposal. */
+  is: PoolLiveRules | null;
+  /** The live rule set it is closest to — what a proposal is a proposal AGAINST. */
+  nearest: PoolLiveRules;
+  diff: PoolLiveDiff;
+}>;
+
+/** One rotation-canonical key, computed the same way for a pool card and a catalog card, so the
+ * two can be compared as sets of cards rather than as counts that happen to agree. */
+function liveCardKey(card: RunCoreCard): string {
+  const letters = card.pieces.map((piece) => GAME_PIECE_TO_POOL[piece]);
+  return cardIdentity(card.formation ?? [], letters, true);
+}
+
+function diffAgainst(cards: readonly PoolCard[], which: PoolLiveRules): PoolLiveDiff {
+  const { rules } = POOL_LIVE_RULES[which];
+  const live = new Map(RUN_CARD_DECK
+    .filter((card) => cardAllowedByRules(card, rules))
+    .map((card) => [liveCardKey(card), card]));
+  let absentFromGame = 0;
+  let differentTier = 0;
+  let differentPrice = 0;
+  const seen = new Set<string>();
+  for (const card of cards) {
+    const key = cardIdentity(card.cells, card.pieces, true);
+    // A SECOND card on the same rotational identity is a card the game does not deal, even though
+    // the game deals the first one: turning rotation collapse off sells the vertical domino and the
+    // horizontal one separately, and a comparison blind to that would call it the shipped catalog.
+    const match = seen.has(key) ? undefined : live.get(key);
+    seen.add(key);
+    if (!match) { absentFromGame += 1; continue; }
+    if (match.rarity !== card.band) differentTier += 1;
+    if (runCardCost(match, rules) * GOLD_PER_POINT !== card.cost) differentPrice += 1;
+  }
+  const missingFromPool = [...live.keys()].filter((key) => !seen.has(key)).length;
+  return {
+    absentFromGame,
+    missingFromPool,
+    differentTier,
+    differentPrice,
+    total: absentFromGame + missingFromPool + differentTier + differentPrice,
+  };
+}
+
+export function poolLiveVerdict(cards: readonly PoolCard[]): PoolLiveVerdict {
+  const byRules = (['default', 'legacy'] as const).map((which) => ({ which, diff: diffAgainst(cards, which) }));
+  const nearest = byRules.reduce((best, next) => (next.diff.total < best.diff.total ? next : best));
+  return { is: nearest.diff.total === 0 ? nearest.which : null, nearest: nearest.which, diff: nearest.diff };
 }
 
 export function buildPool(knobs: PoolKnobs): PoolCard[] {
@@ -696,8 +815,8 @@ export const POOL_MODELS: readonly PoolModel[] = Object.freeze([
   },
   {
     id: 'shipped-2x2',
-    label: 'Shipped rule · the 2x2 market',
-    note: 'The game as it stands. DEFAULT_RUN_RULES caps a formation at two cells on its longest side and prices by density, and rarity comes from runCardRarity rather than from price: a material band (Common through 4, Uncommon 5-6, Rare above), the five awkward footprints stepped DOWN one, any Bishop card stepped UP one. Read this before judging any proposal — it is the position a proposal has to beat, and until now the studio could not show it. Common is six identities against sixteen pile seats, which is why a Sectio row repeats itself.',
+    label: 'LIVE · the rules every new Run plays',
+    note: 'Not a proposal. This is DEFAULT_RUN_RULES: formations capped at two cells on the longest side, priced by density, rarity from runCardRarity — a material band (Common through 4, Uncommon 5-6, Rare above) with the five awkward footprints stepped DOWN one and any Bishop card stepped UP one. Every card, tier and price here is checked against RUN_CARD_DECK itself and the banner above says so. Read this before judging any proposal: it is the position a proposal has to beat. Common is six identities against sixteen pile seats, which is why a Sectio row deals the same card twice.',
     knobs: {
       ...DEFAULT_POOL_KNOBS,
       cols: 2,
@@ -709,12 +828,12 @@ export const POOL_MODELS: readonly PoolModel[] = Object.freeze([
   },
   {
     id: 'shipped-4x2',
-    label: 'Shipped rule · full catalog',
-    note: 'The same rarity rule over the whole four-by-two catalog — the market as it stood before the two-by-two default, and the catalog ADR-0523 and ADR-0532 were measured against. Compare its Common tier with the 2x2 model above: the awkward-footprint demotion is what stocks Common, all five of those shapes are three cells long, and a two-by-two rule deletes every one of them. Nothing about rarity changed to cause that; the shape rule moved out from under it.',
+    label: 'LIVE · the rules a pre-rules Run still plays',
+    note: 'Also not a proposal. LEGACY_RUN_RULES is the game a Run created before RunRules existed is still being dealt: the whole four-by-two catalog, priced at flat material, same rarity rule. It is the catalog ADR-0523 and ADR-0532 were measured against. Compare its Common tier with the live 2x2 rules above — 29 identities against 6. Nothing about rarity changed to do that: the awkward-footprint demotion is what stocks Common, all five of those shapes are three cells long, and a two-by-two rule deletes every one of them.',
     knobs: {
       ...DEFAULT_POOL_KNOBS,
       overCapNamedCards: 'live-catalog',
-      terms: SHIPPED_PRICE_TERMS,
+      terms: [{ kind: 'scale', by: 10 }],
       bandRule: 'shipped',
     },
   },
