@@ -4,7 +4,7 @@ date: 2026-08-01
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0302](0302-camera-authoring-is-a-dedicated-level-editor-page.md)"
-  - "[ADR-0573](0573-the-camera-obeys-coverage-and-usefulness-as-two-limits.md)"
+  - "[ADR-0574](0574-a-stated-camera-boundary-governs-how-far-out-the-camera-goes.md)"
 partially_supersedes:
   - "[ADR-0190](0190-accepted-art-zoom-floor-uses-the-full-feasible-pan-region.md)'s no additional level-relative zoom-out restriction clause"
   - "[ADR-0189](0189-board-facing-views-open-on-playable-geometry.md)'s accepted-raster-only zoom/pan safety boundary clause"
@@ -36,7 +36,7 @@ edge reaches the boundary. The former global 55% floor is removed. A 5% technica
 remains only as a defensive numerical limit for exceptionally large authored boxes.
 
 The zoom-out floor and pan clamp above are refined by
-[ADR-0573](0573-the-camera-obeys-coverage-and-usefulness-as-two-limits.md): coverage remains this
+[ADR-0574](0574-a-stated-camera-boundary-governs-how-far-out-the-camera-goes.md): coverage remains this
 hard limit, but it is one of two limits rather than the only one, it is measured on the rectangle
 art is visible in rather than on the board's measured stage, and an unauthored level resolves its
 boundary from what it actually paints rather than from the snap default described below.

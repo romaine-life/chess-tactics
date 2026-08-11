@@ -424,7 +424,7 @@ export function minimumZoomToCoverViewport({
  * asking it as well stopped a boundary-governed camera short of the boundary the Level
  * Editor draws — 81% of it where coverage alone reaches 89%. Two limits measured against
  * two different boxes is not a safety margin, it is the editor and the game disagreeing
- * again, which is the whole defect (ADR-0573).
+ * again, which is the whole defect (ADR-0574).
  *
  * `containBox` is the level's own extent, and it answers only the case where there IS no
  * boundary: a viewport-locked backdrop paints wherever the camera goes, so nothing is

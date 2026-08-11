@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { useSkirmish } from '../game/store';
 import { createSkirmishViewStore } from '../game/skirmishView';
-import { hudTabFromRoute, moveNumberLabel, runSkirmishShortcut, SHORTCUT_BINDINGS, skirmishRosterAction, skirmishUnitOwnerLabel } from './SkirmishHud';
+import { hudTabFromRoute, moveNumberLabel, runMoveReviewKey, runSkirmishShortcut, SHORTCUT_BINDINGS, skirmishRosterAction, skirmishUnitOwnerLabel } from './SkirmishHud';
 
 const viewStore = createSkirmishViewStore();
 
@@ -134,6 +134,59 @@ describe('Skirmish HUD event log', () => {
     expect(hudTabFromRoute(null)).toBe('unit');
     expect(hudTabFromRoute('admin')).toBe('unit'); // admin-only, never link-addressable
     expect(hudTabFromRoute('nonsense')).toBe('unit');
+  });
+});
+
+describe('move review keyboard', () => {
+  // Two half-moves recorded, so there is somewhere to step back to.
+  const seeded = () => {
+    const game = useSkirmish.getState().game;
+    useSkirmish.setState({
+      reviewIndex: null,
+      positions: [
+        { ply: 0, snapshot: { pieces: game.pieces, turn: 'player', winner: null } },
+        { ply: 1, snapshot: { pieces: game.pieces, turn: 'enemy', winner: null } },
+        { ply: 2, snapshot: { pieces: game.pieces, turn: 'player', winner: null } },
+      ],
+    });
+  };
+
+  it('walks the score sheet with the arrows every chess site uses', () => {
+    seeded();
+
+    expect(runMoveReviewKey('ArrowLeft')).toBe(true);
+    expect(useSkirmish.getState().reviewIndex).toBe(1);
+    expect(runMoveReviewKey('ArrowLeft')).toBe(true);
+    expect(useSkirmish.getState().reviewIndex).toBe(0);
+    expect(runMoveReviewKey('ArrowRight')).toBe(true);
+    expect(useSkirmish.getState().reviewIndex).toBe(1);
+  });
+
+  it('jumps to the opening and back to the live board', () => {
+    seeded();
+
+    expect(runMoveReviewKey('Home')).toBe(true);
+    expect(useSkirmish.getState().reviewIndex).toBe(0);
+    expect(runMoveReviewKey('End')).toBe(true);
+    expect(useSkirmish.getState().reviewIndex).toBeNull();
+  });
+
+  it('claims Escape only while a review is actually open', () => {
+    seeded();
+
+    // Nothing under review: Escape still means whatever else it means on this screen.
+    expect(runMoveReviewKey('Escape')).toBe(false);
+
+    runMoveReviewKey('ArrowLeft');
+    expect(runMoveReviewKey('Escape')).toBe(true);
+    expect(useSkirmish.getState().reviewIndex).toBeNull();
+  });
+
+  it('leaves keys it does not own to the command card', () => {
+    seeded();
+
+    expect(runMoveReviewKey('q')).toBe(false);
+    expect(useSkirmish.getState().reviewIndex).toBeNull();
   });
 });
 

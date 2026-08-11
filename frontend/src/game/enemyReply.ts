@@ -13,6 +13,7 @@
 import type { GameEvent, GameState, Move } from '../core/types';
 import { applyMove, enemyMove, gameEnv, recordPosition, type MoveEnv } from '../core/rules';
 import { sanForMove } from './sanNotation';
+import { snapshotOf, type PositionSnapshot } from './moveReview';
 import { searchEnemyMove, type EvalWeights } from '../core/ai';
 import { createRng, type Rng } from '../core/rng';
 import type { ObjectiveType, VictoryRules } from '../core/level';
@@ -63,6 +64,13 @@ export interface EnemyReplyResult {
    * returns, and the Event Log's score sheet needs one token per move, not per reply.
    */
   notation: string[];
+  /**
+   * The board after each notated half-move, in the same order — one entry per `notation` row.
+   * Recorded HERE for the same reason the notation is: the intermediate boards of a
+   * multi-move reply exist only inside this loop, and move review has to be able to step
+   * through them one at a time rather than jump the whole reply at once.
+   */
+  snapshots: PositionSnapshot[];
 }
 
 /** Resolve the enemy half-turn(s) until it is the player's move again. Deterministic on
@@ -90,6 +98,7 @@ export function resolveEnemyReply(req: EnemyReplyRequest): EnemyReplyResult {
   let tick = req.tick;
   const events: GameEvent[] = [];
   const notation: string[] = [];
+  const snapshots: PositionSnapshot[] = [];
   while (game.turn === 'enemy' && !game.winner) {
     const move = pick(game, createRng(req.seed + tick), env);
     tick += 1;
@@ -108,7 +117,8 @@ export function resolveEnemyReply(req: EnemyReplyRequest): EnemyReplyResult {
         from: { x: mover.x, y: mover.y },
         move: move.move,
       }));
+      snapshots.push(snapshotOf(game));
     }
   }
-  return { game, tick, events, notation };
+  return { game, tick, events, notation, snapshots };
 }

@@ -49,6 +49,14 @@ const APPROVED_FRAMELESS_SURFACE_RESETS = new Map([
     'border-radius:0',
     'box-shadow:none',
   ])],
+  // A score-sheet row that can be navigated to is the SAME row, made pressable — move review
+  // turns the Event Log's move lines into the way back through the game. These declarations
+  // remove the native button paint so a navigable row and a plain one are pixel-identical;
+  // the log card's own frame remains the complete owned surface.
+  ['src/style.css|.skirmish-log-card li > button.skirmish-log-move', new Set([
+    'background:none',
+    'border:0',
+  ])],
   // The accepted InnerChromeBox wrapper owns the Gold field's complete surface. These
   // declarations remove the native input paint inside that frame; they add no surface.
   ['src/style.css|.admin-gold-input', new Set([

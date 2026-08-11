@@ -24,6 +24,16 @@ import { PIECE_LABEL } from '../core/pieces';
 import { clearPersistedNetIntent, loadPersistedNetIntent, persistNetIntent } from './netIntentPersistence';
 import { adminMoveTargets, killUnitForAdmin } from './adminBattle';
 import { sanForMove } from './sanNotation';
+import {
+  clampReviewIndex,
+  openingPosition,
+  recordPositions,
+  snapshotOf,
+  steppedReviewIndex,
+  truncatePositions,
+  type PositionSnapshot,
+  type RecordedPosition,
+} from './moveReview';
 import type { RunBattleNotice, RunBattleUndoCheckpoint } from '../run/model';
 
 // Seed the shipped-AI-weights cache once so the live enemy AI picks up any weights an
@@ -213,6 +223,17 @@ function envFor(game: GameState): MoveEnv {
 }
 
 /**
+ * What a commit does to a review in progress. Ordinarily nothing: the score sheet grows
+ * underneath the cursor and the player keeps reading where they were. The exception is the
+ * commit that DECIDES the game — a result has to land on the real board rather than under an
+ * older one, so that single moment returns to live. Reviewing the finished game is free from
+ * there, which is when a player most wants it.
+ */
+function reviewAfterCommit(before: GameState, after: GameState, index: number | null): number | null {
+  return after.winner && !before.winner ? null : index;
+}
+
+/**
  * Fire the terrain "footstep" for a piece arriving at (x, y): read the destination
  * tile's material from the indexed terrain and play its one-shot. A no-op when the
  * board has no terrain authored there; `playTerrain` itself stays silent when
@@ -249,10 +270,14 @@ export interface LogEntry {
 export const logNote = (text: string): LogEntry => ({ text });
 
 /**
- * How many Event Log rows are kept. Every move now writes one, so this is also how far
- * back the score sheet reads: 24 rows is roughly a dozen full moves.
+ * How many Event Log rows are kept. Every move writes one, so this is how far back the score
+ * sheet reads — and since move review navigates BY those rows, a row that has fallen off the
+ * end is a move the player can no longer step to. That is why this is a whole game's worth of
+ * rows rather than the dozen full moves it used to hold: the log is the navigation surface, so
+ * truncating it truncates the review. Rows are three small fields, so a full game's worth is
+ * still a trivial fraction of the position history sitting beside it.
  */
-const LOG_LIMIT = 24;
+const LOG_LIMIT = 600;
 
 /** Prepend `entries` (oldest first) onto the newest-first running log. */
 function extendLog(log: readonly LogEntry[], entries: readonly LogEntry[]): LogEntry[] {
@@ -543,6 +568,28 @@ export interface SkirmishState {
   runUndoEnabled: boolean;
   canUndoLastPlayerMove: () => boolean;
   undoLastPlayerMove: () => boolean;
+  /**
+   * Every board this match has stood in, oldest first — the score sheet's positions, one per
+   * half-move plus the opening (see game/moveReview). Read ONLY by move review: no rule, no
+   * search, no move and no persisted position is ever taken from here.
+   */
+  positions: RecordedPosition[];
+  /**
+   * Which recorded position the battlefield is showing, when it is not showing the live one.
+   * `null` — the normal state — means live.
+   *
+   * This is the whole of "you are not on the current move any more". Reviewing is a VIEW, not
+   * a rewind: the turn, the clock, the queued premoves and the enemy's think all carry on
+   * underneath, the board is read-only while it shows an older position, and returning to
+   * live hands back exactly the board that was there. Nothing else in the store reads it.
+   */
+  reviewIndex: number | null;
+  /** Show a recorded position; `null` returns to the live board. Out-of-range is clamped, and
+   *  asking for the newest recorded position returns to live rather than freezing on a
+   *  duplicate of it. */
+  reviewPosition: (index: number | null) => void;
+  /** Walk the score sheet by whole half-moves: -1 is a move back, +1 a move forward. */
+  stepReview: (delta: number) => void;
   armAdminMode: (mode: AdminBattleMode) => boolean;
   clearAdminMode: () => void;
   adminKillUnit: (pieceId: string) => boolean;
@@ -780,6 +827,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       premoveInputOpen: false,
       testMode: false,
       testMinCpuDelayMs: 0,
+      reviewIndex: null,
       log: extendLog(cur.log, [logNote('Defeat — your clock ran out.')]),
     });
     persistMatch(get()); // game decided → drops the saved copy
@@ -928,6 +976,12 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
           // instead of arbitrarily selecting the first remaining unit.
           const keep = livingSelected(game, live.selectedId, 'player');
           const openPremoveInput = !game.winner && game.turn === 'player';
+          // One recorded board per notated half-move of the reply, so a reply that resolved
+          // several enemy moves reads back one move at a time. The worker's intermediate
+          // boards are the raw ones; the LAST is replaced by the settled, Run-transformed
+          // position, which is the board the player is actually left facing.
+          const replySnapshots = enemyRes.snapshots.filter((_, i) => enemyRes.notation[i] !== '');
+          if (replySnapshots.length) replySnapshots[replySnapshots.length - 1] = snapshotOf(game);
           set({
             game,
             env: envFor(game),
@@ -937,6 +991,8 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
             selectedId: keep,
             focusedId: keep,
             log: extendLog(live.log, msgs),
+            positions: recordPositions(live.positions, replySnapshots),
+            reviewIndex: reviewAfterCommit(cur.game, game, live.reviewIndex),
             goldNotices: [...live.goldNotices, ...goldNotices],
             premoveInputOpen: openPremoveInput,
           });
@@ -1128,6 +1184,11 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       undoStack,
       ...interaction,
       log: extendLog(s.log, msgs),
+      // One half-move played, one board recorded. A move made while the player is reading an
+      // older position still records here and still leaves the cursor where it was — the score
+      // sheet grows underneath the review rather than yanking it forward.
+      positions: recordPositions(s.positions, san ? [snapshotOf(game)] : []),
+      reviewIndex: reviewAfterCommit(s.game, game, s.reviewIndex),
       goldNotices: [...s.goldNotices, ...goldNotices],
     });
     soundGoldNotices(goldNotices);
@@ -1258,6 +1319,10 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       premoves: game.winner ? [] : s.premoves,
       premoveInputOpen: returnedToLocal,
       log: extendLog(s.log, msgs),
+      // Both seats record the same board off the same relayed move, so both score sheets
+      // review identically. Reviewing is local: it relays nothing and sends nothing.
+      positions: recordPositions(s.positions, san ? [snapshotOf(game)] : []),
+      reviewIndex: reviewAfterCommit(s.game, game, s.reviewIndex),
       net: {
         ...s.net,
         moveCount: s.net.moveCount + 1,
@@ -1323,6 +1388,10 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       pendingPromotion: null,
       adminMode: null,
       undoStack: [],
+      // An admin position change is not a move and records no board, so it leaves the score
+      // sheet saying something the battlefield no longer does. Return to live rather than keep
+      // showing a history that has quietly stopped describing this game.
+      reviewIndex: null,
       premoves: [],
       premoveInputOpen: false,
       sessionEpoch: epoch,
@@ -1362,6 +1431,8 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
   adminMode: null,
   undoStack: [],
   runUndoEnabled: false,
+  positions: [openingPosition(INITIAL_GAME)],
+  reviewIndex: null,
   sessionEpoch: 0,
   boardViewEpoch: 0,
   net: null,
@@ -1437,6 +1508,8 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       pendingPromotion: null,
       adminMode: null,
       undoStack: [],
+      positions: [openingPosition(game)],
+      reviewIndex: null,
       sessionEpoch: epoch,
       boardViewEpoch: opts.preserveBoardPresentation ? get().boardViewEpoch : epoch,
       net: null,
@@ -1530,6 +1603,8 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       pendingPromotion: null,
       adminMode: null,
       undoStack: [],
+      positions: [openingPosition(game)],
+      reviewIndex: null,
       sessionEpoch: epoch,
       boardViewEpoch: epoch,
       premoves: [],
@@ -1653,6 +1728,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       clock: s.clock ? { ...s.clock, running: false } : null,
       testMode: false,
       testMinCpuDelayMs: 0,
+      reviewIndex: null,
       log: extendLog(s.log, [logNote('Defeat — you resigned.')]),
     });
     persistMatch(get()); // game decided → drops the saved copy
@@ -1679,6 +1755,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       pendingPromotion: null,
       adminMode: null,
       resultDetail: reason === 'resign' ? null : s.resultDetail,
+      reviewIndex: null,
       undoStack: [],
       premoves: [],
       premoveInputOpen: false,
@@ -1717,9 +1794,27 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       adminMode: null,
       undoStack: [],
       runUndoEnabled: false,
+      reviewIndex: null,
       premoves: [],
       premoveInputOpen: false,
     });
+  },
+
+  // Move review. Both actions touch `reviewIndex` and NOTHING else: no rule runs, no clock
+  // moves, no premove is dropped, and the live `game` is not read or written. That is the whole
+  // guarantee that looking back cannot cost the player the game they are still playing.
+  reviewPosition: (index) => {
+    const s = get();
+    const next = clampReviewIndex(s.positions, index);
+    if (next === s.reviewIndex) return;
+    set({ reviewIndex: next });
+  },
+
+  stepReview: (delta) => {
+    const s = get();
+    const next = steppedReviewIndex(s.positions, s.reviewIndex, delta);
+    if (next === s.reviewIndex) return;
+    set({ reviewIndex: next });
   },
 
   canUndoLastPlayerMove: () => {
@@ -1773,6 +1868,12 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
         ...older,
         run: adapter.chargeEarlier(older.run),
       })),
+      // An Undo really did take the move back, so the score sheet loses it too — unlike a
+      // review, which takes nothing back and leaves this alone. The restored log names the
+      // half-move count to keep, and the cursor returns to live rather than pointing into
+      // plies that no longer happened.
+      positions: truncatePositions(s.positions, nextPly(checkpoint.log)),
+      reviewIndex: null,
       sessionEpoch: epoch,
     });
     startClock();
@@ -1821,6 +1922,13 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       pendingPromotion: null,
       adminMode: null,
       undoStack: match.undoStack ?? [],
+      // A save written before review existed carries no positions. It resumes with the board
+      // it actually holds, recorded at the half-move count its own log names, so the score
+      // sheet still says where the game is — it simply has nothing earlier to step back to.
+      positions: match.positions?.length
+        ? match.positions
+        : [{ ply: nextPly(match.log), snapshot: snapshotOf(game) }],
+      reviewIndex: null,
       sessionEpoch: epoch,
       boardViewEpoch: epoch,
       // Resume with the clock paused; startClock re-arms the deadline from the
@@ -1972,6 +2080,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       undoStack: [],
       sessionEpoch: epoch,
       clock: s.clock ? { ...s.clock, running: false } : null,
+      reviewIndex: null,
       log: extendLog(s.log, [logNote('Admin awarded victory to the player.')]),
     });
     persistMatch(get());

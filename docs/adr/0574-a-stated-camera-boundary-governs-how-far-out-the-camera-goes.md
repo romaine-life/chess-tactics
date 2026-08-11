@@ -9,7 +9,7 @@ refines:
   - "[ADR-0302](0302-camera-authoring-is-a-dedicated-level-editor-page.md)"
 ---
 
-# ADR-0573: A stated camera boundary governs how far out the camera goes
+# ADR-0574: A stated camera boundary governs how far out the camera goes
 
 ## Context
 
