@@ -134,14 +134,19 @@ function ContinuePanel({ inventory }: { inventory: ContinueInventory }): ReactEl
   return (
     <ActionColumn>
       <div className="settings-panel-content continue-selector-panel">
-        <section className="settings-section">
-          <h3 className="settings-section-title">Continue</h3>
+        {/* No eyebrow over the one group in the column, and none over the card either: an
+            eyebrow distinguishes a group from the ones beside it, and this column holds exactly
+            one (ADR-0556). It also ran a hairline rule straight across the live vista. The card
+            names the activity and its verb says Continue; the section keeps the landmark. */}
+        <section className="settings-section" aria-label="Continue">
           {selected ? (
             <div className="continue-resume" data-testid="continue-detail" aria-label={selected.title}>
-              <div className="ce-selected-head"><h2>{selected.title}</h2></div>
               {/* The same one-field card Run's detail uses: facts and the verb that completes them
-                  inside one structural stone region, with the oak plaque as its only leaf. */}
+                  inside one structural stone region, with the oak plaque as its only leaf. Which
+                  activity is being resumed is the one fact the rows do not carry, so the name goes
+                  INSIDE the field as its first line — it never stands outside on the vista. */}
               <InnerChromeBox className="play-detail-card" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
+                <div className="ce-selected-head"><h2>{selected.title}</h2></div>
                 <div className="play-detail-facts">
                   <dl>
                     {selected.facts.map((fact) => (
@@ -366,7 +371,9 @@ function RunPanel({
             question (ADR-0557). */}
         {choice === 'current' && presentation.adoptionConflict ? (
           <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Two active Runs" data-testid="run-detail-current">
-            <div className="ce-selected-head"><h2>Two active Runs</h2></div>
+            {/* No heading. "Two active Runs" only renamed the sentence directly under it, which
+                already states both Runs and the question — so it was a line of text standing on
+                the live vista for nothing. The aside's label keeps the name as a landmark. */}
             <div className="play-detail-body">
               <InnerChromeBox className="play-detail-card" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
                 <div className="run-adoption-conflict" data-testid="run-adoption-conflict">

@@ -28213,6 +28213,12 @@ button.run-card-formation-cell {
   padding: 0;
 }
 
+/* A title that earns its place lives INSIDE the card, so it drops the horizontal inset it
+   carried as a free-standing head and starts on the same line as the rows beneath it. */
+.play-detail-card > .ce-selected-head {
+  padding-inline: 0;
+}
+
 .play-detail-facts dl {
   display: grid;
   gap: var(--ds-inline-tight);

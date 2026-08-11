@@ -96,6 +96,10 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // Any other Continue address is stale by construction and canonicalizes onto the one.
     expect(playMenu).toContain('if (path !== canonicalHref) navigateApp(canonicalHref, { replace: true, scroll: false });');
     // An empty Continue says so once instead of listing modes.
+    // And no eyebrow over the column's one group — it named the column after the only thing in it
+    // and drew a hairline across the live vista to do it (ADR-0556). The section keeps the label.
+    expect(playMenu).not.toContain('<h3 className="settings-section-title">Continue</h3>');
+    expect(playMenu).toContain('<section className="settings-section" aria-label="Continue">');
     expect(playMenu).toContain('data-testid="continue-empty"');
     expect(playMenu).toContain('<h4>Nothing to continue</h4>');
   });
@@ -122,6 +126,11 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).not.toMatch(/<InnerChromeBox className="play-detail-facts"/);
     expect(playMenu).toMatch(/className="play-detail-card"[\s\S]*?to="\/run"><span>Play<\/span><\/ChromeNavButton>[\s\S]*?<\/InnerChromeBox>/);
     expect(playMenu).not.toMatch(/<div className="ce-selected-head"><h2>Current Run<\/h2><\/div>/);
+    // Nothing at all stands outside a card in these columns: a title either says something the
+    // rows do not — and then it goes INSIDE the field — or it is discarded. No head is left
+    // sitting on the live vista above a box.
+    expect(playMenu).not.toMatch(/<div className="ce-selected-head"><h2>Two active Runs<\/h2><\/div>/);
+    expect(playMenu).toMatch(/className="play-detail-card"[\s\S]*?<div className="ce-selected-head"><h2>\{selected\.title\}<\/h2><\/div>[\s\S]*?<\/InnerChromeBox>/);
     expect(style).toContain('.play-detail-card {');
     expect(style).not.toMatch(/\.play-detail-facts \{\s*padding:/);
     expect(playMenu).not.toContain('run-current-summary');
