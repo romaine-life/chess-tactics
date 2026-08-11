@@ -67,8 +67,11 @@ export function MoveReviewControls({
     phase: number,
   ): ReactElement => (
     <ChromeButton
-      unit="inner-text-button"
-      className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'move-review-key')}
+      // A transport key carries a mark and no words, so it is the registered SQUARE — the
+      // same locked-square unit the editor's icon-only actions take — not a text button
+      // stretched to whatever room its row had.
+      unit="inner-tool-square"
+      className={chromeUnitClassNames('inner-tool-square', 'move-review-key')}
       // A transport key ENDS the interaction tree, so it takes the leaf oak, phased by its
       // place in the row so four identical keys are cut from one plank run (ADR-0433).
       data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}

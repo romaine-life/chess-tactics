@@ -9505,10 +9505,10 @@ body.loading-bootstrap .app-startup-status {
   min-width: 0;
 }
 
-/* In the Controls column the four keys share the panel's width on their own line, with the
-   move name (and the way back to live) under them. A key row wide enough to press and a
-   move name long enough to read do not both fit that column on one line, and the name is
-   the half that must never be the one clipped — it is what says WHICH move is on screen. */
+/* In the Controls column the keys take their own line with the move name (and the way back
+   to live) under them. A row of four keys and a move name long enough to read do not both
+   fit that column, and the name is the half that must never be the one clipped — it is what
+   says WHICH move is on screen. */
 .move-review-controls.is-panel {
   display: grid;
   gap: var(--ds-space-1, 6px);
@@ -9517,14 +9517,15 @@ body.loading-bootstrap .app-startup-status {
 }
 
 .move-review-controls.is-panel .move-review-keys {
-  display: grid;
   grid-column: 1 / -1;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+/* The unit locks the square; this only centres the mark in it. A square that leaves its
+   glyph to default block layout hangs it on a text baseline (ADR-0571). */
 .move-review-key {
-  min-inline-size: 0;
-  padding-inline: 0;
+  align-items: center;
+  display: flex;
+  justify-content: center;
 }
 
 .move-review-glyph {
