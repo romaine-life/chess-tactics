@@ -6541,6 +6541,26 @@ body.loading-bootstrap .app-startup-status {
   display: flex;
   min-width: 0;
 }
+/* A picker SEATED in a cell of a divided box: the cell's edges are the box's rails, so it takes no
+   frame of its own and fills the whole area between them. It names no registered unit — the
+   `inner-dropdown` unit IS the 9-slice frame — and paints nothing but the wood its host names, so
+   the declarations here are geometry only. See HouseSelect's `seated`. */
+.house-select-seated {
+  block-size: 100%;
+  gap: var(--ds-inline);
+  inline-size: 100%;
+  min-block-size: var(--run-prep-plate-h, 30px);
+  padding: 0 var(--ds-inset);
+}
+.house-select-seated-label {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.house-select-seated > .stepper-glyph {
+  flex: 0 0 auto;
+}
 .house-select-trigger:disabled {
   cursor: default;
   opacity: .55;
@@ -25805,7 +25825,14 @@ button.tileset-relationship-cell {
 }
 /* A disclosure control says which way its content is about to move: down while closed (it
    opens below the control), up while open (it folds back up). Same shared mark turned a
-   quarter, mirrored the way -right already is -- never a second chevron implementation. */
+   quarter, mirrored the way -right already is -- never a second chevron implementation.
+
+   These are NOT re-centred, and that was checked rather than assumed: captured at 8x on the live
+   route and the ink's bounding box read off the pixels, a turned chevron lands 1.5 device pixels
+   (0.19 CSS px) off the centre of its glyph box — below what the rasterizer can place at 1x, and
+   not worth a magic number. When a turned chevron LOOKS off-centre, it is its host that is not
+   centring the glyph: `.stepper-glyph` is an inline-block, so a host that leaves it on the text
+   baseline hangs it high. See `.run-rules-toggle`, where that was 2.5px. */
 .stepper-chevron-down {
   transform: rotate(-90deg);
 }
@@ -28237,8 +28264,8 @@ button.run-card-formation-cell {
   display: grid;
 }
 
-.run-rules-selector h4,
-.run-rules-selector p {
+.run-rules-cell h4,
+.run-rules-cell p {
   margin: 0;
 }
 
@@ -28387,12 +28414,142 @@ button.run-card-formation-cell {
   text-align: end;
 }
 
-/* Replacement disclosure seated above Start Run — the popup-free abandon confirm.
-   Sits between the detail body and the actions row, so the column's own gap spaces it. */
-.run-replace-note {
+/* ── Start New Run is ONE box ─────────────────────────────────────────────────────────────────
+   Ataraxia, the replacement warning, the verb and Options were four separate slabs with the live
+   vista showing through the gaps, which drew one control as four unrelated things. They are cells
+   of a single box now and the gaps are that box's own rails — laid and capped by its topology, so
+   nothing here draws a rule. See the mount in PlayMenu. */
+.run-prep-box {
+  /* The plate a CELL paints when it is the control. A framed button is a 38px box whose 9-slice
+     eats a rail's width a side, so about 24px of it is oak; a cell has no frame — the box's rails
+     are its edges — so at 38px it would paint the whole 38 and read half again as heavy as every
+     framed control on the screen. Stated here because `--le-inner-square` and its siblings are
+     scoped to the Level Editor screen and do not reach the menu shell's columns. */
+  --run-prep-plate-h: 30px;
+  /* ONE WOOD height through the whole box. The square key that opens Options is the only FRAMED
+     control here, and a frame is measured in what it eats: at a 30px box its 9-slice rails take 7px
+     a side and leave 16px of oak, against the 30px a frameless plate paints — so matching the boxes
+     makes the key read half the size of the bars above it. The key's box is therefore one plate
+     PLUS its own two rails, which is the same trade `.ce-preview-box` records from the other
+     direction (there a frameless cell was shrunk to the oak a framed button paints).
+     Stated on `--le-inner-square` because that is the token the registered unit already reads; it
+     is scoped to the Level Editor's screen and never reached the menu shell, where the unit fell
+     back to 38px. */
+  --le-inner-square: calc(var(--run-prep-plate-h) + 2 * var(--le-chrome-inner-rail-w, 7px));
+  /* ONE seat for every name cell, whether it carries a key or not. Sized to hold the key: a cell
+     that holds nothing but a line of text would otherwise be 18px shorter than the one beside it,
+     and the two titles would sit at different heights in what is meant to be the same treatment. */
+  --run-prep-name-h: calc(var(--run-prep-plate-h) + 2 * var(--ds-inset));
+  /* Sized by what it holds. Stretching it to the column and packing the cells from the top is
+     what leaves a slab of empty marble under the last one. */
+  flex: 0 0 auto;
+  min-inline-size: 0;
+  /* NO padding: a rail has to reach the frame on both sides, and box padding would hold every one
+     of them short of it. Each cell takes the inset instead. */
+  padding: 0;
+}
+
+.run-prep-box > .chrome-divided-grid__rows {
+  display: grid;
+  min-block-size: 0;
+}
+
+/* A cell that CARRIES something — a name, a sentence — takes the inset and wears the box's marble. */
+.run-prep-cell {
+  gap: var(--ds-inline-tight);
   padding: var(--ds-inset);
 }
 
+/* A cell that IS something — a verb, a picker — takes no inset at all: its control fills the whole
+   area between the rails, and the wood reaches them. That is the difference between a control
+   INSERTED into the box and one merely standing inside it. */
+.run-prep-plate {
+  min-block-size: var(--run-prep-plate-h);
+  padding: 0;
+}
+
+.run-prep-name {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: minmax(0, 1fr);
+  justify-content: space-between;
+  min-block-size: var(--run-prep-name-h);
+  /* The inset is measured to the OAK, not to the frame around it. The key's 9-slice rails live
+     inside it, so the key seats itself one rail shallower on every side its frame meets — which is
+     three of them, the fourth being the leading edge where the title's text sits and text has no
+     frame to discount. Its wood then stops exactly as far from this cell's trailing edge as the
+     title's letters start from the leading one, and the seat still comes out at one plate plus the
+     inset: a 44px key with 9px above and below is the same 62px as a line of text with 16px. */
+  padding-block: calc(var(--ds-inset) - var(--le-chrome-inner-rail-w, 7px));
+  padding-inline-end: calc(var(--ds-inset) - var(--le-chrome-inner-rail-w, 7px));
+}
+
+.run-prep-cell-name {
+  font-size: var(--ds-text-md);
+}
+
+/* Armed, the verb splits into two compartments of one row. The row takes no inset — each verb's
+   own padding is its whole cell's — and the line between them is the BOX's column line, so it
+   crosses the row boundaries above and below as capped tees rather than a rule drawn between two
+   buttons with nothing to terminate against. */
+.run-prep-verbs {
+  min-block-size: var(--run-prep-plate-h);
+  padding: 0;
+}
+
+/* The verb IS the cell (section-box-member-verb owns the frameless reset); this sizes the plate and
+   gives its label the same display treatment every other verb cell in the menu shell wears. */
+.run-prep-verb {
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xs);
+  min-block-size: var(--run-prep-plate-h);
+  padding: 0 var(--ds-inset);
+  text-transform: uppercase;
+}
+
+.run-prep-verb:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.run-prep-verb:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: -2px;
+}
+
+/* The disclosure is a registered tool square; this rule only seats it at the end of the name row.
+   It keeps its own frame — it is a control standing ON the marble cell, not filling one.
+   The mark is CENTRED in it rather than sitting on a text baseline: the glyph is an inline-block,
+   so in the square's default block layout it hung 2.5px high of centre. */
+.run-rules-toggle {
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+}
+
+/* Options' cells are there whether the choices are painted or not, so opening the section moves
+   nothing above or below it. `visibility` rather than `hidden`/`display:none` is what reserves the
+   space: the choices stay laid out, so what is held is exactly what they need and cannot drift from
+   a number written here. It also keeps them out of the tab order and the accessibility tree while
+   closed. The RAILS stay drawn either way — they belong to the box, and closed the section shows
+   the compartments its choices are about to fill. */
+.run-rules-cell[data-open="false"] {
+  visibility: hidden;
+}
+
+/* Closed, the section is reserved SPACE rather than compartments, so the box's rails stop at the
+   Options name row: a rail divides two things, and there is nothing down there yet to divide. The
+   boundary the grid lays immediately before each closed cell goes with that cell's paint — matched
+   by adjacency rather than by a class the row carries, so the grid stays the only thing that
+   decides WHERE a rail is and this only says when one is showing. */
+.run-prep-box .chrome-divided-grid__row-boundary:has(+ .run-rules-cell[data-open="false"]) {
+  visibility: hidden;
+}
+
+/* Replacement warning seated above Start Run — the popup-free abandon confirm. */
 .run-replace-note h3 {
   font-size: var(--ds-text-2xs);
   margin: 0 0 var(--ds-inline-tight);
@@ -28844,18 +29001,18 @@ button.run-card-formation-cell {
   text-align: center;
 }
 
-/* Start New Run → one section box per question (SectionBox). Rule options is the one that
-   opens: closed, its name row is the box's entire interior, so pressing anywhere on the slab
-   opens it and the slab itself is what grows.
-   That name row is deliberately NOT a registered unit. A second frame inside this one would draw
-   a control sitting IN the box rather than the box being the control, so it fills the accepted
-   InnerChromeBox, takes that box's whole content padding as its own inset (the pressable area
-   therefore reaches the frame on every side), strips the shell's native button paint, and paints
-   nothing of its own. check-ui-surface-contract.mjs registers exactly that reset. A section
-   without a disclosure renders the same row as a div, which needs the layout and inherits the
-   reset harmlessly. */
-.run-rules-selector h4 {
-  margin-block-start: var(--ds-inline-tight);
+/* A named group of controls elsewhere in the app — Settings groups, the War editor's Battles —
+   is a box whose name row heads it (SectionBox). Where that row is a disclosure it is deliberately
+   NOT a registered unit: a second frame inside this one would draw a control sitting IN the box
+   rather than the box being the control, so it fills the accepted InnerChromeBox, takes that box's
+   whole content padding as its own inset (the pressable area therefore reaches the frame on every
+   side), strips the shell's native button paint, and paints nothing of its own.
+   check-ui-surface-contract.mjs registers exactly that reset. A section without a disclosure
+   renders the same row as a div, which needs the layout and inherits the reset harmlessly.
+   Start New Run is NOT one of these: it is a single box of cells, and the one disclosure in it is
+   a square key rather than a pressable slab — a cell has no frame to be the button. See
+   `.run-prep-box`. */
+.run-rules-cell h4 {
   font-size: var(--ds-text-xs);
   opacity: .78;
 }

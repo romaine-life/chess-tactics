@@ -240,14 +240,13 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
                         ),
                       }] : []),
                       {
-                        // The Ataraxia picker is a member row here, not a box of its own: it is one
-                        // of the War's settings, and its own box inside this one would draw the
-                        // same marble twice.
+                        // The Ataraxia picker is a member row here, so the row supplies the name:
+                        // it is one of the War's settings, and the picker naming itself inside a
+                        // row already titled Ataraxia would state the same word twice.
                         id: 'ataraxia',
                         content: (
                           <EditorRow framed={false} title="Ataraxia" description="The rung this War is played at.">
                             <AtaraxiaSelector
-                              framed={false}
                               value={ataraxiaTier}
                               highestUnlockedTier={highestUnlockedTier}
                               onChange={setAtaraxiaTier}
