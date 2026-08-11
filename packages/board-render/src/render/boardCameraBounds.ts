@@ -191,37 +191,19 @@ export function intersectConvexBoardCameraPolygons(
 }
 
 /**
- * The runtime coverage authority — the region the camera may never leave (ADR-0301).
+ * The region the camera may never leave: the level's box, and nothing else (ADR-0301).
  *
- * An AUTHORED box is a statement of intent and binds: the camera is held inside it, intersected
- * with accepted pixels so a box larger than the painting cannot expose black.
- *
- * With no authored box the answer is the painted extent itself, not the derived default. The
- * default is a snap preset for an author staring at an empty Camera page — it is deliberately
- * tight around the playable surface, and it is usually far SMALLER than what the level already
- * paints. Treating it as the runtime limit throws away real coverage and buys nothing: it does
- * not add a pixel of art, it only forces the camera in until a board that was fully painted no
- * longer fits on screen. What a level has actually painted is the honest promise until an author
- * states a different one.
+ * The box is the whole authority. It is not intersected with the artwork, not stood in for by
+ * the artwork, and not conditional on whether an author has touched it — every level resolves
+ * one, the camera stops at it, and dragging it is how the maximum view changes. Keeping a box
+ * inside its artwork is worth doing and belongs to authoring, as an action that moves the box;
+ * a runtime check that silently overrides it makes the drawn rectangle stop meaning what it
+ * says, which is exactly the confusion this replaces.
  */
 export function effectiveBoardCameraCoverPolygon(
   board: BoardWithCameraBounds,
-  acceptedArtPolygon?: readonly BoardCameraPoint[],
-): BoardCameraPoint[] | undefined {
-  const authored = normalizeBoardCameraBounds(board.cameraBounds, board);
-  if (!acceptedArtPolygon) {
-    // No authored box and no finite painting: this board's backdrop is locked to the
-    // viewport and paints wherever the camera goes, so there is no unpainted world to be
-    // kept out of and nothing for a boundary to protect. Usefulness alone limits it.
-    return authored ? boardCameraBoundsPolygon(authored) : undefined;
-  }
-  if (!authored) return [...acceptedArtPolygon];
-  const intersection = intersectConvexBoardCameraPolygons(
-    boardCameraBoundsPolygon(authored),
-    acceptedArtPolygon,
-  );
-  // Accepted pixels remain the fail-safe if corrupt legacy data produces disjoint boundaries.
-  return intersection.length >= 3 ? intersection : [...acceptedArtPolygon];
+): BoardCameraPoint[] {
+  return boardCameraBoundsPolygon(resolvedBoardCameraBounds(board));
 }
 
 /**

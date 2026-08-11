@@ -415,39 +415,27 @@ export function minimumZoomToCoverViewport({
 }
 
 /**
- * How far out this pane may go: zooming out ends with the WHOLE of the level's box visible,
- * and never further.
+ * How far out this pane may go: zooming out stops where the view reaches the edge of the box.
  *
- * The box is the boundary when a level states one and its own extent otherwise. Which of the
- * two it is changes nothing about the question, because both name the same thing — how much
- * world this level has to show.
- *
- * The camera does NOT have to keep the viewport inside that box, and forcing it to was the
- * mistake. Anything beyond the painting is the screen's own backdrop, so a view wider than
- * the painting shows backdrop, not bare stage. Demanding containment instead cost the entire
- * zoom-out range — measured, zero rungs at almost every window size on both pre-drawn levels
- * — and on a wide-short window it cropped the board outright, because a screen of one aspect
- * cannot fit inside a painting of another without being driven in until it does (ADR-0574).
- *
- * Pan is still held inside the boundary wherever that is feasible; see the pane body. Losing
- * the board off the side of the screen is a different failure from seeing past the painting.
+ * That is the whole rule. There is deliberately no second behaviour, no artwork override and
+ * no condition on how the box came to exist — every level has one, it is the furthest a
+ * player may see, and an author moves it by dragging it. A camera whose limit depends on
+ * which of several rules a level qualifies for cannot be reasoned about from the screen, and
+ * the owner has to reconstruct the implementation to understand a zoom control (ADR-0574).
  */
 export function boardZoomFloor({
   viewport,
-  coverPolygon,
-  containBox,
+  coverPolygon,
   minZoom,
   maxZoom,
 }: {
   viewport: ViewPaneCoverViewport;
-  coverPolygon?: readonly ViewPanePoint[];
-  containBox?: { width: number; height: number };
+  coverPolygon?: readonly ViewPanePoint[];
   minZoom: number;
   maxZoom: number;
 }): number {
-  const box = coverPolygon ? polygonBoundingBox(coverPolygon) : containBox;
-  if (!box) return minZoom;
-  return zoomTierRange({ viewport, levelBox: box, cell: BOARD_CELL_SIZE }).outer;
+  if (!coverPolygon) return minZoom;
+  return minimumZoomToCoverViewport({ viewport, polygon: coverPolygon, minZoom, maxZoom });
 }
 
 export function ViewPane({
@@ -459,8 +447,7 @@ export function ViewPane({
   maxZoom,
   onZoomChange,
   onPanChange,
-  coverPolygon,
-  containBox,
+  coverPolygon,
   onMinimumZoomChange,
   onViewportSizeChange,
   onViewInteraction,
@@ -483,8 +470,7 @@ export function ViewPane({
    * the camera goes, so there is nothing for a boundary to protect.
    */
   coverPolygon?: readonly ViewPanePoint[];
-  /** The level's own extent, so zooming out ends with the whole of it visible. */
-  containBox?: { width: number; height: number };
+  /** The level's own extent, so zooming out ends with the whole of it visible. */
   /** Reports the viewport-derived floor so external steppers clamp identically to the wheel. */
   onMinimumZoomChange?: (zoom: number) => void;
   /** Reports the live drawable viewport used by projection-aware editor actions. */
@@ -569,8 +555,7 @@ export function ViewPane({
       }
       const next = boardZoomFloor({
         viewport: cover,
-        coverPolygon,
-        containBox,
+        coverPolygon,
         minZoom,
         maxZoom: Math.max(maxZoom, COVER_SEARCH_MAX_ZOOM),
       });
@@ -589,7 +574,7 @@ export function ViewPane({
       }
     }
     return () => observer.disconnect();
-  }, [containBox, coverPolygon, maxZoom, minZoom, onViewportSizeChange]);
+  }, [coverPolygon, maxZoom, minZoom, onViewportSizeChange]);
 
   useLayoutEffect(() => {
     if (!coverViewport || !coverPolygon) return;

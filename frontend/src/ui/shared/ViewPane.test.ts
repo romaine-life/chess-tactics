@@ -169,11 +169,23 @@ describe('ViewPane cover zoom floor', () => {
 });
 
 /**
- * The floor obeys two limits at once and they pull opposite ways, so composing them is its
- * own contract rather than a consequence of either half. Every one of these was reachable
- * from a floor that answered only one question.
+ * One rule: the view stops at the box. There is deliberately no second behaviour to compose
+ * with, because a camera limit that changes rule per level cannot be read off the screen.
  */
-describe('board zoom floor composition', () => {
+describe('board zoom floor', () => {
+  it('stops the view at the box, on the tighter axis, one notch at a time', () => {
+    for (const viewport of [{ width: 2400, height: 1100 }, { width: 900, height: 1400 }]) {
+      const floor = boardZoomFloor({ viewport, coverPolygon: rectangle, minZoom: 0.05, maxZoom: 16 });
+      coverTierHolds(viewport, RECTANGLE_BOX, floor);
+    }
+  });
+
+  it('has nothing to say without a box', () => {
+    expect(boardZoomFloor({
+      viewport: { width: 2400, height: 1100 }, minZoom: 0.37, maxZoom: 16,
+    })).toBe(0.37);
+  });
+
   // The regression the owner caught: coverage was enforced on the whole WINDOW, so the camera
   // bought coverage for the strips under the opaque title bar and Controls rail and paid for
   // it out of the pixels a player can see. The rail is on the right, which is where the board
@@ -188,65 +200,4 @@ describe('board zoom floor composition', () => {
     expect(fn.indexOf('data-shell-viewport-primary')).toBeLessThan(fn.indexOf('overflowX'));
   });
 
-  // Zooming out ends with the WHOLE box visible. Requiring the viewport to fit INSIDE it
-  // instead drove the camera in until a screen of one aspect fitted a painting of another —
-  // zero zoom-out range at almost every window size, and a cropped board on a wide-short one.
-  it('ends zoom-out with the whole box visible, not with the viewport inside it', () => {
-    const viewport = { width: 2400, height: 1100 };
-    const floor = boardZoomFloor({
-      viewport, coverPolygon: rectangle, containBox: RECTANGLE_BOX, minZoom: 0.05, maxZoom: 16,
-    });
-    expect(floor).toBe(snapToTier(floor));
-    expect(RECTANGLE_BOX.width * floor).toBeLessThanOrEqual(viewport.width + 1e-9);
-    expect(RECTANGLE_BOX.height * floor).toBeLessThanOrEqual(viewport.height + 1e-9);
-    const closer = floor * ZOOM_TIER_RATIO;
-    expect(
-      RECTANGLE_BOX.width * closer > viewport.width
-      || RECTANGLE_BOX.height * closer > viewport.height,
-    ).toBe(true);
-    // And it is genuinely wider than the containment answer, which is the range that came back.
-    expect(floor).toBeLessThan(minimumZoomToCoverViewport({
-      viewport, polygon: rectangle, minZoom: 0.05, maxZoom: 16,
-    }));
-  });
-
-  it('still stops zooming out when coverage is unconditional and no boundary is stated', () => {
-    const viewport = { width: 2400, height: 1100 };
-    const floor = boardZoomFloor({
-      viewport, coverPolygon: undefined, containBox: RECTANGLE_BOX, minZoom: 0.05, maxZoom: 16,
-    });
-    // A viewport-locked backdrop paints wherever the camera goes, so nothing is uncovered —
-    // but a camera that can retreat forever is still useless, so the level box binds.
-    expect(RECTANGLE_BOX.width * floor).toBeLessThanOrEqual(viewport.width + 1e-9);
-    expect(RECTANGLE_BOX.height * floor).toBeLessThanOrEqual(viewport.height + 1e-9);
-    const closer = floor * ZOOM_TIER_RATIO;
-    expect(
-      RECTANGLE_BOX.width * closer > viewport.width
-      || RECTANGLE_BOX.height * closer > viewport.height,
-    ).toBe(true);
-  });
-
-  // The regression that made a boundary-governed camera stop short of its own boundary:
-  // the level box is the snap default, sized around the playable surface and smaller than
-  // what a level paints, so consulting it as well held the camera in tighter than the
-  // boundary the Level Editor draws. A stated boundary is the answer, not one of two.
-  it('measures the box from a stated boundary, ignoring a level box that disagrees', () => {
-    const viewport = { width: 2000, height: 1214 };
-    // A boundary wider than the level box, exactly as accepted art is wider than the default.
-    const artBoundary = [
-      { x: -725, y: -408 }, { x: 725, y: -408 }, { x: 725, y: 408 }, { x: -725, y: 408 },
-    ];
-    const smallerLevelBox = { width: 1152, height: 648 };
-    const withBox = boardZoomFloor({
-      viewport, coverPolygon: artBoundary, containBox: smallerLevelBox, minZoom: 0.05, maxZoom: 16,
-    });
-    const boundaryOnly = boardZoomFloor({
-      viewport, coverPolygon: artBoundary, minZoom: 0.05, maxZoom: 16,
-    });
-    expect(withBox).toBe(boundaryOnly);
-    // The smaller level box would have answered a tighter zoom; the boundary is what counts.
-    expect(boardZoomFloor({
-      viewport, containBox: smallerLevelBox, minZoom: 0.05, maxZoom: 16,
-    })).toBeGreaterThan(boundaryOnly);
-  });
 });

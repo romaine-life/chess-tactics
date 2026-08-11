@@ -9,7 +9,7 @@ refines:
   - "[ADR-0302](0302-camera-authoring-is-a-dedicated-level-editor-page.md)"
 ---
 
-# ADR-0574: Zoom-out ends with the whole painting visible, on the region a player can see
+# ADR-0574: One box per level is the furthest a player may see
 
 ## Context
 
@@ -130,3 +130,38 @@ painting visible**. At 1920x1080 that is four rungs of range where there were no
 
 Coverage still governs PAN: the viewport is held inside the boundary wherever that is feasible,
 so a player cannot drag the board off the side of the screen.
+
+## Final form — one box, one rule
+
+Everything above records a camera whose limit depended on which case a level fell into: a
+stored box, a stored box intersected with artwork, the artwork alone, or no boundary and a
+usefulness limit instead. Four behaviours, indistinguishable on screen. The owner spent a full
+session unable to answer "why can't I zoom out", because answering it required reconstructing
+which branch his level took — and the rectangle the Level Editor drew was, on every level he
+actually plays, a number recomputed each load rather than a value anyone had set.
+
+**Every level stores one camera box. The view stops at it. That is the whole rule.**
+
+- `effectiveBoardCameraCoverPolygon(board)` returns the level's box and consults nothing else —
+  no artwork intersection, no artwork substitute, no dependence on whether an author has
+  touched it.
+- `boardZoomFloor` has one branch: the furthest-out rung at which the view is still inside the
+  box. The usefulness limit and its `containBox` input are gone.
+- The box is measured against the board's own allocation, `[data-shell-viewport-primary]`, so
+  the camera never buys coverage for the strips under the opaque title bar and Controls rail.
+
+Keeping a box inside its artwork is worth doing and belongs to authoring — an action that moves
+the box, which the owner can press — not a runtime check that silently overrides it. A drawn
+rectangle that does not mean what it says is the defect this ADR exists to end.
+
+**Backfill.** 33 official levels had no stored box; they now carry
+`defaultBoardCameraBounds(cols, rows)`, the same rectangle the editor was already drawing, so
+nothing moved on screen. Four already had one and were left alone. Three carry no board code at
+all and so have nothing to attach a box to: `off-l-pinned`, `off-l-high-ground`,
+`off-l-ten-battle-run-test-battle-i`. Verified after the write: 40 levels before and after,
+none lost or gained, both campaigns intact, and each level's measured zoom floor equals the
+cover tier of its own stored box.
+
+The default box is about ten percent larger than the opening composition while one ladder rung
+is five percent, so most levels open with no zoom-out range. That is now a property of the
+stored value rather than of the code, which is the point: it is a rectangle an author drags.

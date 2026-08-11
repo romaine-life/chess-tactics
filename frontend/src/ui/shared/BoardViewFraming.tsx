@@ -11,7 +11,6 @@ import {
   BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM,
   cameraToContainBounds,
   centeredPlayableBoardFramingBounds,
-  boardCameraContainBox,
   effectiveBoardCameraCoverPolygon,
   isPredrawnBackgroundActive,
   viewportForMaximumOpeningAspect,
@@ -29,19 +28,9 @@ export interface BoardViewCamera {
   pan: { x: number; y: number };
 }
 
-/**
- * Resolve the level camera boundary, intersected with accepted immutable pixels when AI is
- * active. Absent when coverage is unconditional — see `effectiveBoardCameraCoverPolygon`.
- */
-export function boardCameraCoverPolygon(board: EditorBoard): { x: number; y: number }[] | undefined {
-  const acceptedArtPolygon = isPredrawnBackgroundActive(board) && board.surface
-    ? predrawnBoardCoverPolygon(
-        runtimePredrawnBoardPlate(board.surface),
-        Array.from({ length: board.rows }, (_, y) =>
-          Array.from({ length: board.cols }, (__, x) => ({ x, y }))).flat(),
-      )
-    : undefined;
-  return effectiveBoardCameraCoverPolygon(board, acceptedArtPolygon);
+/** The level's camera box: the furthest a view of this board may reach. */
+export function boardCameraCoverPolygon(board: EditorBoard): { x: number; y: number }[] {
+  return effectiveBoardCameraCoverPolygon(board);
 }
 
 /**
@@ -275,10 +264,6 @@ export function FramedReadOnlyBoardView({
     () => boardCameraCoverPolygon(board),
     [board.backgroundMode, board.cameraBounds, board.cols, board.rows, board.surface],
   );
-  const containBox = useMemo(
-    () => boardCameraContainBox(board),
-    [board.cameraBounds, board.cols, board.rows],
-  );
   const { markViewInteraction } = useBoardCameraFraming({
     board,
     viewKey,
@@ -305,7 +290,6 @@ export function FramedReadOnlyBoardView({
       onZoomChange={setZoom}
       onPanChange={setPan}
       coverPolygon={coverPolygon}
-      containBox={containBox}
       onMinimumZoomChange={setMinimumZoom}
       onViewportSizeChange={setViewport}
       onViewInteraction={markViewInteraction}
