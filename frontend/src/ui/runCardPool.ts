@@ -9,11 +9,12 @@
  * on the live catalog and every knob moves away from a known position.
  *
  * RARITY is the exception, and `bandRule: 'shipped'` READS `runCardRarity` instead of restating it.
- * The shipped rule is not a cut on price at all — it is a material band with the five awkward
- * footprints stepped down and any Bishop card stepped up — so the cost thresholds every other model
- * uses cannot express it, and for a long time the studio simply had no way to show the rule the game
- * was running. A second copy of it here would drift from the catalog the first time either moved;
- * calling the game's own function cannot.
+ * The shipped rule is a flat cut on price and then a list of declared SET SHIFTS — moves of a named
+ * set of cards between tiers, which no threshold can express however the threshold is placed. For a
+ * long time this studio therefore had no way to draw the rule the game was running, and a proposal
+ * compared against a baseline that cannot be drawn is compared against nothing. A second copy of the
+ * rule here would drift from the catalog the first time either moved; calling the game's own
+ * function cannot, and the shift audit it exposes is what tells a live shift from a dead one.
  */
 
 import {
@@ -816,7 +817,7 @@ export const POOL_MODELS: readonly PoolModel[] = Object.freeze([
   {
     id: 'shipped-2x2',
     label: 'LIVE · the rules every new Run plays',
-    note: 'Not a proposal. This is DEFAULT_RUN_RULES: formations capped at two cells on the longest side, priced by density, rarity from runCardRarity — a material band (Common through 4, Uncommon 5-6, Rare above) with the five awkward footprints stepped DOWN one and any Bishop card stepped UP one. Every card, tier and price here is checked against RUN_CARD_DECK itself and the banner above says so. Read this before judging any proposal: it is the position a proposal has to beat. Common is six identities against sixteen pile seats, which is why a Sectio row deals the same card twice.',
+    note: 'Not a proposal. This is DEFAULT_RUN_RULES: formations capped at two cells on the longest side, priced by density, rarity from runCardRarity — a flat cut on PRICE (Common through 70 gold, Uncommon through 100, Rare above) and then the shifts it declares, listed in the Rarity panel with what each one actually moved. Every card, tier and price here is checked against RUN_CARD_DECK itself and the banner above says so. Read this before judging any proposal: it is the position a proposal has to beat.',
     knobs: {
       ...DEFAULT_POOL_KNOBS,
       cols: 2,
@@ -829,7 +830,7 @@ export const POOL_MODELS: readonly PoolModel[] = Object.freeze([
   {
     id: 'shipped-4x2',
     label: 'LIVE · the rules a pre-rules Run still plays',
-    note: 'Also not a proposal. LEGACY_RUN_RULES is the game a Run created before RunRules existed is still being dealt: the whole four-by-two catalog, priced at flat material, same rarity rule. It is the catalog ADR-0523 and ADR-0532 were measured against. Compare its Common tier with the live 2x2 rules above — 29 identities against 6. Nothing about rarity changed to do that: the awkward-footprint demotion is what stocks Common, all five of those shapes are three cells long, and a two-by-two rule deletes every one of them.',
+    note: 'Also not a proposal. LEGACY_RUN_RULES is the game a Run created before RunRules existed is still being dealt: the whole four-by-two catalog, priced at flat material, same rarity rule. Its Common tier is enormous — a four-cell card spreads its material thin and prices cheap — which is the cost of cutting the bands on a density price and the next thing worth arguing about.',
     knobs: {
       ...DEFAULT_POOL_KNOBS,
       overCapNamedCards: 'live-catalog',

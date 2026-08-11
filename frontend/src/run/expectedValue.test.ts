@@ -41,8 +41,14 @@ describe('sectio offer expectation', () => {
       .reduce((total, band) => total + band.seats * band.meanValue, 0) / seats;
     expect(uncapped.meanOfferValue).toBeCloseTo(byHand, 12);
     // The pile is 16/3/1 common/uncommon/rare, so the mean sits near the common band.
+    //
+    // That mean is MATERIAL, and it rose when the bands moved from material to price: a card is now
+    // Common because it is cheap, and under density pricing the cheap cards are the ones spreading
+    // their material over four squares. So the Common tier hands out more material per offer than
+    // it did, for the same gold. Growth per Battle is still authored in gold, which is the number
+    // the ceiling below holds down.
     expect(uncapped.meanOfferValue).toBeGreaterThan(2);
-    expect(uncapped.meanOfferValue).toBeLessThan(6);
+    expect(uncapped.meanOfferValue).toBeLessThan(9);
   });
 
   it('is cheaper while the early cost ceiling holds', () => {

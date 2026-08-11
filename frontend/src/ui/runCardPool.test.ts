@@ -114,9 +114,9 @@ describe('runCardPool shipped rule', () => {
     const pool = buildPool(model('shipped-2x2'));
     expect(pool).toHaveLength(market.length);
     expect(summarizePool(pool).byBand).toEqual(liveBands(market));
-    // The starved tier, pinned as a number: six identities against sixteen pile seats is why a
-    // Sectio row deals the same card twice.
-    expect(summarizePool(pool).byBand.common).toBe(6);
+    // The tier that was starved, pinned as a number: 41 identities against 16 pile seats, so the
+    // pile fills them with distinct cards. It read 6 before the bands moved off material.
+    expect(summarizePool(pool).byBand.common).toBe(41);
   });
 
   it('keeps the Rook pair, which exempting the Queen+Pawn alone drops', () => {
@@ -133,13 +133,17 @@ describe('runCardPool shipped rule', () => {
     for (const card of buildPool(model('shipped-2x2'))) expect(card.cost % 10, card.key).toBe(0);
   });
 
-  it('separates cards that price the same, which a cut on price cannot', () => {
+  it('separates cards that price the same, which a cut on price alone cannot', () => {
     const pool = buildPool(model('shipped-2x2'));
-    const pair = (letters: string) => pool.find((card) => card.pieces.join('') === letters);
-    // Identical material and identical price; the Bishop step is the whole difference.
-    expect(pair('BB')?.cost).toBe(pair('NN')?.cost);
-    expect(pair('BB')?.band).toBe('rare');
-    expect(pair('NN')?.band).toBe('uncommon');
+    const card = (letters: string) => pool.find((entry) => entry.pieces.join('') === letters);
+    // 60 gold each, and so is a lone Rook. The minor-cluster shift is what tells them apart, and a
+    // shift is the only way anything can: the price cuts see one number and these three share it.
+    expect(card('BB')?.cost).toBe(60);
+    expect(card('NN')?.cost).toBe(60);
+    expect(card('R')?.cost).toBe(60);
+    expect(card('BB')?.band).toBe('rare');
+    expect(card('NN')?.band).toBe('rare');
+    expect(card('R')?.band).toBe('common');
   });
 });
 

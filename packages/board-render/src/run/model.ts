@@ -1060,10 +1060,16 @@ function cardCompositionArtId(
   return `${cardFootprintId(formation)}-${cardComposition(pieces)}`;
 }
 
-/** The value bands rarity reads before footprint adjusts it. Four is the most material a card
- * can carry and still be the cheap, always-available tier. */
-export const RUN_CARD_COMMON_MAX_VALUE = 4;
-export const RUN_CARD_UNCOMMON_MAX_VALUE = 6;
+/**
+ * The price cuts the tier ladder is drawn on, in the gold a card face prints.
+ *
+ * Rarity used to be drawn on raw MATERIAL, which stopped tracking what a card is worth the moment
+ * pricing began weighting material by how few squares it occupies: a Queen alone and a Queen with a
+ * Pawn carry nine and ten material and cost 160 and 130, and a ladder reading the material called
+ * them the same rung. The cuts are on price for the same reason the price formula exists.
+ */
+export const RUN_CARD_RARITY_COMMON_MAX_GOLD = 70;
+export const RUN_CARD_RARITY_UNCOMMON_MAX_GOLD = 100;
 
 /** Rotation-canonical footprint, blind to which piece sits in which seat. Card identity already
  * collapses quarter turns, so the shapes a rarity rule names have to collapse them too. */
@@ -1090,57 +1096,122 @@ function rotationalFootprintId(formation: readonly RunCardFormationCell[]): stri
     .sort()[0];
 }
 
-/**
- * The five four-cell footprints that waste the deployment band, each written here in the form it
- * takes lying in that band. Every one of them is a bar with the fourth seat pushed off the line,
- * so the shape cannot be tucked against a neighbour the way a square, a straight run, or a corner
- * can. Both Z chiralities are separate card identities, and both are listed.
- */
-const AWKWARD_CARD_FOOTPRINTS: ReadonlySet<string> = new Set(([
-  [[0, 0], [1, 0], [1, 1], [2, 1]], // ##. / .##  Z
-  [[1, 0], [2, 0], [0, 1], [1, 1]], // .## / ##.  S
-  [[0, 0], [1, 0], [2, 0], [1, 1]], // ### / .#.  T
-  [[0, 0], [0, 1], [1, 1], [2, 1]], // #.. / ###  J
-  [[0, 0], [1, 0], [2, 0], [0, 1]], // ### / #..  L
-] as const).map((cells) => rotationalFootprintId(cells.map(([x, y]) => ({ x, y })))));
+/** The card a rarity rule is asked about. Formation, because a shift may read the shape. */
+export type RunCardRarityInput = Readonly<{
+  pieces: readonly AdlectablePieceType[];
+  formation: readonly RunCardFormationCell[];
+}>;
 
-/** One step along the rarity ladder, clamped at both ends. */
-function stepRarity(rarity: RunCardRarity, steps: number): RunCardRarity {
-  const index = RUN_CARD_RARITIES.indexOf(rarity) + steps;
-  return RUN_CARD_RARITIES[Math.max(0, Math.min(RUN_CARD_RARITIES.length - 1, index))];
+/**
+ * ONE DECLARED MOVE OF A SET OF CARDS BETWEEN TIERS.
+ *
+ * A rarity rule is a flat formula plus the exceptions to it, and the exceptions are the part that
+ * carries the design. Written as extra clauses inside the function they become invisible: the rule
+ * this replaces was a material band with two untitled adjustments fused into it, and when the
+ * two-by-two shape rule deleted every card one of them acted on, that adjustment went silently
+ * inert and took the Common tier down from 29 identities to 6 with nothing anywhere saying so.
+ *
+ * So a shift is DATA. It has a name, it says why it exists, and `runRarityShiftAudit` reports how
+ * many cards it actually moved — a shift that moves none is dead, and says so out loud instead of
+ * waiting to be discovered in a Sectio row dealing the same card twice.
+ *
+ * `from` is the difference between the two things you can say. Naming it is a MOVE: these cards
+ * come out of that tier, and if they are not in it the shift declines and the audit counts the
+ * skip. Omitting it is an INTRODUCTION: put these in this tier from wherever they sit.
+ */
+export type RunRarityShift = Readonly<{
+  id: string;
+  name: string;
+  why: string;
+  from?: RunCardRarity;
+  to: RunCardRarity;
+  holds: (card: RunCardRarityInput) => boolean;
+}>;
+
+const MINOR_PIECES: ReadonlySet<AdlectablePieceType> = new Set(['bishop', 'knight']);
+
+/**
+ * The shifts the shipped ladder declares, applied in this order.
+ *
+ * Two shifts the material rule carried are NOT here, and their absence is a decision rather than an
+ * omission. The five awkward footprints were demoted because material overstated a shape that packs
+ * badly — but a price weighted by density already charges them less for exactly that, so the
+ * demotion had nothing left to correct. And a Bishop was promoted because material understated the
+ * pair; that survives below, as the cluster rule, which reaches the Knight pair on the same
+ * argument instead of singling out one piece.
+ */
+export const RUN_CARD_RARITY_SHIFTS: readonly RunRarityShift[] = Object.freeze([
+  Object.freeze({
+    id: 'minor-cluster',
+    name: 'A card of nothing but minors is Rare',
+    why: 'Price reads a card as material over squares, and two or three minors in a tight cluster '
+      + 'price as ordinary. What they are worth is not their material: the player places every '
+      + 'formation by hand (ADR-0526), so a card of two Bishops IS the opposite-colour pair, and a '
+      + 'card of three minors is a whole minor piece battery arriving already assembled. No cut on '
+      + 'price can see that, which is what a shift is for.',
+    to: 'rare',
+    holds: (card: RunCardRarityInput) => card.pieces.length >= 2
+      && card.pieces.every((piece: AdlectablePieceType) => MINOR_PIECES.has(piece)),
+  }),
+]);
+
+/** The tier the flat formula gives a card, before any shift. */
+export function runCardRarityBand(card: RunCardRarityInput): RunCardRarity {
+  // Priced on the canonical curve rather than the asking Run's, so a card's tier is a property of
+  // the catalog: the frame a card wears must not change because a Run is playing the legacy rules.
+  const gold = runCardCost({
+    value: card.pieces.reduce((total, piece) => total + PIECE_VALUE[piece], 0),
+    formation: [...card.formation],
+    pieces: [...card.pieces],
+  }, DEFAULT_RUN_RULES) * GOLD_SCALE;
+  if (gold <= RUN_CARD_RARITY_COMMON_MAX_GOLD) return 'common';
+  return gold <= RUN_CARD_RARITY_UNCOMMON_MAX_GOLD ? 'uncommon' : 'rare';
 }
 
-/**
- * Rarity is the market's ramp control, and it reads three things.
- *
- * Material value sets the band: Common through four, Uncommon at five and six, Rare above that.
- *
- * Footprint then adjusts it. The five awkward shapes pack badly enough that their material
- * overstates what they are worth on a board, so each drops one tier -- which is what puts genuinely
- * high-value cards in the Common pool without letting the Common pool hand out clean material.
- *
- * A Bishop then costs a band back, because material understates it. The player places every
- * formation by hand (ADR-0526), so they choose the square each Bishop lands on: any two Bishops
- * they own become the opposite-colour pair. The pair is assembled in the deployment band out of
- * whatever cards it came from, and every Bishop card is half of it. Card-local parity is therefore
- * not read at all -- it decides what one card's own two Bishops cover, never whether the player
- * ends the Run holding the pair, which is the thing rarity is pricing.
- *
- * The two adjustments cancel on an awkward shape carrying a Bishop, and that is the intended
- * reading rather than a coincidence: a Bishop is worth exactly the band a wasteful shape costs.
- */
+/** The flat band, then every shift that holds, in declared order. */
 export function runCardRarity(
   pieces: readonly AdlectablePieceType[],
   formation: readonly RunCardFormationCell[],
 ): RunCardRarity {
-  const value = pieces.reduce((total, piece) => total + PIECE_VALUE[piece], 0);
-  const band: RunCardRarity = value <= RUN_CARD_COMMON_MAX_VALUE
-    ? 'common'
-    : value <= RUN_CARD_UNCOMMON_MAX_VALUE ? 'uncommon' : 'rare';
-  const shaped = AWKWARD_CARD_FOOTPRINTS.has(rotationalFootprintId(formation))
-    ? stepRarity(band, -1)
-    : band;
-  return pieces.includes('bishop') ? stepRarity(shaped, 1) : shaped;
+  const card: RunCardRarityInput = { pieces, formation };
+  let band = runCardRarityBand(card);
+  for (const shift of RUN_CARD_RARITY_SHIFTS) {
+    if (shift.from !== undefined && band !== shift.from) continue;
+    if (shift.holds(card)) band = shift.to;
+  }
+  return band;
+}
+
+export type RunRarityShiftReport = Readonly<{
+  shift: RunRarityShift;
+  /** Cards this shift actually moved. Empty means the shift is DEAD. */
+  moved: readonly string[];
+  /** Cards it holds but declined, because they were not in the tier its `from` names. */
+  declined: readonly string[];
+}>;
+
+/**
+ * What each shift is doing to the cards a Run under `rules` can actually be dealt.
+ *
+ * This is the readout that would have caught the footprint demotion the day it stopped working, so
+ * it is not a debugging aid — it is the thing that makes a shift safe to declare.
+ */
+export function runRarityShiftAudit(rules: RunRules = DEFAULT_RUN_RULES): RunRarityShiftReport[] {
+  const market = RUN_CARD_DECK.filter((card) => cardAllowedByRules(card, rules));
+  const reports = RUN_CARD_RARITY_SHIFTS.map((shift) => ({ shift, moved: [] as string[], declined: [] as string[] }));
+  for (const card of market) {
+    const input: RunCardRarityInput = { pieces: card.pieces, formation: card.formation ?? [] };
+    let band = runCardRarityBand(input);
+    for (const report of reports) {
+      const { shift } = report;
+      if (!shift.holds(input)) continue;
+      if (shift.from !== undefined && band !== shift.from) { report.declined.push(card.id); continue; }
+      if (band === shift.to) continue;
+      band = shift.to;
+      report.moved.push(card.id);
+    }
+  }
+  return reports;
 }
 
 const formationCard = (

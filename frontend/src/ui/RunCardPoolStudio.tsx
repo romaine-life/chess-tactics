@@ -1,4 +1,12 @@
 import { useCallback, useMemo, useState, type ReactElement } from 'react';
+import {
+  DEFAULT_RUN_RULES,
+  LEGACY_RUN_RULES,
+  RUN_CARD_RARITY_COMMON_MAX_GOLD,
+  RUN_CARD_RARITY_UNCOMMON_MAX_GOLD,
+  runRarityShiftAudit,
+} from '../run/model';
+import { RUN_CARD_NAME_BY_ID } from '../run/cardNames';
 import { navigateApp } from './navigation';
 import {
   DEFAULT_POOL_MODEL,
@@ -175,6 +183,13 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
   const cards = useMemo(() => buildPool(knobs), [knobs]);
   const summary = useMemo(() => summarizePool(cards), [cards]);
   const verdict = useMemo(() => poolLiveVerdict(cards), [cards]);
+  // Audited against the market the model's own shape rule leaves, so a shift that is alive on the
+  // wide catalog and dead on the narrow one reads as dead here — which is the case that started all
+  // of this, and the case a rule stated only in prose can never show you.
+  const shiftAudit = useMemo(
+    () => runRarityShiftAudit(knobs.cols >= 4 ? LEGACY_RUN_RULES : DEFAULT_RUN_RULES),
+    [knobs.cols],
+  );
 
   const shown = useMemo(() => cards.filter((card) => (
     (bandFilter === 'all' || card.band === bandFilter)
@@ -239,6 +254,13 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
         .rcp-verdict.is-live b { color: #8fd9ae; }
         .rcp-verdict span { font-size: calc(var(--rcp-fs) * 0.92); opacity: 0.86; flex: 1 1 320px; line-height: 1.5; }
         .rcp-verdict span b { font-size: inherit; letter-spacing: 0; text-transform: none; color: inherit; }
+        .rcp-shift { margin-top: 12px; padding: 9px 11px; border-left: 3px solid #3f9c66; background: rgba(63, 156, 102, 0.09); }
+        .rcp-shift.is-dead { border-left-color: #b45a5a; background: rgba(180, 90, 90, 0.11); }
+        .rcp-shift-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+        .rcp-shift-head b { font-size: var(--rcp-fs); }
+        .rcp-shift-head em { font-style: normal; font-size: calc(var(--rcp-fs) * 0.85); opacity: 0.75; }
+        .rcp-shift.is-dead .rcp-shift-head em { color: #e6a3a3; opacity: 1; }
+        .rcp-shift-moved { font-size: calc(var(--rcp-fs) * 0.84); opacity: 0.72; }
         .rcp-select-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; font-size: var(--rcp-fs); }
         .rcp-select-row select { font: inherit; font-size: var(--rcp-fs); padding: 4px 6px; min-width: 0; flex: 1 1 auto; }
         .rcp-check input { width: calc(var(--rcp-fs) * 1.05); height: calc(var(--rcp-fs) * 1.05); }
@@ -431,18 +453,38 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
             <div className="rcp-term">
               <div className="rcp-term-head">The rule the game is running</div>
               <code className="rcp-term-formula">
-                {`material  P 1  N 3  B 3  R 5  Q 9
-
-common    material <= 4
-uncommon  material 5-6
-rare      material >= 7
-
-then  Z S T J L footprint   -> down one tier
-then  card carries a Bishop -> up one tier`}
+                {`common    cost <= ${RUN_CARD_RARITY_COMMON_MAX_GOLD}
+uncommon  cost <= ${RUN_CARD_RARITY_UNCOMMON_MAX_GOLD}
+rare      everything above`}
               </code>
+              {/*
+                The shifts are the part of a rarity rule that carries the design, and they are shown
+                with what they MOVED rather than only with what they say. A shift moving nothing is
+                dead — its precondition has quietly stopped holding — and that is the failure this
+                whole page exists because of, so it is stated in red and not left to be inferred.
+              */}
+              {shiftAudit.map((report) => (
+                <div key={report.shift.id} className={`rcp-shift${report.moved.length ? '' : ' is-dead'}`}>
+                  <div className="rcp-shift-head">
+                    <b>{report.shift.name}</b>
+                    <em>
+                      {report.shift.from ? `${report.shift.from} → ${report.shift.to}` : `→ ${report.shift.to}`}
+                      {' · '}
+                      {report.moved.length ? `moves ${report.moved.length}` : 'MOVES NOTHING — DEAD'}
+                    </em>
+                  </div>
+                  <p className="rcp-note">{report.shift.why}</p>
+                  {report.moved.length ? (
+                    <p className="rcp-note rcp-shift-moved">
+                      {report.moved.map((id) => RUN_CARD_NAME_BY_ID[id] ?? id).join(' · ')}
+                    </p>
+                  ) : null}
+                </div>
+              ))}
               <p className="rcp-note">
-                Price is not read at all. This is `runCardRarity` itself, asked the same question the
-                catalog asks it, so a tier here is the tier the card has in a Run.
+                This is `runCardRarity` itself — the flat cut on price, then every shift it declares,
+                asked the same question the catalog asks it. A tier here is the tier the card has in
+                a Run.
               </p>
             </div>
           ) : (
