@@ -618,14 +618,26 @@ if os.environ.get("LAB_OUT"):
     # like. Load the build's own output as a real image and pack it, so opening the
     # file shows the last render immediately; F12 then swaps the pane to the live
     # Render Result as usual.
-    _rr = None
+    # Render Result, even though it opens EMPTY.
+    #
+    # A render result is never written into a .blend, so this pane is blank until the
+    # first F12 -- which looks like the file lost the piece, and I "fixed" that once by
+    # pointing it at a packed still of the last build instead. That is worse: F12 then
+    # renders into Render Result while the pane keeps showing the stale still, so you
+    # can turn every knob in the graph and watch nothing happen. A blank pane that
+    # fills on render beats a full one that never updates.
+    #
+    # The last build is still packed into the file as "last build", so it can be picked
+    # from the dropdown to compare against.
     _shot = os.environ["OUT"] + ".png"
     if os.path.exists(_shot):
-        _rr = bpy.data.images.load(_shot, check_existing=True)
-        _rr.name = "last build"
-        _rr.pack()
-    if _rr is None:
-        _rr = bpy.data.images.get("Render Result")
+        _keep = bpy.data.images.load(_shot, check_existing=True)
+        _keep.name = "last build"
+        _keep.pack()
+        # Nothing points at it now that the pane holds Render Result, and Blender drops
+        # unreferenced datablocks on save -- so the dropdown would not have had it.
+        _keep.use_fake_user = True
+    _rr = bpy.data.images.get("Render Result")
     if _rr is not None:
         # Only the workspaces where the render is the subject. UV Editing and Texture
         # Paint have image editors too, and theirs are for the map being painted --
