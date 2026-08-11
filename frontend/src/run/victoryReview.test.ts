@@ -11,6 +11,7 @@ import {
   prepareDeployment,
   reviewSectioBattleReport,
   runPhaseKeepsBattleReport,
+  takeVacantiaLipsanon,
   sectioBattleReport,
   type RunDocument,
   type RunWarSnapshot,
@@ -131,6 +132,41 @@ describe('a retained report may only describe the Battle its screen followed', (
   it('is kept by a Sectio whose report is its own', () => {
     const sectio = leaveAftermath(reported());
     expect(normalizeRunDocument(sectio).aftermath).toEqual(sectio.aftermath);
+  });
+});
+
+describe('a Conflict that opens on Bona Vacantia carries the report across it', () => {
+  /**
+   * Battle 0 closes a Conflict, so the lipsanon screen lands between the report and the Sectio.
+   * A later loot Battle is what makes the NEXT Conflict open on one at all.
+   */
+  function lootWar(): RunWarSnapshot {
+    return {
+      id: 'victory-review-loot-war',
+      name: 'Victory Review Loot War',
+      description: 'Victory review loot fixture.',
+      battles: [0, 1, 2].map((index) => ({
+        level: battleLevel(`loot-battle-${index}`),
+        loot: index === 0 || index === 2,
+      })),
+    };
+  }
+
+  it('keeps it through the lipsanon screen and into the Sectio that follows', () => {
+    const run = createRun(lootWar(), 5);
+    const closed = closeBattle({ ...run, phase: 'battle', battleIndex: 0, battleRuntime: null }, {
+      survivingUnitIds: run.army.map((unit) => unit.id),
+      turns: 11,
+      standingEnemyValue: 6,
+    });
+    const vacantia = leaveAftermath(closed);
+    expect(vacantia.phase).toBe('bona-vacantia');
+    expect(vacantia.aftermath?.battleIndex).toBe(0);
+    expect(normalizeRunDocument(vacantia).aftermath).toEqual(vacantia.aftermath);
+
+    const sectio = takeVacantiaLipsanon(vacantia, vacantia.vacantia!.offers[0]);
+    expect(sectio.phase).toBe('sectio');
+    expect(sectioBattleReport(sectio)?.turns).toBe(11);
   });
 });
 
