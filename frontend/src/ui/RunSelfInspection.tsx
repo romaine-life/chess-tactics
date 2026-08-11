@@ -39,6 +39,10 @@ export const RUN_SECTIO_CONTROL_ICON_ROLE = Object.freeze({
   'battle-preview': 'ui-kit-icons-run-battle-png',
   expunctio: 'ui-kit-icons-delete-png',
   'reset-sectio': 'ui-kit-icons-reset-png',
+  // Back to the Victory report: the objective mark, because that report is the Battle's
+  // objective met and what it paid for meeting it. The Battle mark is already Exploratio's,
+  // and one destination may not answer to a mark another already owns (ADR-0059).
+  victory: 'ui-kit-icons-game-objective-png',
   continue: 'ui-kit-icons-game-attack-png',
   abandon: 'ui-kit-icons-sign-out-png',
 }) satisfies Readonly<Record<string, string>>;
