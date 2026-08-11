@@ -196,6 +196,47 @@ function rowSpansAllColumns(row: ReactNode): boolean {
   return isValidElement<{ spans?: 'all' }>(row) && row.props.spans === 'all';
 }
 
+const INSTALLED_JUNCTION_SIDES = new Set<string>(['nes', 'nsw', 'esw', 'new', 'nesw']);
+
+/**
+ * The cap where a vertical grid line meets a ROW BOUNDARY, shaped by which side of that boundary
+ * actually carries a rail.
+ *
+ * Both rows divided is the four-way crossing the node already describes. Beside a row that spans
+ * every column there is no rail on that side, so the arm pointing into it comes off and what is
+ * left is a TEE pointing into the row that does have one — the rail BEGINS or ENDS at this
+ * boundary, and its end is a meeting with the horizontal rail exactly as much as a crossing is.
+ * Dropping the node instead left the vertical segment starting out of nothing, which is the
+ * uncapped rail this whole module exists to make unsayable.
+ *
+ * Null when neither side carries a rail: the horizontal rail simply runs through, with nothing to
+ * cap. A shape the kit has no atom for is refused outright rather than shipped unpainted.
+ */
+function rowBoundaryCrossing(
+  node: ChromeDividedGridNode,
+  above: ReactNode,
+  below: ReactNode,
+): ChromeDividedGridNode | null {
+  const railAbove = !rowSpansAllColumns(above);
+  const railBelow = !rowSpansAllColumns(below);
+  if (railAbove && railBelow) return node;
+  const sides = [
+    railAbove && node.sides.includes('n') ? 'n' : '',
+    node.sides.includes('e') ? 'e' : '',
+    railBelow && node.sides.includes('s') ? 's' : '',
+    node.sides.includes('w') ? 'w' : '',
+  ].join('');
+  if (!sides.includes('n') && !sides.includes('s')) return null;
+  if (!INSTALLED_JUNCTION_SIDES.has(sides)) {
+    throw new Error(
+      `A divided chrome grid has no installed "${sides}" junction atom: line ${node.line} `
+      + 'ends against a row that spans every column. A scrollbar gutter cannot border a spanning '
+      + 'row — give the row its own cells, or drop the gutter.',
+    );
+  }
+  return { ...node, sides: sides as ChromeJunctionSides };
+}
+
 type ChromeDividedGridChild = {
   row: ReactNode;
   key: string;
@@ -324,13 +365,15 @@ export function DividedInnerChromeBox({
                 data-chrome-grid-inline-end={topology.horizontalEndBoundary}
                 style={{ gridColumn: `1 / ${topology.horizontalEndLine}` }}
               />
-              {/* A four-way junction on this boundary only where a vertical rail actually crosses
-                  it — which needs the rows on BOTH sides to be divided. Next to a spanning row
-                  there is no rail to cap, and the crossing glyph became an ornament floating in a
-                  rail with nothing running through it. */}
+              {/* The cap on this boundary at every vertical line, shaped by which side of it
+                  carries a rail: a four-way where both rows are divided, a tee pointing into the
+                  divided one where its neighbour spans, and nothing at all where neither has a
+                  rail to cap. */}
               {boundaryNodes(topology.rowNodes)
-                .filter((node) => node.inlineBoundary !== 'internal'
-                  || (!rowSpansAllColumns(rows[index - 1]) && !rowSpansAllColumns(row)))
+                .map((node) => node.inlineBoundary === 'internal'
+                  ? rowBoundaryCrossing(node, rows[index - 1], row)
+                  : node)
+                .filter((node): node is ChromeDividedGridNode => node !== null)
                 .map((node) => (
                 <GridJunction
                   key={`${node.line}-${node.sides}`}

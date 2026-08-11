@@ -66,6 +66,64 @@ describe('divided inner chrome topology', () => {
     expect(html).not.toContain('data-chrome-divider-junctions="endpoints"');
   });
 
+  // A divided row beside a spanning one still has a vertical rail, and that rail BEGINS or ENDS
+  // at the boundary between them. The boundary used to draw nothing there — reasoning that a
+  // four-way crossing would be an ornament — which left the segment starting out of thin air with
+  // no cap, the exact uncapped rail this module exists to make unsayable. It is a tee.
+  it('tees a vertical rail into the boundary where its neighbour spans every column', () => {
+    const html = renderToStaticMarkup(
+      <DividedInnerChromeBox columns={['minmax(0, 1fr)', 'minmax(0, 1fr)']}>
+        <ChromeDividedGridRow spans="all"><span>name</span></ChromeDividedGridRow>
+        <ChromeDividedGridRow><span>left</span><span>right</span></ChromeDividedGridRow>
+      </DividedInnerChromeBox>,
+    );
+
+    // The rail runs SOUTH from the boundary into the divided row, with the horizontal rail east
+    // and west of it — and reaches the bottom frame, where the block boundary caps it northward.
+    expect(html.match(/data-chrome-junction-sides="esw"/g)).toHaveLength(1);
+    expect(html.match(/data-chrome-junction-sides="new"/g)).toHaveLength(1);
+    expect(html).not.toContain('data-chrome-junction-sides="nesw"');
+  });
+
+  it('tees the other way when the divided row comes first', () => {
+    const html = renderToStaticMarkup(
+      <DividedInnerChromeBox columns={['minmax(0, 1fr)', 'minmax(0, 1fr)']}>
+        <ChromeDividedGridRow><span>left</span><span>right</span></ChromeDividedGridRow>
+        <ChromeDividedGridRow spans="all"><span>verb</span></ChromeDividedGridRow>
+      </DividedInnerChromeBox>,
+    );
+
+    // The rail arrives from the NORTH and stops; the top frame caps its other end southward.
+    expect(html.match(/data-chrome-junction-sides="new"/g)).toHaveLength(1);
+    expect(html.match(/data-chrome-junction-sides="esw"/g)).toHaveLength(1);
+    expect(html).not.toContain('data-chrome-junction-sides="nesw"');
+  });
+
+  it('caps nothing on a boundary between two rows that both span every column', () => {
+    const html = renderToStaticMarkup(
+      <DividedInnerChromeBox columns={['minmax(0, 1fr)', 'minmax(0, 1fr)']}>
+        <ChromeDividedGridRow spans="all"><span>name</span></ChromeDividedGridRow>
+        <ChromeDividedGridRow spans="all"><span>body</span></ChromeDividedGridRow>
+      </DividedInnerChromeBox>,
+    );
+
+    // Only the horizontal rail's own two ends against the side frames.
+    expect(html.match(/data-chrome-junction-sides="nes"/g)).toHaveLength(1);
+    expect(html.match(/data-chrome-junction-sides="nsw"/g)).toHaveLength(1);
+    expect(html).not.toContain('data-chrome-junction-sides="esw"');
+    expect(html).not.toContain('data-chrome-junction-sides="new"');
+    expect(html).not.toContain('data-chrome-junction-sides="nesw"');
+  });
+
+  it('refuses a scrollbar gutter beside a spanning row rather than shipping it uncapped', () => {
+    expect(() => renderToStaticMarkup(
+      <DividedInnerChromeBox columns={['minmax(0, 1fr)']} scroll>
+        <ChromeDividedGridRow spans="all"><span>name</span></ChromeDividedGridRow>
+        <ChromeDividedGridRow><span>option</span></ChromeDividedGridRow>
+      </DividedInnerChromeBox>,
+    )).toThrow('has no installed "sw" junction atom');
+  });
+
   it('centers perimeter tees on the frame rail instead of the frame outer edge', () => {
     expect(styleCss).toMatch(
       /--chrome-divided-grid-boundary-node-offset:\s*calc\(var\(--chrome-divided-grid-reach\) \/ 2\);/,
