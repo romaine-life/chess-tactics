@@ -3,7 +3,9 @@ import { TitleBarButtonPrimitive } from '../shell/TitleBarControls';
 import { installedUiMedia } from '../installedUiMedia';
 
 // The signed-in account control for the trailing edge of the app chrome: an
-// icon-only avatar button (Gravatar) that opens a small kit-framed menu. The menu
+// icon-only avatar button (Gravatar) that opens a small kit-framed menu. The trigger is a
+// SEAT of the cluster's divided box — the box's frame and rail are its edges, so it carries
+// no frame of its own (see HeaderAccountCluster). The menu
 // shows the immutable email (small, static) above the editable username — click the
 // name to rename it, Enter / the save button to commit, Escape to cancel — and the
 // door (the door IS Sign Out, no text label; the bar avatar already carries identity).
@@ -76,6 +78,7 @@ export function AccountMenu({ name, email, avatarUrl, surfacePhase, onRename, on
     <div className="account-menu-root" ref={rootRef}>
       <TitleBarButtonPrimitive
         variant="icon"
+        seated
         className="cluster-icon-button account-avatar-button"
         surfacePhase={surfacePhase}
         aria-haspopup="menu"
