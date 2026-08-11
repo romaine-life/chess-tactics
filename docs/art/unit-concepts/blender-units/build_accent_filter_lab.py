@@ -236,14 +236,34 @@ def make_ramp(stops):
 # switching palettes. So every palette gets its own ramp, and a single Value node
 # labelled PALETTE selects between them: 0 navy-blue, 1 white, 2 golden, 3 emerald,
 # 4 crimson, 5 black. Drag that one field and the piece changes team.
-BODY_PALETTES = [
-    ("navy-blue", [(0.00000, "#0d1926"), (0.05139, "#17314a"), (0.09918, "#224466"), (0.15729, "#2f5983"), (0.28899, "#416e9c")]),
-    ("white",     [(0.00000, "#3b3f47"), (0.05139, "#717b8b"), (0.09918, "#9daabf"), (0.15729, "#ccdbf6"), (0.28899, "#d7e6ff")]),
-    ("golden",    [(0.00000, "#28200a"), (0.05139, "#4f3d10"), (0.09918, "#6c5519"), (0.15729, "#8b6e25"), (0.28899, "#a68637")]),
-    ("emerald",   [(0.00000, "#0c2116"), (0.05139, "#16412a"), (0.09918, "#20593b"), (0.15729, "#2c734e"), (0.28899, "#3c8961")]),
-    ("crimson",   [(0.00000, "#260c10"), (0.05139, "#4a151d"), (0.09918, "#66202a"), (0.15729, "#832c39"), (0.28899, "#9c3e4c")]),
-    ("black",     [(0.00000, "#0d0e10"), (0.05139, "#181c1f"), (0.09918, "#22262b"), (0.15729, "#2c3137"), (0.28899, "#363b41")]),
+# Stop POSITIONS are shared by every palette, and deliberately live in one place.
+#
+# Positions are the shading structure -- where luminance breaks into bands, how much of
+# the piece is shadow and how much is highlight. Colours are the team. If crimson's
+# positions drift from navy's, the two teams read with different contrast and stop
+# looking like one set, which is a bug you notice as "the red ones look flatter"
+# without seeing why.
+#
+# Blender cannot link ramps: there is no shared-position mechanism, so moving a stop in
+# one ColorRamp will never move the other five. That makes drift a matter of time
+# rather than a possibility, so the positions are stated ONCE here and every ramp is
+# built from them. Tune them on one palette in the lab, then have them read back and
+# set here -- do not hand-edit five ramps to match a sixth.
+BODY_POSITIONS = [0.00000, 0.05139, 0.09918, 0.15729, 0.28899]
+
+BODY_COLOURS = [
+    ("navy-blue", ["#0d1926", "#17314a", "#224466", "#2f5983", "#416e9c"]),
+    ("white",     ["#3b3f47", "#717b8b", "#9daabf", "#ccdbf6", "#d7e6ff"]),
+    ("golden",    ["#28200a", "#4f3d10", "#6c5519", "#8b6e25", "#a68637"]),
+    ("emerald",   ["#0c2116", "#16412a", "#20593b", "#2c734e", "#3c8961"]),
+    ("crimson",   ["#260c10", "#4a151d", "#66202a", "#832c39", "#9c3e4c"]),
+    ("black",     ["#0d0e10", "#181c1f", "#22262b", "#2c3137", "#363b41"]),
 ]
+
+if len(BODY_POSITIONS) != 5 or any(len(c) != 5 for _, c in BODY_COLOURS):
+    raise SystemExit("every palette needs exactly one colour per shared position")
+
+BODY_PALETTES = [(name, list(zip(BODY_POSITIONS, cols))) for name, cols in BODY_COLOURS]
 
 select = tree.nodes.new("ShaderNodeValue")
 select.label = "PALETTE  0=navy 1=white 2=golden 3=emerald 4=crimson 5=black"
