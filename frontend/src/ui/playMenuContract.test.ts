@@ -114,6 +114,12 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // The Current Run detail's Play sits where Start Run sits on the sibling tab; a bare
     // one there frames the live vista instead of a button.
     expect(playMenu).toMatch(/<ChromeNavButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*to="\/run">/);
+    // And the facts they sit under are a structural field, not a leaf: nothing in the box takes
+    // a click, so it wears the teal stone and the verb below it is the column's only oak
+    // (ADR-0433). No heading over it either — same reason the sibling column has none, the rail
+    // tab that opened it already said Current Run.
+    expect(playMenu).toContain('<InnerChromeBox className="play-detail-facts" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>');
+    expect(playMenu).not.toMatch(/<div className="ce-selected-head"><h2>Current Run<\/h2><\/div>/);
     expect(playMenu).not.toContain('run-current-summary');
     expect(playMenu).not.toContain('>Continue Run<');
     // The Current Run row is an availability surface, not an existence surface: with

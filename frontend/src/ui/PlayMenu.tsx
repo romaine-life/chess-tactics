@@ -139,7 +139,9 @@ function ContinuePanel({ inventory }: { inventory: ContinueInventory }): ReactEl
           {selected ? (
             <div className="continue-resume" data-testid="continue-detail" aria-label={selected.title}>
               <div className="ce-selected-head"><h2>{selected.title}</h2></div>
-              <InnerChromeBox className="play-detail-facts">
+              {/* Same field, same material as Run's: a facts box holds rows, so it is structural
+                  teal stone and the Continue verb under it is the only oak (ADR-0433). */}
+              <InnerChromeBox className="play-detail-facts" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
                 <dl>
                   {selected.facts.map((fact) => (
                     <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>
@@ -391,10 +393,15 @@ function RunPanel({
             </div>
           </aside>
         ) : choice === 'current' && presentedRun ? (
+          /* No heading, for the same reason the sibling column has none: the rail tab that
+             opened this column already says Current Run, so a title there spends a row
+             restating the press that got you here. The aside keeps the name as a landmark. */
           <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Current Run" data-testid="run-detail-current">
-            <div className="ce-selected-head"><h2>Current Run</h2></div>
             <div className="play-detail-body">
-              <InnerChromeBox className="play-detail-facts">
+              {/* Marble, not oak. The facts are a standing statement about the Run — nothing in
+                  the box takes a click — so it wears the structural teal stone every field that
+                  holds subordinate rows wears, and only the Play verb below it is oak (ADR-0433). */}
+              <InnerChromeBox className="play-detail-facts" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
                 <dl>
                   <div><dt>Battle</dt><dd>{presentedRun.battleIndex + 1} of {presentedRun.war.battles.length}</dd></div>
                   <div><dt>Army</dt><dd>{presentedRun.army.length} units</dd></div>
