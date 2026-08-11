@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
 import { useTitleBarPortalTarget } from './TitleBarPortalContext';
 import { ChromeButton, ChromeNavButton } from '../shared/ChromeButton';
+import { NavButton } from '../shared/NavButton';
 import { CHROME_LEAF_FILL_SURFACE, leafSurfacePhase } from '../shared/chromeSurfacePolicy';
 import { Tooltip } from '../shared/InfoTip';
 import { useSceneActivation } from './SceneBoundary';
@@ -113,6 +114,20 @@ interface TitleBarButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElemen
   active?: boolean;
   replace?: boolean;
   scroll?: boolean;
+  /**
+   * This control is a COMPARTMENT of a divided box rather than a framed box of its own.
+   *
+   * The invariant trailing cluster is one divided box now, so the frame around its members and
+   * the rails between them belong to that box (ADR-0242). A registered inner-box unit in here
+   * would draw a second frame a few pixels inside the first — the doubled edge this replaced,
+   * where two adjacent controls put two rails and a strip of bar between one glyph and the next.
+   * A seat therefore fills its cell and paints nothing: the box's frame is its outer edge and
+   * the box's rail is the edge it shares with the seat beside it.
+   *
+   * Contributed route controls are NOT seats. They stand on the bar before the persistent
+   * divider, each its own framed box, and keep the registered unit.
+   */
+  seated?: boolean;
   /** This control's seat in the lane; see TITLE_BAR_CLUSTER_LEAF_PHASE. */
   surfacePhase?: number;
   to?: string | (() => string);
@@ -132,25 +147,36 @@ export function TitleBarButtonPrimitive({
   className,
   replace,
   scroll,
+  seated = false,
   surfacePhase = 0,
   to,
   variant = 'label',
   ...props
 }: TitleBarButtonProps): ReactElement {
-  const controlClassName = chromeUnitClassNames(
-    'inner-box',
+  const stateClasses: Array<string | false | undefined> = [
     'titlebar-control',
     `titlebar-control--${variant}`,
     active && 'active titlebar-control--active',
     className,
-  );
+  ];
+  // A seat is deliberately NOT a registered unit: the unit is what brings the frame, and the
+  // divided box around it already drew one. Same shape as every other compartment control in
+  // the app (LevelPreviewColumn's verbs, SectionBox's members) — the leaf material stays,
+  // because a trigger wears the oak wherever it sits (ADR-0433).
+  const controlClassName = seated
+    ? cx('titlebar-control--seat', ...stateClasses)
+    : chromeUnitClassNames('inner-box', ...stateClasses);
   const surface = {
     'data-chrome-fill-surface': CHROME_LEAF_FILL_SURFACE,
     style: leafSurfacePhase(surfacePhase),
   };
 
   if (to) {
-    return (
+    return seated ? (
+      <NavButton className={controlClassName} {...surface} to={to} replace={replace} scroll={scroll} {...props}>
+        {children}
+      </NavButton>
+    ) : (
       <ChromeNavButton
         unit="inner-box"
         className={controlClassName}
@@ -165,7 +191,11 @@ export function TitleBarButtonPrimitive({
     );
   }
 
-  return (
+  return seated ? (
+    <button type="button" className={controlClassName} {...surface} {...props}>
+      {children}
+    </button>
+  ) : (
     <ChromeButton unit="inner-box" className={controlClassName} {...surface} {...props}>
       {children}
     </ChromeButton>
