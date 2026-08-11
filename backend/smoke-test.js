@@ -2634,8 +2634,11 @@ async function validateGeneratedFormationRunMigration63() {
       runSaveVersion: 24, phase: 'sectio', deployment: null, battleRuntime: null, aftermath: null,
       sectio: {
         cardOffers: [
+          // One card per tier, so the re-read proves it reaches the whole ladder. The middle seat
+          // is Rook-and-Bishop rather than a lone Rook: the bands are cut on PRICE, and five
+          // material on one square is 60 gold and Common.
           offer('p', 'p', ['pawn'], [{ x: 0, y: 0 }], 1),
-          offer('r', 'r', ['rook'], [{ x: 0, y: 0 }], 5),
+          offer('f-0111-rb', 'rb', ['rook', 'bishop'], [{ x: 0, y: 0 }, { x: 0, y: 1 }], 8),
           offer('bb-vertical', 'bb', ['bishop', 'bishop'], [{ x: 0, y: 0 }, { x: 0, y: 1 }], 6),
         ],
       },
@@ -6538,6 +6541,10 @@ async function main() {
     ...activeRunDocument,
     phase: 'deployment',
     sectio: null,
+    // Leaving the Sectio for the next Battle retires that Battle's report along with the Sectio
+    // it was reachable from (ADR-0568) -- so a Deployment derived from this fixture drops both,
+    // exactly as leaveSectio does.
+    aftermath: null,
     deployment: {
       battleIndex: 0,
       seed: 1709,
@@ -6846,6 +6853,47 @@ async function main() {
       throw new Error(`A crafted ${craftedPhase.spec.phase} Run must be one this server stores: ${savedCraftedPhase.statusCode} ${savedCraftedPhase.body}`);
     }
     craftedPhaseRevision = savedCraftedPhaseBody.revision;
+  }
+  // A Sectio turned back to the Victory it came from is the one document whose phase does not
+  // determine its own sub-state: the report is being read while the Sectio stands behind it,
+  // and the Battle's runtime was retired on the way past (ADR-0568). It is reached by pressing
+  // a control on a durable Run, so the server has to store it.
+  const reviewedReportRun = {
+    ...boardRender.reviewSectioBattleReport(boardRender.craftRunDocument(
+      boardRender.runCraftSpecFromJson({ phase: 'sectio', battle: 2, seed: 17 }),
+      craftedPhaseWar(),
+    )),
+    id: 'run-crafted-reviewed-report',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+  if (reviewedReportRun.phase !== 'aftermath' || !reviewedReportRun.sectio || reviewedReportRun.battleRuntime !== null) {
+    throw new Error('A reviewed Victory report must stand on its Sectio with no Battle runtime.');
+  }
+  const savedReviewedReport = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ run: reviewedReportRun, revision: craftedPhaseRevision }),
+  );
+  const savedReviewedReportBody = JSON.parse(savedReviewedReport.body);
+  if (savedReviewedReport.statusCode !== 200 || savedReviewedReportBody.run.phase !== 'aftermath') {
+    throw new Error(`A reviewed Victory report must be one this server stores: ${savedReviewedReport.statusCode} ${savedReviewedReport.body}`);
+  }
+  craftedPhaseRevision = savedReviewedReportBody.revision;
+  // The relaxation is exactly that pairing and no wider: a report naming a Battle the Sectio
+  // behind it did not follow is still refused.
+  const mismatchedReport = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      run: {
+        ...reviewedReportRun,
+        aftermath: { ...reviewedReportRun.aftermath, battleIndex: reviewedReportRun.aftermath.battleIndex + 1 },
+      },
+      revision: craftedPhaseRevision,
+    }),
+  );
+  if (mismatchedReport.statusCode !== 400) {
+    throw new Error(`A report naming another Battle must be refused: ${mismatchedReport.statusCode} ${mismatchedReport.body}`);
   }
   const deletedCraftedPhaseRun = await request(
     'DELETE', '/api/active-run',

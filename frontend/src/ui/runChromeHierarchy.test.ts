@@ -26,6 +26,7 @@ const runCardFace = readFileSync(new URL('./RunCardFace.tsx', import.meta.url), 
 const runBattlePreview = readFileSync(new URL('./RunBattlePreview.tsx', import.meta.url), 'utf8');
 const levelInfoCompact = readFileSync(new URL('./LevelInfoCompact.tsx', import.meta.url), 'utf8');
 const chromeDividedGrid = readFileSync(new URL('./shared/ChromeDividedGrid.tsx', import.meta.url), 'utf8');
+const chromeVerbRow = readFileSync(new URL('./shared/ChromeVerbRow.tsx', import.meta.url), 'utf8');
 const runDeploymentCardStack = readFileSync(new URL('./RunDeploymentCardStack.tsx', import.meta.url), 'utf8');
 const runLipsana = readFileSync(new URL('./Lipsana.tsx', import.meta.url), 'utf8');
 const runSelfInspection = readFileSync(new URL('./RunSelfInspection.tsx', import.meta.url), 'utf8');
@@ -454,6 +455,24 @@ describe('Run chrome hierarchy', () => {
     expect(runDeploymentCardStack).not.toContain('SkirmishBoard');
     expect(runDeploymentCardStack).toContain('Draw automatically');
     expect(runDeploymentCardStack).toContain('data-deployment-center-deck');
+    // The deck empties as it DEALS. It used to count the hand arriving in Controls, two and a half
+    // seconds after the cards left, so it stood at full height and full number while the whole
+    // hand flew out of it and the last card never appeared to take it with it.
+    expect(runDeploymentCardStack).toContain('run.cards.length - departedCount');
+    expect(runDeploymentCardStack).not.toContain('run.cards.length - dealtCount');
+    expect(runScreen).toContain('departedCount={deckDeparted}');
+    expect(runScreen).toContain('onDeckDeparture={setDeckDeparted}');
+    expect(runScreen).not.toContain('dealtCount={dealProgress}');
+    // A pile with nothing in it draws nothing — the floor of one layer is what left a phantom deck
+    // standing on the table after its last card had gone.
+    expect(runDeploymentCardStack).toContain('if (layers < 1) return null;');
+    expect(runDeploymentCardStack).not.toContain('Math.max(1, centerCount)');
+    // Departures ride the deal's own timeline, not a wall clock a throttled tab would drift from.
+    expect(runDeploymentCardStack).toContain('onDeckDeparture(index + 1)');
+    expect(runDeploymentCardStack).not.toContain('scene.after(index * stagger');
+    expect(runDeploymentCardStack).toContain('const expectedAnimationCount = cards.length * 4 + 1');
+    // The swept remainder IS the deck, not a single card standing in for it.
+    expect(runDeploymentCardStack).toContain('<RunDeckPile count={undealtCardCount}');
     expect(runDeploymentCardStack).toContain('data-testid="deployment-deal"');
     expect(runDeploymentCardStack).toContain("deployment?.stage === 'awaiting-deal' || deployment?.stage === 'dealing'");
     expect(runDeploymentCardStack).toContain('data-deployment-discard-flight-card');
@@ -569,8 +588,8 @@ describe('Run chrome hierarchy', () => {
     expect(runExpunctioWorkspace).toContain('fillRole="outer"');
     // The aftermath report is a structural box and takes the marble by NAMING the shared policy
     // role, not by inheriting the scene's leaf adoption (ADR-0433/ADR-0557 — a box wears the
-    // marble, the actions under it wear the oak). Unfilled it read its ledger off the vista.
-    expect(runScreen).toMatch(/className="run-aftermath-report"\s*\r?\n\s*fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
+    // marble, the verbs that close it wear the oak). Unfilled it read its ledger off the vista.
+    expect(runScreen).toMatch(/className="run-aftermath-report"\s*\r?\n\s*columns=\{verbColumns\(verbs\)\}\s*\r?\n\s*fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
     expect(styleCss).not.toMatch(/\.run-(?:roster-filters|meta-controls)[^}]*:nth-child/);
   });
 
@@ -603,22 +622,29 @@ describe('Run chrome hierarchy', () => {
     expect(skirmish).toContain('<RunBattleUndoButton testId="undo-run-move-result" style={leafSurfacePhase(0)} />');
     expect(skirmish).toContain('style={leafSurfacePhase(1)}');
     expect(skirmish).toContain('style={leafSurfacePhase(2)}');
-    expect(runScreen).toContain('style={leafSurfacePhase(0)}');
-    expect(runScreen).toContain('style={leafSurfacePhase(1)}');
+    // The result reports' verbs are a repeated leaf collection too, and the row that seats them
+    // phases each one from the index of the verb DATA — the same rule, owned once.
+    expect(chromeVerbRow).toContain('style: leafSurfacePhase(index),');
+    expect(chromeVerbRow).toContain("'data-chrome-fill-surface': CHROME_LEAF_FILL_SURFACE,");
+    expect(runScreen).not.toContain('leafSurfacePhase');
     for (const button of [runBattleRetryButton, runBattleUndoButton, runDeploymentRerollButton]) {
       expect(button).toContain('style?: CSSProperties;');
       expect(button).toContain('style={style}');
     }
-    expect(styleCss).not.toMatch(/\.(?:campaign-result-actions|run-aftermath-actions)[^}]*:nth-child/);
+    expect(styleCss).not.toMatch(/\.(?:campaign-result-actions|run-result-verbs)[^}]*:nth-child/);
 
-    // The Run's last action is a button, not a band: the workspace lane stretches its grid
-    // children, which only became conspicuous once it wore a plank. It sits in an actions row
-    // now — the same one the Battle's Aftermath uses — so the row holds it to its own width and
-    // the lone `justify-self` that used to do that job is retired rather than left dead.
-    expect(runScreen).toContain("'active', 'run-victory-finish'");
-    expect(runScreen).toContain('<div className="run-victory-actions">');
-    expect(styleCss).toMatch(/\.run-aftermath-actions,\s*\.run-victory-actions\s*\{[\s\S]*?justify-content:\s*center;/);
-    expect(styleCss).not.toContain('.run-victory-finish {');
+    // A result report closes with its own verbs. They used to be a loose pair of framed buttons
+    // under the box — the vista showing through between the report and the thing it is read to
+    // decide, each button drawing a second frame inside the one already there. They are cells of
+    // the box's bottom row now, so nothing is left to hold to its own width beneath it.
+    expect(runScreen).not.toContain('run-victory-finish');
+    expect(runScreen).not.toContain('run-victory-actions');
+    expect(runScreen).not.toContain('run-aftermath-actions');
+    expect(styleCss).not.toContain('.run-victory-actions');
+    expect(styleCss).not.toContain('.run-aftermath-actions');
+    for (const panel of ['run-aftermath', 'run-victory']) {
+      expect(runScreen).toMatch(new RegExp(`className="${panel}-report"[\\s\\S]*?<ChromeVerbRow verbs=\\{verbs\\} className="run-result-verbs"`));
+    }
   });
 
   it('keeps Expunctio card-first and removes only complete held formations', () => {
@@ -1004,13 +1030,26 @@ describe('Run chrome hierarchy', () => {
     expect(skirmish).toContain('useLayoutEffect(() => {');
     expect(skirmish).toContain("if (armAdminMode('win-battle')) adminWinBattle()");
     expect(runScreen).toContain('clearCraftedBattleResult({');
-    expect(runScreen).toContain('data-testid="run-aftermath-back"');
+    // Back is a verb of the report box, so its test id is declared with the verb; the row that
+    // seats it is what puts the attribute on the element.
+    expect(runScreen).toContain("testId: 'run-aftermath-back',");
+    expect(chromeVerbRow).toContain("'data-testid': verb.testId,");
     expect(runScreen).toContain("onReviewBattle={() => navigateRunView('battle-review')}");
     expect(runScreen).toContain("onReviewRewards={reviewingWonBattle ? () => navigateRunView('primary') : undefined}");
     expect(runScreen).toContain('loadReviewableRunBattleMatch(');
     expect(skirmish).toContain('? loadReviewableRunBattleMatch(levelId, activityId)');
     expect(runScreen).toContain("? { ...shellRun, phase: 'battle', aftermath: null }");
     expect(runScreen).toContain('clearMatch();');
+    // The won-board snapshot outlives the report's Continue, because the report itself is
+    // reachable from the Sectio it opens; the Sectio's Continue is what retires it (ADR-0568).
+    expect(runScreen).toMatch(/data-testid="continue-run-sectio"[\s\S]{0,400}?clearMatch\(\);/);
+    expect(runScreen).not.toMatch(/replace\(leaveAftermath\(run\)\);\s*\n\s*clearMatch\(\);/);
+    // Back to Victory is seated with Continue, and reopens the report without touching the
+    // Sectio standing behind it.
+    expect(runScreen).toContain('data-testid="review-run-victory"');
+    expect(runScreen).toContain('replace(reviewSectioBattleReport(run));');
+    expect(runScreen).toContain('const battleReport = sectioBattleReport(run);');
+    expect(runScreen).toContain('disabled={!battleReport}');
     expect(runScreen).toContain("data-run-controls-scroll={sectio ? 'scroll' : 'static'}");
     expect(styleCss).toMatch(/\.run-meta-controls\[data-run-controls-scroll="static"\]\s*\{[\s\S]*?overflow-y:\s*hidden;/);
 
@@ -1033,17 +1072,18 @@ describe('Run chrome hierarchy', () => {
     // rules composes both and the optical placement cannot drift apart between them (ADR-0456).
     expect(styleCss).toMatch(/\.run-aftermath-workspace,\s*\.run-victory-workspace\s*\{[\s\S]*?container-type:\s*size;/);
     expect(styleCss).toMatch(/\.run-aftermath-workspace-content,\s*\.run-victory-workspace-content\s*\{[\s\S]*?grid-template-rows:\s*minmax\(0, 1fr\) auto minmax\(0, 1fr\);/);
-    expect(styleCss).toMatch(/\.run-aftermath-head,\s*\.run-victory-head,\s*\.run-aftermath-report,\s*\.run-victory-report,\s*\.run-aftermath-actions,\s*\.run-victory-actions\s*\{[\s\S]*?translate:\s*0 -5cqh;/);
-    expect(styleCss).toMatch(/\.run-aftermath-report\s*\{[\s\S]*?grid-row:\s*2;/);
-    expect(styleCss).toMatch(/\.run-victory-report\s*\{[\s\S]*?grid-row:\s*2;/);
+    expect(styleCss).toMatch(/\.run-aftermath-head,\s*\.run-victory-head,\s*\.run-aftermath-report,\s*\.run-victory-report\s*\{[\s\S]*?translate:\s*0 -5cqh;/);
+    // The report is the whole slab now — its verbs are its bottom row — so both take the same
+    // grid row and the same zero padding, because a divided box's rails run its full inner width.
+    expect(styleCss).toMatch(/\.run-aftermath-report,\s*\.run-victory-report\s*\{\s*\r?\n\s*grid-row:\s*2;\s*\r?\n\s*padding:\s*0;/);
     // Only the display heading may stand on the artwork; every factual line moved into the
     // report box, because Victory's backdrop is a bright daylight sky.
-    expect(runScreen).toMatch(/<InnerChromeBox as="div" className="run-victory-report"[\s\S]*?run\.war\.description[\s\S]*?<\/InnerChromeBox>/);
+    expect(runScreen).toMatch(/<ChromeDividedGridRow spans="all" className="run-victory-record">[\s\S]*?run\.war\.description[\s\S]*?<\/ChromeDividedGridRow>/);
     expect(runScreen).not.toMatch(/<h2>\{run\.war\.name\}<\/h2>/);
     // Both report boxes name the structural marble. Naming no fill drops a box onto the inner
     // role's TINT — a translucent field rather than an installed material, and unapproved paint
     // no gate catches, because it arrives from the generated role CSS and not from style.css.
-    expect(runScreen).toMatch(/className="run-victory-report" fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
+    expect(runScreen).toMatch(/className="run-victory-report"\s*\r?\n\s*columns=\{verbColumns\(verbs\)\}\s*\r?\n\s*fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
     // The aftermath report's own fill is pinned above, against the wrapping this file already
     // expects. Asserting it a second time here only pinned a line break.
     expect(styleCss).toMatch(/\.run-screen\.has-lipsana \.run-aftermath-workspace-content\s*\{[\s\S]*?padding-block-start:\s*0;/);

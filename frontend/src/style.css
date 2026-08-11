@@ -11121,14 +11121,16 @@ body { font-size: 17px; }
 /* ── Background music mute control ───────────────────────────────────────── */
 /* Persistent mute control — the trailing cluster's media member (ADR-0044). The vanilla
    BGM player (bgm.js) re-homes its own button into the title bar's .cluster-bgm-slot, so
-   this is no longer floating chrome docked bottom-right: it's an icon-only cluster button
-   sized to match the gear/avatar on the kit mode-button 9-slice frame (ADR-0002/0036), on
-   every route. The active frame marks "playing"; the icon dims when muted / silent. */
+   this is no longer floating chrome docked bottom-right: it's the leading compartment of
+   the cluster's divided box, the same square as the gear and the avatar, on every route.
+   The icon carries the whole state — see the three steps below. */
 .cluster-bgm-slot {
-  /* Boxless wrapper: when bgm hides the control (no soundtrack configured) or hasn't
-     re-homed it yet, the slot adds no width and no cluster gap; with the control present
-     it joins the .header-account-cluster flex row directly as its leading member. */
-  display: contents;
+  /* A REAL compartment, not a boxless wrapper. The seat is one of the columns the box
+     declares, so it has to exist from the first frame — before bgm.js re-homes its button
+     into it — or the members after it would each sit one column to the left until it lands.
+     The button inside fills it, via .titlebar-control--seat. */
+  display: block;
+  min-inline-size: 0;
 }
 
 .bgm-control {
@@ -11143,16 +11145,24 @@ body { font-size: 17px; }
 
 .bgm-control.is-playing,
 .bgm-control.is-othertab {
-  /* Playing = kit active-frame swap (no glow halo), per main's bgm rework. is-othertab is
-     a follower tab: same lit frame (music IS playing, elsewhere), but its icon stays
-     dimmed via is-muted, so it reads as "on, not here" — distinct from the base-frame
-     muted state it used to be pixel-identical to. */
   color: #f4fbff;
 }
 
+/* THREE states on one axis, because a compartment of the cluster box has no frame of its own
+   to light. This used to be two axes — a kit active-frame swap for "music is playing
+   somewhere" and a dimmed icon for "this tab is silent" — and the follower state read them
+   both at once. The seat has one frame, shared with the gear and the avatar, so the icon
+   carries all of it: bright = playing here, half-lit = playing in another tab, flat grey =
+   nothing is playing. Collapsing the middle step back into `is-muted` would make a follower
+   tab pixel-identical to silence again, which is the distinction ADR-0044 added. */
 .bgm-control.is-muted .bgm-control-icon {
   opacity: 0.4;
   filter: grayscale(0.7);
+}
+
+.bgm-control.is-othertab .bgm-control-icon {
+  opacity: 0.72;
+  filter: grayscale(0.25);
 }
 
 .tile-preview-page {
@@ -17936,6 +17946,30 @@ button.tileset-relationship-cell {
   min-inline-size: var(--titlebar-control-size, 52px);
 }
 
+/* A seat FILLS its compartment of the cluster's divided box, edge to edge, instead of being a
+   52px square standing inside one. The reset below is written two classes deep on purpose: the
+   shell's `button.active` base is (0,1,1) and would otherwise repaint a lit seat with its own
+   gradient and shadow, which is exactly the raw surface the box's installed frame exists to
+   own. Those four declarations REMOVE the shell's native button chrome and paint nothing, so
+   check-ui-surface-contract.mjs carries them as an approved frameless reset — keyed on the bare
+   selector, which is why no comment sits directly above it.
+
+   The focus ring goes INSIDE the compartment too: the shell's +2px offset would land it on the
+   rail this seat shares with its neighbour, so tabbing to the gear would outline the account
+   seat's edge as well. */
+.titlebar-control--seat:focus-visible {
+  outline-offset: -2px;
+}
+
+.titlebar-control.titlebar-control--seat {
+  background: none;
+  block-size: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  inline-size: 100%;
+}
+
 .titlebar-control-glyph {
   block-size: var(--titlebar-control-icon-size, 26px);
   image-rendering: pixelated;
@@ -17984,6 +18018,19 @@ button.tileset-relationship-cell {
   --titlebar-rule-h: var(--le-chrome-outer-rail-w, 12px);
   --ds-titlebar-inset: var(--ds-space-2);
   --titlebar-control-size: 52px;
+  /* The visible OPENING of one compartment of the divided box the trailing cluster is, on both
+     axes. It is exactly the opening a framed title-bar control gives its glyph, so a seat and a
+     framed button present the same square to the same icon — all that changed is that the three
+     seats share one frame and one rail instead of stamping three frames and putting a strip of
+     bar between them. */
+  --titlebar-control-seat:
+    calc(var(--titlebar-control-size, 52px) - 2 * var(--le-chrome-inner-rail-w, 7px));
+  /* What a rail takes off the compartment on each side it touches. A rail is drawn ON the grid
+     line, so it straddles it and covers half its width from each neighbour — which is why a
+     column track is the opening PLUS this for every internal side it has, and why a seat pads
+     itself by the same amount so its glyph centres in what can actually be seen. Without it the
+     middle seat came out 3.5px narrower than the two beside it. */
+  --titlebar-seat-rail-half: calc(var(--le-chrome-inner-rail-w, 7px) / 2);
   /* Horizontal relationships use the design-system spacing scale. This one token
      governs action-to-divider, divider-to-cluster, and control-to-control spacing. */
   --titlebar-control-gap: var(--ds-space-2);
@@ -18342,17 +18389,39 @@ button.tileset-relationship-cell {
 }
 
 /* --- Trailing-edge "settings + user" cluster ----------------------------------
-   The signed-in chrome at the top-right: an icon-only Settings gear + the avatar
-   account button, framed identically so the pair reads as one matched unit
-   (Material-3 "few trailing items"; the avatar opens the account menu below). */
+   The chrome at the top-right — music, an icon-only Settings gear, the account control —
+   as ONE divided box rather than three framed squares in a row. Its outer height is still
+   the canonical control size; the frame that used to be stamped around each member is now
+   drawn once around all of them, and the doubled edge between two members (rail, bar, rail)
+   is one of the box's own rails. Every rail and junction cap comes from the box's grid lines
+   (ADR-0242); nothing here places one. */
 .header-account-cluster {
-  /* ONE spacing source for the cluster's two edges: the inter-button gap AND the gap that
-     frames the whole cluster against the bar. Both read this so they can never drift apart. */
-  --cluster-gap: var(--titlebar-control-gap, var(--ds-space-2));
-  align-items: center;
-  display: flex;
-  gap: var(--cluster-gap);
-  justify-content: flex-end;
+  align-self: center;
+}
+
+/* The seats' row IS the box's content, so the box's outer size derives from the compartment
+   size plus its own frame — no title-bar box states a height of its own. Nothing divides the
+   row, so the compartment's visible HEIGHT is the opening exactly. */
+.header-account-cluster-seats {
+  block-size: var(--titlebar-control-seat);
+}
+
+/* A cell reaches to the grid LINE, and the rail drawn on that line covers half its width on
+   this side of it. So a cell that has a neighbour is a half-rail wider than the opening it
+   shows, and it gives that half-rail back as padding — otherwise its content centres in the
+   cell rather than in what can be seen, and the glyph sits off-centre by half of half a rail.
+   First and last have no neighbour on their outer side, where the box's own frame is the edge
+   and takes nothing from the content box.
+
+   Position, because that IS the question: which grid lines this cell touches. The same index
+   builds the column tracks in HeaderAccountCluster, and verify:titlebar measures the openings
+   the two produce together, so they cannot drift apart unnoticed. */
+.header-account-cluster-seats > :not(:first-child) {
+  padding-inline-start: var(--titlebar-seat-rail-half);
+}
+
+.header-account-cluster-seats > :not(:last-child) {
+  padding-inline-end: var(--titlebar-seat-rail-half);
 }
 
 /* Title-bar icon-only controls get their geometry from .titlebar-control--icon. This
@@ -18380,25 +18449,25 @@ button.tileset-relationship-cell {
   place-items: center;
 }
 
+/* The account seat's compartment. It stays an element of its own — the menu below is
+   positioned off it and the outside-click handler needs a root — so it fills the cell and the
+   avatar trigger inside fills it in turn. */
 .account-menu-root {
   align-items: center;
+  block-size: 100%;
   display: flex;
-  flex: 0 0 var(--titlebar-control-size, 52px);
-  gap: 10px;
-  inline-size: var(--titlebar-control-size, 52px);
+  inline-size: 100%;
+  min-inline-size: 0;
   position: relative;
-}
-
-.account-sign-in-button {
-  flex: 0 0 var(--titlebar-control-size, 52px);
 }
 
 /* Keep the trailing cluster stable while a restarting backend cannot yet answer
    the authoritative account probe. No sign-in affordance is shown until a real
-   signed-out response arrives. */
+   signed-out response arrives — the compartment stays, empty, so the box keeps its
+   columns and the seats beside it never move. */
 .account-auth-pending {
-  flex: 0 0 var(--titlebar-control-size, 52px);
-  inline-size: var(--titlebar-control-size, 52px);
+  block-size: 100%;
+  inline-size: 100%;
 }
 
 /* Account menu — small kit panel-framed popover anchored under the avatar. A
@@ -21328,9 +21397,7 @@ button.tileset-relationship-cell {
 .run-aftermath-head,
 .run-victory-head,
 .run-aftermath-report,
-.run-victory-report,
-.run-aftermath-actions,
-.run-victory-actions {
+.run-victory-report {
   translate: 0 -5cqh;
 }
 
@@ -21363,18 +21430,34 @@ button.tileset-relationship-cell {
    short rows stretched edge to edge would put its labels and its numbers on opposite
    sides of the screen. Victory's report is prose rather than a ledger, so it takes a
    wider measure — the same reason read the other way. */
-.run-aftermath-report {
+/* Both reports close with their own verbs, so the box takes no padding: its rails run the full
+   inner width and each ROW carries its inset instead. */
+.run-aftermath-report,
+.run-victory-report {
   grid-row: 2;
+  padding: 0;
+}
+
+.run-aftermath-report {
   inline-size: min(100%, 420px);
+}
+
+.run-victory-report {
+  inline-size: min(100%, 560px);
+}
+
+/* A row that is one thing across the box is ONE column, whatever the verb row below it split
+   the box into. Without this it inherits the box's tracks and huddles into the first of them. */
+.run-aftermath-record,
+.run-victory-record {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 /* The record the War is remembered by. Its own rows carry the spacing, because the kit
    frame's inner padding is sized for dense panel content. */
-.run-victory-report {
+.run-victory-record {
   display: grid;
   gap: var(--ds-space-3);
-  grid-row: 2;
-  inline-size: min(100%, 560px);
   padding: var(--ds-space-4);
 }
 
@@ -21396,25 +21479,30 @@ button.tileset-relationship-cell {
   justify-content: center;
 }
 
-/* The Run's last action is a button, not a band: the workspace lane stretches its grid
-   children, which was inconspicuous while this one wore the flat field and read as a wall
-   the moment it wore a plank. The actions row is what holds it to its own width now. */
-.run-aftermath-actions,
-.run-victory-actions {
-  align-self: start;
-  display: flex;
-  gap: var(--ds-inline-tight);
-  grid-row: 3;
-  justify-content: center;
+/* A verb of a result report IS its compartment, so it carries only type and measure — the frame
+   around it, the rail beside it and the plank under it are the box's. Sized as the framed text
+   button each one replaced, so the screen is read at the same scale it always was. */
+.run-result-verbs .run-result-verb {
+  display: grid;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-sm);
+  min-block-size: 46px;
+  padding: 0 var(--ds-inset);
+  text-transform: uppercase;
 }
 
-/* The kit frame's own inner padding is sized for dense panel content; a ledger read at
-   arm's length needs its rows further off the border than that. */
+.run-result-verb:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: -2px;
+}
+
+/* The ledger is a ROW of the report box now, so it carries its own inset off the frame — the
+   box's padding is 0 there, because its rails run the full inner width. */
 .run-aftermath-ledger {
   display: grid;
   gap: var(--ds-space-4);
   margin: 0;
-  padding: var(--ds-space-2) var(--ds-space-3);
+  padding: var(--ds-inset);
 }
 
 /* Label left, number right, on one row — the shape a ledger is read in. The pair is
@@ -23580,6 +23668,14 @@ button.tileset-relationship-cell {
 .run-deployment-deal-flight > :is(.run-card-back, .run-card-action) {
   block-size: 100%;
   display: block;
+  inline-size: 100%;
+}
+
+/* The swept remainder carries the deck's own pile, so its top card must take the flight box
+   exactly the way the top card takes the deck box — the JS gives this element the deck's rect,
+   and anything short of filling it would make the pile change size at the handover. */
+.run-deployment-deal-flight.is-remainder > .run-deployment-center-card {
+  block-size: 100%;
   inline-size: 100%;
 }
 

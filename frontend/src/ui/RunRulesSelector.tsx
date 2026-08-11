@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { RUN_CARD_SPANS, type RunRules } from '../run/model';
+import { RUN_CARD_SPANS, RUN_RARITY_RULE_IDS, type RunRarityRuleId, type RunRules } from '../run/model';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { ChromeButton } from './shared/ChromeButton';
 import { ChromeDividedGridRow } from './shared/ChromeDividedGrid';
@@ -44,6 +44,7 @@ const RULE_NAMES = {
   span: 'Formation size',
   rotation: 'Placement facing',
   pricing: 'Card pricing',
+  rarity: 'Card rarity',
 } as const;
 
 const SPAN_COPY: Readonly<Record<2 | 4, { label: string; effect: string }>> = {
@@ -81,6 +82,22 @@ const PRICING_COPY: Readonly<Record<'material' | 'density', { label: string; eff
   },
 };
 
+// Rarity is here because ADR-0567 made it a rule a Run is bound to rather than a global property of
+// the catalog. The two are not a preference and a fallback: they sort the same 69 cards two
+// different ways, and the older one is kept playable because a rule nobody can play is a rule nobody
+// can judge. Its effect line says what it does rather than what it is — the repeated row IS the
+// thing, and a player who picks it should not be surprised by it.
+const RARITY_COPY: Readonly<Record<RunRarityRuleId, { label: string; effect: string }>> = {
+  'price-shifts': {
+    label: 'Priced',
+    effect: 'A card is rare because it is dear, and then a few named exceptions move: a card of nothing but minor pieces is Rare whatever it costs.',
+  },
+  'material-bands': {
+    label: 'By material',
+    effect: 'Rarity from raw material, the way it worked before. Under the two-by-two market this leaves six Common cards for sixteen pile seats, so a Sectio row will deal the same card twice.',
+  },
+};
+
 /**
  * The rule options as CELLS of Run preparation's box — an array rather than a component, because
  * only a direct child of the box is a row it lays a rail around (see ChromeDividedGrid).
@@ -114,6 +131,15 @@ export function useRunRulesCells({
   }));
 
   const rotationKey = value.mayRotate ? 'on' : 'off';
+
+  const rarityOptions: readonly HouseSelectOption[] = RUN_RARITY_RULE_IDS.map((key) => ({
+    value: key,
+    label: (
+      <span className="run-rules-option-copy">
+        <span>{RARITY_COPY[key].label}</span>
+      </span>
+    ),
+  }));
 
   // Default first, as the span and facing lists above are ordered.
   const pricingOptions: readonly HouseSelectOption[] = (['density', 'material'] as const).map((key) => ({
@@ -200,6 +226,23 @@ export function useRunRulesCells({
         ariaLabel={RULE_NAMES.pricing}
         className="run-rules-select"
         testId="run-rules-pricing"
+        fillSurface={fillSurface}
+      />
+    </ChromeDividedGridRow>,
+
+    <ChromeDividedGridRow key="rules-rarity-copy" spans="all" className="run-prep-cell run-rules-cell" {...hidden}>
+      <h4>{RULE_NAMES.rarity}</h4>
+      <p className="run-rules-effect">{RARITY_COPY[value.rarity].effect}</p>
+    </ChromeDividedGridRow>,
+    <ChromeDividedGridRow key="rules-rarity" spans="all" className="run-prep-plate run-rules-cell" {...hidden}>
+      <HouseSelect
+        seated
+        value={value.rarity}
+        options={rarityOptions}
+        onChange={(next) => onChange({ ...value, rarity: next as RunRarityRuleId })}
+        ariaLabel={RULE_NAMES.rarity}
+        className="run-rules-select"
+        testId="run-rules-rarity"
         fillSurface={fillSurface}
       />
     </ChromeDividedGridRow>,

@@ -1,11 +1,24 @@
 import { useCallback, useMemo, useState, type ReactElement } from 'react';
 import {
+  DEFAULT_RUN_RULES,
+  LEGACY_RUN_RULES,
+  RUN_CARD_RARITY_COMMON_MAX_GOLD,
+  RUN_CARD_RARITY_UNCOMMON_MAX_GOLD,
+  runRarityShiftAudit,
+} from '../run/model';
+import { RUN_CARD_NAME_BY_ID } from '../run/cardNames';
+import { navigateApp } from './navigation';
+import {
   DEFAULT_POOL_MODEL,
   POOL_GROUPINGS,
   POOL_MODELS,
+  POOL_LIVE_RULES,
   POOL_PIECES,
-  POOL_PILE_SLOTS,
+  POOL_RUN_OFFERS,
   buildPool,
+  poolDistribution,
+  poolPile,
+  poolLiveVerdict,
   groupPool,
   poolPriceSteps,
   poolRotationContract,
@@ -19,6 +32,7 @@ import {
   type PoolCell,
   type PoolGrouping,
   type PoolKnobs,
+  type PoolModel,
   type PoolPiece,
   type PoolTerm,
 } from './runCardPool';
@@ -33,8 +47,35 @@ import {
 // one number. GROUPS are a register in the Prosopography sense: choose a dimension and read who is
 // actually in each bucket, because a tier count answers "how many" and never answers "which".
 //
-// Defaults reproduce the shipped generator, with one known gap: `rr-vertical` is a named card
-// injected past the material cap, so this lands on 268 where the live catalog carries 269.
+// The two `Shipped rule` models are the position every proposal is arguing against, and they are the
+// game rather than a likeness of it: the pool admits both over-cap named cards, the price chain
+// rounds where `runCardCost` rounds, and the tier is read straight out of `runCardRarity`. Read one
+// of them first. A proposal compared against a baseline the studio could not draw is not compared
+// against anything, which is how the Bishop pair came to be discussed as a card to PROMOTE into Rare
+// while the shipped rule already had it there.
+
+// Which MODEL is on screen is the whole content of this page, so it is addressed rather than
+// clicked to: `?poolModel=<id>` opens straight on a position instead of on the head of the list with
+// a dropdown still to find. The Studio's route encoder rebuilds the query from its own model, so
+// preserveCardPoolRouteParams in TilePreview keeps this alive across that rebuild — the same shape
+// the Chrome Lab and the Main Menu tuner use for their own sub-state. The head of the list is the
+// default and is written as an ABSENT param, so a plain catalog link stays plain.
+export const POOL_MODEL_PARAM = 'poolModel';
+
+function readPoolModel(): PoolModel {
+  if (typeof window === 'undefined') return DEFAULT_POOL_MODEL;
+  const id = new URLSearchParams(window.location.search).get(POOL_MODEL_PARAM);
+  return POOL_MODELS.find((model) => model.id === id) ?? DEFAULT_POOL_MODEL;
+}
+
+function writePoolModel(id: string): void {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  if (id === DEFAULT_POOL_MODEL.id) url.searchParams.delete(POOL_MODEL_PARAM);
+  else url.searchParams.set(POOL_MODEL_PARAM, id);
+  const query = url.searchParams.toString();
+  navigateApp(`${url.pathname}${query ? `?${query}` : ''}${url.hash}`, { replace: true, scroll: false });
+}
 
 const BANDS: readonly PoolBand[] = ['common', 'uncommon', 'rare'];
 const MAX_ROWS_PER_GROUP = 60;
@@ -111,8 +152,9 @@ function CardTable({ cards }: { cards: readonly PoolCard[] }): ReactElement {
 }
 
 export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactElement {
-  const [modelId, setModelId] = useState<string>(DEFAULT_POOL_MODEL.id);
-  const [knobs, setKnobs] = useState<PoolKnobs>(DEFAULT_POOL_MODEL.knobs);
+  const opened = readPoolModel();
+  const [modelId, setModelId] = useState<string>(opened.id);
+  const [knobs, setKnobs] = useState<PoolKnobs>(opened.knobs);
   const [bandFilter, setBandFilter] = useState<PoolBand | 'all'>('all');
   const [volumeFilter, setVolumeFilter] = useState<number | 'all'>('all');
   const [pieceFilter, setPieceFilter] = useState<PoolPiece | 'all'>('all');
@@ -133,6 +175,7 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
     if (!model) return;
     setModelId(id);
     setKnobs(model.knobs);
+    writePoolModel(id);
   }, []);
 
   const activeModel = POOL_MODELS.find((model) => model.id === modelId) ?? null;
@@ -141,6 +184,16 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
   const rotation = useMemo(() => poolRotationContract(knobs), [knobs]);
   const cards = useMemo(() => buildPool(knobs), [knobs]);
   const summary = useMemo(() => summarizePool(cards), [cards]);
+  const verdict = useMemo(() => poolLiveVerdict(cards), [cards]);
+  const distribution = useMemo(() => poolDistribution(cards), [cards]);
+  const pile = useMemo(() => poolPile(cards), [cards]);
+  // Audited against the market the model's own shape rule leaves, so a shift that is alive on the
+  // wide catalog and dead on the narrow one reads as dead here — which is the case that started all
+  // of this, and the case a rule stated only in prose can never show you.
+  const shiftAudit = useMemo(
+    () => runRarityShiftAudit(knobs.cols >= 4 ? LEGACY_RUN_RULES : DEFAULT_RUN_RULES),
+    [knobs.cols],
+  );
 
   const shown = useMemo(() => cards.filter((card) => (
     (bandFilter === 'all' || card.band === bandFilter)
@@ -199,6 +252,22 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
         .rcp-row-label { opacity: 0.85; }
         .rcp-row input[type=number] { width: calc(var(--rcp-fs) * 6); padding: 4px 8px; font: inherit; font-size: var(--rcp-fs); }
         .rcp-check { display: flex; align-items: center; gap: 9px; margin: 8px 0; font-size: var(--rcp-fs); }
+        .rcp-verdict { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 14px; padding: 12px 16px; border: 1px solid #7a3b3b; border-left-width: 5px; background: rgba(122, 59, 59, 0.16); }
+        .rcp-verdict.is-live { border-color: #2f6f4a; border-left-color: #3f9c66; background: rgba(47, 111, 74, 0.16); }
+        .rcp-verdict b { font-size: calc(var(--rcp-fs) * 1.15); letter-spacing: 0.09em; text-transform: uppercase; color: #e6a3a3; }
+        .rcp-verdict.is-live b { color: #8fd9ae; }
+        .rcp-verdict span { font-size: calc(var(--rcp-fs) * 0.92); opacity: 0.86; flex: 1 1 320px; line-height: 1.5; }
+        .rcp-verdict span b { font-size: inherit; letter-spacing: 0; text-transform: none; color: inherit; }
+        .rcp-shift { margin-top: 12px; padding: 9px 11px; border-left: 3px solid #3f9c66; background: rgba(63, 156, 102, 0.09); }
+        .rcp-shift.is-dead { border-left-color: #b45a5a; background: rgba(180, 90, 90, 0.11); }
+        .rcp-shift-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+        .rcp-shift-head b { font-size: var(--rcp-fs); }
+        .rcp-shift-head em { font-style: normal; font-size: calc(var(--rcp-fs) * 0.85); opacity: 0.75; }
+        .rcp-shift.is-dead .rcp-shift-head em { color: #e6a3a3; opacity: 1; }
+        .rcp-row-alarm td { color: #e6a3a3; }
+        .rcp-shift-moved { font-size: calc(var(--rcp-fs) * 0.84); opacity: 0.72; }
+        .rcp-select-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; font-size: var(--rcp-fs); }
+        .rcp-select-row select { font: inherit; font-size: var(--rcp-fs); padding: 4px 6px; min-width: 0; flex: 1 1 auto; }
         .rcp-check input { width: calc(var(--rcp-fs) * 1.05); height: calc(var(--rcp-fs) * 1.05); }
         .rcp-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--rcp-fs) * 10), 1fr)); gap: 10px; margin-bottom: 16px; }
         .rcp-stat { border: 1px solid rgba(255,255,255,0.16); border-radius: 6px; padding: 12px 14px; }
@@ -282,10 +351,22 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
             <input type="checkbox" checked={knobs.oneOrientationPerShape} onChange={(e) => set('oneOrientationPerShape', e.target.checked)} />
             <span>One orientation per shape</span>
           </label>
-          <label className="rcp-check">
-            <input type="checkbox" checked={knobs.allowQueenPawnOverCap} onChange={(e) => set('allowQueenPawnOverCap', e.target.checked)} />
-            <span>Queen+Pawn exempt from cap</span>
+          <label className="rcp-select-row">
+            <span>Over-cap named cards</span>
+            <select
+              value={knobs.overCapNamedCards}
+              onChange={(e) => set('overCapNamedCards', e.target.value as PoolKnobs['overCapNamedCards'])}
+            >
+              <option value="none">none — generator only</option>
+              <option value="queen-pawn">Queen+Pawn</option>
+              <option value="live-catalog">the live catalog’s two</option>
+            </select>
           </label>
+          <p className="rcp-note">
+            The live catalog injects two ten-material pairs past the cap by hand: `pq-front` and
+            `rr-vertical`. Exempting the Queen+Pawn alone lands one card short of the game, and the
+            card it drops is the Rook pair.
+          </p>
 
           <div className="rcp-contract">
             <div className="rcp-contract-row">
@@ -338,6 +419,9 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
               {term.kind === 'blockedPawn' ? (
                 <NumberRow label="penalty" value={term.penalty} onChange={(v) => setTerm(index, { ...term, penalty: v })} step={0.05} />
               ) : null}
+              {term.kind === 'scale' ? (
+                <NumberRow label="by" value={term.by} onChange={(v) => setTerm(index, { ...term, by: v })} step={1} min={0} />
+              ) : null}
               {term.kind === 'round' ? (
                 <NumberRow label="to" value={term.to} onChange={(v) => setTerm(index, { ...term, to: Math.max(0, v) })} step={1} min={0} />
               ) : null}
@@ -363,37 +447,109 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
 
         <div className="rcp-panel">
           <h3>Rarity formula</h3>
-          <div className="rcp-term">
-            <div className="rcp-term-head">Bands on price</div>
-            <code className="rcp-term-formula">
-              {`common    cost <= ${knobs.commonMaxCost}
+          <label className="rcp-select-row">
+            <span>Tier decided by</span>
+            <select value={knobs.bandRule} onChange={(e) => set('bandRule', e.target.value as PoolKnobs['bandRule'])}>
+              <option value="price">price — two cuts</option>
+              <option value="shipped">the shipped rule</option>
+            </select>
+          </label>
+          {knobs.bandRule === 'shipped' ? (
+            <div className="rcp-term">
+              <div className="rcp-term-head">The rule the game is running</div>
+              <code className="rcp-term-formula">
+                {`common    cost <= ${RUN_CARD_RARITY_COMMON_MAX_GOLD}
+uncommon  cost <= ${RUN_CARD_RARITY_UNCOMMON_MAX_GOLD}
+rare      everything above`}
+              </code>
+              {/*
+                The shifts are the part of a rarity rule that carries the design, and they are shown
+                with what they MOVED rather than only with what they say. A shift moving nothing is
+                dead — its precondition has quietly stopped holding — and that is the failure this
+                whole page exists because of, so it is stated in red and not left to be inferred.
+              */}
+              {shiftAudit.map((report) => (
+                <div key={report.shift.id} className={`rcp-shift${report.moved.length ? '' : ' is-dead'}`}>
+                  <div className="rcp-shift-head">
+                    <b>{report.shift.name}</b>
+                    <em>
+                      {report.shift.from ? `${report.shift.from} → ${report.shift.to}` : `→ ${report.shift.to}`}
+                      {' · '}
+                      {report.moved.length ? `moves ${report.moved.length}` : 'MOVES NOTHING — DEAD'}
+                    </em>
+                  </div>
+                  <p className="rcp-note">{report.shift.why}</p>
+                  {report.moved.length ? (
+                    <p className="rcp-note rcp-shift-moved">
+                      {report.moved.map((id) => RUN_CARD_NAME_BY_ID[id] ?? id).join(' · ')}
+                    </p>
+                  ) : null}
+                </div>
+              ))}
+              <p className="rcp-note">
+                This is `runCardRarity` itself — the flat cut on price, then every shift it declares,
+                asked the same question the catalog asks it. A tier here is the tier the card has in
+                a Run.
+              </p>
+            </div>
+          ) : (
+            <div className="rcp-term">
+              <div className="rcp-term-head">Bands on price</div>
+              <code className="rcp-term-formula">
+                {`common    cost <= ${knobs.commonMaxCost}
 uncommon  cost <= ${knobs.uncommonMaxCost}
 rare      everything above`}
-            </code>
-            <NumberRow label="common ≤" value={knobs.commonMaxCost} onChange={(v) => set('commonMaxCost', v)} step={5} />
-            <NumberRow label="uncommon ≤" value={knobs.uncommonMaxCost} onChange={(v) => set('uncommonMaxCost', v)} step={5} />
-          </div>
+              </code>
+              <NumberRow label="common ≤" value={knobs.commonMaxCost} onChange={(v) => set('commonMaxCost', v)} step={5} />
+              <NumberRow label="uncommon ≤" value={knobs.uncommonMaxCost} onChange={(v) => set('uncommonMaxCost', v)} step={5} />
+            </div>
+          )}
           <table>
             <tbody>
               {BANDS.map((band) => (
                 <tr key={band}>
                   <td>{band}</td>
                   <td>{summary.byBand[band]} cards</td>
-                  <td>{POOL_PILE_SLOTS[band]} slots</td>
+                  <td>{pile.seats[band]} slots</td>
                   <td>{summary.byBand[band] === 0 ? '—' : `${(summary.perPileShare[band] * 100).toFixed(1)}%`}</td>
                 </tr>
               ))}
             </tbody>
           </table>
           <p className="rcp-note">
-            Rarity here is derived entirely from price — two cuts, nothing else. That is one proposal
-            rather than a fact: a cut cannot separate cards that price the same, which is why rung 90
-            holds RB and RN alongside the triple-minor cards.
+            {knobs.bandRule === 'shipped'
+              ? 'The shipped rule reads material and shape and never reads price, so it separates cards that cost the same — the Bishop step is what puts the Bishop pair in Rare while the Knight pair stays Uncommon at identical material. What it cannot do is notice that a shape rule has deleted every card the footprint demotion was feeding into Common.'
+              : 'Rarity here is derived entirely from price — two cuts, nothing else. That is one proposal rather than a fact: a cut cannot separate cards that price the same, which is why rung 90 holds RB and RN alongside the triple-minor cards.'}
           </p>
         </div>
       </div>
 
       <div>
+        {/*
+          The verdict leads the page, before a single number, because every number under it means
+          something different depending on this one answer. It is computed against RUN_CARD_DECK
+          card for card — not read off the model's name — so a model cannot call itself the game
+          and be believed, and an edited one stops being the game the moment a knob moves.
+        */}
+        <div className={`rcp-verdict${verdict.is ? ' is-live' : ''}`}>
+          <b>{verdict.is ? 'THIS IS THE GAME' : 'THIS IS A PROPOSAL'}</b>
+          {verdict.is ? (
+            <span>
+              {POOL_LIVE_RULES[verdict.is].label} — {POOL_LIVE_RULES[verdict.is].note}. Every card,
+              tier and price below matches the live catalog exactly.
+            </span>
+          ) : (
+            <span>
+              Not the rules any Run is dealt under. What it costs against
+              {' '}{POOL_LIVE_RULES[verdict.nearest].label}, the nearest live position — different
+              tier: <b>{verdict.diff.differentTier}</b> · priced differently:
+              {' '}<b>{verdict.diff.differentPrice}</b> · not dealt by the game:
+              {' '}<b>{verdict.diff.absentFromGame}</b> · dealt but missing here:
+              {' '}<b>{verdict.diff.missingFromPool}</b>
+            </span>
+          )}
+        </div>
+
         <div className="rcp-active-model">
           <span>Model</span>
           <b>{activeModel?.label ?? 'Custom'}</b>
@@ -405,7 +561,7 @@ rare      everything above`}
           {BANDS.map((band) => (
             <div className="rcp-stat" key={band}>
               <b>{summary.byBand[band]}</b>
-              <span>{band.toUpperCase()} · {POOL_PILE_SLOTS[band]} SLOTS</span>
+              <span>{band.toUpperCase()} · {pile.seats[band]} SLOTS</span>
             </div>
           ))}
           <div className="rcp-stat"><b>{summary.artOwed}</b><span>ILLUSTRATIONS OWED</span></div>
@@ -429,9 +585,73 @@ rare      everything above`}
             </tbody>
           </table>
           <p className="rcp-note">
-            Share of a pile slot is how often ONE card of that band reaches a 20-card pile at the shipped
-            16/3/1 quota. Under 1% means the player never learns to recognise it. Illustrations owed counts
-            uncommon + rare only, on the rule that commons are templated.
+            Volumes are how many cells a card occupies. Illustrations owed counts uncommon + rare
+            only, on the rule that commons are templated. What a tier's SIZE actually costs the
+            player is the panel below.
+          </p>
+        </div>
+
+        {/*
+          The distribution, and it leads with the sentence the tier counts do not say.
+          A tier is a label; the shuffle is what makes a card rare. The seats are a fixed quota and
+          the identities are whatever the rule swept in, and nothing holds those two in any
+          relation -- so the same word can mean "dealt to you three times a pile" and "you will
+          finish the Run without meeting it". Both pathologies were live on this page at once, and
+          neither was visible from the tier counts that were.
+        */}
+        <div className="rcp-panel">
+          <h3>What a card's rarity actually is</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>band</th><th>identities</th><th>seats/pile</th>
+                <th>one card, per pile</th><th>you meet a given one, per run</th>
+              </tr>
+            </thead>
+            <tbody>
+              {distribution.map((row) => (
+                <tr key={row.band} className={row.fillsDistinctly ? undefined : 'rcp-row-alarm'}>
+                  <td>{row.band}</td>
+                  <td>{row.identities}</td>
+                  <td>{row.seats}</td>
+                  <td>
+                    {row.identities === 0 ? '—' : `${row.perPile.toFixed(2)}x`}
+                    {row.fillsDistinctly ? '' : ' — REPEATS'}
+                  </td>
+                  <td>{row.identities === 0 ? '—' : `${Math.round(row.metPerRun * 100)}%`}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="rcp-note">
+            A pile is <b>{pile.size}</b> cards holding an exact quota — {pile.seats.common} common,
+            {' '}{pile.seats.uncommon} uncommon, {pile.seats.rare} rare. Its SIZE is derived, not
+            chosen: as many cards as these tiers can fill <b>without repeating one</b>. A QUOTA, not
+            a roll — every pile is that composition rather than converging over a long sample. Each
+            band draws from its own seeded shuffle and the seats are then shuffled together, so the
+            order of a row is a surprise and its composition never is. The cursor runs continuously
+            and exhausting a pile builds the next one the same way.
+          </p>
+          <p className="rcp-note">
+            {pile.size >= POOL_RUN_OFFERS
+              ? `And ${pile.size} outlasts the ${POOL_RUN_OFFERS} offers a Run walks, so a Run never
+                 crosses into a second pile. Repetition is not merely rare here — it is unreachable.`
+              : `This pile is shorter than the ${POOL_RUN_OFFERS} offers a Run walks, so a Run crosses
+                 into a second, independently shuffled pile and a row that straddles the boundary can
+                 repeat a card.`}
+          </p>
+          <p className="rcp-note">
+            <b>A band can never hold fewer identities than it has seats</b>, because the pile is
+            sized to the tiers rather than the tiers cut to fit the pile. Starving a band shrinks the
+            PILE; it can no longer make that band deal one card twice. This is what the market used
+            to do instead, and it is why a Sectio dealt the same card twice in a row of three: the
+            pile was fixed at twenty while the tier under it fell to six.
+          </p>
+          <p className="rcp-note">
+            The per-run figure assumes {POOL_RUN_OFFERS} offers — ten Sectios of three, the installed
+            Run-eligible War. It is the one assumption on this page; everything else is arithmetic
+            on the pile. A card met in under a few percent of Runs is content that is drawn,
+            illustrated and never seen.
           </p>
         </div>
 
@@ -519,8 +739,9 @@ rare      everything above`}
         })}
 
         <p className="rcp-note">
-          At shipped generation rules this pool holds 268 where the live catalog holds 269: `rr-vertical` is a
-          named card injected past the material cap, and this generator exempts the Queen+Pawn pair alone.
+          {knobs.overCapNamedCards === 'live-catalog'
+            ? 'Over-cap named cards are set to the live catalog’s two, so this pool holds every card the game can deal and none it cannot.'
+            : 'This pool is short of the live catalog by the over-cap named cards it is not admitting: `rr-vertical`, the Rook pair at ten material, and — set to none — `pq-front` with it. Both reach the game only through the named-card injection.'}
         </p>
       </div>
     </div>

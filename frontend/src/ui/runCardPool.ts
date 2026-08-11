@@ -3,13 +3,49 @@
  * design is actually stuck on — how big is common, what does a cost band admit, what does dropping
  * rotation collapse cost — can be asked and answered live instead of one probe script at a time.
  *
- * This deliberately does NOT read `runCardRarity` or `createRunCardOffer`. The shipped rules are
- * one point in the space; the point of the studio is to stand somewhere else and look. Defaults
- * reproduce the shipped generator (4x2 grid, <=4 units, <=9 material, rotation-canonical), so a
- * fresh load lands on the live catalog and every knob moves away from a known position.
+ * Pricing is re-derived rather than imported, because a price formula is the thing being proposed
+ * and a proposal has to be able to stand somewhere the game does not. Defaults reproduce the
+ * shipped generator (4x2 grid, <=4 units, <=9 material, rotation-canonical), so a fresh load lands
+ * on the live catalog and every knob moves away from a known position.
+ *
+ * RARITY is the exception, and `bandRule: 'shipped'` READS `runCardRarity` instead of restating it.
+ * The shipped rule is a flat cut on price and then a list of declared SET SHIFTS — moves of a named
+ * set of cards between tiers, which no threshold can express however the threshold is placed. For a
+ * long time this studio therefore had no way to draw the rule the game was running, and a proposal
+ * compared against a baseline that cannot be drawn is compared against nothing. A second copy of the
+ * rule here would drift from the catalog the first time either moved; calling the game's own
+ * function cannot, and the shift audit it exposes is what tells a live shift from a dead one.
  */
 
+import {
+  DEFAULT_RUN_RULES,
+  LEGACY_RUN_RULES,
+  RUN_CARD_DECK,
+  apportionPileSeats,
+  cardAllowedByRules,
+  pileSizeForTiers,
+  runCardCost,
+  runCardRarity,
+  type AdlectablePieceType,
+  type RunCardFormationCell,
+  type RunCoreCard,
+  type RunRules,
+} from '../run/model';
+
 export type PoolPiece = 'P' | 'N' | 'B' | 'R' | 'Q';
+
+/** Studio letters to the game's own piece names, so the shipped rarity rule can be asked directly. */
+const POOL_PIECE_TO_GAME: Readonly<Record<PoolPiece, AdlectablePieceType>> = {
+  P: 'pawn', N: 'knight', B: 'bishop', R: 'rook', Q: 'queen',
+};
+
+const GAME_PIECE_TO_POOL: Readonly<Record<AdlectablePieceType, PoolPiece>> = {
+  pawn: 'P', knight: 'N', bishop: 'B', rook: 'R', queen: 'Q',
+};
+
+/** `runCardCost` answers in whole points and the card face prints ten times it (ADR-0547), which is
+ * the scale every price on this page is written at. */
+const GOLD_PER_POINT = 10;
 
 export const POOL_PIECES: readonly PoolPiece[] = ['P', 'N', 'B', 'R', 'Q'];
 
@@ -34,6 +70,9 @@ export type PoolTerm =
   | Readonly<{ kind: 'defences'; bonus: number; countPawnSupport: boolean }>
   /** x (1 - blocked x penalty). A Pawn directly behind a friendly piece can never advance. */
   | Readonly<{ kind: 'blockedPawn'; penalty: number }>
+  /** x `by`, weighting nothing. Material pricing is this and only this: the flat conversion from
+   * points to the gold a card face prints, with no term deciding what the material is worth. */
+  | Readonly<{ kind: 'scale'; by: number }>
   /** Round to the nearest `to`. Normally last. */
   | Readonly<{ kind: 'round'; to: number }>;
 
@@ -45,9 +84,12 @@ export type PoolKnobs = Readonly<{
   rows: number;
   /** Largest footprint the generator will emit. */
   maxCells: number;
-  /** Material ceiling. The shipped generator exempts a completed Queen+Pawn pair. */
+  /** Material ceiling. The shipped generator stops here and the live catalog then INJECTS two
+   * named ten-material pairs past it by hand: `pq-front` and `rr-vertical`. A generator that
+   * exempts neither lands two short of the catalog; one that exempts the Queen+Pawn alone lands
+   * one short, which is why the Rook pair went missing from the rare tier for as long as it did. */
   maxValue: number;
-  allowQueenPawnOverCap: boolean;
+  overCapNamedCards: 'none' | 'queen-pawn' | 'live-catalog';
   /** Rotation-canonical identity (shipped) vs every orientation and seating distinct. */
   collapseRotation: boolean;
   /**
@@ -71,7 +113,18 @@ export type PoolKnobs = Readonly<{
    * of the formula has to be per-model too, not just its numbers.
    */
   terms: readonly PoolTerm[];
-  /** Cost bands. */
+  /**
+   * What decides a card's tier.
+   *
+   * `price` is the proposal every model in this studio was written to explore: two cuts on the
+   * card's own cost, so rarity follows whatever the price formula says a card is worth.
+   *
+   * `shipped` is the rule the game is actually running, read from `runCardRarity`. It ignores price
+   * entirely. Keep it selectable rather than merely described, because a proposal is only worth
+   * anything against the position it replaces, and the tier counts below are the comparison.
+   */
+  bandRule: 'price' | 'shipped';
+  /** Cost bands. Read only under `bandRule: 'price'`. */
   commonMaxCost: number;
   uncommonMaxCost: number;
 }>;
@@ -82,16 +135,29 @@ export const DEFAULT_POOL_KNOBS: PoolKnobs = {
   rows: 2,
   maxCells: 4,
   maxValue: 9,
-  allowQueenPawnOverCap: true,
+  overCapNamedCards: 'queen-pawn',
   collapseRotation: true,
   oneOrientationPerShape: false,
   terms: [
     { kind: 'density', power: 0.5, scale: 10 },
     { kind: 'round', to: 5 },
   ],
+  bandRule: 'price',
   commonMaxCost: 35,
   uncommonMaxCost: 90,
 };
+
+/**
+ * The live pricing chain, at the game's own rounding.
+ *
+ * `runCardCost` rounds to whole gold and the face prints ten times it, so every live price is a
+ * multiple of ten. The studio's usual `round: 5` is half a step finer, which is harmless while
+ * comparing proposals and wrong when the model claims to BE the game.
+ */
+const SHIPPED_PRICE_TERMS: readonly PoolTerm[] = Object.freeze([
+  { kind: 'density', power: 0.5, scale: 10 },
+  { kind: 'round', to: 10 },
+]);
 
 export type PoolBand = 'common' | 'uncommon' | 'rare';
 
@@ -154,7 +220,7 @@ function rotate(cells: readonly PoolCell[], turns: number): PoolCell[] {
  * assignment rides with the cell — which is why `NP` and `PN` are the same offer today. With it
  * off, every orientation and every seating is its own card, and front/back becomes a purchase.
  */
-function cardIdentity(
+export function cardIdentity(
   cells: readonly PoolCell[],
   pieces: readonly PoolPiece[],
   collapseRotation: boolean,
@@ -378,6 +444,7 @@ export function poolTermFormula(term: PoolTerm): string {
     return `x (1 + defences x ${term.bonus})${term.countPawnSupport ? '' : ', Pawn shelter not counted'}`;
   }
   if (term.kind === 'blockedPawn') return `x (1 - blocked Pawns x ${term.penalty})`;
+  if (term.kind === 'scale') return `x ${term.by}, weighting nothing`;
   return `rounded to the nearest ${term.to}`;
 }
 
@@ -386,6 +453,7 @@ export function poolTermLabel(term: PoolTerm): string {
   if (term.kind === 'bishopPair') return 'Bishop pair';
   if (term.kind === 'defences') return 'Defences';
   if (term.kind === 'blockedPawn') return 'Blocked pawns';
+  if (term.kind === 'scale') return 'Flat scale';
   return 'Rounding';
 }
 
@@ -426,6 +494,9 @@ function runTerms(
         cost = before * (1 - blockedPawns * term.penalty);
         worked = `x (1 - ${blockedPawns} x ${term.penalty})`;
       }
+    } else if (term.kind === 'scale') {
+      cost = before * term.by;
+      worked = `x ${term.by}`;
     } else {
       cost = roundTo(before, term.to);
       worked = `-> ${cost}`;
@@ -477,6 +548,29 @@ export function poolPriceSteps(
   };
 }
 
+/**
+ * The tier a card lands in, by whichever rule the model declares.
+ *
+ * Under `shipped` this ASKS the game — same function the catalog is built with, so a card's tier
+ * here is the tier it has in a Run, not a reconstruction that agrees until one of them is edited.
+ */
+export function poolCardBand(
+  cells: readonly PoolCell[],
+  pieces: readonly PoolPiece[],
+  knobs: PoolKnobs,
+  cost: number,
+): PoolBand {
+  if (knobs.bandRule === 'shipped') {
+    return runCardRarity(
+      pieces.map((piece) => POOL_PIECE_TO_GAME[piece]),
+      cells as readonly RunCardFormationCell[],
+    );
+  }
+  return cost <= knobs.commonMaxCost
+    ? 'common'
+    : cost <= knobs.uncommonMaxCost ? 'uncommon' : 'rare';
+}
+
 export function priceCard(
   cells: readonly PoolCell[],
   pieces: readonly PoolPiece[],
@@ -485,10 +579,120 @@ export function priceCard(
   const {
     value, volume, density, hasBishopPair, defences, blockedPawns, cost,
   } = poolPriceSteps(cells, pieces, knobs);
-  const band: PoolBand = cost <= knobs.commonMaxCost
-    ? 'common'
-    : cost <= knobs.uncommonMaxCost ? 'uncommon' : 'rare';
+  const band: PoolBand = poolCardBand(cells, pieces, knobs, cost);
   return { value, volume, density, cost, band, hasBishopPair, defences, blockedPawns };
+}
+
+/**
+ * Whether a two-cell roster may finish above the material cap, because the live catalog hand-injects
+ * it. Both are ten material: `pq-front` is the Queen with her Pawn, `rr-vertical` the Rook pair.
+ * Written as a pair test rather than a card list because the generator has no card ids — it is
+ * mid-walk, holding a seat and a piece.
+ */
+function completesOverCapPair(
+  knobs: PoolKnobs,
+  volume: number,
+  index: number,
+  seated: PoolPiece | undefined,
+  piece: PoolPiece,
+): boolean {
+  if (knobs.overCapNamedCards === 'none') return false;
+  if (volume !== 2 || index !== 1) return false;
+  const pair = `${seated}${piece}`;
+  if (pair === 'QP' || pair === 'PQ') return true;
+  return knobs.overCapNamedCards === 'live-catalog' && pair === 'RR';
+}
+
+/**
+ * IS WHAT IS ON SCREEN THE GAME?
+ *
+ * The one question this page has to answer before any other, and the one it could not answer for
+ * most of its life: it drew thirteen positions that all looked equally authoritative, and the reader
+ * had no way to tell a proposal from the rules a Run is actually dealt under. A model LABELLED
+ * `Shipped rule` is not an answer — a label is a claim, and this page's claims had already been
+ * wrong. So the verdict is COMPUTED, card for card, against `RUN_CARD_DECK` itself.
+ *
+ * There are exactly two live positions, because `RunRules` has exactly two instances a Run can be
+ * created under. Everything else on the dropdown is a proposal, however plausibly it is named.
+ */
+export type PoolLiveRules = 'default' | 'legacy';
+
+export const POOL_LIVE_RULES: Readonly<Record<PoolLiveRules, Readonly<{
+  label: string; rules: RunRules; note: string;
+}>>> = Object.freeze({
+  default: Object.freeze({
+    label: 'DEFAULT_RUN_RULES',
+    rules: DEFAULT_RUN_RULES,
+    note: 'what every new Run is created under',
+  }),
+  legacy: Object.freeze({
+    label: 'LEGACY_RUN_RULES',
+    rules: LEGACY_RUN_RULES,
+    note: 'what a Run written before rules existed is still playing',
+  }),
+});
+
+export type PoolLiveDiff = Readonly<{
+  /** Cards here that the game does not deal under these rules. */
+  absentFromGame: number;
+  /** Cards the game deals under these rules that are not here. */
+  missingFromPool: number;
+  /** Shared cards this model puts in a different tier than the game does. */
+  differentTier: number;
+  /** Shared cards this model prices differently than the game does. */
+  differentPrice: number;
+  total: number;
+}>;
+
+export type PoolLiveVerdict = Readonly<{
+  /** The live rule set this pool IS, verified card for card. Null makes it a proposal. */
+  is: PoolLiveRules | null;
+  /** The live rule set it is closest to — what a proposal is a proposal AGAINST. */
+  nearest: PoolLiveRules;
+  diff: PoolLiveDiff;
+}>;
+
+/** One rotation-canonical key, computed the same way for a pool card and a catalog card, so the
+ * two can be compared as sets of cards rather than as counts that happen to agree. */
+function liveCardKey(card: RunCoreCard): string {
+  const letters = card.pieces.map((piece) => GAME_PIECE_TO_POOL[piece]);
+  return cardIdentity(card.formation ?? [], letters, true);
+}
+
+function diffAgainst(cards: readonly PoolCard[], which: PoolLiveRules): PoolLiveDiff {
+  const { rules } = POOL_LIVE_RULES[which];
+  const live = new Map(RUN_CARD_DECK
+    .filter((card) => cardAllowedByRules(card, rules))
+    .map((card) => [liveCardKey(card), card]));
+  let absentFromGame = 0;
+  let differentTier = 0;
+  let differentPrice = 0;
+  const seen = new Set<string>();
+  for (const card of cards) {
+    const key = cardIdentity(card.cells, card.pieces, true);
+    // A SECOND card on the same rotational identity is a card the game does not deal, even though
+    // the game deals the first one: turning rotation collapse off sells the vertical domino and the
+    // horizontal one separately, and a comparison blind to that would call it the shipped catalog.
+    const match = seen.has(key) ? undefined : live.get(key);
+    seen.add(key);
+    if (!match) { absentFromGame += 1; continue; }
+    if (match.rarity !== card.band) differentTier += 1;
+    if (runCardCost(match, rules) * GOLD_PER_POINT !== card.cost) differentPrice += 1;
+  }
+  const missingFromPool = [...live.keys()].filter((key) => !seen.has(key)).length;
+  return {
+    absentFromGame,
+    missingFromPool,
+    differentTier,
+    differentPrice,
+    total: absentFromGame + missingFromPool + differentTier + differentPrice,
+  };
+}
+
+export function poolLiveVerdict(cards: readonly PoolCard[]): PoolLiveVerdict {
+  const byRules = (['default', 'legacy'] as const).map((which) => ({ which, diff: diffAgainst(cards, which) }));
+  const nearest = byRules.reduce((best, next) => (next.diff.total < best.diff.total ? next : best));
+  return { is: nearest.diff.total === 0 ? nearest.which : null, nearest: nearest.which, diff: nearest.diff };
 }
 
 export function buildPool(knobs: PoolKnobs): PoolCard[] {
@@ -511,11 +715,7 @@ export function buildPool(knobs: PoolKnobs): PoolCard[] {
       }
       for (const piece of POOL_PIECES) {
         const next = value + knobs.pieceValue[piece];
-        const completesQueenPawn = knobs.allowQueenPawnOverCap
-          && footprint.length === 2
-          && index === 1
-          && ((pieces[0] === 'Q' && piece === 'P') || (pieces[0] === 'P' && piece === 'Q'));
-        if (next > knobs.maxValue && !completesQueenPawn) continue;
+        if (next > knobs.maxValue && !completesOverCapPair(knobs, footprint.length, index, pieces[0], piece)) continue;
         pieces.push(piece);
         walk(index + 1, next);
         pieces.pop();
@@ -617,6 +817,30 @@ export const POOL_MODELS: readonly PoolModel[] = Object.freeze([
     },
   },
   {
+    id: 'shipped-2x2',
+    label: 'LIVE · the rules every new Run plays',
+    note: 'Not a proposal. This is DEFAULT_RUN_RULES: formations capped at two cells on the longest side, priced by density, rarity from runCardRarity — a flat cut on PRICE (Common through 70 gold, Uncommon through 100, Rare above) and then the shifts it declares, listed in the Rarity panel with what each one actually moved. Every card, tier and price here is checked against RUN_CARD_DECK itself and the banner above says so. Read this before judging any proposal: it is the position a proposal has to beat.',
+    knobs: {
+      ...DEFAULT_POOL_KNOBS,
+      cols: 2,
+      rows: 2,
+      overCapNamedCards: 'live-catalog',
+      terms: SHIPPED_PRICE_TERMS,
+      bandRule: 'shipped',
+    },
+  },
+  {
+    id: 'shipped-4x2',
+    label: 'LIVE · the rules a pre-rules Run still plays',
+    note: 'Also not a proposal. LEGACY_RUN_RULES is the game a Run created before RunRules existed is still being dealt: the whole four-by-two catalog, priced at flat material, same rarity rule. Its Common tier is enormous — a four-cell card spreads its material thin and prices cheap — which is the cost of cutting the bands on a density price and the next thing worth arguing about.',
+    knobs: {
+      ...DEFAULT_POOL_KNOBS,
+      overCapNamedCards: 'live-catalog',
+      terms: [{ kind: 'scale', by: 10 }],
+      bandRule: 'shipped',
+    },
+  },
+  {
     id: 'synergy',
     label: 'Synergy priced',
     note: 'The density curve plus what material cannot express: the opposite-colour Bishop pair, defences, and a penalty for a Pawn stuck directly behind a friendly piece. Pawn shelter counts as a defence here.',
@@ -634,7 +858,7 @@ export const POOL_MODELS: readonly PoolModel[] = Object.freeze([
   {
     id: 'material-bands',
     label: 'Material bands',
-    note: 'cost = material, nothing else, and rarity by raw value. NOT the shipped rarity: that also steps any Bishop card up a band and steps awkward footprints down one, which is what puts 23 four-cell cards into common.',
+    note: 'cost = material, nothing else, and rarity by raw value — the material band on its own, without the two steps the game applies after it. Not the shipped rule and not an approximation of it: `Shipped rule · full catalog` is the real thing, and the difference between the two is exactly what the footprint demotion and the Bishop step are worth.',
     knobs: { ...DEFAULT_POOL_KNOBS, terms: [], commonMaxCost: 4, uncommonMaxCost: 6 },
   },
   {
@@ -814,10 +1038,79 @@ export type PoolSummary = Readonly<{
   perPileShare: Readonly<Record<PoolBand, number>>;
 }>;
 
-export const POOL_PILE_SLOTS: Readonly<Record<PoolBand, number>> = { common: 16, uncommon: 3, rare: 1 };
+/** The pile a market this shape would deal, sized and apportioned by the GAME's own rule rather
+ * than by a copy of it: as many cards as the tiers can fill without repeating one. */
+export function poolPile(cards: readonly PoolCard[]): Readonly<{
+  size: number; seats: Record<PoolBand, number>;
+}> {
+  const tiers = { common: 0, uncommon: 0, rare: 0 };
+  for (const card of cards) tiers[card.band] += 1;
+  const size = pileSizeForTiers(tiers);
+  return { size, seats: apportionPileSeats(tiers, size) };
+}
+
+/**
+ * How many offers one Run walks past. Ten Sectios of three, which is the installed Run-eligible
+ * War. It is the ONE number on this page that is an assumption rather than a derivation, and it is
+ * stated on screen for that reason: everything else here is arithmetic on the pile.
+ */
+export const POOL_RUN_OFFERS = 30;
+
+/**
+ * A CARD'S ACTUAL RARITY, which is not the word printed on it.
+ *
+ * The tier is a label; what makes a card rare is the shuffle. A pile is a fixed quota of seats, so a
+ * tier's seats are shared among however many identities it happens to hold — and nothing keeps those
+ * two numbers in any relation. 54 identities behind one seat and 6 identities over sixteen both wear
+ * a one-word label that says nothing about either, which is exactly how a market came to deal the
+ * same card twice in a row of three while calling it Common.
+ *
+ * So this is the number to read: how often ONE card of a band reaches the player.
+ *
+ * `perPile` above 1 is the pathology at the crowded end — the tier cannot fill its seats without
+ * repeating, so a single row can deal the same card twice. `metPerRun` near zero is the pathology at
+ * the empty end: content that exists, is drawn, is illustrated, and is never seen.
+ */
+export type PoolBandDistribution = Readonly<{
+  band: PoolBand;
+  identities: number;
+  seats: number;
+  /** Expected appearances of ONE card of this band in a 20-card pile. */
+  perPile: number;
+  /** The same over a whole Run. */
+  perRun: number;
+  /** Chance a Run shows you a GIVEN card of this band at least once. */
+  metPerRun: number;
+  /** Whether the tier can fill its seats without dealing an identity twice. */
+  fillsDistinctly: boolean;
+}>;
+
+export function poolDistribution(cards: readonly PoolCard[]): PoolBandDistribution[] {
+  const pile = poolPile(cards);
+  // A Run walks its offers off the front of one pile, and the pile is drawn WITHOUT replacement, so
+  // this is not a coin flipped once per seat: a card is either in the pile or it is not, and if it
+  // is, its place in the shuffle is uniform. Treating the seats as independent under-reports.
+  const walked = pile.size === 0 ? 0 : Math.min(1, POOL_RUN_OFFERS / pile.size);
+  const runs = pile.size === 0 ? 0 : POOL_RUN_OFFERS / pile.size;
+  return (['common', 'uncommon', 'rare'] as const).map((band) => {
+    const identities = cards.filter((card) => card.band === band).length;
+    const seats = pile.seats[band];
+    const perPile = identities === 0 ? 0 : seats / identities;
+    return {
+      band,
+      identities,
+      seats,
+      perPile,
+      perRun: perPile * Math.max(1, runs),
+      metPerRun: identities === 0 ? 0 : (seats / identities) * walked,
+      fillsDistinctly: identities >= seats,
+    };
+  });
+}
 
 export function summarizePool(cards: readonly PoolCard[]): PoolSummary {
   const bands: PoolBand[] = ['common', 'uncommon', 'rare'];
+  const pileSeats = poolPile(cards).seats;
   const byBand = { common: 0, uncommon: 0, rare: 0 };
   const byVolume = [0, 0, 0, 0, 0];
   const byBandVolume: Record<PoolBand, number[]> = {
@@ -831,7 +1124,7 @@ export function summarizePool(cards: readonly PoolCard[]): PoolSummary {
   }
   const perPileShare = { common: 0, uncommon: 0, rare: 0 };
   for (const band of bands) {
-    perPileShare[band] = byBand[band] === 0 ? 0 : POOL_PILE_SLOTS[band] / byBand[band];
+    perPileShare[band] = byBand[band] === 0 ? 0 : pileSeats[band] / byBand[band];
   }
   return {
     total: cards.length,

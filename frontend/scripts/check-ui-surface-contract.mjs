@@ -87,6 +87,17 @@ const APPROVED_FRAMELESS_SURFACE_RESETS = new Map([
     'border-radius:0',
     'box-shadow:none',
   ])],
+  // The invariant title-bar cluster is one divided box, and each member is a COMPARTMENT of it
+  // (ADR-0242). The box's installed frame is the seat's outer edge and the box's rail is the
+  // edge it shares with the seat beside it, so these declarations remove the shell's native
+  // button chrome — including the `button.active` gradient a lit seat would otherwise wear —
+  // and paint nothing in its place.
+  ['src/style.css|.titlebar-control.titlebar-control--seat', new Set([
+    'background:none',
+    'border:0',
+    'border-radius:0',
+    'box-shadow:none',
+  ])],
 ]);
 
 function normalize(value) {
