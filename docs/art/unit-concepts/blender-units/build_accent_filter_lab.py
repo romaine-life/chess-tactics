@@ -242,7 +242,11 @@ pix.label = "BLOCK SIZE (one art pixel)"
 #
 # Like every other Blender 5 control, it is an input SOCKET named "Switch", not the
 # node property the API docs for older versions describe.
-_switch_state = {"Outline": True, "Flares": False, "Fog": False}
+# The addon's Outline draws INSIDE the piece at depth steps; the stroke added here
+# wraps the silhouette from outside and covers the accent boundaries too. Running both
+# double-lines the piece, so the addon's is off by default -- tick it in the lab to
+# compare. ADDON_OUTLINE=1 builds with it on.
+_switch_state = {"Outline": bool(os.environ.get("ADDON_OUTLINE")), "Flares": False, "Fog": False}
 for _n in tree.nodes:
     if _n.bl_idname != "CompositorNodeSwitch":
         continue
