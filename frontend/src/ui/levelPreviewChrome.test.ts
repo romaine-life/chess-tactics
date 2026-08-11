@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const preview = readFileSync(new URL('./LevelPreviewColumn.tsx', import.meta.url), 'utf8');
+const verbRow = readFileSync(new URL('./shared/ChromeVerbRow.tsx', import.meta.url), 'utf8');
 const info = readFileSync(new URL('./LevelInfoCompact.tsx', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 
@@ -30,16 +31,24 @@ describe('campaign level preview chrome', () => {
   });
 
   // Declared, never handed over rendered: a caller that could pass its own markup could wrap the
-  // verbs in a box of its own, which is exactly how they came to sit outside the frame.
+  // verbs in a box of its own, which is exactly how they came to sit outside the frame. The shape
+  // is the shared one every divided box's closing verbs use — the Aftermath's Back and Continue
+  // are the same row — so the column takes it rather than building a second copy of it.
   it('takes its verbs as data and seats each one as a cell of the bottom row', () => {
     expect(preview).toContain('verbs?: readonly LevelPreviewVerb[];');
+    expect(preview).toContain('export type LevelPreviewVerb = ChromeVerb;');
     expect(preview).not.toContain('actions?: ReactNode');
-    expect(preview).toContain("const columns = verbs.length > 1");
-    expect(preview).toMatch(/spans=\{verbs\.length > 1 \? undefined : 'all'\}/);
+    expect(preview).toContain('const columns = verbColumns(verbs);');
+    expect(preview).toContain('<ChromeVerbRow verbs={verbs} className="ce-preview-verbs" cellClassName="ce-preview-verb" />');
+    // One verb has no neighbour, so its row spans the box rather than being ruled off from
+    // nothing — decided by the row itself, never by a count a consumer restates.
+    expect(verbRow).toContain("return verbs.length > 1 ? verbs.map(() => 'minmax(0, 1fr)') : ['minmax(0, 1fr)'];");
+    expect(verbRow).toMatch(/spans=\{verbs\.length > 1 \? undefined : 'all'\}/);
     // The cell IS the control — the same reset the section box's full-width verbs use, so no
     // registered unit brings a second frame inside the rail that already bounds it.
-    expect(preview).toContain("'section-box-member-verb ce-preview-verb'");
-    expect(preview).toContain("'data-chrome-fill-surface': CHROME_LEAF_FILL_SURFACE");
+    expect(verbRow).toContain('`section-box-member-verb ${className ?? \'\'}`.trim()');
+    expect(verbRow).toContain("'data-chrome-fill-surface': CHROME_LEAF_FILL_SURFACE");
+    expect(preview).not.toContain('<NavButton');
   });
 
   it('keeps the readout frameless inside the box it is a row of', () => {

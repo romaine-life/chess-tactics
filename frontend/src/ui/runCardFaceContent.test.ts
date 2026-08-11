@@ -29,7 +29,9 @@ describe('the canonical formation card projection', () => {
     const offer = createRunCardOffer({ seed: 17 }, RUN_CARD_BY_ID.q, 0, 0);
     expect(offer.cost).toBe(RUN_CARD_BY_ID.q.value);
     expect(runCardFrameSlot(offer)).toBe(RUN_CARD_RARE_FRAME_SLOT);
-    expect(runCardFrameSlot(runCardSpecimen({ pieces: ['rook'] }))).toBe(RUN_CARD_UNCOMMON_FRAME_SLOT);
+    // Rook and Bishop on two squares is 90 gold, the middle band. A lone Rook is 60 and Common —
+    // the bands are cut on price now, and five material on one square is not an expensive card.
+    expect(runCardFrameSlot(runCardSpecimen({ pieces: ['rook', 'bishop'] }))).toBe(RUN_CARD_UNCOMMON_FRAME_SLOT);
     expect(runCardFrameSlot(runCardSpecimen({ pieces: ['pawn'] }))).toBe(RUN_CARD_FRAME_SLOT);
   });
 

@@ -9,7 +9,7 @@ refines:
   - "[ADR-0044](0044-persistent-mute-control-in-the-trailing-cluster.md)"
 ---
 
-# ADR-0567: The invariant title-bar cluster is one divided box
+# ADR-0568: The invariant title-bar cluster is one divided box
 
 ## Context
 

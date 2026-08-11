@@ -21377,9 +21377,7 @@ button.tileset-relationship-cell {
 .run-aftermath-head,
 .run-victory-head,
 .run-aftermath-report,
-.run-victory-report,
-.run-aftermath-actions,
-.run-victory-actions {
+.run-victory-report {
   translate: 0 -5cqh;
 }
 
@@ -21412,18 +21410,34 @@ button.tileset-relationship-cell {
    short rows stretched edge to edge would put its labels and its numbers on opposite
    sides of the screen. Victory's report is prose rather than a ledger, so it takes a
    wider measure — the same reason read the other way. */
-.run-aftermath-report {
+/* Both reports close with their own verbs, so the box takes no padding: its rails run the full
+   inner width and each ROW carries its inset instead. */
+.run-aftermath-report,
+.run-victory-report {
   grid-row: 2;
+  padding: 0;
+}
+
+.run-aftermath-report {
   inline-size: min(100%, 420px);
+}
+
+.run-victory-report {
+  inline-size: min(100%, 560px);
+}
+
+/* A row that is one thing across the box is ONE column, whatever the verb row below it split
+   the box into. Without this it inherits the box's tracks and huddles into the first of them. */
+.run-aftermath-record,
+.run-victory-record {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 /* The record the War is remembered by. Its own rows carry the spacing, because the kit
    frame's inner padding is sized for dense panel content. */
-.run-victory-report {
+.run-victory-record {
   display: grid;
   gap: var(--ds-space-3);
-  grid-row: 2;
-  inline-size: min(100%, 560px);
   padding: var(--ds-space-4);
 }
 
@@ -21445,25 +21459,30 @@ button.tileset-relationship-cell {
   justify-content: center;
 }
 
-/* The Run's last action is a button, not a band: the workspace lane stretches its grid
-   children, which was inconspicuous while this one wore the flat field and read as a wall
-   the moment it wore a plank. The actions row is what holds it to its own width now. */
-.run-aftermath-actions,
-.run-victory-actions {
-  align-self: start;
-  display: flex;
-  gap: var(--ds-inline-tight);
-  grid-row: 3;
-  justify-content: center;
+/* A verb of a result report IS its compartment, so it carries only type and measure — the frame
+   around it, the rail beside it and the plank under it are the box's. Sized as the framed text
+   button each one replaced, so the screen is read at the same scale it always was. */
+.run-result-verbs .run-result-verb {
+  display: grid;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-sm);
+  min-block-size: 46px;
+  padding: 0 var(--ds-inset);
+  text-transform: uppercase;
 }
 
-/* The kit frame's own inner padding is sized for dense panel content; a ledger read at
-   arm's length needs its rows further off the border than that. */
+.run-result-verb:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: -2px;
+}
+
+/* The ledger is a ROW of the report box now, so it carries its own inset off the frame — the
+   box's padding is 0 there, because its rails run the full inner width. */
 .run-aftermath-ledger {
   display: grid;
   gap: var(--ds-space-4);
   margin: 0;
-  padding: var(--ds-space-2) var(--ds-space-3);
+  padding: var(--ds-inset);
 }
 
 /* Label left, number right, on one row — the shape a ledger is read in. The pair is
@@ -23629,6 +23648,14 @@ button.tileset-relationship-cell {
 .run-deployment-deal-flight > :is(.run-card-back, .run-card-action) {
   block-size: 100%;
   display: block;
+  inline-size: 100%;
+}
+
+/* The swept remainder carries the deck's own pile, so its top card must take the flight box
+   exactly the way the top card takes the deck box — the JS gives this element the deck's rect,
+   and anything short of filling it would make the pile change size at the handover. */
+.run-deployment-deal-flight.is-remainder > .run-deployment-center-card {
+  block-size: 100%;
   inline-size: 100%;
 }
 
