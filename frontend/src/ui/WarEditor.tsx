@@ -270,6 +270,20 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
                           </EditorRow>
                         ),
                       },
+                      {
+                        // The War's own delete, on the War's own box — the same seat Delete Battle
+                        // takes on the selected Battle's box. It used to be a framed slab standing
+                        // on its own below the Battles list, so it paid for its own frame rail on
+                        // both sides and its name and its button sat ~15px inside every other row's.
+                        // A row cannot be made to line up with members of a box from outside that
+                        // box; it has to be one of them.
+                        id: 'delete',
+                        content: (
+                          <EditorRow framed={false} title="Delete War" description="Removes the War and its exclusive Battle levels on the next Save or Publish.">
+                            <EditorButton tone="danger" disabled={!canEditSelected} onClick={() => void deleteSelectedWar()}>Delete War</EditorButton>
+                          </EditorRow>
+                        ),
+                      },
                     ]}
                   />
 
@@ -387,11 +401,6 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
                     />
                   ) : null}
 
-                  <SettingsSection>
-                    <EditorRow title="Delete War" description="Removes the War and its exclusive Battle levels on the next Save or Publish.">
-                      <EditorButton tone="danger" disabled={!canEditSelected} onClick={() => void deleteSelectedWar()}>Delete War</EditorButton>
-                    </EditorRow>
-                  </SettingsSection>
                 </>
               ) : (
                 <SettingsSection>
