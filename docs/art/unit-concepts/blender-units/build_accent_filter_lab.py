@@ -746,6 +746,70 @@ if os.environ.get("LAB_OUT"):
         if _s is not scene and getattr(_s, "compositing_node_group", None) is None:
             bpy.data.scenes.remove(_s)
 
+    # Lay the graph out before saving.
+    #
+    # Nodes were placed by hand as they were added, and the graph has grown well past
+    # the point where that works -- they pile on top of each other, and the ramps worth
+    # turning end up buried under the machinery that feeds them. A tuning surface you
+    # cannot find the knobs in is not a tuning surface.
+    #
+    # Columns by dependency depth, so signal runs left to right; within a column, the
+    # LABELLED nodes sort to the top, because those are the ones with a reason to be
+    # looked at. Spacing is generous rather than tight -- this is read at a glance while
+    # dragging a colour stop, not printed.
+    _nodes = [n for n in tree.nodes if n.bl_idname != "NodeFrame"]
+    _depth = {}
+
+    def _d(node, seen=()):
+        if node in _depth:
+            return _depth[node]
+        if node in seen:
+            return 0
+        best = 0
+        for sock in node.inputs:
+            for link in sock.links:
+                best = max(best, _d(link.from_node, seen + (node,)) + 1)
+        _depth[node] = best
+        return best
+
+    for _n in _nodes:
+        _d(_n)
+    _cols = {}
+    for _n in _nodes:
+        _cols.setdefault(_depth[_n], []).append(_n)
+    COL_W, ROW_H = 420, 260
+    for _c, _members in sorted(_cols.items()):
+        _members.sort(key=lambda n: (n.label == "", (n.label or n.name).lower()))
+        for _r, _n in enumerate(_members):
+            _n.location = (_c * COL_W, -_r * ROW_H)
+    print("LAYOUT %d nodes over %d columns" % (len(_nodes), len(_cols)))
+
+    # Then pull every knob into ONE column, to the left of the flow.
+    #
+    # Depth ordering is right for reading signal but wrong for tuning: the ramps chain
+    # through the palette selector, so they land in different columns and finding one
+    # means panning across 18 of them. These are the nodes with a reason to be touched,
+    # so they get a single stack you can open the file and see, and a frame saying so.
+    # Selected by TYPE as well as label. Matching on the name alone swept in the
+    # addon's own "Palette" group, which is a node group and not a knob -- a tuning
+    # column with someone else's machinery in it is back to being a hunt.
+    _tunable_types = {"ShaderNodeValue", "ShaderNodeValToRGB", "CompositorNodePixelate"}
+    _tune = [n for n in _nodes
+             if n.bl_idname in _tunable_types
+             and (n.label or "").upper().startswith(("PALETTE", "BODY ", "BLOCK SIZE", ACCENT_LABEL))]
+    _tune.sort(key=lambda n: (
+        0 if (n.label or "").startswith("PALETTE") else
+        1 if (n.label or "").startswith("BODY ") else
+        2 if (n.label or "").upper().startswith(ACCENT_LABEL) else 3,
+        (n.label or "").lower()))
+    _frame = tree.nodes.new("NodeFrame")
+    _frame.label = "TUNE THESE"
+    _frame.location = (-820, 200)
+    for _i, _n in enumerate(_tune):
+        _n.location = (-760, -_i * 300)
+        _n.parent = _frame
+    print("TUNE_COLUMN", [n.label for n in _tune])
+
     bpy.ops.wm.save_as_mainfile(filepath=os.environ["LAB_OUT"])
     print("LAB_SAVED", os.environ["LAB_OUT"])
 print("ACCENT_DONE", [(m.name, m.pass_index) for m in bpy.data.materials])
