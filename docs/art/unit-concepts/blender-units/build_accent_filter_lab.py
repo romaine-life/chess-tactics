@@ -178,7 +178,13 @@ for index in CROWN_INDICES:
 scene.render.engine="CYCLES"; scene.cycles.samples=256
 scene.render.filter_size=0.01; scene.view_settings.view_transform="Standard"
 scene.render.film_transparent=True; scene.render.use_compositing=True
-scene.render.resolution_x=scene.render.resolution_y=SPRITE*BLOCK
+# Height is separate from width, and the ortho scale is pinned to WIDTH -- Blender fits
+# it to the longer side by default, so a taller frame would shrink the piece instead of
+# giving it room. A square lab frame cut the rook's battlements off at row 0, which
+# would have meant tuning a piece whose top was not on screen.
+scene.render.resolution_x = SPRITE * BLOCK
+scene.render.resolution_y = int(os.environ.get("SPRITE_PY", SPRITE)) * BLOCK
+cam.data.sensor_fit = "HORIZONTAL"
 scene.render.image_settings.file_format="PNG"; scene.render.image_settings.color_mode="RGBA"
 
 tree = scene.compositing_node_group
