@@ -688,7 +688,7 @@ if not os.environ.get("NO_STROKE"):
     _grow_px = int(os.environ.get("STROKE_PX", "1")) * BLOCK
     _fat = tree.nodes.new("CompositorNodeDilateErode")
     _fat.inputs["Size"].default_value = _grow_px
-    _fat.label = "STROKE width"
+    _fat.label = "STROKE width (Size is FULL-RES px: %d = 1 art px)" % BLOCK
     tree.links.new(_alpha, _fat.inputs[0])
     _ring = tree.nodes.new("ShaderNodeMath")
     _ring.operation = "SUBTRACT"
@@ -901,10 +901,16 @@ if os.environ.get("LAB_OUT"):
     # Selected by TYPE as well as label. Matching on the name alone swept in the
     # addon's own "Palette" group, which is a node group and not a knob -- a tuning
     # column with someone else's machinery in it is back to being a hunt.
-    _tunable_types = {"ShaderNodeValue", "ShaderNodeValToRGB", "CompositorNodePixelate"}
+    # Types AND labels, because neither alone is enough. Label alone swept in the
+    # addon's own "Palette" group; type alone would have missed the stroke, which is a
+    # Dilate/Erode and a Mix -- and did, leaving the owner hunting through the
+    # machinery for the one control that actually draws an outline.
+    _tunable_types = {"ShaderNodeValue", "ShaderNodeValToRGB", "CompositorNodePixelate",
+                      "CompositorNodeDilateErode", "ShaderNodeMix"}
+    _tune_names = ("PALETTE", "BODY ", "BLOCK SIZE", "STROKE", "ACCENT EDGE", "ALPHA CUTOFF", ACCENT_LABEL)
     _tune = [n for n in _nodes
              if n.bl_idname in _tunable_types
-             and (n.label or "").upper().startswith(("PALETTE", "BODY ", "BLOCK SIZE", ACCENT_LABEL))]
+             and (n.label or "").upper().startswith(_tune_names)]
     _tune.sort(key=lambda n: (
         0 if (n.label or "").startswith("PALETTE") else
         1 if (n.label or "").startswith("BODY ") else
