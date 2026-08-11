@@ -487,6 +487,7 @@ function ArrangedDeploymentControls({
   availableRotations,
   dealProgress,
   onDealProgress,
+  onDeckDeparture,
   onStepCard,
   onSelectCard,
   onTurn,
@@ -501,6 +502,7 @@ function ArrangedDeploymentControls({
   availableRotations: ReadonlySet<RunFormationRotation>;
   dealProgress: number;
   onDealProgress: (count: number) => void;
+  onDeckDeparture: (count: number) => void;
   onStepCard: (step: 1 | -1) => void;
   onSelectCard: (cardId: string) => void;
   onTurn: (direction: FormationTurnDirection) => void;
@@ -546,6 +548,7 @@ function ArrangedDeploymentControls({
             run={run}
             dealProgress={dealProgress}
             onDealProgress={onDealProgress}
+            onDeckDeparture={onDeckDeparture}
             onDealComplete={onDealComplete}
             onRevealComplete={() => undefined}
             onDiscardComplete={() => undefined}
@@ -716,6 +719,9 @@ function useRunDeploymentPresentation({
   const options = useMemo(() => deploymentOptions(prepared, level), [level, prepared]);
   const stage = deploymentInteractionStage(prepared, options);
   const [dealProgress, setDealProgress] = useState(0);
+  // Cards that have LEFT the deck. Separate from dealProgress, which counts the hand arriving in
+  // Controls two and a half seconds later: the deck empties as it deals, not as the hand lands.
+  const [deckDeparted, setDeckDeparted] = useState(0);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [arrangementRotation, setArrangementRotation] = useState<RunFormationRotation>(0);
   // Where the mouse is. ONLY the pointer may clear it — pointerenter does not fire again for a
@@ -884,7 +890,9 @@ function useRunDeploymentPresentation({
   }, [prepared, replace, run]);
 
   useEffect(() => {
-    if (prepared.deployment?.stage === 'awaiting-deal') setDealProgress(0);
+    if (prepared.deployment?.stage !== 'awaiting-deal') return;
+    setDealProgress(0);
+    setDeckDeparted(0);
   }, [prepared.deployment?.battleIndex, prepared.deployment?.stage]);
 
   useEffect(() => {
@@ -1148,6 +1156,7 @@ function useRunDeploymentPresentation({
         availableRotations={availableArrangementRotations}
         dealProgress={dealProgress}
         onDealProgress={setDealProgress}
+        onDeckDeparture={setDeckDeparted}
         onStepCard={stepArrangementCard}
         onSelectCard={selectArrangementCard}
         onTurn={turnArrangement}
@@ -1161,7 +1170,7 @@ function useRunDeploymentPresentation({
       <>
         <RunDeploymentDeckDeal
           run={prepared}
-          dealtCount={dealProgress}
+          departedCount={deckDeparted}
           onBeginDeal={beginDeal}
           disabled={departureActive}
         />

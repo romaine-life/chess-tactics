@@ -60,6 +60,50 @@ function deploymentCardPresentation(run: RunDocument, owned: RunOwnedCard, fromS
 }
 
 /**
+ * A face-down pile: up to three stacked backs with its number in the corner.
+ *
+ * The deck standing on the table and the remainder swept back to the Chartulary are the SAME pile
+ * at two moments of one journey, so they are one object. Drawn separately, the handover read as a
+ * three-deep stack being replaced by a single card — the deck appearing to be swapped for
+ * something else rather than picked up.
+ *
+ * An EMPTY pile draws nothing. The deck used to floor its layers at one, so a deck that had dealt
+ * its last card still stood there at full height with nothing in it; that phantom is the whole
+ * reason the last card never looked like it took the deck with it. The host keeps its own box
+ * (`aspect-ratio` and `inline-size` on the deck element), so drawing nothing here never moves the
+ * source rect the cards in flight are measured from.
+ */
+function RunDeckPile({
+  count,
+  mediaUrl,
+  live = false,
+}: {
+  count: number;
+  mediaUrl: string;
+  live?: boolean;
+}): ReactElement | null {
+  const layers = Math.min(3, count);
+  if (layers < 1) return null;
+  return (
+    <>
+      {Array.from({ length: layers }, (_, index) => {
+        const depth = layers - index - 1;
+        return (
+          <span
+            className={`run-deployment-center-card ${depth === 2 ? 'is-depth-two' : depth === 1 ? 'is-depth-one' : 'is-top'}`}
+            aria-hidden={depth > 0 ? true : undefined}
+            key={depth}
+          >
+            <RunCardBack mediaUrl={mediaUrl} />
+          </span>
+        );
+      })}
+      <strong className="run-deployment-center-count" aria-live={live ? 'polite' : undefined}>{count}</strong>
+    </>
+  );
+}
+
+/**
  * The complete face-down Chartulary deck before its combat partition is committed, and the table
  * the drawn hand is laid out on.
  *
@@ -68,15 +112,20 @@ function deploymentCardPresentation(run: RunDocument, owned: RunOwnedCard, fromS
  * Chartulary, and only after a beat does the hand gather into the Controls panel to be placed.
  * The spread seats are laid out by the shared card row every other Run table uses, so the hand is
  * presented at the size that row gives it rather than at one invented here.
+ *
+ * The deck counts down as cards LEAVE it. `departedCount` is therefore the number that have set
+ * off, not the number that have landed in Controls: those are two and a half seconds apart, and
+ * reading the landings left the deck standing at its full height and full number while the whole
+ * hand flew out of it, only to tick down later on an element nobody could see any more.
  */
 export function RunDeploymentDeckDeal({
   run,
-  dealtCount,
+  departedCount,
   onBeginDeal,
   disabled = false,
 }: {
   run: RunDocument;
-  dealtCount: number;
+  departedCount: number;
   onBeginDeal: () => void;
   disabled?: boolean;
 }): ReactElement | null {
@@ -85,8 +134,7 @@ export function RunDeploymentDeckDeal({
   const backMediaUrl = useRunCardBackMediaUrl();
   const visible = deployment?.stage === 'awaiting-deal' || deployment?.stage === 'dealing';
   const awaiting = deployment?.stage === 'awaiting-deal';
-  const centerCount = Math.max(0, run.cards.length - dealtCount);
-  const visibleDeckLayers = Math.min(3, Math.max(1, centerCount));
+  const centerCount = Math.max(0, run.cards.length - departedCount);
   // What pressing it actually does. The Battle authors how many cards it deals, but a hand
   // shorter than that draws every card there is, so the authored count would be a promise the
   // deck cannot keep — the dealt list is the honest one.
@@ -105,19 +153,7 @@ export function RunDeploymentDeckDeal({
         className={`run-deployment-center-deck${deployment?.stage === 'dealing' ? ' is-dealing' : ''}`}
         data-deployment-center-deck=""
       >
-        {Array.from({ length: visibleDeckLayers }, (_, index) => {
-          const depth = visibleDeckLayers - index - 1;
-          return (
-            <span
-              className={`run-deployment-center-card ${depth === 2 ? 'is-depth-two' : depth === 1 ? 'is-depth-one' : 'is-top'}`}
-              aria-hidden={depth > 0 ? true : undefined}
-              key={depth}
-            >
-              <RunCardBack mediaUrl={backMediaUrl} />
-            </span>
-          );
-        })}
-        <strong className="run-deployment-center-count" aria-live="polite">{centerCount}</strong>
+        <RunDeckPile count={centerCount} mediaUrl={backMediaUrl} live />
       </div>
       {/* Seats only. The drawn cards themselves are the flight elements, which come to rest on
           these boxes and then carry on to Controls, so the hand is never handed between two sets
@@ -178,6 +214,7 @@ export function RunDeploymentCardStack({
   run,
   dealProgress,
   onDealProgress,
+  onDeckDeparture,
   onDealComplete,
   onRevealComplete,
   onDiscardComplete,
@@ -185,6 +222,8 @@ export function RunDeploymentCardStack({
   run: RunDocument;
   dealProgress: number;
   onDealProgress: (count: number) => void;
+  /** How many cards have SET OFF from the deck, so the deck can empty as it deals. */
+  onDeckDeparture: (count: number) => void;
   onDealComplete: () => void;
   onRevealComplete: () => void;
   onDiscardComplete: () => void;
@@ -253,6 +292,7 @@ export function RunDeploymentCardStack({
     let cancelled = false;
     let landed = 0;
     onDealProgress(0);
+    onDeckDeparture(0);
 
     // Four acts, in this order: the hand is dealt face down, the deck clears, the hand turns
     // over, and only then does it leave for the panel. The turn waits on the LATER of the pour
@@ -285,6 +325,21 @@ export function RunDeploymentCardStack({
         height: `${sourceRect.height}px`,
       });
       const laid = restingOn(seats[index]!.getBoundingClientRect());
+      // The deck is one card lighter the moment this one sets off. It rides an EMPTY effect on the
+      // same timeline as the flight rather than a timer of its own: a wall-clock timer and an
+      // animation are two clocks, and a throttled or backgrounded tab moves one without the other,
+      // which would count the deck down while the cards it is counting still stood in it. Empty
+      // keyframes touch no property, so this is a clock and nothing else. When the last card goes
+      // and nothing is held back the deck is empty here, and being EMPTY is what takes it off the
+      // table: the pile draws nothing at zero, so the last card is what clears the deck rather
+      // than a fade that happens to run afterwards.
+      const departure = scene.animate(flight, [], { duration: 1, delay: index * stagger, fill: 'none' });
+      if (departure) {
+        animations.push(departure);
+        void departure.finished
+          .then(() => { if (!cancelled) onDeckDeparture(index + 1); })
+          .catch(() => undefined);
+      }
       // Act one: out of the deck onto the table, face down, in a pour.
       const deal = scene.animate(flight, [
         { opacity: 0, transform: 'translate(0, 0) scale(1)' },
@@ -359,6 +414,10 @@ export function RunDeploymentCardStack({
       // The register does not react. The card putting itself away is the whole of the event; a
       // mark that jumped as it arrived drew the eye to the corner of the screen at the moment
       // the hand on the table is what the player should be reading.
+      //
+      // A cut, not a fade, and it is invisible: the deck has counted down to exactly what is left
+      // to sweep, and the flight above draws that same pile at that same box. What the player
+      // sees is one pile being picked up, not the deck dissolving while a copy of it departs.
       const sourceFade = scene.animate(source, [{ opacity: 1 }, { opacity: 0 }], {
         duration: 1,
         delay: deckLeavesAt,
@@ -366,6 +425,10 @@ export function RunDeploymentCardStack({
       });
       if (sourceFade) animations.push(sourceFade);
     } else {
+      // Nothing to sweep with, so whatever is left goes quietly. When the deal took the whole deck
+      // this runs on an already-empty box and is seen by nobody — the last card leaving is what
+      // cleared it. It still matters when there IS a remainder and no register to put it in: that
+      // pile has to leave the table somehow.
       const remainder = scene.animate(source, [{ opacity: 1 }, { opacity: 0 }], {
         duration: sweepDuration,
         delay: deckLeavesAt,
@@ -375,10 +438,10 @@ export function RunDeploymentCardStack({
       if (remainder) animations.push(remainder);
     }
 
-    // Pour, turn and gather for every card, the deck's own fade, and its remainder when there is
-    // one to sweep. A count that does not match cancels the whole draw, so it moves with the
-    // animations above rather than being an estimate of them.
-    const expectedAnimationCount = cards.length * 3 + 1 + (sweeping ? 1 : 0);
+    // Departure, pour, turn and gather for every card, the deck's own fade, and its remainder when
+    // there is one to sweep. A count that does not match cancels the whole draw, so it moves with
+    // the animations above rather than being an estimate of them.
+    const expectedAnimationCount = cards.length * 4 + 1 + (sweeping ? 1 : 0);
     if (animations.length < expectedAnimationCount) {
       animations.forEach((animation) => animation.cancel());
       return scene.nextFrame(onDealComplete);
@@ -509,9 +572,11 @@ export function RunDeploymentCardStack({
                 </div>
               );
             })}
+            {/* What the deck has left, drawn as the deck itself. The deck has already counted down
+                to exactly this number by the time the sweep starts, so the handover is the same
+                pile continuing — not a stack swapped for a single card at the same spot. */}
             <div className="run-deployment-deal-flight is-remainder" data-deployment-remainder-flight="">
-              <RunCardBack mediaUrl={backMediaUrl} />
-              <strong className="run-deployment-center-count">{undealtCardCount}</strong>
+              <RunDeckPile count={undealtCardCount} mediaUrl={backMediaUrl} />
             </div>
           </div>
         </SceneContinuityPortal>
