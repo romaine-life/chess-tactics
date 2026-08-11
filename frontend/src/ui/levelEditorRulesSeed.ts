@@ -29,6 +29,8 @@ import {
   type TimeControl,
   type VictoryRules,
 } from '../core/level';
+import { editorBoardToLevel, type LevelMeta } from '../core/levelBoard';
+import type { EditorBoard } from './boardCode';
 import { DEFAULT_SURVIVE_TURNS, victoryRulesForObjective } from '../core/objectives';
 import { levelParTurns } from '../core/speedBonus';
 import { effectiveLevelEvents } from '../core/levelEvents';
@@ -87,6 +89,35 @@ export function battleSettingsForSave(
     );
   }
   return Object.keys(next).length ? next : undefined;
+}
+
+/**
+ * The Level the editor's board + panels stand for — the ONE serialization the playability gate
+ * judges and Save persists. Both read it from here so a field authored in a panel cannot reach
+ * one and miss the other: Save used to carry `battle` straight off the metadata source, so a War
+ * Battle's Deployment deal was gated on the edited count and then published with the saved one,
+ * and pressing Publish wrote the old number back and left the level dirty forever.
+ *
+ * `rules` is the panel state (id, name, objective, clock, par, victory, events). `metadata` is the
+ * document whose non-board fields are carried through unchanged — the working copy for the live
+ * candidate, the canonical Level for the Save that promotes over it. `deal` is the authored
+ * Deployment count for a War Battle, or null for anything else. Pure.
+ */
+export function editorCandidateLevel(
+  board: EditorBoard,
+  rules: LevelMeta,
+  metadata: Level | undefined,
+  deal: number | null,
+): Level {
+  return editorBoardToLevel(board, {
+    ...rules,
+    notes: metadata?.notes,
+    difficulty: metadata?.difficulty,
+    economy: metadata?.economy,
+    theme: metadata?.theme,
+    battle: battleSettingsForSave(metadata?.battle, deal),
+    previousTerrain: metadata?.layers.terrain,
+  });
 }
 
 /** The rules state a level document seeds into the editor — the single derivation both
