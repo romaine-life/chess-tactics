@@ -233,6 +233,26 @@ tree = scene.compositing_node_group
 pix = next(n for n in tree.nodes if n.bl_idname=="CompositorNodePixelate")
 pix.label = "BLOCK SIZE (one art pixel)"
 
+# The addon gates each effect behind a SWITCH node, and they default to Off.
+#
+# This is why the outline never drew: the Outline group's output feeds the switch's On
+# input and was being discarded downstream, so muting the group changed nothing and the
+# group's own settings -- sensitivity, thickness -- were tuning something disconnected.
+# The owner had been ticking this box by hand after every reload.
+#
+# Like every other Blender 5 control, it is an input SOCKET named "Switch", not the
+# node property the API docs for older versions describe.
+_switch_state = {"Outline": True, "Flares": False, "Fog": False}
+for _n in tree.nodes:
+    if _n.bl_idname != "CompositorNodeSwitch":
+        continue
+    _want = _switch_state.get(_n.label)
+    if _want is None or "Switch" not in _n.inputs:
+        continue
+    _n.inputs["Switch"].default_value = _want
+    print("SWITCH %-8s -> %s" % (_n.label, _want))
+
+
 # The addon's demo compositor ships decorative effects AHEAD of everything, and they
 # were never turned off: the chain ran Clean Image -> Fog -> Flares -> Outline ->
 # Pixelate. Flares draws lens stars on bright pixels, which Pixelate then mashed into
