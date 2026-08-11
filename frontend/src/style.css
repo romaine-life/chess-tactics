@@ -23681,13 +23681,12 @@ button.tileset-relationship-cell {
 
 /* Account/browser Run adoption is a decision made with two buttons, not a framed record of its
    own. It is answered inside the Current Run detail column now (ADR-0557), which already
-   supplies the head, the body inset and the two-column action row — so the copy carries no
-   padding of its own and the buttons are ordinary .ce-preview-actions. It used to stand in the
-   choice column, in the seat the Current Run row occupies, and paid its own inset for that. */
-.run-adoption-conflict {
-  display: grid;
-  gap: var(--ds-gutter);
-}
+   supplies the head, the body inset and the row that closes each side — so the copy carries no
+   padding of its own and each Keep is a row of the detail card. It used to stand in the
+   choice column, in the seat the Current Run row occupies, and paid its own inset for that.
+
+   The conflict IS that card: it adds nothing to `.play-detail-card` but its name, because the
+   question is the card's contents and never a second field inside it. */
 
 /* One line of situation over the two candidates — the question, not the comparison. The
    comparison is the two labelled row lists under it. */
@@ -23698,11 +23697,9 @@ button.tileset-relationship-cell {
 
 /* Each candidate names itself with the SAME head the card's own title uses — no second
    heading treatment — so the two sides read as headed lists rather than two paragraphs that
-   happen to sit near two buttons. */
-.run-adoption-candidate {
-  display: grid;
-  gap: var(--ds-stack);
-}
+   happen to sit near two buttons. It is a semantic GROUP of the card's rows and generates no
+   layout: boxed, each side would draw a frame inside the card's and have to cap the rails
+   between its own rows against it. `display: contents` is the row group's own. */
 
 .run-adoption-conflict p {
   margin: 0;
@@ -28230,22 +28227,64 @@ button.run-card-formation-cell {
 
 /* One card per detail column: the facts (or the adoption question) and the verb that completes
    them share a single structural stone field, so nothing in the column reads as text floating on
-   the live vista. The card owns the inset; its contents pay none of their own, and the action row
-   drops the bottom padding it carried when it sat loose in the column. */
-.play-detail-card {
-  display: grid;
-  gap: var(--ds-stack);
-  padding: var(--ds-inset);
-}
+   the live vista.
 
-.play-detail-card .ce-preview-actions {
+   The card closes with its own verb, so it takes NO padding and no gap: its rails run the full
+   inner width and each ROW carries its inset instead. Padded, the verb was a plaque floating in
+   the middle of the field with a margin of marble on all four sides and a second frame a few
+   pixels inside the card's own. */
+.play-detail-card {
+  --play-detail-verb-h: 40px;
   padding: 0;
 }
 
-/* A title that earns its place lives INSIDE the card, so it drops the horizontal inset it
-   carried as a free-standing head and starts on the same line as the rows beneath it. */
-.play-detail-card .ce-selected-head {
-  padding-inline: 0;
+/* A row that is one thing across the card is ONE column, whatever the verb row below it split
+   the card into. Without this it inherits the card's tracks and huddles into the first of them.
+   The rails run the full inner width, so each row carries the inset the card no longer does. */
+.play-detail-lede,
+.play-detail-head,
+.play-detail-facts {
+  grid-template-columns: minmax(0, 1fr);
+  padding: var(--ds-inset);
+}
+
+/* A title that earns its place lives INSIDE the card, as a row of it — the same eyebrow the
+   level preview's own name row wears, on the same terms. It borrowed the campaign editor's
+   panel head before, which draws a hairline gradient rule under itself; inside a divided box
+   that rule sat a few pixels above the kit's own rail and said the same thing twice in raw CSS.
+   The rail IS the division now, so the head is type and nothing else. */
+.play-detail-head h2 {
+  color: var(--ce-eyebrow);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-2xs);
+  font-weight: 400;
+  letter-spacing: .14em;
+  line-height: 1.55;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+/* The verb IS its row — pressable edge to edge, so the card's frame is this control's edge and
+   there is no second frame a few pixels inside it. It keeps the height `.ce-link-button` gave
+   the plaque it replaces, so the card reads at the same scale it always did; only the width
+   changes, from a plate parked in the field to a band across the whole of it. */
+.play-detail-verbs .play-detail-verb {
+  display: grid;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xs);
+  min-block-size: var(--play-detail-verb-h);
+  padding: 0 var(--ds-inset);
+  text-transform: uppercase;
+}
+
+.play-detail-verb:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.play-detail-verb:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: -2px;
 }
 
 .play-detail-facts dl {
