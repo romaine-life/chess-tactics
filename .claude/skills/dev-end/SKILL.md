@@ -33,12 +33,17 @@ Use this closeout workflow for `D:\repos\chess-tactics` after code changes are c
    any shell or chrome refactor.
    - Touched `frontend/` — `cd frontend && npm run check`
    - Touched `backend/`, `bin/`, or `packages/` — `cd backend && npm run test:backend`. Its
-     tail (`smoke-test.js`) needs Postgres, which this Windows box does not have. When it
-     cannot run, say so plainly and name what did: `node netplay-smoke-test.js` covers all
-     lobby/netplay behaviour DB-free, and a narrow change can run just its own script (for
-     example `npm run test:pr-gate`).
-   If validation cannot run, explain why before continuing. Do not proceed to a PR on a
-   subset run and describe it as green.
+     tail (`smoke-test.js`) needs Postgres, which this Windows box does not have, so run what
+     does: `node netplay-smoke-test.js` covers all lobby/netplay behaviour DB-free,
+     `npm run test:live-media` covers migration integrity and planning, and a narrow change can
+     run just its own script (for example `npm run test:pr-gate`).
+     **Do not report the Postgres gap unless the change touched a schema migration or a
+     DB-backed endpoint.** It is a permanent property of the machine and CI runs the full test
+     on every PR, so on an ordinary change the sentence is noise that reads as a blocker the
+     owner should fix — and he has said so. Never suggest he install Postgres; see the "Do NOT
+     report the missing Postgres unless it actually mattered" section of `CLAUDE.md`.
+   If validation cannot run for any OTHER reason, explain why before continuing. Do not proceed
+   to a PR on a subset run and describe it as green.
 5. Stage only files that belong to the completed task.
 6. Commit with a concise message that reflects the user-facing change.
 7. Push the feature branch.

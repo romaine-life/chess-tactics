@@ -629,6 +629,36 @@ On a host without Postgres binaries (this Windows box has none), the full smoke 
 run locally — but `netplay-smoke-test.js` covers everything multiplayer, so reach for that.
 Both are wired into `npm test` (netplay first, so netplay regressions fail fast).
 
+### Do NOT report the missing Postgres unless it actually mattered
+
+**`smoke-test.js` not running on this box is the normal, permanent state of the machine, not a
+finding.** CI runs it on every PR, so nothing merges without it. Mention it in a handoff ONLY
+when the change touched a schema migration or a DB-backed endpoint — which is exactly when its
+coverage is the coverage you needed. For anything else, a green `cd frontend && npm run check`
+is the whole report, and the caveat is noise.
+
+The owner said so directly, after hearing it in every closeout: *"you mention after EVERY
+session 'didn't have postgres' like im supposed to care."* A caveat repeated on every change
+reads as a standing blocker he is expected to fix, and it buries the two or three facts in a
+report that are not routine. Same failure mode as reporting "nothing to clean".
+
+**Do not suggest he install Postgres to fix it — that alone would not work.** `findPgBinary`
+resolves binaries by shelling out to `sh -c 'command -v …'`, which under Git Bash answers with
+an MSYS path (`/c/Program Files/PostgreSQL/17/bin/initdb`) that Node's `spawnSync` cannot
+execute on Windows. Verified: handing `spawnSync` such a path fails `ENOENT`. So with Postgres
+installed, `startEmbeddedPostgres` would find the binaries and then die on the first spawn with
+a worse error than today's clear message. The two paths that do work are `DATABASE_URL` pointed
+at a disposable database, or making `findPgBinary` Windows-aware (~10 lines, and then it
+self-provisions here exactly as it does on CI). Neither is worth raising unprompted.
+
+Know what you are skipping before deciding it mattered. `smoke-test.js` is the heaviest test in
+the repo — 11.6k lines — and it is mostly one thing: it replays roughly twenty schema migrations
+against a real database and asserts the *rows* came out right, then boots a second backend in
+`schema=check` mode to confirm the history is sealed, then truncates and drives the editor
+document, upload, prop-seat, SSE, campaign and portfolio endpoints. `test:live-media` checks
+migration *integrity and planning* and needs no database; this one checks that they actually
+transform data.
+
 ## Checking a PR: use `pr-gate`, never a hand-written poll loop
 
 After opening a PR, run this from the repo root and read the one-line verdict:

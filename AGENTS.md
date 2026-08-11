@@ -186,6 +186,15 @@ merge approval; any corrective schema work must be a subsequent migration.
   `.codex-session/environment.json`; the dynamically printed Vite URL is an
   internal fallback, never an assumed port or owner handoff. Use the supported
   screenshot path documented in `CLAUDE.md`.
+- A permanent property of the machine is not a finding. The backend's full
+  `smoke-test.js` needs Postgres, which this Windows box does not have, and CI
+  runs it on every pull request. Report that gap only when the change touched a
+  schema migration or a database-backed endpoint — the case where its coverage is
+  the coverage you needed. Do not caveat an ordinary change with it, and do not
+  suggest installing Postgres as the fix; see the "Do NOT report the missing
+  Postgres unless it actually mattered" section of `CLAUDE.md` for why that would
+  not work. The same rule governs any recurring environmental fact: state it when
+  it changes the owner's decision, otherwise stay silent.
 - Nelson uses external Chrome for application review and handoff. Ambient
   in-app-browser state is informational only: never infer that he is using that
   browser, never navigate or claim its tabs as a substitute, and never ask him
