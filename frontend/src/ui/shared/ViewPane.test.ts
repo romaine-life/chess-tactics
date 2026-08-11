@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ZOOM_TIER_RATIO, snapToTier } from '../../game/zoomTiers';
+import { ZOOM_TIER_RATIO, snapToTier, zoomTierRange } from '../../game/zoomTiers';
 import {
+  boardZoomFloor,
   clientDeltaToLocal,
   constrainPanToCoverViewport,
   exceedsViewPanePanThreshold,
@@ -17,26 +18,29 @@ const rectangle = [
 ];
 
 /**
- * The outer limit is a rung on the global ladder at which the whole level box fits
- * inside the viewport. Asserting that contract directly — it fits, it is on the
- * ladder, and one rung closer would not fit — says what the camera promises, where
- * a hardcoded float only says what today's arithmetic happens to produce.
+ * The safety floor is a rung on the global ladder at which the viewport is still entirely
+ * INSIDE the boundary. Asserting that contract directly — it is covered, it is on the
+ * ladder, and one rung further out would not be — says what the camera promises, where a
+ * hardcoded float only says what today's arithmetic happens to produce.
+ *
+ * The direction matters and is the whole defect this guards: a rung chosen so the boundary
+ * fits inside the VIEWPORT guarantees a margin of unpainted world around it.
  */
-const outerTierFits = (
+const coverTierHolds = (
   viewport: { width: number; height: number },
   box: { width: number; height: number },
   zoom: number,
 ): void => {
   expect(zoom).toBe(snapToTier(zoom));
-  expect(box.width * zoom).toBeLessThanOrEqual(viewport.width + 1e-9);
-  expect(box.height * zoom).toBeLessThanOrEqual(viewport.height + 1e-9);
-  const closer = zoom * ZOOM_TIER_RATIO;
+  expect(viewport.width / zoom).toBeLessThanOrEqual(box.width + 1e-9);
+  expect(viewport.height / zoom).toBeLessThanOrEqual(box.height + 1e-9);
+  const further = zoom / ZOOM_TIER_RATIO;
   expect(
-    box.width * closer > viewport.width + 1e-9 || box.height * closer > viewport.height + 1e-9,
+    viewport.width / further > box.width + 1e-9 || viewport.height / further > box.height + 1e-9,
   ).toBe(true);
 };
 
-describe('ViewPane outer zoom tier', () => {
+describe('ViewPane cover zoom floor', () => {
   it('maps screen-space pointer movement back into a scaled design canvas', () => {
     expect(clientDeltaToLocal(40, 1560, 1040)).toBeCloseTo(60);
     expect(clientDeltaToLocal(-25, 1920, 960)).toBeCloseTo(-50);
@@ -44,13 +48,13 @@ describe('ViewPane outer zoom tier', () => {
   });
 
   it('is limited by the tighter viewport axis', () => {
-    // 501x300 against a 1000x600 box: height is the binding axis, not width.
+    // 501x300 against a 1000x600 box: width is the binding axis for coverage, not height.
     const wide = { width: 501, height: 300 };
-    outerTierFits(wide, RECTANGLE_BOX, minimumZoomToCoverViewport({
+    coverTierHolds(wide, RECTANGLE_BOX, minimumZoomToCoverViewport({
       viewport: wide, polygon: rectangle, minZoom: 0.4, maxZoom: 4,
     }));
     const square = { width: 600, height: 600 };
-    outerTierFits(square, RECTANGLE_BOX, minimumZoomToCoverViewport({
+    coverTierHolds(square, RECTANGLE_BOX, minimumZoomToCoverViewport({
       viewport: square, polygon: rectangle, minZoom: 0.4, maxZoom: 4,
     }));
   });
@@ -81,7 +85,7 @@ describe('ViewPane outer zoom tier', () => {
 
   it('is independent of current pan', () => {
     const viewport = { width: 500, height: 300 };
-    outerTierFits(viewport, RECTANGLE_BOX, minimumZoomToCoverViewport({
+    coverTierHolds(viewport, RECTANGLE_BOX, minimumZoomToCoverViewport({
       viewport, polygon: rectangle, minZoom: 0.4, maxZoom: 4,
     }));
   });
@@ -94,7 +98,7 @@ describe('ViewPane outer zoom tier', () => {
       { x: -744, y: 365 },
     ];
     const viewport = { width: 275.375, height: 183.578125 };
-    outerTierFits(viewport, { width: 1450, height: 816 }, minimumZoomToCoverViewport({
+    coverTierHolds(viewport, { width: 1450, height: 816 }, minimumZoomToCoverViewport({
       viewport, polygon: asymmetricArt, minZoom: 0.2, maxZoom: 4,
     }));
 
@@ -136,7 +140,7 @@ describe('ViewPane outer zoom tier', () => {
       viewport, polygon: [...rectangle].reverse(), minZoom: 0.55, maxZoom: 1.45,
     });
     expect(reversed).toBe(forward);
-    outerTierFits(viewport, RECTANGLE_BOX, forward);
+    coverTierHolds(viewport, RECTANGLE_BOX, forward);
   });
 
   it('follows a temporary automatic clamp back down after the viewport settles', () => {
@@ -160,5 +164,58 @@ describe('ViewPane outer zoom tier', () => {
       minimum: 0.84,
       automaticFloorZoom: 2.6,
     })).toEqual({ zoom: 3, automaticFloorZoom: null });
+  });
+});
+
+/**
+ * The floor obeys two limits at once and they pull opposite ways, so composing them is its
+ * own contract rather than a consequence of either half. Every one of these was reachable
+ * from a floor that answered only one question.
+ */
+describe('board zoom floor composition', () => {
+  it('holds the camera inside a finite boundary even where the level would fit further out', () => {
+    const viewport = { width: 2400, height: 1100 };
+    const floor = boardZoomFloor({
+      viewport, coverPolygon: rectangle, containBox: RECTANGLE_BOX, minZoom: 0.05, maxZoom: 16,
+    });
+    coverTierHolds(viewport, RECTANGLE_BOX, floor);
+    // The whole box fits inside this viewport at 1.05^-... — usefulness alone would have
+    // handed back a zoom that shows the box AND a margin of world beyond it.
+    expect(zoomTierRange({
+      viewport, levelBox: RECTANGLE_BOX, cell: { width: 96, height: 54 },
+    }).outer).toBeLessThan(floor);
+  });
+
+  it('still stops zooming out when coverage is unconditional and no boundary is stated', () => {
+    const viewport = { width: 2400, height: 1100 };
+    const floor = boardZoomFloor({
+      viewport, coverPolygon: undefined, containBox: RECTANGLE_BOX, minZoom: 0.05, maxZoom: 16,
+    });
+    // A viewport-locked backdrop paints wherever the camera goes, so nothing is uncovered —
+    // but a camera that can retreat forever is still useless, so the level box binds.
+    expect(RECTANGLE_BOX.width * floor).toBeLessThanOrEqual(viewport.width + 1e-9);
+    expect(RECTANGLE_BOX.height * floor).toBeLessThanOrEqual(viewport.height + 1e-9);
+    const closer = floor * ZOOM_TIER_RATIO;
+    expect(
+      RECTANGLE_BOX.width * closer > viewport.width
+      || RECTANGLE_BOX.height * closer > viewport.height,
+    ).toBe(true);
+  });
+
+  it('takes the tighter of the two limits, never the average or the last one asked', () => {
+    // Boundary far larger than the level: coverage is satisfied long before the level stops
+    // being worth zooming out from, so usefulness is what binds here.
+    const viewport = { width: 800, height: 600 };
+    const wideBoundary = [
+      { x: -4000, y: -3000 }, { x: 4000, y: -3000 }, { x: 4000, y: 3000 }, { x: -4000, y: 3000 },
+    ];
+    const floor = boardZoomFloor({
+      viewport, coverPolygon: wideBoundary, containBox: RECTANGLE_BOX, minZoom: 0.05, maxZoom: 16,
+    });
+    const coverOnly = minimumZoomToCoverViewport({
+      viewport, polygon: wideBoundary, minZoom: 0.05, maxZoom: 16,
+    });
+    expect(floor).toBeGreaterThan(coverOnly);
+    expect(RECTANGLE_BOX.height * floor).toBeLessThanOrEqual(viewport.height + 1e-9);
   });
 });

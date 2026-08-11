@@ -191,16 +191,48 @@ export function intersectConvexBoardCameraPolygons(
 }
 
 /**
- * The runtime coverage authority. AI boards must satisfy both the authored camera box and their
- * accepted-pixel polygon; ordinary boards use the authored/default box alone.
+ * The runtime coverage authority — the region the camera may never leave (ADR-0301).
+ *
+ * An AUTHORED box is a statement of intent and binds: the camera is held inside it, intersected
+ * with accepted pixels so a box larger than the painting cannot expose black.
+ *
+ * With no authored box the answer is the painted extent itself, not the derived default. The
+ * default is a snap preset for an author staring at an empty Camera page — it is deliberately
+ * tight around the playable surface, and it is usually far SMALLER than what the level already
+ * paints. Treating it as the runtime limit throws away real coverage and buys nothing: it does
+ * not add a pixel of art, it only forces the camera in until a board that was fully painted no
+ * longer fits on screen. What a level has actually painted is the honest promise until an author
+ * states a different one.
  */
 export function effectiveBoardCameraCoverPolygon(
   board: BoardWithCameraBounds,
   acceptedArtPolygon?: readonly BoardCameraPoint[],
-): BoardCameraPoint[] {
-  const cameraPolygon = boardCameraBoundsPolygon(resolvedBoardCameraBounds(board));
-  if (!acceptedArtPolygon) return cameraPolygon;
-  const intersection = intersectConvexBoardCameraPolygons(cameraPolygon, acceptedArtPolygon);
+): BoardCameraPoint[] | undefined {
+  const authored = normalizeBoardCameraBounds(board.cameraBounds, board);
+  if (!acceptedArtPolygon) {
+    // No authored box and no finite painting: this board's backdrop is locked to the
+    // viewport and paints wherever the camera goes, so there is no unpainted world to be
+    // kept out of and nothing for a boundary to protect. Usefulness alone limits it.
+    return authored ? boardCameraBoundsPolygon(authored) : undefined;
+  }
+  if (!authored) return [...acceptedArtPolygon];
+  const intersection = intersectConvexBoardCameraPolygons(
+    boardCameraBoundsPolygon(authored),
+    acceptedArtPolygon,
+  );
   // Accepted pixels remain the fail-safe if corrupt legacy data produces disjoint boundaries.
   return intersection.length >= 3 ? intersection : [...acceptedArtPolygon];
+}
+
+/**
+ * The level's own extent, for the usefulness limit: zooming out ends with the whole of
+ * this visible. An authored boundary states how much of the world the level means to be
+ * seen, so it is that when present, and the derived default otherwise.
+ */
+export function boardCameraContainBox(board: BoardWithCameraBounds): {
+  width: number;
+  height: number;
+} {
+  const { width, height } = resolvedBoardCameraBounds(board);
+  return { width, height };
 }

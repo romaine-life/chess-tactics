@@ -3183,13 +3183,30 @@ export function LevelEditor(): ReactElement {
       : undefined,
     [editorPredrawnPlate, predrawnCoverCells],
   );
+  /**
+   * What this page draws must be the boundary the PLAYER actually gets, or the instrument
+   * is lying about the one thing it exists to show. An unauthored level is governed at
+   * runtime by what it paints, not by the snap default, so an unauthored pre-drawn level
+   * shows its accepted pixels here and Snap/drag remain how a tighter box gets authored.
+   */
   const resolvedCameraBoundary = useMemo(
-    () => resolvedBoardCameraBounds({
-      cols: boardCols,
-      rows: boardRows,
-      cameraBounds: boardCameraBounds,
-    }),
-    [boardCameraBounds, boardCols, boardRows],
+    () => {
+      const authored = { cols: boardCols, rows: boardRows, cameraBounds: boardCameraBounds };
+      if (boardCameraBounds || !predrawnCoverPolygon?.length) {
+        return resolvedBoardCameraBounds(authored);
+      }
+      const xs = predrawnCoverPolygon.map((point) => point.x);
+      const ys = predrawnCoverPolygon.map((point) => point.y);
+      const minX = Math.min(...xs);
+      const minY = Math.min(...ys);
+      return {
+        minX,
+        minY,
+        width: Math.max(...xs) - minX,
+        height: Math.max(...ys) - minY,
+      };
+    },
+    [boardCameraBounds, boardCols, boardRows, predrawnCoverPolygon],
   );
   const {
     markViewInteraction: markBoardViewInteraction,
@@ -3308,17 +3325,29 @@ export function LevelEditor(): ReactElement {
     isPlacedArtBrushKind(initialBrushKind) ? initialBrushKind : 'artwork',
   );
   const [layer, setLayer] = useState<LayerKey>(initialLayer);
-  const cameraLayerEntryFramedRef = useRef(false);
+  const cameraLayerEntryFramedRef = useRef<string | null>(null);
   useEffect(() => {
     if (layer !== 'camera') {
-      cameraLayerEntryFramedRef.current = false;
+      cameraLayerEntryFramedRef.current = null;
       return;
     }
-    if (cameraLayerEntryFramedRef.current || !viewViewportSize) return;
-    cameraLayerEntryFramedRef.current = true;
+    if (!viewViewportSize) return;
+    // Frame the boundary that is actually THERE, not the one that was there on arrival.
+    // Landing on this page by URL frames it seconds before the accepted artwork resolves, so
+    // an unauthored level was framed against its placeholder and never re-framed once its real
+    // boundary appeared. Once a box is authored the author owns the camera, and Snap and the
+    // panel's own control are the ways back to it.
+    const identity = boardCameraBounds
+      ? `${provisionalClientScope}|authored`
+      : `${provisionalClientScope}|${resolvedCameraBoundary.width}x${resolvedCameraBoundary.height}`
+        + `@${resolvedCameraBoundary.minX},${resolvedCameraBoundary.minY}`;
+    if (cameraLayerEntryFramedRef.current === identity) return;
+    cameraLayerEntryFramedRef.current = identity;
     frameCameraBoundary(resolvedCameraBoundary);
   }, [
+    boardCameraBounds,
     layer,
+    provisionalClientScope,
     resolvedCameraBoundary.height,
     resolvedCameraBoundary.minX,
     resolvedCameraBoundary.minY,

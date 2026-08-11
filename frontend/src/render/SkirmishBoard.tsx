@@ -29,7 +29,7 @@ import {
   sizeCanvasForBounds,
 } from './BoardCanvasLayer';
 import { objectBaseZIndex } from './sceneDepth';
-import { ViewPane, minimumZoomToCoverViewport, type ViewPaneViewportSize } from '../ui/shared/ViewPane';
+import { ViewPane, boardZoomFloor, type ViewPaneViewportSize } from '../ui/shared/ViewPane';
 import { PawnPromotionPicker } from '../ui/PawnPromotionPicker';
 import { BattleGoldNoticeMarker } from '../ui/BattleGoldNotice';
 import { useBoardCameraFraming } from '../ui/shared/BoardViewFraming';
@@ -54,6 +54,7 @@ import {
   boardBounds,
   boardContentHash,
   boardDrawOps,
+  boardCameraContainBox,
   effectiveBoardCameraCoverPolygon,
   boardVisualFeatures,
   boardVisualTerrainCells,
@@ -2007,24 +2008,29 @@ export function SkirmishBoard({
   useEffect(() => {
     setAuthoredZoomIn(normalizeCameraZoomIn(exactBoard?.cameraZoomIn) ?? null);
   }, [exactBoard?.cameraZoomIn, setAuthoredZoomIn]);
+  const cameraBoundsSubject = exactBoard ?? { cols: game.size.cols, rows: game.size.rows };
   const cameraCoverPolygon = useMemo(
-    () => effectiveBoardCameraCoverPolygon(
-      exactBoard ?? { cols: game.size.cols, rows: game.size.rows },
-      predrawnCoverPolygon,
-    ),
+    () => effectiveBoardCameraCoverPolygon(cameraBoundsSubject, predrawnCoverPolygon),
     [exactBoard, game.size.cols, game.size.rows, predrawnCoverPolygon],
+  );
+  // The level's own extent, so zooming out still ends with the whole board visible on a
+  // level whose backdrop covers unconditionally and therefore states no boundary.
+  const cameraContainBox = useMemo(
+    () => boardCameraContainBox(cameraBoundsSubject),
+    [exactBoard, game.size.cols, game.size.rows],
   );
   const boardViewKey = surfaceState?.viewKey
     ?? storedActivityId
     ?? `${storedLevelId ?? 'free'}:${storedBoardViewEpoch}`;
   const preparedMinimumZoom = useMemo(() => viewViewportSize
-    ? minimumZoomToCoverViewport({
+    ? boardZoomFloor({
         viewport: viewViewportSize,
-        polygon: cameraCoverPolygon,
+        coverPolygon: cameraCoverPolygon,
+        containBox: cameraContainBox,
         minZoom: PLAYER_TECHNICAL_MINIMUM_ZOOM,
         maxZoom: 16,
       })
-    : boardMinZoom, [boardMinZoom, cameraCoverPolygon, viewViewportSize]);
+    : boardMinZoom, [boardMinZoom, cameraContainBox, cameraCoverPolygon, viewViewportSize]);
   const { markViewInteraction, cameraReady } = useBoardCameraFraming({
     board: { cols: game.size.cols, rows: game.size.rows },
     viewKey: boardViewKey,
@@ -2614,6 +2620,7 @@ export function SkirmishBoard({
         onZoomChange={setZoom}
         onPanChange={setBoardPan}
         coverPolygon={cameraCoverPolygon}
+        containBox={cameraContainBox}
         onMinimumZoomChange={setMinZoom}
         onViewportSizeChange={setViewViewportSize}
         onViewInteraction={markViewInteraction}
