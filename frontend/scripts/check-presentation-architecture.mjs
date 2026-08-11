@@ -324,11 +324,15 @@ for (const required of [
   'activate={!runDeployment && sceneActivated}',
   'interactive={!runDeployment && !unitDeparture && sceneActivated &&',
   'surfaceSignature={runBattle?.activityId}',
-  'surfaceState={presentedDeploymentSurface}',
+  // Every passive position the battlefield shows goes through the ONE surface seam, in a fixed
+  // order of authority: a Deployment being built outranks a move review of the live match, and
+  // both outrank the live board. A second projection path is what this pins shut.
+  'surfaceState={presentedDeploymentSurface ?? reviewSurface}',
   'preserveBoardPresentation: true',
   // Activation releases an ordinary entrance; it does not decide whether there is one. A
-  // terminal review deliberately keeps the already-arrived position settled instead.
-  "unitArrivals={runBattleReviewTerminal ? 'settled' : sceneActivated ? 'active' : 'pending'}",
+  // terminal review, and an earlier half-move held up for reading, both deliberately keep
+  // their already-arrived position settled instead.
+  "unitArrivals={runBattleReviewTerminal || reviewSurface ? 'settled' : sceneActivated ? 'active' : 'pending'}",
   // A navigated Battle delegates opacity to the authored scene so board readiness cannot start
   // a second serialized fade after the scene itself has entered.
   'revealTransition="scene"',

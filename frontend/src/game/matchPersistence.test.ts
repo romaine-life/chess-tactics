@@ -120,6 +120,7 @@ describe('match persistence', () => {
       clock: state.clock,
       battleElapsed: state.battleElapsed,
       undoStack: [],
+      positions: [],
       savedAt: expect.any(String),
     });
     expect(Number.isNaN(Date.parse(loaded?.savedAt ?? ''))).toBe(false);

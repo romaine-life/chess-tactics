@@ -20,6 +20,8 @@ import { BackGlyph, RestartGlyph, NewGlyph } from './shared/actionGlyphs';
 import { SkirmishClockControl } from './SkirmishClockControl';
 import { loadSkirmishClockPref } from '../game/skirmishClockPref';
 import { Stepper } from './shared/Stepper';
+import { MoveReviewControls } from './shared/MoveReviewControls';
+import { moveNumberFor, reviewIndexForLoggedPly } from '../game/moveReview';
 import { clientSide, clientSideLabel, clientSideOrder, clientSideRelation, clientTurnLabel, type PlayingSide } from '../game/clientPerspective';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox, ShellControlsPanel } from './shared/ChromeBox';
@@ -98,6 +100,25 @@ export const SHORTCUT_BINDINGS: Record<string, GridAction> = {
 
 const ZOOM_STEP = 0.1;
 
+/**
+ * Move review's keyboard: the arrows every chess site walks a game with, plus Escape to drop
+ * back to the live board. Separate from the command card above because that card is a grid of
+ * letters mapped to physical key POSITIONS — the arrows are not part of it, and reading a game
+ * back is not an overlay toggle.
+ *
+ * Returns true when the key was claimed. Escape is claimed only while a review is actually
+ * open, so it keeps meaning whatever else it means the rest of the time.
+ */
+export function runMoveReviewKey(key: string, skirmishStore: SkirmishStore = defaultSkirmishStore): boolean {
+  const state = skirmishStore.getState();
+  if (key === 'ArrowLeft') { state.stepReview(-1); return true; }
+  if (key === 'ArrowRight') { state.stepReview(1); return true; }
+  if (key === 'ArrowUp' || key === 'Home') { state.reviewPosition(0); return true; }
+  if (key === 'ArrowDown' || key === 'End') { state.reviewPosition(null); return true; }
+  if (key === 'Escape' && state.reviewIndex !== null) { state.reviewPosition(null); return true; }
+  return false;
+}
+
 /** Run the command card action for a physical key or painted button. */
 export function runSkirmishShortcut(
   key: string,
@@ -148,7 +169,7 @@ function parseDelaySeconds(raw: string): number | null {
  */
 export function moveNumberLabel(entry: LogEntry): string {
   if (entry.ply === undefined) return '';
-  return `${Math.floor(entry.ply / 2) + 1}${entry.ply % 2 === 0 ? '.' : '…'}`;
+  return moveNumberFor(entry.ply);
 }
 
 function UnitBadge({ piece, large = false }: { piece: Piece | null; large?: boolean }) {
@@ -275,6 +296,9 @@ export function SkirmishHud({
   const selectedId = useSkirmish((s) => s.selectedId);
   const focusedId = useSkirmish((s) => s.focusedId);
   const log = useSkirmish((s) => s.log);
+  const positions = useSkirmish((s) => s.positions);
+  const reviewIndex = useSkirmish((s) => s.reviewIndex);
+  const reviewPosition = useSkirmish((s) => s.reviewPosition);
   const net = useSkirmish((s) => s.net);
   const newSkirmish = useSkirmish((s) => s.newSkirmish);
   const resign = useSkirmish((s) => s.resign);
@@ -335,6 +359,9 @@ export function SkirmishHud({
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
+      // Review first: holding an arrow scrubs the score sheet, so unlike the command card
+      // its keys deliberately accept auto-repeat.
+      if (runMoveReviewKey(e.key, skirmishStore)) { e.preventDefault(); return; }
       if (!runSkirmishShortcut(e.key, e.repeat, skirmishViewStore, skirmishStore)) return;
       e.preventDefault();
     };
@@ -504,14 +531,39 @@ export function SkirmishHud({
         {tab === 'log' && (
           <section className="skirmish-card skirmish-log-card" aria-label="Event log">
             <h2>Event Log</h2>
+            {/* The score sheet is also the way back through the game, so its transport sits
+                with it: the same first/back/forward/live row the battlefield plate carries. */}
+            <MoveReviewControls variant="panel" />
             <ul>
-              {logLines.map((entry, i) => (
-                <li key={`${entry.text}-${entry.ply ?? 'note'}-${i}`} className={entry.side ? `is-move is-${entry.side}` : 'is-note'}>
-                  <span aria-hidden="true" />
-                  <strong>{moveNumberLabel(entry)}</strong>
-                  <em>{entry.text}</em>
-                </li>
-              ))}
+              {logLines.map((entry, i) => {
+                const seat = entry.ply === undefined ? null : reviewIndexForLoggedPly(positions, entry.ply);
+                const showing = seat !== null && seat === reviewIndex;
+                const className = `${entry.side ? `is-move is-${entry.side}` : 'is-note'}${showing ? ' is-showing' : ''}`;
+                return (
+                  <li key={`${entry.text}-${entry.ply ?? 'note'}-${i}`} className={className}>
+                    <span aria-hidden="true" />
+                    {/* A row whose board this match recorded is a place you can go: pressing it
+                        shows that position. Prose rows, and moves from a match resumed without a
+                        history, stay plain text — there is nothing to show. */}
+                    {seat === null ? (
+                      <>
+                        <strong>{moveNumberLabel(entry)}</strong>
+                        <em>{entry.text}</em>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        className="skirmish-log-move"
+                        aria-current={showing ? 'true' : undefined}
+                        onClick={() => reviewPosition(seat)}
+                      >
+                        <strong>{moveNumberLabel(entry)}</strong>
+                        <em>{entry.text}</em>
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </section>
         )}
