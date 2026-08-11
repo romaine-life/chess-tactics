@@ -574,14 +574,6 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": ".ce-link-button-ghost",
-      "surfaceHash": "277bdb0426fbd5d87210424b00ac6c1525193cdb2b056c94d6c7e0fe251b5a78",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
       "selector": ".ce-name-field input",
       "surfaceHash": "4842be9ebfe8e5e102fd2b424a7a68837fd2203a1bb3256669ca88e6488bc6ee",
       "occurrence": 1

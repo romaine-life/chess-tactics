@@ -1323,43 +1323,41 @@ export function CampaignEditor({
           {/* ── PREVIEW COLUMN (col 4, top-right) — the shared LevelPreviewColumn (same one the
               play-side Campaign screen uses). Lifted OUT of the main scroll into its OWN column;
               renders ONLY when a level is selected, so nothing shows until you click a level. The
-              editor's verbs (Edit Board / Test Play, plus the unassigned Assign picker) ride in as
-              its actions slot. ── */}
+              editor's verbs (Edit Board / Test Play) become cells of that box's bottom row, and
+              the unassigned Assign picker takes the field row under them — given as data, so
+              nothing here can wrap them in a box of its own outside the frame.
+
+              That picker is the house dropdown, not a native select: the registered control the
+              Enchiridion's filters and the Ataraxia picker use, wearing the same oak as the verbs
+              above it. A native select cannot take the installed fill — its kit frame paints its
+              own interior — and its menu is drawn by the OS. ── */}
           {levelDoc ? (
             <LevelPreviewColumn
               level={levelDoc}
               title={selectedLevelTitle}
               embedded={embedded}
-              actions={(levelRef || isMetaCollectionSelected) ? (
-                <div className={`ce-preview-actions ${isUnassignedSelected ? 'has-assign' : ''}`.trim()}>
-                  <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} data-chrome-fill-surface={EDITOR_COLUMN_CONTROL_FILL_SURFACE} to={editHref}><span>Edit Board</span></ChromeNavButton>
-                  <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button ce-link-button-ghost')} data-chrome-fill-surface={EDITOR_COLUMN_CONTROL_FILL_SURFACE} to={playHref}><span>Test Play</span></ChromeNavButton>
-                  {/* The house dropdown, not a native select: the registered control the
-                      Enchiridion's filters and the Ataraxia picker use, wearing the same oak
-                      as the verbs beside it. A native select cannot take the installed fill —
-                      its kit frame paints its own interior — and its menu is drawn by the OS. */}
-                  {isUnassignedSelected ? (
-                    <div className="ce-assign-field">
-                      <HouseSelect
-                        value=""
-                        options={[
-                          {
-                            value: '',
-                            label: editableCampaignsForLevel.length === 0 ? 'No eligible campaigns' : 'Assign to campaign',
-                            disabled: true,
-                          },
-                          ...editableCampaignsForLevel.map((campaign) => ({ value: campaign.id, label: campaign.name })),
-                        ]}
-                        onChange={(campaignId) => { if (campaignId) assignSelectedUnassignedLevel(campaignId); }}
-                        ariaLabel="Assign to campaign"
-                        disabled={editableCampaignsForLevel.length === 0}
-                        title={editableCampaignsForLevel.length === 0 ? 'No editable campaign matches this level tier' : 'Assign selected level to campaign'}
-                        testId="assign-to-campaign"
-                        fillSurface={EDITOR_COLUMN_CONTROL_FILL_SURFACE}
-                      />
-                    </div>
-                  ) : null}
-                </div>
+              verbs={(levelRef || isMetaCollectionSelected) ? [
+                { id: 'edit', label: 'Edit Board', to: editHref },
+                { id: 'test', label: 'Test Play', to: playHref },
+              ] : []}
+              field={(levelRef || isMetaCollectionSelected) && isUnassignedSelected ? (
+                <HouseSelect
+                  value=""
+                  options={[
+                    {
+                      value: '',
+                      label: editableCampaignsForLevel.length === 0 ? 'No eligible campaigns' : 'Assign to campaign',
+                      disabled: true,
+                    },
+                    ...editableCampaignsForLevel.map((campaign) => ({ value: campaign.id, label: campaign.name })),
+                  ]}
+                  onChange={(campaignId) => { if (campaignId) assignSelectedUnassignedLevel(campaignId); }}
+                  ariaLabel="Assign to campaign"
+                  disabled={editableCampaignsForLevel.length === 0}
+                  title={editableCampaignsForLevel.length === 0 ? 'No editable campaign matches this level tier' : 'Assign selected level to campaign'}
+                  testId="assign-to-campaign"
+                  fillSurface={EDITOR_COLUMN_CONTROL_FILL_SURFACE}
+                />
               ) : null}
             />
           ) : null}
