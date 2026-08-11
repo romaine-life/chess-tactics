@@ -25725,7 +25725,14 @@ button.tileset-relationship-cell {
 }
 /* A disclosure control says which way its content is about to move: down while closed (it
    opens below the control), up while open (it folds back up). Same shared mark turned a
-   quarter, mirrored the way -right already is -- never a second chevron implementation. */
+   quarter, mirrored the way -right already is -- never a second chevron implementation.
+
+   These are NOT re-centred, and that was checked rather than assumed: captured at 8x on the live
+   route and the ink's bounding box read off the pixels, a turned chevron lands 1.5 device pixels
+   (0.19 CSS px) off the centre of its glyph box — below what the rasterizer can place at 1x, and
+   not worth a magic number. When a turned chevron LOOKS off-centre, it is its host that is not
+   centring the glyph: `.stepper-glyph` is an inline-block, so a host that leaves it on the text
+   baseline hangs it high. See `.run-rules-toggle`, where that was 2.5px. */
 .stepper-chevron-down {
   transform: rotate(-90deg);
 }
@@ -28277,6 +28284,15 @@ button.run-card-formation-cell {
      framed control on the screen. Stated here because `--le-inner-square` and its siblings are
      scoped to the Level Editor screen and do not reach the menu shell's columns. */
   --run-prep-plate-h: 30px;
+  /* ONE control height through the whole box: the square key that opens Options is the same 30px
+     as every plate, rather than the 38px a tool square takes on the Level Editor's screen. The
+     registered unit reads its size from this token, so this is the token's value here and not a
+     rule out-specifying the unit. */
+  --le-inner-square: var(--run-prep-plate-h);
+  /* ONE seat for every name cell, whether it carries a key or not. Sized to hold the key: a cell
+     that holds nothing but a line of text would otherwise be 18px shorter than the one beside it,
+     and the two titles would sit at different heights in what is meant to be the same treatment. */
+  --run-prep-name-h: calc(var(--run-prep-plate-h) + 2 * var(--ds-inset));
   /* Sized by what it holds. Stretching it to the column and packing the cells from the top is
      what leaves a slab of empty marble under the last one. */
   flex: 0 0 auto;
@@ -28311,7 +28327,7 @@ button.run-card-formation-cell {
   gap: var(--ds-inline-tight);
   grid-template-columns: minmax(0, 1fr);
   justify-content: space-between;
-  min-block-size: 0;
+  min-block-size: var(--run-prep-name-h);
 }
 
 .run-prep-cell-name {
@@ -28348,11 +28364,15 @@ button.run-card-formation-cell {
 }
 
 /* The disclosure is a registered tool square; this rule only seats it at the end of the name row.
-   It keeps its own frame — it is a control standing ON the marble cell, not filling one. */
+   It keeps its own frame — it is a control standing ON the marble cell, not filling one.
+   The mark is CENTRED in it rather than sitting on a text baseline: the glyph is an inline-block,
+   so in the square's default block layout it hung 2.5px high of centre. */
 .run-rules-toggle {
   color: inherit;
   cursor: pointer;
+  display: grid;
   flex: 0 0 auto;
+  place-items: center;
 }
 
 /* Options' cells are there whether the choices are painted or not, so opening the section moves

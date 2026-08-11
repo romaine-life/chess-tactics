@@ -293,6 +293,16 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // That is the difference between a control INSERTED into the box and one standing inside it.
     expect(style).toMatch(/\.run-prep-plate \{[\s\S]*?padding: 0;/);
     expect(style).toMatch(/\.run-prep-verb \{[\s\S]*?min-block-size: var\(--run-prep-plate-h\);/);
+    // ONE control height through the whole box: the square key that opens Options is the same
+    // plate height as every picker and every verb, not the 38px a tool square takes on the Level
+    // Editor's screen. The registered unit reads its size from this token, so this is the token's
+    // value here rather than a rule out-specifying the unit.
+    expect(style).toMatch(/--le-inner-square: var\(--run-prep-plate-h\);/);
+    // ONE seat for every name cell, sized to hold that key whether the cell carries one or not.
+    // Ataraxia holds only a line of text, so without this it stood 18px shorter than Options and
+    // the two titles sat at different heights in what is meant to be the same treatment.
+    expect(style).toMatch(/--run-prep-name-h: calc\(var\(--run-prep-plate-h\) \+ 2 \* var\(--ds-inset\)\);/);
+    expect(style).toMatch(/\.run-prep-name \{[\s\S]*?min-block-size: var\(--run-prep-name-h\);/);
     // The box takes no padding of its own: a rail has to reach the frame on both sides, and box
     // padding would hold every one of them short of it. Each cell carries the inset instead.
     expect(style).toMatch(/\.run-prep-box \{[\s\S]*?padding: 0;/);
@@ -474,6 +484,13 @@ describe('Run rule options are a departure from the defaults, not a step in setu
     expect(source).toContain("chromeUnitClassNames('inner-tool-square', 'run-rules-toggle')");
     expect(source).not.toContain('unit="inner-text-button"');
     expect(source).toMatch(/<span className="run-prep-cell-name" id="run-rules-title">Options<\/span>/);
+    // The key CENTRES its mark. `.stepper-glyph` is an inline-block, so left to the square's
+    // default block layout it hangs on a text baseline — measured 2.5px high of centre, which is
+    // what put the chevron in the corner of the key. The mark's own seat is untouched: captured at
+    // 8x, a turned chevron sits 0.19 CSS px off its glyph's centre, below what the rasterizer can
+    // place at 1x.
+    expect(style).toMatch(/\.run-rules-toggle \{[\s\S]*?place-items: center;/);
+    expect(style).toMatch(/\.stepper-chevron-down \{\s*transform: rotate\(-90deg\);\s*\}/);
     // The named-group box the section used to be still exists for Settings and the War's Battles,
     // and there the box IS the disclosure: its name row fills the accepted InnerChromeBox, so the
     // frame is the button's edge and its inset is the box's whole content padding.

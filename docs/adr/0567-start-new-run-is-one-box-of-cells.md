@@ -62,6 +62,12 @@ Two more things followed from being four boxes rather than one:
   - The plate is **30px**, not the 38px of a framed control. A framed button's 9-slice eats a
     rail's width a side, so about 24px of it is oak; a cell painting the full 38 would read half
     again as heavy as every framed control on the screen.
+- **One control height, and one name-cell seat, through the whole box.** The square key that opens
+  Options is the same 30px as every plate — the box sets `--le-inner-square`, which is the token
+  the registered unit already reads, rather than a rule out-specifying it. And every name cell is
+  one seat sized to hold that key, whether it carries one or not: Ataraxia holds only a line of
+  text, so left to itself it stood 18px shorter than Options and the two titles sat at different
+  heights in what is meant to be the same treatment.
 - **A cell that CARRIES something** — a name, a sentence — takes `--ds-inset` and wears the box's
   marble. The replacement warning is one of these, and being bare marble is now what tells you it
   cannot be pressed, in a column where the cells either side of it are solid wood.
@@ -70,7 +76,12 @@ Two more things followed from being four boxes rather than one:
   button; making the cell pressable would put a press on a region whose boundary belongs to
   something bigger. The key is labelled BY the cell's name (`aria-labelledby`), so the screen never
   says Options twice and pressing it changes nothing but `aria-expanded`. The key keeps its own
-  frame: it is a control standing ON a marble cell, not one filling a cell.
+  frame: it is a control standing ON a marble cell, not one filling a cell. **It centres its mark**
+  — `.stepper-glyph` is an inline-block, so a square that leaves it to default block layout hangs
+  it on a text baseline, which is what put the chevron in the corner of this key by 2.5px. The
+  shared mark itself is untouched: captured at 8x and measured off the painted pixels, a turned
+  chevron sits 0.19 CSS px off the centre of its own glyph box, below what the rasterizer can place
+  at 1x. When a turned chevron looks off-centre, look at its HOST.
 - **Options' cells are always there, empty when closed.** They are the same cells at the same
   heights open and closed; opening the section paints compartments that were already there, and
   nothing above or below moves. The space is reserved by keeping the choices LAID OUT and hiding
