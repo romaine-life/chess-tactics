@@ -7,7 +7,7 @@ refines:
   - "[ADR-0026](0026-ui-kit-icon-canvas.md)"
 ---
 
-# ADR-0559: Run's rail tabs wear their own marks
+# ADR-0610: Run's rail tabs wear their own marks
 
 ## Context
 

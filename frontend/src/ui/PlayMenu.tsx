@@ -264,7 +264,7 @@ function RunPanel({
   });
   const eligible = useMemo(() => runEligibleOfficialWars(wars), [wars]);
   // Each destination wears its OWN installed mark, authored for this seat and reviewed on this
-  // tab (ADR-0559). They borrowed the title bar's Battle and Ataraxia marks first, which read as
+  // tab (ADR-0610). They borrowed the title bar's Battle and Ataraxia marks first, which read as
   // arbitrary: those are minted for the bar's tight measure chip, warm where the kit is not, and
   // authored edge-to-edge so they needed the `bleed` canvas. These are kit-canvas marks, so they
   // take the same `inset` seat every other rail mark uses.
