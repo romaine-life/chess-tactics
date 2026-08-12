@@ -1,0 +1,580 @@
+{
+  "schemaVersion": 3,
+  "cardType": "King",
+  "status": "proposed",
+  "governedBy": "docs/adr/0578-card-art-is-briefed-from-a-king-rooted-event.md",
+  "contract": "docs/art/card-art-brief-contract.md",
+  "supersedes": "docs/art/run-king-prompts-v2.json (left intact as the record of what shipped)",
+  "note": "The fifteen King slots with their fixed casts. Nine acts are kept from v2 because they are already strong and singular; six are re-anchored, taking the slate from two realms to nine. Casts are fixed by each card formation and are not negotiable; everything else here is. Awaiting owner sign-off before briefs are written against it.",
+  "rules": {
+    "castIsFixed": "The cast comes from the card formation in packages/board-render/src/run/model.ts and cannot change.",
+    "actNeverPrinted": "The act, its realm and its date drive period, setting and what is being done. They never reach the card face.",
+    "noHieraticScale": "Delete \"largest in frame\" and \"holding the centre\". The monarch is identified by regalia, position in the action, and what he is doing.",
+    "eyeExceptionKept": "The monarch meets the viewer’s eye; his retinue keep the usual reticence. Deliberate departure from docs/lore-anti-story.md.",
+    "factual": "Every name, date and act must be factual, as in v2."
+  },
+  "slots": [
+    {
+      "cardId": "sole-surviving-issue",
+      "slot": "ui/run/card-art/k-sole-surviving-issue/illustration.png",
+      "cast": [
+        "K",
+        "p"
+      ],
+      "castShape": {
+        "cells": [
+          "K",
+          "p"
+        ],
+        "columns": 1
+      },
+      "verdict": "keep",
+      "previous": {
+        "name": "Sole Surviving Issue",
+        "anchor": "Charles VII · siege of Orléans, 1429"
+      },
+      "displacedBecause": null,
+      "name": "Sole Surviving Issue",
+      "where": "France · Troyes 1420, and after",
+      "act": "Fifth son. His brothers died one after another until the crown reached him, and then a treaty disinherited him anyway. Kept as-is; the act only needs to stop being a man standing at a shut gate.",
+      "moment": "Rising out of a chair to receive somebody, mid-movement, in a hall dressed for a court that is not there."
+    },
+    {
+      "cardId": "entered-without-objection",
+      "slot": "ui/run/card-art/k-entered-without-objection/illustration.png",
+      "cast": [
+        "K",
+        "p",
+        "p"
+      ],
+      "castShape": {
+        "cells": [
+          "K",
+          "p",
+          "p"
+        ],
+        "columns": 1
+      },
+      "verdict": "keep",
+      "previous": {
+        "name": "Entered Without Objection",
+        "anchor": "Henry IV · deposition of Richard II, 1399"
+      },
+      "displacedBecause": null,
+      "name": "Entered Without Objection",
+      "where": "England · Westminster, 30 September 1399",
+      "act": "The parliament roll recorded Richard II's renunciation as voluntary. Nobody in the hall said otherwise, and the column ruled for objections reached the binder empty.",
+      "moment": "The roll turned and weighted flat on a table, the king one of several men leaning over it and not the largest."
+    },
+    {
+      "cardId": "his-grace",
+      "slot": "ui/run/card-art/k-his-grace/illustration.png",
+      "cast": [
+        "p",
+        "p",
+        "K"
+      ],
+      "castShape": {
+        "cells": [
+          "p",
+          "p",
+          "K",
+          "."
+        ],
+        "columns": 2
+      },
+      "verdict": "keep",
+      "previous": {
+        "name": "His Grace",
+        "anchor": "Richard III · the princes, 1483"
+      },
+      "displacedBecause": null,
+      "name": "His Grace",
+      "where": "England · London, summer 1483",
+      "act": "Two names stood before his, were declared illegitimate, and then were absent from the record. The protected starter card; it should not move.",
+      "moment": "A clerk striking two lines through a genealogy while the king reads it over his shoulder, half out of the light."
+    },
+    {
+      "cardId": "one-left-at-the-marker",
+      "slot": "ui/run/card-art/k-one-left-at-the-marker/illustration.png",
+      "cast": [
+        "K",
+        "p",
+        "p",
+        "p"
+      ],
+      "castShape": {
+        "cells": [
+          "K",
+          "p",
+          "p",
+          ".",
+          ".",
+          "p"
+        ],
+        "columns": 3
+      },
+      "verdict": "keep",
+      "previous": {
+        "name": "One Left at the Marker",
+        "anchor": "Edward I · Hundred Rolls inquests, 1274"
+      },
+      "displacedBecause": null,
+      "name": "One Left at the Marker",
+      "where": "England · the hundreds, 1274–75",
+      "act": "Commissioners recorded boundaries and franchises from sworn local memory, because the memory was the evidence. At each marker a boy was struck so that he would remember the place.",
+      "moment": "The instant before the blow, the rest of the party already walking on."
+    },
+    {
+      "cardId": "household-roll",
+      "slot": "ui/run/card-art/k-household-roll/illustration.png",
+      "cast": [
+        "K",
+        "p",
+        "p",
+        "p"
+      ],
+      "castShape": {
+        "cells": [
+          "K",
+          "p",
+          "p",
+          "p"
+        ],
+        "columns": 2
+      },
+      "verdict": "keep",
+      "previous": {
+        "name": "The Household Roll",
+        "anchor": "Henry VIII · Dissolution (1 of 3)"
+      },
+      "displacedBecause": "Kept as the best of the three Dissolution cards. The other two go.",
+      "name": "The Household Roll",
+      "where": "England · Valor Ecclesiasticus, 1535",
+      "act": "Every monastic income in the realm was counted before a single house was dissolved. The survey came first, and the same roll had once served a household of forty.",
+      "moment": "A figure going into a column on a board propped against cloister stone — a valuation, not a seizure."
+    },
+    {
+      "cardId": "called-to-the-bounds",
+      "slot": "ui/run/card-art/k-called-to-the-bounds/illustration.png",
+      "cast": [
+        "K",
+        "p",
+        "p",
+        "p"
+      ],
+      "castShape": {
+        "cells": [
+          "K",
+          ".",
+          ".",
+          "p",
+          "p",
+          "p"
+        ],
+        "columns": 3
+      },
+      "verdict": "keep",
+      "previous": {
+        "name": "Called to the Bounds",
+        "anchor": "Edward VI · Edwardian injunctions, 1547"
+      },
+      "displacedBecause": null,
+      "name": "Called to the Bounds",
+      "where": "England · Rogationtide, after 1547",
+      "act": "Most processions were banned and the perambulation was deliberately kept, because walking the line was how a parish still knew where it ran. Kept because it is a walk, not another piece of paper.",
+      "moment": "A boy lifted to touch the corner post so that he will remember it — the instant his hand reaches the wood."
+    },
+    {
+      "cardId": "turning-stone",
+      "slot": "ui/run/card-art/k-turning-stone/illustration.png",
+      "cast": [
+        "K",
+        "p",
+        "p",
+        "p"
+      ],
+      "castShape": {
+        "cells": [
+          "K",
+          "p",
+          "p",
+          ".",
+          "p",
+          "."
+        ],
+        "columns": 2
+      },
+      "verdict": "re-anchor",
+      "previous": {
+        "name": "The Turning Stone",
+        "anchor": "Henry VIII · Dissolution (2 of 3)"
+      },
+      "displacedBecause": "Third English land-and-church survey on the slate, and the second Dissolution card. Replaced.",
+      "name": "Earth of Every County",
+      "where": "Hungary · Székesfehérvár, the coronation mound",
+      "act": "The mound was built of earth carried in from every county of the realm. The newly crowned king rode up it and cut his sword to the four points of the compass, which is how he undertook to defend all of it.",
+      "moment": "The horse's forefeet reaching the top of a mound made of somebody else's fields, with the men who carried the earth standing off it."
+    },
+    {
+      "cardId": "within-the-old-bounds",
+      "slot": "ui/run/card-art/k-within-the-old-bounds/illustration.png",
+      "cast": [
+        "p",
+        "p",
+        "K",
+        "p"
+      ],
+      "castShape": {
+        "cells": [
+          "p",
+          "p",
+          "K",
+          ".",
+          "p",
+          "."
+        ],
+        "columns": 2
+      },
+      "verdict": "re-anchor",
+      "previous": {
+        "name": "Within the Old Bounds",
+        "anchor": "Henry VIII · Dissolution (3 of 3)"
+      },
+      "displacedBecause": "Third Dissolution card, and the second boundary-bank scene. Replaced.",
+      "name": "Confirmed on the Road",
+      "where": "Sweden · the Eriksgata",
+      "act": "Elected at the Stone of Mora by one province, the new king then had to ride the circuit of all the others and be confirmed by each assembly in turn, taking local men as hostages along the way. One king refused the hostages; it was taken as an insult, because it meant he did not fear them.",
+      "moment": "Three provincial men mounting up to ride with him as sureties, at the moment the last one takes the reins."
+    },
+    {
+      "cardId": "staggered-muster",
+      "slot": "ui/run/card-art/k-staggered-muster/illustration.png",
+      "cast": [
+        "K",
+        "p",
+        "p",
+        "p"
+      ],
+      "castShape": {
+        "cells": [
+          "K",
+          ".",
+          "p",
+          "p",
+          ".",
+          "p"
+        ],
+        "columns": 2
+      },
+      "verdict": "re-anchor",
+      "previous": {
+        "name": "Staggered Muster",
+        "anchor": "King John · Portsmouth, 1205"
+      },
+      "displacedBecause": "One of two English musters that are the same act twice. Replaced with a levy of a wholly different shape.",
+      "name": "A Ship From Every District",
+      "where": "Denmark · the leidang",
+      "act": "The coast was divided into districts that each owed one ship, and those into smaller districts that each owed one man to crew it. A royal charter of 1085 fines the people of certain lands for neglecting it. The arithmetic is exact and the ships are wooden.",
+      "moment": "Three men from three districts standing on a beach beside a keel that is one crew short, and the tide already going."
+    },
+    {
+      "cardId": "muster-incomplete",
+      "slot": "ui/run/card-art/k-muster-incomplete/illustration.png",
+      "cast": [
+        "p",
+        "K",
+        "p",
+        "p"
+      ],
+      "castShape": {
+        "cells": [
+          "p",
+          ".",
+          "K",
+          "p",
+          ".",
+          "p"
+        ],
+        "columns": 2
+      },
+      "verdict": "re-anchor",
+      "previous": {
+        "name": "Muster Incomplete",
+        "anchor": "Henry VI · Hundred Years' War"
+      },
+      "displacedBecause": "The second of the two identical musters. Replaced with an act that is a distribution rather than a count.",
+      "name": "Measured and Entered",
+      "where": "Castile · Seville, from 1248",
+      "act": "Seville capitulated in November 1248 and Ferdinand III began handing the city out himself — to nobles, to orders, and to the foot soldiers who had helped take it. The book records each beneficiary, what he got, its measurement and where it stood.",
+      "moment": "A cord being drawn across a doorway to measure a lot, with the clerk waiting to write the number and the man who will live there holding one end."
+    },
+    {
+      "cardId": "witness-to-the-oath",
+      "slot": "ui/run/card-art/k-witness-to-the-oath/illustration.png",
+      "cast": [
+        "K",
+        "b",
+        "p"
+      ],
+      "castShape": {
+        "cells": [
+          "K",
+          "b",
+          "p"
+        ],
+        "columns": 1
+      },
+      "verdict": "keep",
+      "previous": {
+        "name": "Witness to the Oath",
+        "anchor": "Henry II · Constitutions of Clarendon, 1164"
+      },
+      "displacedBecause": null,
+      "name": "Witness to the Oath",
+      "where": "England · Clarendon, January 1164",
+      "act": "Sixteen articles read out and assented to in one sitting, written down the same afternoon, and disputed for the rest of the reign. The agreeing is the only part anybody later argued about.",
+      "moment": "The reader lowering the sheet, the assent given, and the bishop's posture already regretting it."
+    },
+    {
+      "cardId": "anointed-late",
+      "slot": "ui/run/card-art/k-anointed-late/illustration.png",
+      "cast": [
+        "K",
+        "p",
+        "b"
+      ],
+      "castShape": {
+        "cells": [
+          "K",
+          "p",
+          "b"
+        ],
+        "columns": 1
+      },
+      "verdict": "re-anchor",
+      "previous": {
+        "name": "Anointed Late",
+        "anchor": "Charles VII · coronation at Reims, 1429"
+      },
+      "displacedBecause": "A second anointing on a slate that already has the one that invented the practice. Reims goes to the bench, intact.",
+      "name": "The Ploughman's Shoes, Produced",
+      "where": "Bohemia · Vyšehrad, eve of the coronation",
+      "act": "The coronation order required the king to go to Vyšehrad the night before and be shown a pair of bast shoes and a satchel said to have belonged to a ploughman his dynasty descended from. Charles IV put them on in 1347.",
+      "moment": "The shoes coming out of the chest and being held up at chest height, and the king looking at them rather than at the man holding them."
+    },
+    {
+      "cardId": "the-anointing",
+      "slot": "ui/run/card-art/k-the-anointing/illustration.png",
+      "cast": [
+        "b",
+        "K",
+        "p"
+      ],
+      "castShape": {
+        "cells": [
+          "b",
+          "K",
+          "p"
+        ],
+        "columns": 1
+      },
+      "verdict": "keep",
+      "previous": {
+        "name": "The Anointing",
+        "anchor": "Pepin the Short · anointing of 751"
+      },
+      "displacedBecause": null,
+      "name": "The Anointing",
+      "where": "Francia · Soissons, 751",
+      "act": "The anointing is what made him king in place of the dynasty he displaced. The church went in first and he followed, and he came out ahead of it. The strongest act on the slate; it should not move.",
+      "moment": "Two men on church steps in the same stride, the one in front carrying the oil, neither drawn larger than the other."
+    },
+    {
+      "cardId": "homage-withheld",
+      "slot": "ui/run/card-art/k-homage-withheld/illustration.png",
+      "cast": [
+        "K",
+        "p",
+        "k"
+      ],
+      "castShape": {
+        "cells": [
+          "K",
+          "p",
+          "k",
+          "."
+        ],
+        "columns": 2
+      },
+      "verdict": "re-anchor",
+      "previous": {
+        "name": "Homage Withheld",
+        "anchor": "Philip VI · homage at Amiens, 1329"
+      },
+      "displacedBecause": "A second homage beside the mounted one, which is the stranger of the two. Amiens goes to the bench, intact.",
+      "name": "Shown the Way Out",
+      "where": "Novgorod · 1136, and after",
+      "act": "The assembly expelled its prince and from then on hired them under written contract: no more than fifty retainers, no land, no trade, and out again on any breach. This is the one card where the commoners hold the power and the king is the one being handled.",
+      "moment": "A prince mounted to leave with one retainer, and a townsman holding the gate open for him rather than shut."
+    },
+    {
+      "cardId": "homage-done-mounted",
+      "slot": "ui/run/card-art/k-homage-done-mounted/illustration.png",
+      "cast": [
+        "K",
+        "k",
+        "p"
+      ],
+      "castShape": {
+        "cells": [
+          "K",
+          "k",
+          "p",
+          "."
+        ],
+        "columns": 2
+      },
+      "verdict": "keep",
+      "previous": {
+        "name": "Homage Done Mounted",
+        "anchor": "Charles the Simple · Saint-Clair-sur-Epte, 911"
+      },
+      "displacedBecause": null,
+      "name": "Homage Done Mounted",
+      "where": "France · Saint-Clair-sur-Epte, 911",
+      "act": "Land in exchange for homage. Homage is sworn kneeling and unarmed; what was sworn from the saddle was entered under the same heading, and argued about for a century.",
+      "moment": "The exact instant the two pairs of hands meet, one above the other, the horse's head higher than the crown."
+    }
+  ],
+  "bench": [
+    {
+      "name": "Touching for the King's Evil",
+      "where": "England · from 1276",
+      "act": "The king strokes the sores of the scrofulous in imitation of Christ and each is given a penny. The earliest hard English evidence is the accounts, where the penny is a line item and the count of the sick is a number.",
+      "wants": "king + three commoners"
+    },
+    {
+      "name": "Anointed Late",
+      "where": "Reims · 17 July 1429",
+      "act": "Crowned seven years after his father died, because the coronation city had to be physically reached before the rite could happen at all.",
+      "wants": "king + churchman + commoner",
+      "displacedBy": "the-anointing (Pepin 751), which is the anointing that makes a king"
+    },
+    {
+      "name": "Homage Withheld",
+      "where": "Amiens · June 1329",
+      "act": "Simple homage given for Gascony where liege homage was owed. The difference between the two words is one of the things the Hundred Years’ War was fought over.",
+      "wants": "king + horseman + commoner",
+      "displacedBy": "homage-done-mounted (Saint-Clair-sur-Epte 911), the stranger of the two"
+    },
+    {
+      "name": "Justice Under the Oak",
+      "where": "Vincennes · c. 1250",
+      "act": "Louis IX sits with his back to a tree and asks whether anyone present has a case, with no usher between him and them.",
+      "wants": "king + three commoners",
+      "caveat": "Joinville’s telling; historians treat it as embellished. Usable as a scene, not as a fact — which fails this manifest’s own factual rule unless re-anchored to the 1247 enquêteurs."
+    }
+  ],
+  "sources": [
+    "Coronation of the Hungarian monarch — the mound of earth from every county at Székesfehérvár and the sword cut to the four points.",
+    "Eriksgata — election at the Stone of Mora, confirmation by each province’s assembly, and the customary hostages Västgötalagen records Ragnvald Knaphövde refusing.",
+    "Leidang — the skipæn that owes a ship and the hafnæ that owes one man; a Danish charter of 1085 fines neglect of expeditio.",
+    "Repartimiento — Seville capitulates 23 November 1248; Ferdinand III begins the distribution himself; the Libro records beneficiary, measurement and location.",
+    "Novgorod veche — Vsevolod Mstislavich expelled 1136; thereafter princes serve under written ryady, capped at fifty retainers and barred from owning land.",
+    "Přemysl the Ploughman — Charles IV’s coronation order requires the eve-of-coronation pilgrimage to Vyšehrad to be shown the bast shoes and satchel; he wore them in 1347.",
+    "Royal touch — earliest direct English evidence is Edward I’s financial records; a penny to each patient well established by 1276."
+  ],
+  "rollup": [
+    {
+      "king": "Sole Surviving Issue",
+      "world": "France · Orléans and the road to Chinon, 1428–29",
+      "cards": 12,
+      "carries": "The densest world on the slate: a 208-day siege with a day-by-day chronicle. Convoys, sorties, bastilles, rationing, the belfry watch. Already written."
+    },
+    {
+      "king": "Confirmed on the Road",
+      "world": "Sweden · the Eriksgata circuit",
+      "cards": 5,
+      "carries": "A journey through provinces, each with its own assembly, hostages and hospitality. Naturally episodic, so it carries more than a single-day rite."
+    },
+    {
+      "king": "The Household Roll",
+      "world": "England · the Valor and the dissolutions, 1535–40",
+      "cards": 6,
+      "carries": "Inventories, carts, reused stone, emptied cloisters. Where the surveying and the taking-apart cards live."
+    },
+    {
+      "king": "Witness to the Oath",
+      "world": "England · Clarendon and the quarrel after it, 1164–70",
+      "cards": 5,
+      "carries": "Courts, benches, writs, a bishop's household on the move. Every card with a judge in it belongs here."
+    },
+    {
+      "king": "One Left at the Marker",
+      "world": "England · the hundreds, 1274–75",
+      "cards": 5,
+      "carries": "Sworn juries, markers, ditches, old men pointing at things. The memory-as-evidence world."
+    },
+    {
+      "king": "A Ship From Every District",
+      "world": "Denmark · the leidang",
+      "cards": 5,
+      "carries": "Coast, timber, keels, beacons, and an exact arithmetic of who owes what. Nothing else on the slate looks like it."
+    },
+    {
+      "king": "Measured and Entered",
+      "world": "Castile · Seville, 1248–53",
+      "cards": 5,
+      "carries": "A city handed out street by street: cords, lots, settlers, a book. Hot, dry, and the only southern world here."
+    },
+    {
+      "king": "Called to the Bounds",
+      "world": "England · Rogationtide parishes, after 1547",
+      "cards": 4,
+      "carries": "Walking, weather, corner posts, a parish with no map. Small and specific by nature."
+    },
+    {
+      "king": "Shown the Way Out",
+      "world": "Novgorod · 1136 onward",
+      "cards": 4,
+      "carries": "Townsmen with power, a river, a contract, a gate. The one world where the formations outrank the king."
+    },
+    {
+      "king": "The Anointing",
+      "world": "Francia · Soissons and the road to it, 751",
+      "cards": 3,
+      "carries": "Thin as one rite on one day. Takes the road and the church stone around it, or it does not fill even three."
+    },
+    {
+      "king": "Earth of Every County",
+      "world": "Hungary · Székesfehérvár",
+      "cards": 3,
+      "carries": "Earth carted in, a mound, horsemen, an assembly. Also thin — it wants the journey to the coronation attached."
+    },
+    {
+      "king": "The Ploughman's Shoes, Produced",
+      "world": "Bohemia · Vyšehrad",
+      "cards": 3,
+      "carries": "Relics as matter, a pilgrimage on the eve, a peasant object kept in a treasury. Sits exactly on the “religion as matter” line."
+    },
+    {
+      "king": "Entered Without Objection",
+      "world": "England · Westminster, 1399",
+      "cards": 3,
+      "carries": "Halls, rolls, clerks, binders. The paperwork of a deposition — quiet, indoor, legally enormous."
+    },
+    {
+      "king": "His Grace",
+      "world": "England · London, 1483",
+      "cards": 3,
+      "carries": "Guarded walks, river paths, genealogies. Close and few-figured, so it stays small."
+    },
+    {
+      "king": "Homage Done Mounted",
+      "world": "France · Saint-Clair-sur-Epte and the Seine, 911",
+      "cards": 3,
+      "carries": "Riverbank meetings, ships drawn up, oaths given badly. Carries the mounted and the maritime together."
+    }
+  ]
+}
