@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:4713170ab6c90ba3924e94a2df1e740b52afa27d0ea937a2b079b06037398f13"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:7a466d6cf96be6826984340e9885d2b9a7aa17bd46d0c0b7bf2d1d7237bacd79"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Encrypt the OAuth tokens the session row holds"
-  prNumber: "924"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/924"
-  commit: "346e677e"
+  prTitle: "Sync the OAuth secrets from Key Vault instead of hand-creating them"
+  prNumber: "927"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/927"
+  commit: "7b5251e4"
 
 name: chess-tactics
 namespace: chess-tactics
@@ -179,9 +179,13 @@ adminEmails: "nelson@romaine.life"
 #
 #   kubectl create secret generic chess-tactics-token-key -n chess-tactics #     --from-literal=key="$(openssl rand -base64 32)"
 #
-tokenEncryptionSecret:
-  name: chess-tactics-token-key
-  key: key
+# External Secrets Operator syncs the OAuth secrets from Key Vault into `chess-tactics-oauth`.
+# Unset renders no ExternalSecret and no secret env: the backend then stores tokens in plaintext
+# and sends no client secret, saying so on boot rather than refusing to start.
+externalSecret:
+  storeName: romaine-kv
+  storeKind: ClusterSecretStore
+  refreshInterval: 1h
 
 # Kubernetes Secret holding this app's OAuth client secret. The SAME value must exist in the auth
 # namespace under the same name, or the provider cannot verify what this backend sends.
