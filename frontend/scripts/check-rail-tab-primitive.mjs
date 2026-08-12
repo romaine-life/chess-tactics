@@ -4,7 +4,7 @@
 //
 // Why this exists: the primitive was AVAILABLE and four surfaces hand-assembled their own
 // anyway — Settings' section tabs, the Campaign Editor's campaign tabs, its editor collection
-// tabs, and Run preparation's Current Run / Start New Run. Availability is not enforcement, and
+// tabs, and Run preparation's Continue / New. Availability is not enforcement, and
 // lookalikes drift silently
 // because each one still LOOKS right in isolation:
 //

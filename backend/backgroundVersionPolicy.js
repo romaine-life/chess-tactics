@@ -36,14 +36,41 @@ const DEFAULT_MOVE_HIGHLIGHT_FOOTPRINT = Object.freeze([
 ]);
 let parsePredrawnBoardRegistration = null;
 let serializePredrawnBoardPreviewRegistration = null;
+let sharedRendererLoadFailure = null;
 try {
   ({
     parsePredrawnBoardRegistration,
     serializePredrawnBoardPreviewRegistration,
   } = require('@chess-tactics/board-render'));
-} catch {
+} catch (error) {
   // Keep unrelated backend routes available if the shared renderer is absent,
   // but fail closed below rather than accepting an unvalidated warp recipe.
+  // Remember why it is absent: swallowing the reason is what let a missing
+  // build artifact masquerade as invalid caller data (see the probe below).
+  sharedRendererLoadFailure = error;
+}
+
+// The shared renderer owns the only canonical registration grammar, and this
+// module reaches it through the package's `require` condition — the bundled
+// `packages/board-render/dist/index.cjs`, which is a gitignored build artifact.
+// A checkout that has never run that build loads this policy with no parser at
+// all, in which case EVERY registration looks unparseable.
+//
+// That is a build fault, not a caller's bad data, and the two must never share
+// an error string. Reporting it as a rejected registration turns one missing
+// artifact into a fleet of phantom "invalid registration" failures that read
+// exactly like a serializer bug and send the reader hunting for a divergence
+// that does not exist. Fail closed, but say which of the two actually happened.
+function predrawnRegistrationSupportIssue() {
+  if (
+    typeof parsePredrawnBoardRegistration === 'function'
+    && typeof serializePredrawnBoardPreviewRegistration === 'function'
+  ) return null;
+  const reason = sharedRendererLoadFailure
+    ? sharedRendererLoadFailure.message
+    : '@chess-tactics/board-render exported no registration grammar';
+  return 'the shared board renderer is unavailable, so warp registrations cannot be validated'
+    + ` — build it with \`npm run build:board-render\` (${reason})`;
 }
 const CREATE_KEYS = new Set([
   'kind', 'label',
@@ -262,7 +289,10 @@ function normalizeMoveHighlightCells(value, columns, rows, playableCellKeys) {
     return { error: 'move-highlight profile contains too many cell overrides' };
   }
   const cells = {};
-  for (const [key, footprint] of entries.sort(([left], [right]) => left.localeCompare(right))) {
+  // Code-unit order, not localeCompare: collation depends on the host's default
+  // locale and on the ICU build shipped with the running Node, so it is not a
+  // stable basis for anything a canonical contract observes.
+  for (const [key, footprint] of entries.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))) {
     const match = /^(\d{1,2}),(\d{1,2})$/.exec(key);
     const x = match ? Number(match[1]) : -1;
     const y = match ? Number(match[2]) : -1;
@@ -759,6 +789,8 @@ function generationAttemptSourceRequestIssue(attempt, sourceArtwork) {
 
 function derivativeOperationIssue(kind, operation, provenance, parentVersionId, sourceVersionId) {
   if (kind === 'warped') {
+    const supportIssue = predrawnRegistrationSupportIssue();
+    if (supportIssue) return supportIssue;
     const registration = canonicalPredrawnRegistration(operation.registration);
     if (!registration) {
       return 'warped operation.registration must be a valid canonical serialized registration';
@@ -1351,6 +1383,7 @@ module.exports = {
   normalizeWorldBounds,
   normalizedUuid,
   parseBackgroundVersionUploadPath,
+  predrawnRegistrationSupportIssue,
   rawBackgroundVersionContractIssue,
   rawBackgroundVersionContractBindingIssue,
   sourceArtworkVersionContractIssue,

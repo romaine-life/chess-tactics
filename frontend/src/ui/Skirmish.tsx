@@ -55,6 +55,7 @@ import { acquireNetSeatLease } from '../game/netSeatLease';
 import { objectiveSummary, victoryRulesForObjective } from '../core/objectives';
 import { objectiveBriefingForSide } from '../game/objectiveBriefing';
 import { BattleClockChip } from './BattleClockChip';
+import { BattleMaterialChip } from './BattleMaterialChip';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { decodeBoard } from './boardCode';
@@ -125,7 +126,8 @@ export interface RunBattlePresentation {
   onRerollDeployment: () => boolean;
   canRerollDeployment: boolean;
   deploymentRerollCostTenths: number;
-  onAbandonRun?: () => void;
+  /** The Run's own Abandon control, which confirms in its seat rather than over the board. */
+  abandonRun?: ReactNode;
   transformCommittedBoard?: RunBattleTransformSink;
   undoAdapter: RunBattleUndoAdapter;
 }
@@ -1330,7 +1332,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
     returnLabel,
     netInteractive: netSeatInteractive,
     onOpenPredrawnRegistration: predrawnPreview ? () => setPredrawnPickerOpen(true) : null,
-    onAbandonRun: runBattle?.onAbandonRun ?? null,
+    abandonRun: runBattle?.abandonRun ?? null,
     onRerollDeployment: runBattle ? () => { runBattle.onRerollDeployment(); } : null,
     canRerollDeployment: !unitDeparture && (runBattle?.canRerollDeployment ?? false),
     deploymentRerollCostTenths: runBattle?.deploymentRerollCostTenths,
@@ -1466,10 +1468,12 @@ function SkirmishSession(props: SkirmishProps = {}) {
   ) : null;
   const skirmishTitleBarContent = playableSurfaceReady ? (
     <div className="skirmish-topbar-status">
-      {/* The battle clock is ALWAYS the middle chip on every play surface (BattleClockChip
-        also seats it in the Run's bar). Keeping the centre chip present means
-        the turn plate and objective always flank a real element, so the clock stays
-        page-centred over the title bar's diamond (equal-width flanks, see style.css).
+      {/* The battle clock is ALWAYS present on every play surface (BattleClockChip also seats
+        it in the Run's bar), so the two labelled panels always have a real element between
+        them and the row never reads as a lopsided pair (equal-width flanks, see style.css).
+        Material is ONE box holding both forces (ADR-0580), seated ahead of the clock: the two
+        numbers are a comparison, so nothing may stand between them — the clock did, when they
+        were two boxes.
         Every box in the bar is one hover/keyboard target that names itself — that is
         what a frame costs its width for (TitleBarStatusTip). */}
       <TitleBarStatusTip
@@ -1484,6 +1488,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
         <strong>{turnLabel}</strong>
         <small>{game.winner ? 'Skirmish Complete' : 'Live Board'}</small>
       </TitleBarStatusTip>
+      <BattleMaterialChip />
       <BattleClockChip />
       <TitleBarStatusTip
         className="skirmish-status-chip skirmish-objective"

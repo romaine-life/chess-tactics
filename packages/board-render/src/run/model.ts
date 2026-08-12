@@ -303,6 +303,7 @@ export const RUN_ROYAL_FORK_MIN_VICTIM_VALUE = PIECE_VALUE.rook;
 
 export type ManubiumId =
   | 'advantageous-capture'
+  | 'capture-with-check'
   | 'royal-fork'
   | 'discovered-check'
   | 'double-check'
@@ -459,6 +460,12 @@ export const RUN_MANUBIAE: readonly ManubiumDefinition[] = Object.freeze([
     goldTenths: null,
     // Written from the rate rather than beside it, so the sentence cannot drift from the gold.
     priceNote: `${knightForkGoldTenths(2)} for two prongs, ${knightForkGoldTenths(3)} for three, ${knightForkGoldTenths(4)} for four, ${knightForkGoldTenths(5)} for five`,
+  },
+  {
+    id: 'capture-with-check',
+    name: 'Capture with check',
+    earnedBy: 'Take an enemy unit and give check with the same move, and leave the unit that took where nothing of theirs attacks it. A capture that hangs it earns nothing — they answer the check by taking it back, and the free move was yours to give. Any unit may earn it, and the check need not come from the unit that took: a line the capture opened counts.',
+    goldTenths: GOLD_SCALE,
   },
   {
     id: 'royal-fork',
@@ -620,18 +627,29 @@ interface StandingForceUnit {
 }
 
 /**
- * What the enemy still had on the board, in points.
+ * What one side still has on the board, in points -- Pawns, since a Pawn is the 1 on the scale.
  *
- * Priced through `manubiaeUnitWorth`, so this agrees with every other place the Run values a
+ * Priced through `manubiaeUnitWorth`, so this agrees with every other place the game values a
  * unit: a promoted pawn counts as the Pawn it started as, and anything with no purchase price
  * -- the King, an obstacle -- counts for nothing. The King costing zero is what makes a
  * ground-down force score zero rather than one, which is exactly the reading intended.
+ *
+ * Deditio asked this about the enemy first and the material readout in the title bar asks it
+ * about both sides, so the side is the argument rather than a second reduce written beside this
+ * one (ADR-0059). One reader means the number a player watches during the Battle is the same
+ * number the mate is priced on afterwards -- material the player is looking at IS the Deditio
+ * forecast, and a parallel implementation could drift out of that agreement without failing.
  */
-export function standingEnemyForceValue(pieces: readonly StandingForceUnit[]): number {
+export function standingForceValue(pieces: readonly StandingForceUnit[], side: string): number {
   return pieces.reduce(
-    (total, piece) => total + (piece.alive && piece.side === 'enemy' ? manubiaeUnitWorth(piece) ?? 0 : 0),
+    (total, piece) => total + (piece.alive && piece.side === side ? manubiaeUnitWorth(piece) ?? 0 : 0),
     0,
   );
+}
+
+/** What the enemy still had on the board, in points -- what Deditio pays on. */
+export function standingEnemyForceValue(pieces: readonly StandingForceUnit[]): number {
+  return standingForceValue(pieces, 'enemy');
 }
 
 /** The whole enemy force a level fields, in points -- what a Battle nobody has fought yet

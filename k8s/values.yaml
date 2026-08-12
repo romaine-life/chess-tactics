@@ -171,3 +171,26 @@ auth:
 # ADR-0038: comma-separated allowlist of emails allowed to publish the global
 # OFFICIAL campaign tier (backend requireAdmin). Fail-closed when empty; not a secret.
 adminEmails: "nelson@romaine.life"
+
+
+# Kubernetes Secret holding the key that encrypts OAuth tokens at rest in `auth_sessions`
+# (ADR-0576). Unset means the backend stores them plainly and logs a warning on every boot;
+# it does not refuse to start, because that would take sign-in away over a missing variable.
+#
+#   kubectl create secret generic chess-tactics-token-key -n chess-tactics #     --from-literal=key="$(openssl rand -base64 32)"
+#
+# External Secrets Operator syncs the OAuth secrets from Key Vault into `chess-tactics-oauth`.
+# Unset renders no ExternalSecret and no secret env: the backend then stores tokens in plaintext
+# and sends no client secret, saying so on boot rather than refusing to start.
+externalSecret:
+  storeName: romaine-kv
+  storeKind: ClusterSecretStore
+  refreshInterval: 1h
+
+# Kubernetes Secret holding this app's OAuth client secret. The SAME value must exist in the auth
+# namespace under the same name, or the provider cannot verify what this backend sends.
+#
+#   kubectl create secret generic chess-tactics-oidc-client -n <ns> --from-literal=secret="..."
+oidcClientSecret:
+  name: chess-tactics-oidc-client
+  key: secret

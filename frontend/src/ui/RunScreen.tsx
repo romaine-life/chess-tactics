@@ -15,6 +15,7 @@ import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleRoute, type TitleRouteSegment } from './shell/TitleRoute';
 import { RunIdentityChip, RunTitleBarMeasures } from './RunTitleBarChips';
 import { BattleClockChip } from './BattleClockChip';
+import { BattleMaterialChip } from './BattleMaterialChip';
 import { PLAY_RUN_SELECTOR_HREF } from './playHubRoute';
 import {
   Skirmish,
@@ -25,7 +26,6 @@ import { navigateApp } from './navigation';
 import { installedRunSectioWrap, runSectioWrapLiveMount } from './runSectioWrapCandidates';
 import { runSceneWorkspaceIdentity, type RunSceneSnapshot } from './shell/sceneManifest';
 import { RunPresentationSceneSlot } from './shell/AuthoredSceneSlot';
-import { useConfirm } from './shared/ConfirmDialog';
 import { RunSceneViewport } from './RunWorkspace';
 import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
 import {
@@ -282,9 +282,21 @@ function RunTitleBarStatus({ run, path, search, view, battlefieldMounted }: {
             one — a Run bar rendered beside any other workspace (a craft still landing, most
             visibly) would fall through to the module default store and report a clock
             belonging to no Battle on screen. So it is seated exactly while the battlefield
-            it is timing is. */}
+            it is timing is.
+            Material is the same kind of fact and answers to the same condition — a force's
+            points exist only while there is a board to count them on — so it rides in and out
+            with the clock rather than standing among the Run's durable measures. It is ONE box
+            holding both forces (ADR-0580), and it sits ahead of the clock exactly as it does on
+            the Skirmish bar, so the reading is the same on every play surface. The enemy's
+            number IS the Deditio forecast, priced by the same reader (`standingForceValue`) the
+            mate is paid through. */}
         {battlefieldMounted && run.phase === 'battle'
-          ? <BattleClockChip fillSurface={CHROME_LEAF_FILL_SURFACE} />
+          ? (
+              <>
+                <BattleMaterialChip fillSurface={CHROME_LEAF_FILL_SURFACE} />
+                <BattleClockChip fillSurface={CHROME_LEAF_FILL_SURFACE} />
+              </>
+            )
           : null}
         <RunTitleBarMeasures
           tier={run.ataraxiaTier}
@@ -298,24 +310,70 @@ function RunTitleBarStatus({ run, path, search, view, battlefieldMounted }: {
   );
 }
 
-function useRunAbandon(run: RunDocument): {
-  abandonDialog: ReactElement | null;
-  abandoning: boolean;
-  requestAbandon: () => Promise<void>;
-} {
+/**
+ * Abandon Run — the control and its confirmation in ONE seat, with nothing opened over the screen.
+ *
+ * Pressing it ARMS the question, and the armed question is ONE BOX holding the two answers: the
+ * line between Keep Run and Abandon Run is the box's own column line, capped where it meets the
+ * frame at either end — laid from the box's topology, so nothing here draws a rule and no page
+ * shows through between them (ADR-0242/ADR-0571). Two framed buttons in a row with a gap is what
+ * this kit puts between things that are NOT related; these are one question and its two answers.
+ *
+ * That is the same shape Start New Run uses to confirm replacing an active Run. A dialog asked the
+ * question somewhere other than where it was raised — it dimmed the Run under discussion, drew its
+ * two answers in a chrome no other control on the screen wears, and spent a heading restating the
+ * button that had just been pressed.
+ *
+ * It states NO stakes, because Abandon Run already says what it does. A sentence spelling out that
+ * abandoning loses the Run tells a player who pressed Abandon Run nothing they did not just decide,
+ * and it was the dialog's shape surviving its dialog — the body text a modal needs to justify the
+ * layer it opened. Answering in the seat needs no such justification.
+ *
+ * The dialog's safety is kept rather than dropped: arming moves focus to the safe answer and
+ * Escape keeps the Run.
+ *
+ * ONE control in three seats — the Sectio rail, the Deployment panel and the Battle HUD — because
+ * an action that reads two ways depending on which screen reached it is the parallel ADR-0059
+ * names. The HUD is handed the rendered control rather than a callback: it owns a seat for this,
+ * not a copy of it.
+ */
+export function RunAbandonControl({
+  disabled = false,
+  surfaceIndex = 0,
+  fillSurface = CHROME_LEAF_FILL_SURFACE,
+}: {
+  disabled?: boolean;
+  /** The seat's place in its own rail, so the resting verb's oak is cut from the plank run around it. */
+  surfaceIndex?: number;
+  /**
+   * The RESTING verb's material is the SEAT's, not the control's (ADR-0433): the Run's own rails
+   * have adopted the oak, and the Battle HUD's Controls panel has not, so it passes `null` and its
+   * Abandon keeps the field every button beside it wears. Armed, the question is a box of its own,
+   * and a box establishes its own containment level — marble field, oak on every cell that is a
+   * control — so the seat has no say in it.
+   */
+  fillSurface?: string | null;
+}): ReactElement {
   const abandon = useActiveRun((state) => state.abandon);
+  const [armed, setArmed] = useState(false);
   const [abandoning, setAbandoning] = useState(false);
-  const { ask, dialog } = useConfirm();
-  const requestAbandon = useCallback(async (): Promise<void> => {
+
+  useEffect(() => {
+    if (!armed) return;
+    // Mirror the danger-dialog convention this replaces: focus lands on the safe choice, Escape
+    // keeps the Run. Found by its test id rather than a ref, because an answer is DECLARED to
+    // ChromeVerbRow rather than rendered here — the whole point of that primitive, and not worth
+    // threading a ref through for one focus call.
+    document.querySelector<HTMLElement>('[data-testid="run-abandon-keep"]')?.focus();
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') { event.preventDefault(); setArmed(false); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [armed]);
+
+  const confirmAbandon = useCallback(async (): Promise<void> => {
     if (abandoning) return;
-    const confirmed = await ask({
-      title: 'Abandon this Run?',
-      message: `${run.war.name} and all of its army, gold, lipsana, and Battle progress will be permanently removed.`,
-      confirmLabel: 'Abandon Run',
-      cancelLabel: 'Keep Run',
-      tone: 'danger',
-    });
-    if (!confirmed) return;
     setAbandoning(true);
     // Leave in the same tick the Run is cleared. `abandon()` drops it from this browser before
     // it suspends, so nothing here waits on the account's DELETE — and holding for it parked the
@@ -326,9 +384,75 @@ function useRunAbandon(run: RunDocument): {
     clearMatch();
     navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false });
     await abandoned;
-  }, [abandon, abandoning, ask, run.war.name]);
-  return { abandonDialog: dialog, abandoning, requestAbandon };
+  }, [abandon, abandoning]);
+
+  if (!armed) {
+    return (
+      <div className="run-abandon-control">
+        <ChromeButton unit="inner-text-button"
+          data-chrome-fill-surface={fillSurface ?? undefined}
+          className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
+          style={{ ['--chrome-leaf-surface-index' as string]: surfaceIndex } as CSSProperties}
+          data-testid="abandon-run"
+          disabled={disabled || abandoning}
+          onClick={() => setArmed(true)}
+        >
+          {/* The same control as the Sectio rail's, so it wears the same mark: one button cannot
+              read two ways because it is reached from two screens. */}
+          <RunControlMark control="abandon" />
+          Abandon Run
+        </ChromeButton>
+      </div>
+    );
+  }
+  // The safe answer leads, and neither wears a mark: these are answers to a question, and the mark
+  // belongs to the control that ASKED it. Declared as data, so the row seats each one in a
+  // compartment the box's own column line divides and nothing here can author the space between
+  // them — the reason ChromeVerbRow takes verbs rather than markup.
+  const answers: readonly ChromeVerb[] = [
+    {
+      id: 'keep',
+      label: 'Keep Run',
+      testId: 'run-abandon-keep',
+      disabled: abandoning,
+      onPress: () => setArmed(false),
+    },
+    {
+      id: 'abandon',
+      label: abandoning ? 'Abandoning…' : 'Abandon Run',
+      testId: 'run-abandon-confirm',
+      disabled: disabled || abandoning,
+      onPress: () => { void confirmAbandon(); },
+    },
+  ];
+  return (
+    <DividedInnerChromeBox
+      /* Not the resting seat's wrapper class: that one owns the layout and measure of a FRAMED
+         button standing in a rail, and this element is the grid the primitive lays its own rails
+         on. */
+      className="run-abandon-box"
+      /* The answers decide the box's tracks, so the count is never restated here. */
+      columns={verbColumns(answers)}
+      fillRole={CHROME_STRUCTURAL_FILL_ROLE}
+      data-testid="run-abandon-armed"
+      role="group"
+      aria-label="Abandon this Run?"
+    >
+      {/* The box's one row. The question it asks is the group's accessible name, not a sentence
+          taking a cell above these — Abandon Run already said what it does. */}
+      <ChromeVerbRow verbs={answers} className="run-abandon-verbs" cellClassName="run-abandon-verb" />
+    </DividedInnerChromeBox>
+  );
 }
+
+/**
+ * The Battle HUD's copy of the control, as a CONSTANT element. The HUD is given the control rather
+ * than a callback (it owns a seat for this, not a copy of it), and a fresh element on every render
+ * would churn the Battle presentation that is deliberately memoized against unrelated Run writes.
+ * The HUD's Controls panel wears the field material rather than the Run rails' oak, so it names no
+ * fill of its own.
+ */
+const RUN_ABANDON_CONTROL = <RunAbandonControl fillSurface={null} />;
 
 /**
  * The padlock laid on a Sectio offer the visit's one admission has closed. The installed kit
@@ -376,7 +500,6 @@ function RunMetaControls({
   showAbandon?: boolean;
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
-  const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
   const sectio = run.phase === 'sectio' ? run.sectio : null;
   const battleReport = sectioBattleReport(run);
   const canLeave = canLeaveSectio(run);
@@ -385,7 +508,6 @@ function RunMetaControls({
   const continueHint: string | null = null;
   return (
     <>
-      {abandonDialog}
       <section
         className="run-meta-controls"
         data-run-controls-scroll={sectio ? 'scroll' : 'static'}
@@ -488,19 +610,7 @@ function RunMetaControls({
         {showAbandon ? (
           <div className="skirmish-view-group run-meta-abandon">
             <span className="skirmish-eyebrow">Run</span>
-            <div className="skirmish-view-row">
-              <ChromeButton unit="inner-text-button"
-                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
-                style={{ ['--chrome-leaf-surface-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 4 } as CSSProperties}
-                data-testid="abandon-run"
-                disabled={abandoning}
-                onClick={() => { void requestAbandon(); }}
-              >
-                <RunControlMark control="abandon" />
-                {abandoning ? 'Abandoning…' : 'Abandon Run'}
-              </ChromeButton>
-            </div>
+            <RunAbandonControl surfaceIndex={SECTIO_WORKSPACE_VIEWS.length + 4} />
           </div>
         ) : null}
       </section>
@@ -539,7 +649,6 @@ function ArrangedDeploymentControls({
   onDealComplete: () => void;
   departing: boolean;
 }): ReactElement {
-  const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
   const cards = arrangedDeploymentCards(run);
   const selected = cards.find(({ card }) => card.id === selectedCardId) ?? null;
   const canBegin = arrangedDeploymentCanBegin(run);
@@ -552,7 +661,6 @@ function ArrangedDeploymentControls({
   const turnable = arranging && Boolean(selected?.admitted);
   return (
     <>
-      {abandonDialog}
       <section
         className="run-meta-controls run-deployment-controls run-arrangement-controls"
         aria-label="Formation arrangement controls"
@@ -659,20 +767,7 @@ function ArrangedDeploymentControls({
             action here nobody is reaching for in a hurry. */}
         <div className="skirmish-view-group run-meta-abandon">
           <span className="skirmish-eyebrow">Run</span>
-          <ChromeButton
-            unit="inner-text-button"
-            data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-            className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
-            style={{ ['--chrome-leaf-surface-index' as string]: 6 } as CSSProperties}
-            data-testid="abandon-run"
-            disabled={abandoning || departing}
-            onClick={() => { void requestAbandon(); }}
-          >
-            {/* The same control as the Sectio rail's, so it wears the same mark: one button
-                cannot read two ways because it is reached from two screens. */}
-            <RunControlMark control="abandon" />
-            {abandoning ? 'Abandoning…' : 'Abandon Run'}
-          </ChromeButton>
+          <RunAbandonControl disabled={departing} surfaceIndex={6} />
         </div>
         </KitScroll>
         {/* The panel's one key that leaves the screen, so it wears its cap like the rest: Space
@@ -1676,7 +1771,6 @@ function RunBattlefieldPanel({
   routeSearch: string;
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
-  const { abandonDialog, requestAbandon } = useRunAbandon(run);
   const runId = run.id;
   const departureSequenceRef = useRef(0);
   const departureRequestRef = useRef<UnitDepartureRequest | null>(null);
@@ -1868,14 +1962,16 @@ function RunBattlefieldPanel({
     retryCostTenths: RUN_BATTLE_RETRY_COST_TENTHS,
     canRerollDeployment: battleCanReroll,
     deploymentRerollCostTenths: RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS,
-    onAbandonRun: () => { void requestAbandon(); },
-  }), [battleCanReroll, battleCanRestart, battleLevel, battleSeed, craftedBattleResult, onReviewRewards, requestAbandon, requestDeploymentReroll, run.battleIndex, runId, transformCommittedBoard]);
+    // The HUD is handed the CONTROL, not a callback that opens something over it: the
+    // confirmation happens in the seat, so the seat is what the Run contributes. The element is
+    // constant, which is what keeps this presentation stable across unrelated Run writes.
+    abandonRun: RUN_ABANDON_CONTROL,
+  }), [battleCanReroll, battleCanRestart, battleLevel, battleSeed, craftedBattleResult, onReviewRewards, requestDeploymentReroll, run.battleIndex, runId, transformCommittedBoard]);
 
   // Subscribe to the current document so Reservist events refresh the hook inputs
   // without restarting the already-live matching board.
   return (
     <>
-      {run.phase === 'battle' ? abandonDialog : null}
       <Skirmish
         runForm={form}
         runBattle={presentation}

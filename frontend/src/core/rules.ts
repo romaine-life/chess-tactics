@@ -950,6 +950,28 @@ export function unitIsDefended(piece: Piece, pieces: readonly Piece[], size: Boa
 }
 
 /**
+ * Whether `piece` is ATTACKED — whether any living enemy unit attacks the square it stands on,
+ * so leaving it there is offering it. The mirror of `unitIsDefended`, and read the same way.
+ *
+ * The plain board reading of the word again: what a player sees when they look at their own unit
+ * and ask "can that be taken?". Attack geometry, not legality — an attacker pinned against its
+ * own king still counts, and so does an enemy King eyeing a square it may not legally enter,
+ * because the question is what is looking at the square rather than what the position would
+ * survive. `sideCanCaptureUnit` is the harder question and plays legal moves to answer it.
+ *
+ * Membership is `isEnemy`, the same predicate a capture uses, so obstacles and neutrals attack
+ * nothing. Board law never consults it.
+ */
+export function unitIsAttacked(piece: Piece, pieces: readonly Piece[], size: BoardSize, env?: MoveEnv): boolean {
+  if (!piece || !piece.alive) return false;
+  for (const other of pieces) {
+    if (!other.alive || !isEnemy(piece, other)) continue;
+    if (attacksSquare(other, pieces, size, env, piece.x, piece.y)) return true;
+  }
+  return false;
+}
+
+/**
  * Every living piece hostile to `side` that currently attacks one of `side`'s kings.
  *
  * `sideInCheck` answers whether that list is non-empty; this hands back the list itself,

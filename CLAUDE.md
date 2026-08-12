@@ -204,6 +204,15 @@ and don't tell the user screenshots are impossible. Use the helper below.
    Level Editor captures automatically use an authenticated observation-only session: the real
    private document renders without gaining write access or changing its working copy. Do not
    replace this with a normal headless editor visit.
+   That observation now covers the request a document is BORN in, not just the one that joins it
+   (ADR-0586). A capture **attaches to a working copy that already exists, or fails** — it never
+   creates one. So an editor URL with no `levelId` and no `document` is refused before any pixels
+   are written, naming the fact rather than a status:
+   `Level Editor capture has nothing to observe`. Point the capture at a `levelId` (or
+   `?document=<id>`) whose working copy exists, open the editor once yourself to create it, or pass
+   `--anonymous` for a signed-out editor that stores nothing. Every capture of a bare
+   `/editor/level` used to mint an **Untitled level** on Nelson's account and photograph that; do
+   not "fix" a refusal by taking the levelId back out of the URL.
    Output defaults to `frontend/tmp-shots/shot.png` (gitignored). **Default to showing the
    small PNG inline — never substitute a link + description for the pixels.**
 

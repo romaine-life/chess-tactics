@@ -157,7 +157,9 @@ function faithfulProvider() {
   return { state, fetchImpl };
 }
 
-function harness({ clock = { at: Date.UTC(2026, 7, 11, 12, 0, 0) } } = {}) {
+const TOKEN_KEY = crypto.randomBytes(32).toString('base64');
+
+function harness({ clock = { at: Date.UTC(2026, 7, 11, 12, 0, 0) }, tokenEncryptionKey = TOKEN_KEY } = {}) {
   const provider = faithfulProvider();
   const store = memoryStore();
   const manager = createOIDCSessionManager({
@@ -166,6 +168,7 @@ function harness({ clock = { at: Date.UTC(2026, 7, 11, 12, 0, 0) } } = {}) {
     clientSecret: CLIENT_SECRET,
     publicOrigin: PUBLIC_ORIGIN,
     store,
+    tokenEncryptionKey,
     fetchImpl: provider.fetchImpl,
     now: () => clock.at,
   });
@@ -302,6 +305,7 @@ test('an unreachable identity provider is not a sign-out', async () => {
     clientSecret: CLIENT_SECRET,
     publicOrigin: PUBLIC_ORIGIN,
     store: h.store,
+    tokenEncryptionKey: TOKEN_KEY,
     now: () => h.clock.at,
     fetchImpl: async (url, options) => {
       if (url === `${ISSUER}/oauth2/token`) return json({ error: 'server_error' }, 503);
@@ -370,6 +374,7 @@ test('a login attempt survives a restart', async () => {
     clientSecret: CLIENT_SECRET,
     publicOrigin: PUBLIC_ORIGIN,
     store: h.store,
+    tokenEncryptionKey: TOKEN_KEY,
     fetchImpl: h.provider.fetchImpl,
     now: () => h.clock.at,
   });
@@ -419,6 +424,7 @@ test('the callback rejects an id_token minted for another client', async () => {
     clientSecret: CLIENT_SECRET,
     publicOrigin: PUBLIC_ORIGIN,
     store: h.store,
+    tokenEncryptionKey: TOKEN_KEY,
     now: () => h.clock.at,
     fetchImpl: async (url, options) => {
       if (url === `${ISSUER}/oauth2/token`) {
@@ -522,4 +528,87 @@ test('concurrent requests share one refresh instead of racing the rotation', asy
   const refreshes = h.provider.state.tokenRequests.filter((r) => r.grant_type === 'refresh_token');
   assert.equal(refreshes.length, 1, `expected one refresh, saw ${refreshes.length}`);
   assert.equal(h.provider.state.liveRefreshTokens.size, 1, 'exactly one refresh token survives');
+});
+
+test('the stored session row never holds a usable token', async () => {
+  const h = harness();
+  await signIn(h);
+  const [record] = [...h.store.sessions.values()];
+
+  // The session cookie's token is hashed, so a row cannot be replayed as a session. These two
+  // cannot be hashed — the backend has to present them to renew — so they are encrypted instead.
+  // Without this, reading the database IS a working refresh token, and every developer's
+  // localhost is connected to the production database.
+  assert.ok(record.refreshToken, 'the row still holds a refresh token');
+  assert.ok(!record.refreshToken.includes('refresh-1'), 'the refresh token must not be readable in the row');
+  assert.ok(!record.accessToken.includes('access-1'), 'the access token must not be readable in the row');
+
+  // And it still works: the session renews from what was stored.
+  h.clock.at += 61 * 60 * 1000;
+  const session = await h.manager.readSession(sessionCookie((await signIn(h)).cookies), responseRecorder());
+  assert.ok(session);
+});
+
+test('rotation re-encrypts, so a captured row goes stale', async () => {
+  const h = harness();
+  const { cookies } = await signIn(h);
+  const before = [...h.store.sessions.values()][0].refreshToken;
+
+  h.clock.at += 61 * 60 * 1000;
+  await h.manager.readSession(sessionCookie(cookies), responseRecorder());
+
+  const after = [...h.store.sessions.values()][0].refreshToken;
+  assert.notEqual(after, before, 'the rotated token is stored freshly encrypted');
+  assert.ok(!after.includes('refresh-2'), 'and still unreadable');
+});
+
+test('turning encryption on does not sign anybody out', async () => {
+  // A session established before the key existed holds plaintext. The next read must work, and
+  // the next rotation must upgrade it — otherwise switching this on is a mass sign-out.
+  const plain = harness({ tokenEncryptionKey: '' });
+  const { cookies } = await signIn(plain);
+  const stored = [...plain.store.sessions.values()][0];
+  assert.equal(stored.refreshToken, 'refresh-1', 'written plainly, before the key existed');
+
+  const encrypted = createOIDCSessionManager({
+    issuer: ISSUER,
+    clientId: CLIENT_ID,
+    clientSecret: CLIENT_SECRET,
+    publicOrigin: PUBLIC_ORIGIN,
+    store: plain.store,
+    tokenEncryptionKey: TOKEN_KEY,
+    fetchImpl: plain.provider.fetchImpl,
+    now: () => plain.clock.at,
+  });
+
+  const session = await encrypted.readSession(sessionCookie(cookies), responseRecorder());
+  assert.ok(session, 'a pre-existing session survives the key being introduced');
+
+  plain.clock.at += 61 * 60 * 1000;
+  assert.ok(await encrypted.readSession(sessionCookie(cookies), responseRecorder()));
+  const upgraded = [...plain.store.sessions.values()][0].refreshToken;
+  assert.ok(!upgraded.includes('refresh-'), 'and its tokens are encrypted from the next rotation on');
+});
+
+test('a session whose tokens cannot be decrypted ends rather than lingering', async () => {
+  const h = harness();
+  const { cookies } = await signIn(h);
+
+  // The encryption key was rotated or lost. The row's tokens are unreadable, so this session can
+  // never be shown to the provider again — it must end, not survive for weeks on cached claims.
+  const rekeyed = createOIDCSessionManager({
+    issuer: ISSUER,
+    clientId: CLIENT_ID,
+    clientSecret: CLIENT_SECRET,
+    publicOrigin: PUBLIC_ORIGIN,
+    store: h.store,
+    tokenEncryptionKey: crypto.randomBytes(32).toString('base64'),
+    fetchImpl: h.provider.fetchImpl,
+    now: () => h.clock.at,
+  });
+
+  h.clock.at += 61 * 60 * 1000;
+  const res = responseRecorder();
+  assert.equal(await rekeyed.readSession(sessionCookie(cookies), res), null);
+  assert.equal(h.store.sessions.size, 0, 'the unusable session is deleted, not left to idle out');
 });

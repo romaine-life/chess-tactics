@@ -4652,15 +4652,21 @@ h1 {
   text-align: center;
 }
 
-/* The two flank chips share ONE width so the status cluster is symmetric about its
-   middle chip. The whole cluster is already page-centered (it's the centred `auto`
-   track of the title bar's 1fr·auto·1fr grid), so an equal-width pair puts the battle
-   clock — the middle chip — dead centre of the page, directly over the title bar's
-   nailhead diamond, with the turn plate and objective hugging it as a mirrored pair.
+/* The two labelled flank chips share ONE width, so the row's two copy panels read as a
+   mirrored pair rather than two differently-sized slabs. The whole cluster is page-centered
+   (it's the centred `auto` track of the title bar's 1fr·auto·1fr grid), and this equal pair is
+   what makes that centring look deliberate at both ends.
+   This rule used to be described as putting the battle clock dead centre of the page, directly
+   over the title bar's nailhead diamond. Material's box now stands between the turn plate and
+   the clock, so the clock is no longer the row's midpoint — and that was checked on the running
+   app rather than assumed. On a Battle route `.app-shell-titlebar-stud` and the retry stud that
+   shares its seat both draw NOTHING: captured at 4x, the seat is bare bar. So the alignment was
+   to an ornament the player cannot see here, and re-balancing the flanks around material would
+   have cost the objective 144px of empty box to line the clock up with it. What IS visible —
+   the cluster centred as a whole, and these two panels matching — is kept.
    min- (not fixed) width so an unusually long objective line grows rather than clips;
    the widest real content is ~139px ("Defeat every enemy piece"), so 150 sits both
-   comfortably on one line. The clock is always the centre chip (untimed counts up),
-   so this equal pair centres it on every play surface, timed or not.
+   comfortably on one line.
    Scoped to the cluster so the standalone board status chips that reuse
    .skirmish-turn-plate (loading / map-error) keep sizing to their own content. */
 .skirmish-topbar-status .skirmish-turn-plate,
@@ -4669,7 +4675,7 @@ h1 {
 }
 
 /* Centre the objective's glyph+copy within its now-wider box so it mirrors the
-   centred turn plate across the clock (both flanks read as balanced panels). */
+   centred turn plate at the other end of the row (both flanks read as balanced panels). */
 .skirmish-topbar-status .skirmish-objective {
   justify-content: center;
 }
@@ -4711,6 +4717,62 @@ h1 {
    urgency channel the board uses. */
 .skirmish-topbar .skirmish-clock.is-low strong {
   color: var(--threat);
+}
+
+/* Material: ONE box holding both forces (ADR-0580) — a live Pawn in each army's palette and the
+   points it is still worth. Material is one FACT, who is ahead and by how much, so the two
+   numbers have to be readable together; when they sat in separate boxes the battle clock stood
+   between the very things being compared. The frame and the control height come from
+   .skirmish-status-chip; this is inner layout only.
+   The gap BETWEEN the forces is the wide one and the gap inside each is the tight one, so the
+   box reads as two pairs rather than four loose marks — the only grouping the box needs, which
+   is why there is no internal rail. */
+.skirmish-material {
+  gap: var(--ds-inline);
+}
+
+.skirmish-material-force {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline-tight);
+  min-width: 0;
+}
+
+.skirmish-material-points {
+  color: #eaf6ff;
+  font: var(--ds-weight-strong) var(--ds-text-md)/1 var(--ds-font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .04em;
+  /* The READOUT owns a stable width, exactly as the clock's does: the box holds two numbers
+     that change independently as pieces come off, and a box that breathed with them would
+     shove the clock beside it on every capture. Two tabular digits is the width every real
+     board needs — a full chess army is 39 points — and the span grows past it rather than
+     clipping if a Run ever fields a three-digit force. */
+  min-inline-size: 2ch;
+  text-align: center;
+}
+
+/* The mark is a live unit sprite rather than a forged kit glyph, so it answers to the bar's
+   shared mark seat through the ink-fraction mechanism above — AlphaBoundIcon draws visible ink
+   at 82% of its box BY CONSTRUCTION (alphaBoundIconLayout's fill), for every sprite, so the
+   fraction is stated once here and is not a per-asset measurement. The drawn Pawn then lands at
+   the same size as the hourglass beside it and the surplus box bleeds back out. */
+.skirmish-material-mark {
+  --titlebar-mark-ink-fill: .82;
+  --titlebar-mark-canvas: calc(var(--titlebar-mark-seat) / var(--titlebar-mark-ink-fill));
+  block-size: var(--titlebar-mark-canvas);
+  display: grid;
+  flex: none;
+  inline-size: var(--titlebar-mark-canvas);
+  margin: calc((var(--titlebar-mark-seat) - var(--titlebar-mark-canvas)) / 2);
+  place-items: center;
+}
+
+/* The sprite fills the seat the mark box just sized; the 58px utility default is for dense
+   pickers, not a title-bar row. */
+.skirmish-material-mark .utility-piece-icon {
+  block-size: 100%;
+  inline-size: 100%;
 }
 
 .skirmish-field {
@@ -5624,23 +5686,24 @@ body.loading-bootstrap .app-startup-status {
   text-align: center;
 }
 
-/* In-match shortcut grid (Controls tab). Cells reuse the kit mode-button frame
-   (.app-header-button / .app-header-button-active), so this block is layout + the
-   key-cap badge only — no raw-CSS chrome. */
-.skirmish-grid {
-  display: grid;
-  gap: var(--ds-inline);
-  grid-template-columns: repeat(5, 1fr);
+/* The in-match command card (Controls tab). It is ONE divided box of fifteen compartments —
+   ChromeSeatGrid — so this block is the card's measure and the compartment's own stacking,
+   and every edge between two commands is the box's rail. There is nothing here that draws a
+   frame, a gap or a border: the fifteen framed buttons in a gapped CSS grid that this used
+   to be are exactly what that primitive exists to replace (ADR-0242/ADR-0586). */
+.skirmish-grid.chrome-seat-grid {
+  /* Against the pad's own max-content default: this card is not a fixed set of squares, it
+     fills the rail it lives in, and its opening is derived from that width. */
+  inline-size: 100%;
+  /* Cap, mark and the compartment's own breathing room, stated once as the block opening the
+     seat axis is derived from. */
+  --command-card-row-opening: calc(var(--ds-text-2xs) + var(--skirmish-shortcut-icon-size, 28px) + 14px);
 }
 
-.skirmish-grid-key.app-header-button {
-  block-size: auto;
-  flex-direction: column;
-  gap: 3px;
-  justify-content: center;
-  min-block-size: 60px;
-  min-width: 0;
-  padding: 6px 4px;
+.skirmish-grid-key {
+  align-content: center;
+  gap: 2px;
+  grid-auto-flow: row;
   text-align: center;
 }
 
@@ -5649,6 +5712,40 @@ body.loading-bootstrap .app-startup-status {
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
   font-size: var(--ds-text-sm);
   line-height: 1;
+}
+
+/* The cap steps down once the mark is the thing being read: on a key with a label it was
+   the largest type in the cell, and against a mark alone at the same size it competes with
+   it for the eye.
+   It stays STACKED above the mark rather than seated in a corner, which was tried and is
+   13px shorter per key: at 42px wide there is no free corner on this card, so the letter
+   landed on the grid lattice, on the cursor's brackets and on both magnifier lenses. A key
+   whose letter cannot be read is not a saving on a card whose whole premise is that the
+   letters map to physical key positions. */
+.skirmish-grid-key .skirmish-grid-cap {
+  font-size: var(--ds-text-2xs);
+  opacity: .78;
+}
+
+/* One command's mark, under its key cap. The seat is a fixed SQUARE rather than a share of
+   the compartment, because the ten marks sit in a 3x5 card where every neighbour is a size
+   reference — a seat that tracked its own compartment would redraw the set at three sizes
+   down the card. The whole 64x64 canvas is drawn and the asset's own transparent margin
+   decides the mark's size inside it (ADR-0026), so the seat carries no per-icon nudge. */
+.skirmish-shortcut-icon {
+  align-items: center;
+  block-size: var(--skirmish-shortcut-icon-size, 28px);
+  display: inline-flex;
+  flex: none;
+  inline-size: var(--skirmish-shortcut-icon-size, 28px);
+  justify-content: center;
+}
+
+.skirmish-shortcut-icon img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: contain;
 }
 
 .skirmish-grid-label {
@@ -5660,14 +5757,23 @@ body.loading-bootstrap .app-startup-status {
   white-space: normal;
 }
 
+/* An open slot is a real compartment of the card with nothing bound to it yet — dimmed, not
+   removed: dropping it would close the gap and move every command after it one key left, and
+   the card's whole premise is that its cells ARE the keyboard. */
 .skirmish-grid-key.is-empty {
   cursor: default;
   opacity: .32;
-  pointer-events: none;
 }
 
-.skirmish-grid-key.is-empty .skirmish-grid-label {
-  display: none;
+/* The tip wrapper is the compartment when a seat carries a tip, so it takes the half-rail
+   inset and the seat fills what is left. Written against `.tooltip` on purpose: the tip
+   primitive states `inline-flex` for a trigger that sits IN a line of text, which is the
+   opposite of a trigger that is a compartment, and the two rules are otherwise a
+   source-order coin toss. */
+.tooltip.chrome-seat-tip,
+.tooltip.chrome-seat-tip > .tooltip-trigger {
+  display: grid;
+  min-inline-size: 0;
 }
 
 .skirmish-grid-hint {
@@ -9702,6 +9808,26 @@ body.loading-bootstrap .app-startup-status {
     font-size: var(--ds-text-xs);
     gap: 2px;
   }
+
+  /* Material sheds with the row it sits in: same smaller face, same tight gaps, so a Run's bar
+     does not narrow its measures around a box that kept the comfortable size. The stable
+     two-digit readout goes as well — it is there so the box does not breathe as pieces come
+     off, and at this width the whole row is already re-laying out around a dropped identity
+     chip. The gap BETWEEN the two forces stays wider than the gap inside each, because that
+     grouping is the only thing telling the reader which number belongs to which mark.
+     The Skirmish bar keeps the comfortable size: nothing has been dropped from it here. */
+  .app-shell-titlebar .run-topbar-status .skirmish-material {
+    gap: var(--ds-space-1);
+  }
+
+  .app-shell-titlebar .run-topbar-status .skirmish-material-force {
+    gap: 2px;
+  }
+
+  .app-shell-titlebar .run-topbar-status .skirmish-material-points {
+    font-size: var(--ds-text-xs);
+    min-inline-size: 0;
+  }
 }
 
 @media (max-width: 860px) {
@@ -9800,6 +9926,23 @@ body.loading-bootstrap .app-startup-status {
     --skirmish-status-chip-inset: var(--ds-space-1);
     --titlebar-mark-seat: 18px;
     gap: var(--ds-space-1);
+  }
+
+  /* That floor is now the design call the note above said it would take, and material is what
+     pays it. Below 860 the lane closes on the row far enough that the last Run measure runs
+     under it, and material is the row's newest arrival rather than something it was already
+     built around — the clock and the four measures were AT the floor before it existed. Nothing
+     else in the bar is asked to give up a box to make room for it.
+     Measured rather than assumed, and it is genuinely marginal: at 740 the row without material
+     is 332px against a 440px budget, and the tightened box is ~90px, which fits by about 14px
+     total. That is the whole margin, and it goes to nothing as soon as both forces read two
+     digits — the shed is 14px of certainty instead of a measure sliding under the lane on a
+     board nobody thought to test.
+     The Skirmish bar's whole status row is already gone at this width (its summary moves into
+     Controls), so this is the same answer both bars give: a stacked narrow Battle reads its
+     forces off the board and its Controls, not off the title bar. */
+  .app-shell-titlebar .run-topbar-status .skirmish-material {
+    display: none;
   }
 }
 
@@ -19551,7 +19694,8 @@ button.tileset-relationship-cell {
    and the kit's inner rail between members is what tells them apart. */
 /* A row that declared itself one thing across every column IS one cell: its content spans the
    whole width. Stated on the grid's own class, not on the section box, because it is the other
-   half of what `spans="all"` means — the rail breaks there AND the content fills the row. */
+   half of what `spans="all"` means — the rail breaks there AND the content fills the row.
+ */
 .chrome-divided-grid__row--spanning > * {
   grid-column: 1 / -1;
 }
@@ -22711,6 +22855,118 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
+/* Studio > Battle Command Card Marks. Same rule as the mark review above: layout only,
+   because the thing being judged is the card the Controls tab paints and a review that
+   restyles it proves nothing about it. The card keeps the rail's own 245px measure so its
+   buttons are the size they will be in a match, not the size this wider panel allows. */
+.command-card-review-screen {
+  block-size: 100%;
+  box-sizing: border-box;
+  grid-template-columns: minmax(0, 1fr);
+  overflow: auto;
+  padding: var(--ds-inset);
+}
+
+.command-card-review-panel {
+  grid-column: 1;
+  grid-row: 2;
+  inline-size: 100%;
+  margin-inline: auto;
+  max-inline-size: 1180px;
+  overflow: auto;
+}
+
+.command-card-review-panel > .le-outer-panel-content {
+  display: grid;
+  gap: var(--ds-inline);
+}
+
+.command-card-review-body {
+  display: grid;
+  gap: var(--ds-block);
+}
+
+.command-card-review-cards {
+  align-items: start;
+  display: flex;
+  gap: var(--ds-inline);
+  /* One row, always: the installed card and the composed one exist to be read against
+     each other, and a wrapped pair cannot be. */
+  overflow-x: auto;
+}
+
+.command-card-review-column {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  justify-items: start;
+}
+
+.command-card-review-column > h2,
+.command-card-review-column > p {
+  margin: 0;
+}
+
+.command-card-review-column > p {
+  color: var(--skirmish-muted);
+}
+
+/* The card derives its compartments from the width it is given, so a review that let it
+   fill this wider panel would judge marks at a size no match ever draws. This is the inner
+   measure of the Battle rail at the default window — stated, because it is not derivable
+   here: the rail is a clamp on the viewport and the card is inside its panel's padding. */
+.command-card-review-card.chrome-seat-grid {
+  inline-size: 245px;
+}
+
+.command-card-review-install {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  justify-items: start;
+}
+
+.command-card-review-install p {
+  color: var(--skirmish-muted);
+  margin: 0;
+}
+
+.command-card-review-picks {
+  display: grid;
+  gap: var(--ds-inline);
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.command-card-review-pick {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.command-card-review-pick > h3 {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline-tight);
+  margin: 0;
+}
+
+.command-card-review-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-inline-tight);
+}
+
+/* A candidate CHIP is not a command-card key and does not pretend to be one: the key is a
+   compartment of the card above, and a loose framed button wearing its class would be the
+   lookalike this page exists to avoid. The chip is a press target with the candidate's name
+   under it; what is judged at match size is the card, where arming puts it. */
+.command-card-review-option.app-header-button {
+  block-size: auto;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  inline-size: 5.6em;
+  justify-content: center;
+  min-width: 0;
+  text-align: center;
+}
+
 /* Studio > Action Marks: each catalog card carries the candidate in the SAME button the
    Expunctio row paints, in both states that control has — offered, and refused. Layout
    only; the buttons bring their own kit frame and the catalog never restyles the seat it
@@ -24059,6 +24315,74 @@ button.tileset-relationship-cell {
 
 .run-meta-abandon {
   margin-block-start: auto;
+}
+
+/* Abandon Run asks its question in its own seat rather than over the screen: at rest one control,
+   armed a Keep Run / Abandon Run pair. The control owns its own layout and its own button measure,
+   because the three seats it stands in (the Sectio rail, the Deployment panel and the Battle HUD)
+   each wrapped it in a different row and sized it differently.
+
+   ONE seat height through BOTH states. Pressing a control must not resize the thing under the
+   cursor, and the two states are different objects — a framed button and a framed box — so the
+   height is stated ONCE here and each derives its own measure from it. Declared on both roots
+   because they are alternatives, not nested: neither can inherit from the other.
+
+   46px is what the rail's buttons already measure, every one of them, in all three seats (read off
+   the live DOM, not chosen). Stating it and pinning BOTH states to it is what stops the two from
+   drifting: the resting height was emergent — a 38px floor plus the mark's line box — so a change
+   to the button's font or its mark would have moved one state and not the other, silently. */
+.run-abandon-control,
+.run-abandon-box {
+  --run-abandon-seat-h: 46px;
+}
+
+.run-abandon-control {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.run-abandon-control .app-header-button {
+  block-size: var(--run-abandon-seat-h);
+  font-size: var(--ds-text-xs);
+  inline-size: 100%;
+}
+
+/* Armed, the question is ONE box holding its two answers, so the line between Keep Run and Abandon
+   Run is the box's own column line — laid and capped from its topology where it meets the frame at
+   either end (ADR-0242). Two framed buttons in a row with a gap is what this kit puts between
+   things that are NOT related; this is one question and its two answers, and the same treatment
+   Start New Run's armed replacement wears. It carries no sentence: Abandon Run already says what
+   it does, and a warning restating that is the dialog's body text outliving its dialog. */
+.run-abandon-box {
+  /* The plate a CELL paints when it IS the control, derived so the BOX comes out at the seat
+     height the resting verb already occupies. A cell has no frame of its own — the box's frame and
+     rail are its edges — so it paints everything the box's own 9-slice does not, which is the seat
+     less a rail a side. That also lands its wood on exactly the wood the framed button painted, so
+     arming changes what the seat says and nothing about its size.
+     Read from the installed rail rather than written out: `--le-chrome-inner-rail-w` is stamped
+     from the live chrome catalog (chromeFamilyRuntime), so a re-tuned frame moves this with it
+     instead of leaving a hardcoded plate a few pixels out. */
+  --run-abandon-plate-h: calc(var(--run-abandon-seat-h) - 2 * var(--le-chrome-inner-rail-w, 7px));
+  /* NO padding: a rail has to reach the frame on both sides, and box padding would hold it short
+     of them. */
+  padding: 0;
+}
+
+/* A cell that IS the control takes no inset at all: the verb fills the whole area between the box's
+   frame and its rail, and the wood reaches them. */
+.run-abandon-verbs {
+  min-block-size: var(--run-abandon-plate-h);
+  padding: 0;
+}
+
+/* section-box-member-verb owns the frameless reset; this sizes the plate and gives the label the
+   display treatment every other verb cell in the app wears. */
+.run-abandon-verb {
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xs);
+  min-block-size: var(--run-abandon-plate-h);
+  padding: 0 var(--ds-inset);
+  text-transform: uppercase;
 }
 
 .run-expunctio-workspace {
@@ -28626,7 +28950,7 @@ button.run-card-formation-cell {
   text-align: end;
 }
 
-/* ── Start New Run is ONE box ─────────────────────────────────────────────────────────────────
+/* ── The New tab's column is ONE box (ADR-0571, when the tab still said "Start New Run") ──────
    Ataraxia, the replacement warning, the verb and Options were four separate slabs with the live
    vista showing through the gaps, which drew one control as four unrelated things. They are cells
    of a single box now and the gaps are that box's own rails — laid and capped by its topology, so
@@ -29221,7 +29545,7 @@ button.run-card-formation-cell {
    side), strips the shell's native button paint, and paints nothing of its own.
    check-ui-surface-contract.mjs registers exactly that reset. A section without a disclosure
    renders the same row as a div, which needs the layout and inherits the reset harmlessly.
-   Start New Run is NOT one of these: it is a single box of cells, and the one disclosure in it is
+   The New tab's column is NOT one of these: it is a single box of cells, and its one disclosure is
    a square key rather than a pressable slab — a cell has no frame to be the button. See
    `.run-prep-box`. */
 .run-rules-cell h4 {

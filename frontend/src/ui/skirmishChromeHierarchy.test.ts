@@ -17,6 +17,10 @@ const portraitPreload = readFileSync(new URL('../art/preload.ts', import.meta.ur
 const runBattleUndoButton = readFileSync(new URL('./RunBattleUndoButton.tsx', import.meta.url), 'utf8');
 const runArmyWorkspace = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
 const chromeUnitRegistry = readFileSync(new URL('./chromeUnitRegistry.ts', import.meta.url), 'utf8');
+// The command card is one shared component, painted by the Controls tab and by the Studio
+// review that composes its marks (ADR-0586). Its assertions follow it there.
+const commandCard = readFileSync(new URL('./shared/CommandCard.tsx', import.meta.url), 'utf8');
+const chromeSeatGrid = readFileSync(new URL('./shared/ChromeSeatGrid.tsx', import.meta.url), 'utf8');
 
 const buttonBlocks = (source: string): string[] => source.match(/<(?:button|ChromeButton)\b[\s\S]*?<\/(?:button|ChromeButton)>/g) ?? [];
 const navButtonBlocks = (source: string): string[] => source.match(/<(?:NavButton|ChromeNavButton)\b[\s\S]*?<\/(?:NavButton|ChromeNavButton)>/g) ?? [];
@@ -92,6 +96,25 @@ describe('Skirmish chrome hierarchy', () => {
     expect(titleContent.match(/<TitleBarStatusTip\b/g)).toHaveLength(2);
     expect(titleContent).toContain('<BattleClockChip />');
     expect(battleClockChip).toContain('<TitleBarStatusTip');
+    // Material is ONE box holding both forces, seated AHEAD of the clock (ADR-0580). The two
+    // numbers are a comparison, so nothing may stand between them — and the clock did, while
+    // they were two boxes. It is its own component rather than markup here, so the Run's bar
+    // shows the same box from the same place the clock comes from.
+    expect(titleContent).toMatch(/<BattleMaterialChip \/>\s*<BattleClockChip \/>/);
+    expect(titleContent).not.toMatch(/BattleMaterialChip relation=/);
+    expect(titleContent).not.toMatch(/skirmish-material/);
+    // The two labelled flank chips share ONE width; that is the whole mechanism, so it cannot
+    // quietly become a per-chip size.
+    expect(styleCss).toMatch(
+      /\.skirmish-topbar-status \.skirmish-turn-plate,\s*\.skirmish-topbar-status \.skirmish-objective\s*\{[\s\S]*?min-inline-size:\s*150px;/,
+    );
+    // Each readout holds a stable width so the box does not breathe as pieces come off and shove
+    // the clock beside it.
+    expect(styleCss).toMatch(/\.skirmish-material-points\s*\{[\s\S]*?min-inline-size:\s*2ch;/);
+    // The gap BETWEEN the forces must stay wider than the gap inside each, or the box reads as
+    // four loose marks instead of two pairs — that grouping is what says which number is whose.
+    expect(styleCss).toMatch(/\.skirmish-material\s*\{\s*gap:\s*var\(--ds-inline\);/);
+    expect(styleCss).toMatch(/\.skirmish-material-force\s*\{[\s\S]*?gap:\s*var\(--ds-inline-tight\);/);
     expect(titleContent).not.toMatch(/<TitleBarStatus\b[^T]/);
     expect(skirmish).not.toContain("from '../core/clock'");
     expect(titleContent).not.toMatch(/<div\b[^>]*skirmish-status-chip/);
@@ -211,8 +234,11 @@ describe('Skirmish chrome hierarchy', () => {
     // Repeated collections phase their wood from the index their own data already has.
     expect(skirmishHud).toContain('HUD_TABS.map((t, index) =>');
     expect(skirmishHud).toContain('style={leafSurfacePhase(index)}');
-    expect(skirmishHud).toContain('SHORTCUT_KEY_ROWS.flat().map((key, index) =>');
-    expect(skirmishHud).toContain('const surfacePhase = leafSurfacePhase(index);');
+    expect(skirmishHud).toContain('COMMAND_CARD_KEY_ROWS.flat().map((key) =>');
+    // The command card is a divided pad, so its planks are phased by the seat's place in the
+    // DATA by the pad itself — the card states the block, never a per-key offset (ADR-0586).
+    expect(commandCard).not.toContain('leafSurfacePhase');
+    expect(chromeSeatGrid).toContain('leafSurfacePhase(rowIndex * columnCount + columnIndex)');
     expect(stepper).toContain('style={leafSurfacePhase(0)}');
     expect(stepper).toContain('style={leafSurfacePhase(1)}');
     expect(styleCss).not.toMatch(/\.skirmish-(?:hud-tabs|view-row|grid)[^}]*:nth-child/);
@@ -296,7 +322,7 @@ describe('Skirmish chrome hierarchy', () => {
   it('maps tabs, promotion choices, and command-grid cells to existing units', () => {
     const promotion = buttonBlocks(pawnPromotionPicker).find((candidate) => candidate.includes('onChoose(type)'));
     const tab = buttonUsing('setTab(t.id)');
-    const commandKey = buttonUsing('runSkirmishShortcut(key, false, skirmishViewStore, skirmishStore)');
+    expect(skirmishHud).toContain('runSkirmishShortcut(key, false, skirmishViewStore, skirmishStore)');
 
     expect(promotion, 'expected anchored Pawn promotion choice').toBeDefined();
     expectChromeUnit(promotion!, 'inner-asset-swatch');
@@ -309,10 +335,21 @@ describe('Skirmish chrome hierarchy', () => {
     expect(skirmishHud).not.toContain('aria-label="Pawn promotion"');
     expectChromeUnit(tab, 'inner-text-button');
     expect(tab).toContain("tab === t.id && 'active'");
-    expectChromeUnit(commandKey, 'inner-text-button');
-    expect(commandKey).toContain("active && 'active is-active'");
+    // The card is ONE divided box of compartments, not fifteen framed buttons in a gapped
+    // grid: between two marks that shape shows a frame, a strip of panel and another frame,
+    // which is what ChromeSeatGrid exists to replace (ADR-0242/ADR-0586).
+    expect(commandCard).toContain('<ChromeSeatGrid');
+    expect(commandCard).not.toMatch(/<ChromeButton\b|app-header-button/);
+    // A compartment is a cap and a mark. The command's name lives in the tip, not in a label
+    // on the face — ten of those were the wall of type the marks replaced.
+    expect(commandCard).not.toContain('skirmish-grid-label');
+    expect(commandCard).toContain('tip: { title: command.label');
+    expect(chromeSeatGrid).toContain('triggerIsInteractive');
+    // An open slot stays a real compartment: dropping it would close the gap and move every
+    // command after it one key to the left, and the card's cells ARE the keyboard.
+    expect(commandCard).toContain("className: 'skirmish-grid-key is-empty'");
 
-    expect(skirmishHud).toMatch(/<span key=\{key\} data-chrome-unit="inner-text-button" className=\{chromeUnitClassNames\('inner-text-button', 'app-header-button', 'skirmish-grid-key', 'is-empty'\)\}/);
+
     expect(styleCss).not.toMatch(/\.skirmish-hud-tab\s*\{[^}]*border-image\s*:/);
     expect(styleCss).not.toMatch(/\.skirmish-hud \.app-header-button\s*\{/);
   });

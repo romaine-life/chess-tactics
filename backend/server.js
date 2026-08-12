@@ -336,6 +336,11 @@ const oidcSessions = createOIDCSessionManager({
   // local runs, where the dev-auth lanes do not reach the token endpoint at all.
   clientSecret: process.env.OIDC_CLIENT_SECRET || '',
   publicOrigin,
+  // The session row holds live OAuth tokens: the refresh token cannot be hashed, because the
+  // backend must present it to renew. Encrypted at rest so a database read is not by itself a
+  // working credential — which matters here because localhost development connects to the
+  // production database, so DB read access is far wider than pod-environment access.
+  tokenEncryptionKey: process.env.AUTH_TOKEN_ENCRYPTION_KEY || '',
   store: useTestAuthSessionStore ? createInMemoryAuthSessionStore() : authSessionStore,
 });
 // Multiplayer lobbies + netplay relay live entirely in process: this Map is the
@@ -6260,6 +6265,53 @@ const MIGRATIONS = [
         ON unit_sprites (asset_id, rung);
     `,
   },
+  {
+    version: 79,
+    name: 'a Run can be owned by a guest',
+    // ADR-0587. A signed-out player generated no server data at all -- not data we discarded,
+    // but nowhere to put it: `owner_email` was the PRIMARY KEY, so a Run without an account had
+    // no row it could occupy. That was a consequence of keying the table by email, not a decision
+    // anyone made about guests, and it made every anonymous player invisible to counting,
+    // observation and sharing alike.
+    //
+    // `guest_hash` is the SHA-256 of an opaque key the browser mints and holds, the same shape as
+    // the auth session cookie of migration 77 and the Level Editor's page credential: the server
+    // stores only the hash, so a database leak yields no usable identity. It is 64 hex characters
+    // because that is what SHA-256 is, and the CHECK says so rather than trusting the caller.
+    //
+    // Ownership is exactly one of the two. The XOR check is what makes the other spelling
+    // unsayable -- a row that named both would be an account Run and a guest Run at once, and
+    // whichever query found it first would win. Neither column can be a PRIMARY KEY any more
+    // because each is null for the other kind of owner, so uniqueness moves to a partial unique
+    // index per kind, which is the same guarantee stated where it still applies.
+    sql: `
+      ALTER TABLE active_runs
+        ADD COLUMN IF NOT EXISTS guest_hash text;
+
+      ALTER TABLE active_runs
+        DROP CONSTRAINT IF EXISTS active_runs_pkey;
+
+      ALTER TABLE active_runs
+        ALTER COLUMN owner_email DROP NOT NULL;
+
+      CREATE UNIQUE INDEX IF NOT EXISTS active_runs_owner_idx
+        ON active_runs (owner_email) WHERE owner_email IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS active_runs_guest_idx
+        ON active_runs (guest_hash) WHERE guest_hash IS NOT NULL;
+
+      ALTER TABLE active_runs
+        DROP CONSTRAINT IF EXISTS active_runs_guest_hash_format;
+      ALTER TABLE active_runs
+        ADD CONSTRAINT active_runs_guest_hash_format
+        CHECK (guest_hash IS NULL OR guest_hash ~ '^[0-9a-f]{64}$');
+
+      ALTER TABLE active_runs
+        DROP CONSTRAINT IF EXISTS active_runs_single_owner;
+      ALTER TABLE active_runs
+        ADD CONSTRAINT active_runs_single_owner
+        CHECK ((owner_email IS NOT NULL) <> (guest_hash IS NOT NULL));
+    `,
+  },
 ];
 
 let pool = null;
@@ -6319,7 +6371,10 @@ const REQUIRED_SCHEMA_REPAIR_MIGRATIONS = new Map([
   // repair must replay both — replaying 45 alone would rebuild the retired spelling.
   ['lipsanon_stat_events', [45, 52]],
   ['run_progression', 49],
-  ['active_runs', 44],
+  // Migration 44 creates this relation keyed by owner_email alone and 79 opens it to guest
+  // ownership, so a repair must replay both -- replaying 44 alone would rebuild a table that
+  // cannot hold the anonymous Runs the app is by then already writing.
+  ['active_runs', [44, 79]],
 ]);
 
 function buildPool() {
@@ -11544,10 +11599,13 @@ async function dbReconcileEditorDocument(client, row, { lockCanonical = true } =
   return { ...row, baseline_conflict: true };
 }
 
-async function dbResolveEditorDocument(ownerEmail, workspace, levelId) {
+async function dbResolveEditorDocument(ownerEmail, workspace, levelId, { create = true } = {}) {
   return withEditorDocumentTransaction(async (client) => {
     let row = await dbGetEditorDocumentByLevel(ownerEmail, workspace, levelId, client, { lock: true });
     if (row) return { row: await dbReconcileEditorDocument(client, row), created: false };
+    // An observing caller attaches to a document that already exists or learns that none does.
+    // Initializing one from canonical is a write, so it stays behind the ordinary editing intent.
+    if (!create) throw editorDocumentError(404, 'editor_document_not_found_for_level');
     const canonical = await dbCanonicalLevel(client, ownerEmail, workspace, levelId, { lock: true });
     if (!canonical.level) throw editorDocumentError(404, 'saved_level_not_found');
     const parsed = editorDocumentLevel(canonical.level, levelId);
@@ -13112,7 +13170,14 @@ function editorDocumentResolveRequest(req, res) {
   const rawLevelId = raw.level_id;
   const levelId = rawLevelId === undefined || rawLevelId === null || rawLevelId === '' ? '' : levelStoreId(rawLevelId);
   if (rawLevelId && !levelId) { res.status(400).json({ error: 'invalid_level_id' }); return null; }
-  return { raw, workspace, levelId };
+  // Same intent vocabulary the edit-session open already speaks, so an observing caller declares
+  // itself once and every document-touching request on the path honours it. Resolve is where a
+  // working copy is BORN, so observation has to reach this request too: rewriting only the
+  // session-open leaves an observer that already created the document it then observes.
+  const rawIntent = raw.intent ?? req.get('x-level-editor-session-intent') ?? 'write';
+  const intent = rawIntent === 'write' || rawIntent === 'observe' ? rawIntent : null;
+  if (!intent) { res.status(400).json({ error: 'invalid_editor_document_resolve_intent' }); return null; }
+  return { raw, workspace, levelId, intent };
 }
 
 function editorDocumentOperationRequest(req, res) {
@@ -13298,11 +13363,17 @@ app.post('/api/editor-documents/resolve', async (req, res) => {
     if (!input.levelId) {
       if (input.workspace.kind !== 'user') { res.status(400).json({ error: 'level_id_required' }); return; }
       if (!isObjectRecord(input.raw.level)) { res.status(400).json({ error: 'invalid_level_body' }); return; }
+      if (input.intent === 'observe') {
+        res.status(409).json({ error: 'observation_cannot_create_editor_document' });
+        return;
+      }
       const row = await dbCreateEditorDocument(user.email, input.raw.level);
       res.status(201).json({ document: publicEditorDocument(row) });
       return;
     }
-    const result = await dbResolveEditorDocument(user.email, input.workspace, input.levelId);
+    const result = await dbResolveEditorDocument(user.email, input.workspace, input.levelId, {
+      create: input.intent !== 'observe',
+    });
     res.status(result.created ? 201 : 200).json({ document: publicEditorDocument(result.row) });
   } catch (error) {
     respondEditorDocumentError(res, error, 'resolve');
@@ -23757,14 +23828,72 @@ function publicActiveRun(row) {
   };
 }
 
+// --- Who a Run belongs to (ADR-0587) -------------------------------------
+// An account Run is keyed by email. A GUEST Run is keyed by the SHA-256 of an opaque key the
+// browser minted and holds -- the same shape as the session cookie of migration 77 and the Level
+// Editor's page credential, so the server stores no credential it could leak. Migration 79's
+// `active_runs_single_owner` check makes exactly one of the two columns carry the owner, so a
+// descriptor names its own column once instead of every query re-deciding which one applies.
+const GUEST_RUN_KEY_HEADER = 'x-guest-run-key';
+// Interpolated into SQL below, so it is a frozen map of literals keyed by a kind this file sets
+// itself -- never a column name that came in on a request.
+const RUN_OWNER_COLUMNS = Object.freeze({ account: 'owner_email', guest: 'guest_hash' });
+
+function guestRunKeyHash(guestKey) {
+  return crypto.createHash('sha256').update(`guest-run\0${guestKey}`).digest('hex');
+}
+
+/** The 64 hex characters a browser mints from 32 random bytes, or null. A key of any other shape
+ * is not repaired into one: it would name an identity that nothing can have written. */
+function readGuestRunKey(req) {
+  const raw = req.get(GUEST_RUN_KEY_HEADER);
+  return typeof raw === 'string' && /^[0-9a-f]{64}$/i.test(raw) ? raw.toLowerCase() : null;
+}
+
+function accountRunOwner(email) {
+  return { kind: 'account', value: email, lock: `active-run:${email}` };
+}
+
+function guestRunOwner(guestHash) {
+  return { kind: 'guest', value: guestHash, lock: `active-run:guest:${guestHash}` };
+}
+
+/**
+ * Who this request's Run belongs to, or null once a refusal has already been sent.
+ *
+ * A signed-in session wins whenever there is one. A browser that played as a guest still holds
+ * its guest key after signing in, and letting that header decide would send the account's play
+ * into the guest row it is in the middle of adopting. The guest identity is consulted only when
+ * there is no account to prefer over it.
+ */
+async function resolveRunOwner(req, res) {
+  let session;
+  try {
+    session = await readSession(req, res);
+  } catch (error) {
+    console.error('auth session check failed:', error);
+    res.status(error.statusCode || 502).json({ error: 'auth_unavailable' });
+    return null;
+  }
+  const user = publicUser(session);
+  if (user.signed_in) return accountRunOwner(user.email);
+  const guestKey = readGuestRunKey(req);
+  if (guestKey) return guestRunOwner(guestRunKeyHash(guestKey));
+  // No account and no guest identity means a browser that could not mint one. Play stays on that
+  // device exactly as it did before guests had a server identity at all, rather than being told
+  // to sign in for something that has never required it.
+  res.status(401).json({ error: 'sign_in_required' });
+  return null;
+}
+
 app.get('/api/active-run', async (req, res) => {
-  const user = await requireUser(req, res);
-  if (!user) return;
+  const owner = await resolveRunOwner(req, res);
+  if (!owner) return;
   try {
     await ensureDbReady();
     const { rows } = await pool.query(
-      'SELECT body, revision, updated_at FROM active_runs WHERE owner_email = $1',
-      [user.email],
+      `SELECT body, revision, updated_at FROM active_runs WHERE ${RUN_OWNER_COLUMNS[owner.kind]} = $1`,
+      [owner.value],
     );
     res.status(200).json(publicActiveRun(rows[0] || null));
   } catch (error) {
@@ -23773,8 +23902,8 @@ app.get('/api/active-run', async (req, res) => {
 });
 
 app.put('/api/active-run', async (req, res) => {
-  const user = await requireUser(req, res);
-  if (!user) return;
+  const owner = await resolveRunOwner(req, res);
+  if (!owner) return;
   const raw = req.body && typeof req.body === 'object' ? req.body : {};
   const expectedRevision = campaignWorkspaceRevision(raw.revision);
   if (expectedRevision === null) {
@@ -23802,10 +23931,10 @@ app.put('/api/active-run', async (req, res) => {
   try {
     await ensureDbReady();
     const result = await withEditorDocumentTransaction(async (client) => {
-      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`active-run:${user.email}`]);
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [owner.lock]);
       const currentResult = await client.query(
-        'SELECT body, revision, updated_at FROM active_runs WHERE owner_email = $1 FOR UPDATE',
-        [user.email],
+        `SELECT body, revision, updated_at FROM active_runs WHERE ${RUN_OWNER_COLUMNS[owner.kind]} = $1 FOR UPDATE`,
+        [owner.value],
       );
       const current = currentResult.rows[0] || null;
       if ((Number(current && current.revision) || 0) !== expectedRevision) return { conflict: true, row: current };
@@ -23821,19 +23950,19 @@ app.put('/api/active-run', async (req, res) => {
       }
       if (!current) {
         const { rows } = await client.query(
-          `INSERT INTO active_runs (owner_email, body, revision)
+          `INSERT INTO active_runs (${RUN_OWNER_COLUMNS[owner.kind]}, body, revision)
            VALUES ($1, $2::jsonb, 1)
            RETURNING body, revision, updated_at`,
-          [user.email, JSON.stringify(run)],
+          [owner.value, JSON.stringify(run)],
         );
         return { row: rows[0] };
       }
       const { rows } = await client.query(
         `UPDATE active_runs
             SET body = $2::jsonb, revision = revision + 1, updated_at = now()
-          WHERE owner_email = $1
+          WHERE ${RUN_OWNER_COLUMNS[owner.kind]} = $1
           RETURNING body, revision, updated_at`,
-        [user.email, JSON.stringify(run)],
+        [owner.value, JSON.stringify(run)],
       );
       return { row: rows[0] };
     });
@@ -23856,8 +23985,8 @@ app.put('/api/active-run', async (req, res) => {
 });
 
 app.delete('/api/active-run', async (req, res) => {
-  const user = await requireUser(req, res);
-  if (!user) return;
+  const owner = await resolveRunOwner(req, res);
+  if (!owner) return;
   const expectedRevision = campaignWorkspaceRevision(req.body && req.body.revision);
   if (expectedRevision === null) {
     res.status(400).json({ error: 'active_run_revision_required' });
@@ -23866,15 +23995,15 @@ app.delete('/api/active-run', async (req, res) => {
   try {
     await ensureDbReady();
     const result = await withEditorDocumentTransaction(async (client) => {
-      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`active-run:${user.email}`]);
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [owner.lock]);
       const currentResult = await client.query(
-        'SELECT body, revision, updated_at FROM active_runs WHERE owner_email = $1 FOR UPDATE',
-        [user.email],
+        `SELECT body, revision, updated_at FROM active_runs WHERE ${RUN_OWNER_COLUMNS[owner.kind]} = $1 FOR UPDATE`,
+        [owner.value],
       );
       const current = currentResult.rows[0] || null;
       if (!current) return { missing: true };
       if (Number(current.revision) !== expectedRevision) return { conflict: true, row: current };
-      await client.query('DELETE FROM active_runs WHERE owner_email = $1', [user.email]);
+      await client.query(`DELETE FROM active_runs WHERE ${RUN_OWNER_COLUMNS[owner.kind]} = $1`, [owner.value]);
       return { deleted: true };
     });
     if (result.conflict) {
@@ -23884,6 +24013,113 @@ app.delete('/api/active-run', async (req, res) => {
     res.status(200).json({ ok: true, revision: 0 });
   } catch (error) {
     dbUnavailable(res, 'active Run delete failed', error, 'active_run_store_unavailable');
+  }
+});
+
+// POST /api/active-run/adopt-guest — the guest row this account inherits on sign-in (ADR-0587).
+//
+// Reuses the merge `campaign_progress` already defines: the browser is the guest's authority, and
+// signing in folds it into the account. So this settles the SERVER's half only -- the guest row --
+// and the Run CONTENT is merged by the client exactly as it already was, because a guest's Run is
+// in that browser's local storage too and the store has always compared the two.
+//
+// Whichever branch runs, the guest row is gone afterwards. That is the point: a guest row that
+// outlived its adoption would be counted forever as a Run nobody is playing, and would still be
+// writable by a key the account holder is no longer using.
+app.post('/api/active-run/adopt-guest', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const guestKey = readGuestRunKey(req);
+  if (!guestKey) {
+    res.status(400).json({ error: 'guest_run_key_required' });
+    return;
+  }
+  const guestHash = guestRunKeyHash(guestKey);
+  try {
+    await ensureDbReady();
+    const result = await withEditorDocumentTransaction(async (client) => {
+      // Both locks, lowest first, so two tabs adopting the same guest identity onto the same
+      // account cannot deadlock against each other holding one apiece.
+      for (const lock of [accountRunOwner(user.email).lock, guestRunOwner(guestHash).lock].sort()) {
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [lock]);
+      }
+      const guestRow = (await client.query(
+        'SELECT body, revision, updated_at FROM active_runs WHERE guest_hash = $1 FOR UPDATE',
+        [guestHash],
+      )).rows[0] || null;
+      if (!guestRow) return { row: null, adopted: false };
+      const accountRow = (await client.query(
+        'SELECT revision FROM active_runs WHERE owner_email = $1 FOR UPDATE',
+        [user.email],
+      )).rows[0] || null;
+      if (accountRow) {
+        // The account is already playing something. Releasing the guest row loses nothing the
+        // client does not still hold locally, and leaving the account row untouched is what lets
+        // the store's existing browser-versus-account conflict be answered by the player.
+        await client.query('DELETE FROM active_runs WHERE guest_hash = $1', [guestHash]);
+        return { row: null, adopted: false };
+      }
+      // Ownership moves rather than the body being copied, so the revision the client is already
+      // holding stays the CAS token for the same Run and its next save does not have to conflict
+      // its way to agreement.
+      const { rows } = await client.query(
+        `UPDATE active_runs
+            SET owner_email = $1, guest_hash = NULL, updated_at = now()
+          WHERE guest_hash = $2
+          RETURNING body, revision, updated_at`,
+        [user.email, guestHash],
+      );
+      return { row: rows[0] || null, adopted: true };
+    });
+    res.status(200).json({ ...publicActiveRun(result.row), adopted: result.adopted });
+  } catch (error) {
+    dbUnavailable(res, 'guest Run adoption failed', error, 'active_run_store_unavailable');
+  }
+});
+
+// GET /api/admin/run-population — ADMIN: how many Runs exist, and whose (ADR-0587).
+//
+// The question guest identity was built to make answerable. Before it there was nothing to count:
+// a signed-out player left no row, so every population figure silently meant "signed-in players".
+// Split by owner kind and phase, because a bare total cannot tell a Run being played from one
+// abandoned in Sectio, and that difference is the whole reason to look.
+//
+// Deliberately NOT presence. This counts the Runs that EXIST; who is playing right now is a
+// different question with a different answer shape.
+app.get('/api/admin/run-population', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  try {
+    await ensureDbReady();
+    const { rows } = await pool.query(
+      `SELECT
+         (owner_email IS NOT NULL) AS is_account,
+         COALESCE(body->>'phase', 'unknown') AS phase,
+         count(*)::integer AS count,
+         max(updated_at) AS last_updated_at
+         FROM active_runs
+        GROUP BY 1, 2
+        ORDER BY 1 DESC, 3 DESC`,
+    );
+    const population = { account: { total: 0, phases: {} }, guest: { total: 0, phases: {} } };
+    let lastGuestUpdate = null;
+    for (const row of rows) {
+      const bucket = row.is_account ? population.account : population.guest;
+      const count = Number(row.count) || 0;
+      bucket.total += count;
+      bucket.phases[row.phase] = (bucket.phases[row.phase] || 0) + count;
+      if (!row.is_account && row.last_updated_at && (!lastGuestUpdate || row.last_updated_at > lastGuestUpdate)) {
+        lastGuestUpdate = row.last_updated_at;
+      }
+    }
+    res.status(200).json({
+      total: population.account.total + population.guest.total,
+      account: population.account,
+      guest: population.guest,
+      guest_last_updated_at: lastGuestUpdate,
+    });
+  } catch (error) {
+    dbUnavailable(res, 'Run population read failed', error, 'active_run_store_unavailable');
   }
 });
 
