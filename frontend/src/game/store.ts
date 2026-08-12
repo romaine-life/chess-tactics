@@ -1950,7 +1950,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       tick: checkpoint.tick,
       // Written out rather than read from RUN_BATTLE_UNDO_COST_TENTHS: this module takes only
       // types from run/model, so the price is spelled here and greps back to that constant.
-      log: extendLog(checkpoint.log, [logNote('Move undone — 10', 'gold-loss')]),
+      log: extendLog(checkpoint.log, [logNote('Move undone — −10', 'gold-loss')]),
       // The undone move's gold went back with it, so its markers stop rising too.
       goldNotices: [],
       resultDetail: checkpoint.resultDetail,

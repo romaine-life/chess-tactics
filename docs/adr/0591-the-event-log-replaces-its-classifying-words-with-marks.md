@@ -128,6 +128,14 @@ should be judged by sight rather than described.
   unmarked and shows their full original sentences. No `PersistedMatch` version bump and no Run
   save migration follows — this is presentation plus seven additive live-media slots, each
   recoverable by retiring it.
+- **A gold row states its sign in the number** — `Knight’s fork — +5`, `Move undone — −10`.
+  The Run HAS a directional gain mark (coins rising behind a green arrow, accepted under
+  ADR-0486) but ADR-0511 retired it when no Run transaction paid gold in any more, so the gain
+  row draws the neutral resource coin while the loss row draws a real transaction mark. A bare
+  number under an undirected coin leaves the reader to guess whether five gold arrived or left.
+  The Manubium row is now a gain consumer and is the reason to bring that mark back; its slot is
+  retired in the database, so an upload is refused `media_slot_retired` and restoring it is a
+  migration rather than an edit. The sign stays honest either way.
 - **Defeat is decided and installed:** option 115 of the plain family, content
   `ce39f7df…282deeab9`, native 49x49, accepted into `ui/kit/icons/game/defeat.png` and bound
   to `ui-kit-icons-game-defeat-png`. Every defeat line in the Event Log paints it. Six seats

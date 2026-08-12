@@ -1201,7 +1201,7 @@ describe('Run chrome hierarchy', () => {
     expect(gameStore).toContain('const captured = capturePlayerMoveUndo();');
     // The line wears the LOSS coin, because what it reports is the Run's economy moving the
     // other way from a bounty — and "gold paid" is the mark's word, not the line's.
-    expect(gameStore).toContain("log: extendLog(checkpoint.log, [logNote('Move undone — 10', 'gold-loss')])");
+    expect(gameStore).toContain("log: extendLog(checkpoint.log, [logNote('Move undone — −10', 'gold-loss')])");
     expect(gameStore).toContain('commitPlayerMove(p, mv, type, true);');
     expect(matchPersistence).toContain('undoStack: state.undoStack ?? []');
   });

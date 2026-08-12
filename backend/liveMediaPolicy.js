@@ -164,6 +164,11 @@ const RUN_STARTER_SELECTED_DERIVATIVE_BY_SLOT = Object.freeze({
 });
 const RUN_RESOURCE_ICON_COMPONENT = 'run-resource-icon';
 const RUN_RESOURCE_ICON_SLOT = /^ui\/run\/resources\/([a-z][a-z0-9-]{0,79})\.png$/;
+// Loss only. The gain-direction mark — coins rising behind a green arrow — was accepted under
+// ADR-0486 and RETIRED by ADR-0511 when no Run transaction paid gold in any more, and its slot
+// is retired in the database, so an upload to it is refused `media_slot_retired`. The Battle
+// log's Manubium row is now a gain consumer and would be the reason to bring it back; doing so
+// is a migration, not an edit here, and until then that row states its sign in the number.
 const RUN_GOLD_TRANSACTION_REVIEW_SLOTS = new Set([
   'ui/run/resources/lose-gold.png',
 ]);

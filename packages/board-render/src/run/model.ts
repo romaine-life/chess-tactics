@@ -4064,7 +4064,13 @@ export function payRunManubium(run: RunDocument, award: ManubiumAward, at: Vec):
     notice: {
       // The Battle log draws a coin at the head of any row that moved the economy, so the
       // words "gold claimed" are the mark's to say and the line keeps the deed and the number.
-      log: `${RUN_MANUBIUM_BY_ID[award.id].name} — ${formatGold(goldTenths)}`,
+      //
+      // The number carries its SIGN, because the coin does not. The Run's directional gain mark
+      // — coins rising behind a green arrow — was retired by ADR-0511 when nothing paid gold in
+      // any more, so this row draws the neutral resource coin and a bare number would leave the
+      // reader to guess whether five gold arrived or left. A signed number says it either way,
+      // and it stays honest if the directional mark comes back.
+      log: `${RUN_MANUBIUM_BY_ID[award.id].name} — +${formatGold(goldTenths)}`,
       at: { x: at.x, y: at.y },
       goldTenths,
     },

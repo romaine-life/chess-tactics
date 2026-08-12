@@ -439,7 +439,7 @@ describe('skirmish store', () => {
     expect(useSkirmish.getState().game).toBe(before.game);
     expect(useSkirmish.getState().selectedId).toBe(before.selectedId);
     expect(useSkirmish.getState().undoStack).toEqual([]);
-    expect(useSkirmish.getState().log[0].text).toBe('Move undone — 10');
+    expect(useSkirmish.getState().log[0].text).toBe('Move undone — −10');
 
     vi.runAllTimers();
     expect(useSkirmish.getState().game).toBe(before.game);
