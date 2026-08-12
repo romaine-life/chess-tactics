@@ -179,10 +179,14 @@ const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
   // family the board verbs are drawn in rather than the Run-position marks, because
   // what it names is a button's effect, not a place in the War.
   'ui/kit/icons/game/athetize.png': Object.freeze({ component: RUN_ACTION_ICON_COMPONENT, variant: 'athetize' }),
-  // Defeat: the one Event Log mark with no existing home. The clock's hourglass and the
-  // Run's coin are already installed for the title bar and the board's rising gold, and
-  // the log reuses those verbatim rather than forging a second of either (ADR-0059).
+  // The four Event Log marks with no existing home. The clock's hourglass, the objective
+  // flag and the Run's two coins are already installed for the title bar and the board's
+  // rising gold, and the log reuses those verbatim rather than forging a second of any of
+  // them (ADR-0059) — so only these four are registered here.
+  'ui/kit/icons/game/check.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'check' }),
+  'ui/kit/icons/game/victory.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'victory' }),
   'ui/kit/icons/game/defeat.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'defeat' }),
+  'ui/kit/icons/game/draw.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'draw' }),
 });
 const CARD_TYPE_ROW_TEXTURE_COMPONENT = 'card-type-row-texture';
 const CARD_TYPE_ROW_TEXTURE_GROUP_ID = 'card-type-row-textures-pixen-v1';

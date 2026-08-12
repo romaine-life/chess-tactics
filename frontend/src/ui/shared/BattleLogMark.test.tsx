@@ -3,17 +3,28 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { installedUiMedia } from '../installedUiMedia';
 import { logNote } from '../../game/store';
 import {
+  BATTLE_LOG_FORGED_MARKS,
   BATTLE_LOG_MARK_MEDIA_ROLE,
   BATTLE_LOG_MARK_SLOT,
   BattleLogMarks,
   EventLogRow,
-  battleLogDefeatMarkUrl,
+  battleLogForgedMarkUrl,
+  isBattleLogForgedMark,
 } from './BattleLogMark';
 
 describe('BattleLogMarks', () => {
-  it('names one slot and one app-ui role, so a second seat cannot answer to different art', () => {
-    expect(BATTLE_LOG_MARK_MEDIA_ROLE).toBe('ui-kit-icons-game-defeat-png');
-    expect(BATTLE_LOG_MARK_SLOT).toBe('ui/kit/icons/game/defeat.png');
+  it('names one slot and one app-ui role per forged mark, so two seats cannot drift', () => {
+    expect(BATTLE_LOG_FORGED_MARKS).toEqual(['check', 'victory', 'defeat', 'draw']);
+    for (const mark of BATTLE_LOG_FORGED_MARKS) {
+      expect(BATTLE_LOG_MARK_SLOT[mark]).toBe(`ui/kit/icons/game/${mark}.png`);
+      expect(BATTLE_LOG_MARK_MEDIA_ROLE[mark]).toBe(`ui-kit-icons-game-${mark}-png`);
+    }
+    // The borrowed marks have no slot here on purpose — a slot for the clock or the coin
+    // would be a second drawing of a fact the game already draws (ADR-0059).
+    expect(isBattleLogForgedMark('clock')).toBe(false);
+    expect(isBattleLogForgedMark('gold')).toBe(false);
+    expect(isBattleLogForgedMark('gold-loss')).toBe(false);
+    expect(isBattleLogForgedMark('objective')).toBe(false);
   });
 
   it('draws nothing at all for an unmarked line', () => {
@@ -21,13 +32,15 @@ describe('BattleLogMarks', () => {
     expect(renderToStaticMarkup(<BattleLogMarks marks={[]} />)).toBe('');
   });
 
-  it('keeps the defeat seat before its art decision exists', () => {
+  it('keeps every forged seat before its art decision exists', () => {
     // Reserved, not fail-closed (ADR-0318): the seat holds its box so installing a mark
     // later cannot shift the line beside it.
-    expect(battleLogDefeatMarkUrl()).toBeNull();
-    const markup = renderToStaticMarkup(<BattleLogMarks marks={['defeat']} />);
-    expect(markup).toContain('data-battle-log-mark="defeat"');
-    expect(markup).not.toContain('<img');
+    for (const mark of BATTLE_LOG_FORGED_MARKS) {
+      expect(battleLogForgedMarkUrl(mark)).toBeNull();
+      const markup = renderToStaticMarkup(<BattleLogMarks marks={[mark]} />);
+      expect(markup).toContain(`data-battle-log-mark="${mark}"`);
+      expect(markup).not.toContain('<img');
+    }
   });
 
   it('wears outcome and cause together, in the order the line wrote them', () => {
@@ -37,19 +50,25 @@ describe('BattleLogMarks', () => {
     expect(markup).toContain('aria-label="Defeat, Clock"');
   });
 
-  it('reuses the installed marks the game already has for the clock and the coin', () => {
-    // Not a second forged hourglass and not a second coin (ADR-0059) — the title bar's own
-    // glyph and the Run's own RunGoldIcon, so the log agrees with the screen beside it.
-    // Asserted against the resolved role, which is what proves it is the SAME installed
-    // bytes rather than a lookalike that happens to be an hourglass.
+  it('reuses the marks the game already has for the clock, the flag and the coins', () => {
+    // Not a second forged hourglass, flag or coin (ADR-0059) — the title bar's own glyphs and
+    // the Run's own coin components, so the log agrees with the screen beside it. Asserted
+    // against the resolved role, which is what proves it is the SAME installed bytes rather
+    // than a lookalike that happens to be an hourglass.
     expect(renderToStaticMarkup(<BattleLogMarks marks={['clock']} />))
       .toContain(`src="${installedUiMedia('ui-kit-icons-game-wait-png')}"`);
+    expect(renderToStaticMarkup(<BattleLogMarks marks={['objective']} />))
+      .toContain(`src="${installedUiMedia('ui-kit-icons-game-objective-png')}"`);
     expect(renderToStaticMarkup(<BattleLogMarks marks={['gold']} />)).toContain('run-gold-icon');
+    // Gaining and losing gold are two different installed marks, and the sign is the thing a
+    // reader most wants at a glance — so the row does not spell it out in words.
+    expect(renderToStaticMarkup(<BattleLogMarks marks={['gold-loss']} />))
+      .toContain('run-gold-transaction-icon is-loss');
   });
 
   it('paints exact candidate bytes in the real seat for a review, without installing them', () => {
     const markup = renderToStaticMarkup(
-      <BattleLogMarks marks={['defeat']} defeatSrc="/api/admin/media/abc" />,
+      <BattleLogMarks marks={['defeat']} forgedSrc={{ defeat: "/api/admin/media/abc" }} />,
     );
     expect(markup).toContain('src="/api/admin/media/abc"');
   });
@@ -58,7 +77,7 @@ describe('BattleLogMarks', () => {
 describe('EventLogRow', () => {
   it('spends the move-number column on a prose row’s marks', () => {
     const markup = renderToStaticMarkup(
-      <EventLogRow entry={logNote('Defeat — your clock ran out.', 'defeat', 'clock')} />,
+      <EventLogRow entry={logNote('Out of time', 'defeat', 'clock')} />,
     );
     expect(markup).toContain('class="is-note"');
     expect(markup).toContain('data-battle-log-mark="defeat"');

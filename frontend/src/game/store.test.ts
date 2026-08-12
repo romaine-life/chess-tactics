@@ -439,7 +439,7 @@ describe('skirmish store', () => {
     expect(useSkirmish.getState().game).toBe(before.game);
     expect(useSkirmish.getState().selectedId).toBe(before.selectedId);
     expect(useSkirmish.getState().undoStack).toEqual([]);
-    expect(useSkirmish.getState().log[0].text).toBe('Move undone — 10 gold paid.');
+    expect(useSkirmish.getState().log[0].text).toBe('Move undone — 10');
 
     vi.runAllTimers();
     expect(useSkirmish.getState().game).toBe(before.game);
@@ -856,7 +856,7 @@ describe('skirmish store: capture-king objective', () => {
     expect(game.winner).toBe('player');
     expect(game.turn).toBe('done');
     expect(game.pieces.find((p) => p.id === 'ep')?.alive).toBe(true); // lesser enemy still on the board
-    expect(log[0].text).toBe('Victory — The opposing King was captured.');
+    expect(log[0].text).toBe('The opposing King was captured');
   });
 
   it('does not win when a non-royal enemy is captured — the game continues', () => {
@@ -910,7 +910,7 @@ describe('skirmish store: the Event Log records moves in chess notation', () => 
     const { log } = useSkirmish.getState();
     expect(log[1]).toEqual({ text: 'Ra1+', side: 'player', ply: 0 });
     // Prose lines carry neither a side nor a ply, so they never number the score sheet.
-    expect(log[0]).toEqual({ text: 'Check!' });
+    expect(log[0]).toEqual({ text: '', marks: ['check'] });
   });
 
   it('numbers consecutive half-moves across both sides, opponent replies included', () => {
@@ -955,7 +955,7 @@ describe('skirmish store: rival-kings + direction-aware capture-king copy', () =
     useSkirmish.getState().tryMoveTo(0, 5); // rook takes the rival King
     const s = useSkirmish.getState();
     expect(s.game.winner).toBe('player');
-    expect(s.log[0].text).toBe('Victory — The opposing King was captured.');
+    expect(s.log[0].text).toBe('The opposing King was captured');
   });
 
   it('capture-king with kingSide=player: losing the King reads as the King falling, not a wipe', () => {
@@ -971,7 +971,7 @@ describe('skirmish store: rival-kings + direction-aware capture-king copy', () =
     useSkirmish.getState().tryMoveTo(0, 5); // any legal pawn step
     const s = useSkirmish.getState();
     expect(s.game.winner).toBe('enemy');
-    expect(s.log[0].text).toBe('Defeat — Your King was captured.');
+    expect(s.log[0].text).toBe('Your King was captured');
   });
 });
 
@@ -1000,7 +1000,7 @@ describe('skirmish store: authored victory names the fired rule (ADR-0064)', () 
     useSkirmish.getState().tryMoveTo(0, 5); // rook takes the enemy King (the pawn survives)
     const s = useSkirmish.getState();
     expect(s.game.winner).toBe('player');
-    expect(s.log[0].text).toBe('Victory — Storm the keep.');
+    expect(s.log[0].text).toBe('Storm the keep');
     expect(s.resultDetail).toBe('Storm the keep');
   });
 });
@@ -1203,7 +1203,7 @@ describe('skirmish store: battle clock', () => {
     expect(s.game.winner).toBe('enemy');
     expect(s.game.turn).toBe('done');
     expect(s.clock).toEqual({ remainingMs: 0, running: false, incrementMs: 0 });
-    expect(s.log[0].text).toMatch(/clock ran out/i);
+    expect(s.log[0].text).toBe('Out of time');
     // The row states two facts and wears both marks: the Battle is lost, and the clock is
     // why. Marking it only as a defeat would make a flag fall scan like any other loss.
     expect(s.log[0].marks).toEqual(['defeat', 'clock']);
@@ -1228,7 +1228,7 @@ describe('skirmish store: battle clock', () => {
     // Let the reply and landing beat finish, then let the restored player clock flag.
     vi.advanceTimersByTime(3_500);
     expect(useSkirmish.getState().game.winner).toBe('enemy');
-    expect(useSkirmish.getState().log[0].text).toMatch(/clock ran out/i);
+    expect(useSkirmish.getState().log[0].text).toBe('Out of time');
     expect(useSkirmish.getState().canUndoLastPlayerMove()).toBe(true);
 
     expect(useSkirmish.getState().undoLastPlayerMove()).toBe(true);
@@ -1773,8 +1773,8 @@ describe('skirmish store: premoves', () => {
 
 describe('skirmish store: multiplayer session parity', () => {
   it.each([
-    ['player', 'Victory — The opposing force was eliminated.', 'The opposing force was eliminated'],
-    ['enemy', 'Defeat — Your force was eliminated.', 'Your force was eliminated'],
+    ['player', 'The opposing force was eliminated', 'The opposing force was eliminated'],
+    ['enemy', 'Your force was eliminated', 'Your force was eliminated'],
   ] as const)('settles an already-terminal initial board from the %s seat', (localSide, copy, detail) => {
     const level = createBlankLevel('terminal-net', 'Terminal Net', 8, 8);
     level.objective = 'capture-all';
@@ -2011,7 +2011,7 @@ describe('skirmish store: multiplayer session parity', () => {
     const state = useSkirmish.getState();
     expect(state.game).toMatchObject({ winner: 'player', turn: 'done' });
     expect(state.net?.terminalResult).toEqual({ expectedMoveCount: 1, winner: 'player', reason: 'victory-rule' });
-    expect(state.log[0].text).toBe('Defeat — Your King was captured.');
+    expect(state.log[0].text).toBe('Your King was captured');
   });
 
   it('invalidates and clears all lobby-owned local state when its route is left', () => {
@@ -2059,7 +2059,7 @@ describe('local resign', () => {
     expect(s.selectedId).toBeNull();
     expect(s.focusedId).toBeNull();
     expect(s.clock?.running).toBe(false);
-    expect(s.log[0].text).toMatch(/you resigned/i);
+    expect(s.log[0].text).toBe('You resigned');
     expect(s.log[0].marks).toEqual(['defeat']);
   });
 
@@ -2109,10 +2109,9 @@ describe('netplay resign', () => {
     expect(s.game.winner).toBe('player');
     expect(s.game.turn).toBe('done');
     expect(s.selectedId).toBeNull();
-    expect(s.log[0].text).toMatch(/opponent resigned/i);
-    // A win wears nothing. The mark says the Battle went badly, so marking every outcome
-    // would leave a scan with nothing to find.
-    expect(s.log[0].marks).toBeUndefined();
+    // The wreath carries "Victory", so the line says only how it was won.
+    expect(s.log[0].text).toBe('Your opponent resigned');
+    expect(s.log[0].marks).toEqual(['victory']);
     // A redelivered result frame must not overwrite the decided game.
     useSkirmish.getState().concludeNet('enemy', 'resign');
     expect(useSkirmish.getState().game.winner).toBe('player');
@@ -2124,7 +2123,7 @@ describe('netplay resign', () => {
     useSkirmish.getState().concludeNet('player', 'resign');
     const s = useSkirmish.getState();
     expect(s.game.winner).toBe('player');
-    expect(s.log[0].text).toMatch(/you resigned/i);
+    expect(s.log[0].text).toBe('You resigned');
     expect(s.log[0].marks).toEqual(['defeat']);
   });
 
@@ -2143,6 +2142,6 @@ describe('netplay resign', () => {
     expect(resolved.game.winner).toBe('player');
     expect(resolved.net?.terminalResult).toBeNull();
     expect(resolved.net?.authoritativeResult).toEqual({ winner: 'player', reason: 'resign' });
-    expect(resolved.log[0].text).toMatch(/opponent resigned/i);
+    expect(resolved.log[0].text).toBe('Your opponent resigned');
   });
 });

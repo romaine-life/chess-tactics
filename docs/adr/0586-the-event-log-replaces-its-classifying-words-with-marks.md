@@ -1,0 +1,146 @@
+---
+status: accepted
+date: 2026-08-12
+deciders: owner (Nelson) + Claude
+refines:
+  - "[ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)"
+  - "[ADR-0318](0318-plagued-and-pestiferous-use-separate-owner-selected-icons.md)"
+  - "[ADR-0552](0552-athetize-is-a-card-struck-through.md)"
+---
+
+# ADR-0586: The Event Log replaces its classifying words with marks
+
+## Context
+
+The Battle's Event Log is a score sheet. Its move rows already read fast — a notated `Nxb5+`
+says capture, mover, square and check at once, and its side rail says who played it.
+
+Its **prose** rows were sentences. "Check!", "Defeat — your clock ran out." and "Knight's
+fork — 5 gold claimed." are three shades of the same muted grey at the same indent, and every
+one of them opens by spending its most prominent position on a word whose only job is to
+classify the line: *Check*, *Defeat*, *Draw*, *Victory*, *Skirmish begins*.
+
+**A reader takes a glyph faster than a word.** A glyph arrives whole, without being spelled
+out, and a column of them can be scanned instead of read. That is the reason, and it is a
+reason about the reader rather than about the log.
+
+A first pass got this backwards. It added marks to three lines and kept every word, on the
+theory that marking only the interesting rows preserves their contrast. That is a restraint
+argument, not a legibility one, and it produces a log the reader must still read in order to
+find out which rows are the interesting ones.
+
+## Decision
+
+**A mark REPLACES the word that classified its line.** Not decoration beside prose that still
+says the same thing — the classifier moves into the column the move numbers take, and the text
+keeps only what the mark cannot say.
+
+| Line, before | Mark | Line, now |
+| --- | --- | --- |
+| `Skirmish begins — capture the rival King.` | objective | `Capture the rival King` |
+| `Check!` | check | *(nothing — the mark is the line)* |
+| `Your King is in check!` | check | `Your King` |
+| `Knight's fork — 5 gold claimed.` | gold | `Knight's fork — 5` |
+| `Move undone — 10 gold paid.` | gold-loss | `Move undone — 10` |
+| `Checkmate — victory!` | victory | `Checkmate` |
+| `Checkmate — defeat.` | defeat | `Checkmate` |
+| `Defeat — your clock ran out.` | defeat + clock | `Out of time` |
+| `Stalemate — the skirmish is a draw.` | draw | `Stalemate` |
+| `Draw — the same position has occurred three times.` | draw | `The same position, three times` |
+
+- **Every kind of prose line gets a mark**, not just the ones worth stopping on. The two
+  exceptions are the lines that classify nothing: a Run change narrating itself ("Roland
+  answers the call…") and a browser-storage failure. Those keep their whole sentence.
+
+- **A line may wear two**, because outcome and cause are different facts and one row can hold
+  both: a flag fall is a defeat AND it is the clock.
+
+- **A row whose whole meaning is its mark says nothing at all.** `Check!` becomes the mark
+  alone. An empty line is a legitimate result here rather than a hole, and the mark's
+  `aria-label` is where that word still exists for a screen reader.
+
+- **The mark is set WHERE THE LINE IS WRITTEN**, never re-derived by matching the rendered
+  prose. `logNote(text, ...marks)` takes them; `adjudicationEntry` and `netOutcomeEntry` decide
+  the copy and its mark in one breath, so an outcome cannot be written without being marked as
+  one. A regex over the copy would go quietly wrong at exactly the moment the wording improves.
+
+- **`gold` is read off `RunBattleNotice.goldTenths`**, already the field that decides whether
+  the board seats a rising marker — and its SIGN picks the coin, because the Run draws gaining
+  and losing gold as two different installed marks and which way it went is the thing a reader
+  most wants at a glance.
+
+- **Half the vocabulary is borrowed, not forged.** `clock` is the title bar's installed
+  hourglass, `objective` is its objective flag, and the two coins are the Run's own
+  `RunGoldIcon` / `RunGoldTransactionIcon` — the same components the board's rising marker
+  draws. Forging a second hourglass or a second coin for this seat is the bespoke parallel
+  [ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md) forbids, and it
+  would let the log and the screen beside it show two different coins.
+
+- **Four marks had no existing home** — `check`, `victory`, `defeat`, `draw` — and get their
+  own slots in the kit's game-icon family under a new `battle-log-mark` runtime component.
+  Like the Run-position and action marks they ship **trimmed to their own ink**: the seat is
+  18px and draws with `contain`, which scales the canvas, so transparent margin left on a 64×64
+  frame would come straight off the drawn glyph.
+
+- **Every forged seat is RESERVED, not fail-closed**
+  ([ADR-0318](0318-plagued-and-pestiferous-use-separate-owner-selected-icons.md)): it holds its
+  18px box before any art decision exists, so installing one later cannot shift the line beside
+  it. The borrowed marks fail closed, because they are already installed chrome.
+
+- **Borrowing a title-bar mark inherits its compensation.** `objective.png` is untrimmed — ink
+  fills 73% of its canvas — so the log's flag seat declares the same `--titlebar-mark-ink-fill`
+  the title bar does, and **both seats are registered in `verify:icon-seats`**, which reads the
+  installed bytes. Two declarations that a gate checks against the art cannot drift; two that
+  nothing checks would.
+
+- **The row's second column is 40px, not the 32 a move number needs.** Two 18px seats plus
+  their gap is exactly 40. Shrinking the marks to fit 32 would have made both unreadable to
+  save eight pixels off a column that is right-aligned anyway.
+
+- **The row is one `EventLogRow` component.** The review surface has to mount the row the
+  player actually gets; a page that re-types the markup can agree with itself while disagreeing
+  with the log.
+
+**The pixels are the owner's call, not the agent's.** Candidates are judged in **Studio → Log
+Marks**, a catalog category reached by clicking its tab
+([ADR-0058](0058-every-route-is-click-reachable.md)). A seat selector picks which of the four
+is being decided; every candidate for it is drawn on the **real log rows at the real 18px
+seat**, beside the marks already installed for the others. A mark this small cannot be judged
+from its 64px art — a headstone that reads beautifully at native size can arrive at the seat as
+a grey lozenge, and that is precisely what the page exists to show. The page also carries the
+before/after of the COPY, because dropping the classifying words is a second decision and it
+should be judged by sight rather than described.
+
+## Consequences
+
+- A finished Battle can be read at a glance, and the log got materially shorter: eleven of its
+  twelve line kinds lost their opening clause.
+- `LogEntry.marks` is additive and optional, so a persisted match resumes with its old rows
+  unmarked and shows their full original sentences. No `PersistedMatch` version bump and no Run
+  save migration follows — this is presentation plus four additive live-media slots, each
+  recoverable by retiring it.
+- Until the owner installs one per seat, `check`, `victory`, `defeat` and `draw` rows render
+  their reserved empty seat. A `Check!` row therefore currently shows nothing at all. That is
+  the contract working, and it is also the strongest argument for installing all four together.
+- The vocabulary is a list, so a fifth mark is a variant rather than a second seat. Whatever is
+  added must pass the same test: does it REPLACE a word, and does the game already draw it?
+- `verify:icon-seats` now covers four rules rather than two, and will fail if either untrimmed
+  title-bar glyph is re-uploaded with different ink.
+
+## More Information
+
+- Candidates were generated with PixelLab `create_image_pro` against
+  `ui/kit/icons/game/objective.png` as the style image, then trimmed by
+  `frontend/scripts/bake-icon-stroke.mjs`'s `trimToInkSquare` — crop and pad only, so the bytes
+  stay honestly native 1× under [ADR-0076](0076-scaling-is-calibration-production-art-is-native-1x.md).
+  Batches: `battle-log-defeat-mark-2026-08-11-v1` (16 headstones) and
+  `battle-log-marks-2026-08-12-v1` (16 chess plus signs and 16 threatened crowns for `check`,
+  16 laurel wreaths, 16 balance scales).
+- **Check is offered as two concepts deliberately.** The chess plus is the symbol the notation
+  directly above the row already ends in; the threatened crown is the fact rather than its
+  notation. Both read at 18px, and which one belongs in a log that is already full of `+` is a
+  judgement about the whole surface, not about the art.
+- A toppled chess king was generated for `defeat` and is **not** offered: it renders cleanly at
+  64px and fails at the seat, where a horizontal piece collapses into a blue smear with a gold
+  blob. That is a legibility fact about this seat, recorded so the idea is not re-attempted at
+  this size without re-checking it.

@@ -35,6 +35,11 @@ const TOLERANCE = 0.01;
 const DECLARED = [
   { rule: '.skirmish-clock .skirmish-icon', slot: 'ui/kit/icons/game/wait.png' },
   { rule: '.skirmish-objective .skirmish-icon', slot: 'ui/kit/icons/game/objective.png' },
+  // The Event Log borrows both title-bar marks rather than forging its own (ADR-0059), which
+  // means it inherits their compensation problem too: a second seat for the same untrimmed
+  // glyph is a second number that can go stale. Gating it here is what stops that.
+  { rule: '.skirmish-log-mark.is-objective', slot: 'ui/kit/icons/game/objective.png' },
+  { rule: '.skirmish-log-mark.is-clock', slot: 'ui/kit/icons/game/wait.png' },
   // The Enchiridion tab draws its DESTINATION's mark through menuModeIcon, so it follows the
   // menu-mode drawable rather than the kit glyph it used to borrow (ADR-0560).
   { rule: '[data-strategikon-section="enchiridion"] img', slot: 'ui/main-menu/icons-carved/enchiridion.png', baseline: true },
