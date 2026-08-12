@@ -90,6 +90,9 @@ export function RunUnitInspectionScene({ unit }: { unit: RunArmyUnit }): ReactEl
     () => runUnitInspectionPlan(unit),
     [unit.inspectionSeed, unit.type],
   );
+  // No structural fill: this box is a WINDOW onto a rendered board, and ADR-0555 keeps a
+  // portrait's scene rather than painting chrome material behind it. Marble here put stone around
+  // a landscape. What it wants is a scene backdrop, which is art, not a fill role.
   return (
     <InnerChromeBox className="run-army-profile-scene">
       <div className="run-army-profile-scene-viewport">

@@ -231,9 +231,13 @@ describe('Skirmish chrome hierarchy', () => {
     expect(chromeRuntime).toContain(':not(.has-backdrop):not([data-chrome-fill-surface])');
     expect(chromeRuntime).toContain(':not(${CHROME_LEAF_HOST_INHERITED_SELECTOR})');
 
-    // Repeated collections phase their wood from the index their own data already has.
+    // Repeated collections phase their wood from the index their own data already has. The HUD
+    // sections are declared to the panel rather than rendered here, so the phase rides the
+    // declaration; the command grid still writes it as a prop.
     expect(skirmishHud).toContain('HUD_TABS.map((t, index) =>');
-    expect(skirmishHud).toContain('style={leafSurfacePhase(index)}');
+    // The HUD's tabs are declared to the panel rather than rendered here, so the phase rides the
+    // declaration instead of a JSX prop.
+    expect(skirmishHud).toContain('style: leafSurfacePhase(index),');
     expect(skirmishHud).toContain('COMMAND_CARD_KEY_ROWS.flat().map((key) =>');
     // The command card is a divided pad, so its planks are phased by the seat's place in the
     // DATA by the pad itself — the card states the block, never a per-key offset (ADR-0586).
@@ -321,7 +325,6 @@ describe('Skirmish chrome hierarchy', () => {
 
   it('maps tabs, promotion choices, and command-grid cells to existing units', () => {
     const promotion = buttonBlocks(pawnPromotionPicker).find((candidate) => candidate.includes('onChoose(type)'));
-    const tab = buttonUsing('setTab(t.id)');
     expect(skirmishHud).toContain('runSkirmishShortcut(key, false, skirmishViewStore, skirmishStore)');
 
     expect(promotion, 'expected anchored Pawn promotion choice').toBeDefined();
@@ -333,8 +336,16 @@ describe('Skirmish chrome hierarchy', () => {
     expect(pawnPromotionPicker).toContain('onPointerDown={(event) => event.stopPropagation()}');
     expect(pawnPromotionPicker).not.toContain('autoFocus');
     expect(skirmishHud).not.toContain('aria-label="Pawn promotion"');
-    expectChromeUnit(tab, 'inner-text-button');
-    expect(tab).toContain("tab === t.id && 'active'");
+    // A HUD section is a COMPARTMENT of the Controls head's divided block, not a framed button
+    // standing in a row: the panel's own rails are its edges, so it declares no unit and paints
+    // no frame. It is handed to the panel as a typed member and the panel lays the rails.
+    expect(skirmishHud).toContain('titleSections={controlsContent === undefined ? HUD_TABS.map');
+    expect(skirmishHud).toContain("press: { onPress: () => setTab(t.id), ariaLabel: t.label, title: t.label, active: tab === t.id }");
+    expect(skirmishHud).not.toMatch(/<ChromeButton[\s\S]*?'skirmish-hud-tab'/);
+    expect(chromeBox).toContain('<DividedInnerChromeBox');
+    expect(chromeBox).toContain('framed={false}');
+    expect(chromeBox).toContain("'data-chrome-fill-surface': section.press ? CHROME_LEAF_FILL_SURFACE : undefined");
+    expect(chromeBox).not.toMatch(/chromeUnitClassNames\([^)]*shell-controls-head-section/);
     // The card is ONE divided box of compartments, not fifteen framed buttons in a gapped
     // grid: between two marks that shape shows a frame, a strip of panel and another frame,
     // which is what ChromeSeatGrid exists to replace (ADR-0242/ADR-0586).
@@ -348,7 +359,6 @@ describe('Skirmish chrome hierarchy', () => {
     // An open slot stays a real compartment: dropping it would close the gap and move every
     // command after it one key to the left, and the card's cells ARE the keyboard.
     expect(commandCard).toContain("className: 'skirmish-grid-key is-empty'");
-
 
     expect(styleCss).not.toMatch(/\.skirmish-hud-tab\s*\{[^}]*border-image\s*:/);
     expect(styleCss).not.toMatch(/\.skirmish-hud \.app-header-button\s*\{/);

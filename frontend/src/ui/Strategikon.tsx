@@ -10,12 +10,18 @@ import { HeldCardCodex } from './HeldCardCodex';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { useOpenRailTab } from './shared/railOpenIntent';
 import { InnerChromeBox, ShellWorkspace } from './shared/ChromeBox';
+import { CHROME_STRUCTURAL_FILL_ROLE } from './shared/chromeSurfacePolicy';
 import {
   StrategikonContentSceneSlot,
   StrategikonReferenceSceneSlot,
 } from './shell/AuthoredSceneSlot';
 import { TitleBarControlContribution } from './shell/TitleBarControls';
-import type { EnchiridionSection } from './enchiridionRoute';
+import {
+  lipsanaBrowseModeFromSearch,
+  withLipsanaBrowseMode,
+  type EnchiridionSection,
+  type LipsanaBrowseMode,
+} from './enchiridionRoute';
 import {
   isStrategikonPath,
   strategikonAddress,
@@ -38,7 +44,7 @@ function UnavailableRunReference({ title, copy }: { title: string; copy: string 
     <main className="strategikon-reference">
       <section className="enchiridion-panel enchiridion-panel-unframed strategikon-unavailable-panel">
         <h2 className="settings-section-title">{title}</h2>
-        <InnerChromeBox className="enchiridion-empty">
+        <InnerChromeBox className="enchiridion-empty" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
           <h3>No persistent Run is attached</h3>
           <p>{copy}</p>
         </InnerChromeBox>
@@ -76,6 +82,14 @@ export function Strategikon({
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
   const href = (next: StrategikonSection, nextReference: EnchiridionSection | null = null): string => (
     `${strategikonHref(base, next, nextReference)}${search}`
+  );
+  // The lipsana browse layout is addressed here too, so the Lipsanotheca's grouped case is linkable
+  // from a Battle exactly as it is from the menu. It rides this host's own query — `withLipsanaBrowseMode`
+  // keeps every other param the Strategikon is carrying — so the section rail's hrefs, which already
+  // append `search`, carry the layout across a section change without knowing it exists.
+  const lipsanaBrowseMode = lipsanaBrowseModeFromSearch(search);
+  const lipsanaBrowseModeHref = (mode: LipsanaBrowseMode, forSection: StrategikonSection): string => (
+    `${strategikonHref(base, forSection, forSection === 'enchiridion' ? reference : null)}${withLipsanaBrowseMode(search, mode)}`
   );
   // The way out. The Controls title mark that opened the workspace is the only other
   // exit and it sits behind the reference pane's own chrome, so leaving read as a
@@ -145,13 +159,17 @@ export function Strategikon({
               className="strategikon-reference-pane"
               sceneInstance={`strategikon/enchiridion/${reference}`}
             >
-              {/* The Battle-hosted reference keeps its selection ephemeral: no href is
-                  supplied, so each codex falls back to its own local selection state. */}
+              {/* The Battle-hosted reference keeps its RECORD selection ephemeral: no lipsanon or
+                  card href is supplied, so each codex falls back to its own local state. The browse
+                  LAYOUT is addressed, because that is the thing a handoff link needs to be able to
+                  put a reader on. */}
               <EnchiridionReference
                 section={reference}
                 framed={false}
                 selectedLipsanonId={null}
                 selectedCardId={null}
+                lipsanaBrowseMode={lipsanaBrowseMode}
+                lipsanaBrowseModeHref={(mode) => lipsanaBrowseModeHref(mode, 'enchiridion')}
               />
             </StrategikonReferenceSceneSlot> : null}
           </>
@@ -178,7 +196,14 @@ export function Strategikon({
             <UnavailableRunReference title="The Chartulary" copy="Cards adlected during a Run appear here." />
           )
         ) : run ? (
-          <LipsanaCodex lipsanonIds={run.lipsana} title="The Lipsanotheca" showStatistics={false} framed={false} />
+          <LipsanaCodex
+            lipsanonIds={run.lipsana}
+            title="The Lipsanotheca"
+            showStatistics={false}
+            framed={false}
+            browseMode={lipsanaBrowseMode}
+            browseModeHref={(mode) => lipsanaBrowseModeHref(mode, 'lipsanotheca')}
+          />
         ) : (
           <UnavailableRunReference title="The Lipsanotheca" copy="Held lipsana appear here during a Run." />
         )}

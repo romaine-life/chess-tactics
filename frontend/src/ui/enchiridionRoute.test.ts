@@ -9,14 +9,19 @@ import {
   enchiridionCardHref,
   enchiridionCardHrefUnderFilters,
   enchiridionCardsHref,
+  enchiridionLipsanaHref,
   enchiridionLipsanonFromPath,
   enchiridionLipsanonHref,
+  enchiridionLipsanonHrefUnderBrowse,
   enchiridionSectionFromPath,
   enchiridionSectionPath,
+  lipsanaBrowseModeFromSearch,
+  withLipsanaBrowseMode,
 } from './enchiridionRoute';
 
 const mainMenu = readFileSync(new URL('./MainMenu.tsx', import.meta.url), 'utf8');
 const enchiridion = readFileSync(new URL('./Enchiridion.tsx', import.meta.url), 'utf8');
+const strategikon = readFileSync(new URL('./Strategikon.tsx', import.meta.url), 'utf8');
 
 describe('main-menu Enchiridion addresses', () => {
   it('keeps the bare and unknown roots empty until a section is addressed', () => {
@@ -123,5 +128,63 @@ describe('card gallery filter addresses', () => {
     // And the gallery must navigate on change rather than keep a second copy of the filters.
     expect(enchiridion).toContain('if (filtersHref) navigateApp(filtersHref(next));');
     expect(enchiridion).toContain('else setLocalFilters(next);');
+  });
+
+  /**
+   * ADR-0589. The lipsana browse layout is part of the address for the reason the card filters are:
+   * a layout is a thing worth linking someone to, and held as component state the grouped case could
+   * only be reached by pressing a tab — so no handoff link could put a reader on it.
+   */
+  it('addresses the lipsana browse layout, with rows as the bare address', () => {
+    expect(lipsanaBrowseModeFromSearch('')).toBe('rows');
+    expect(lipsanaBrowseModeFromSearch('?browse=grouped')).toBe('grouped');
+    expect(lipsanaBrowseModeFromSearch('browse=grouped')).toBe('grouped');
+    // Unknown, empty and prototype-shaped values read as rows rather than throwing.
+    for (const search of ['?browse=tiles', '?browse=', '?browse=constructor', '?browse=ROWS']) {
+      expect(lipsanaBrowseModeFromSearch(search)).toBe('rows');
+    }
+    // The default is REMOVED rather than written, so the bare address stays bare.
+    expect(enchiridionLipsanaHref('rows')).toBe('/enchiridion/lipsana');
+    expect(enchiridionLipsanaHref('grouped')).toBe('/enchiridion/lipsana?browse=grouped');
+    expect(withLipsanaBrowseMode('?browse=grouped', 'rows')).toBe('');
+  });
+
+  it('keeps every other param the host was carrying when the layout changes', () => {
+    // This is what lets the Strategikon put the layout on an address it does not own the rest of.
+    expect(withLipsanaBrowseMode('?returnTo=%2Frun&run=abc', 'grouped'))
+      .toBe('?returnTo=%2Frun&run=abc&browse=grouped');
+    expect(withLipsanaBrowseMode('?run=abc&browse=grouped', 'rows')).toBe('?run=abc');
+    // Switching layout twice is idempotent, not additive.
+    expect(withLipsanaBrowseMode('?browse=grouped', 'grouped')).toBe('?browse=grouped');
+  });
+
+  it('carries the browsed layout onto a lipsanon address', () => {
+    const href = enchiridionLipsanonHrefUnderBrowse('royal-tent', 'grouped');
+    expect(href).toBe('/enchiridion/lipsana/royal-tent?browse=grouped');
+    // The record stays addressable through its layout, and the layout survives the click.
+    expect(enchiridionLipsanonFromPath(href.split('?')[0])).toBe('royal-tent');
+    expect(lipsanaBrowseModeFromSearch(href.slice(href.indexOf('?')))).toBe('grouped');
+    expect(enchiridionLipsanonHrefUnderBrowse('royal-tent', 'rows')).toBe(enchiridionLipsanonHref('royal-tent'));
+  });
+
+  it('wires the layout to the live address in BOTH reference hosts', () => {
+    // The menu reads it out of the search and hands back the href.
+    expect(mainMenu).toContain('lipsanaBrowseModeFromSearch(search)');
+    expect(mainMenu).toContain('lipsanaBrowseMode={lipsanaBrowseMode}');
+    expect(mainMenu).toContain('lipsanaBrowseModeHref={enchiridionLipsanaHref}');
+    expect(mainMenu).toContain('enchiridionLipsanonHrefUnderBrowse(lipsanonId, lipsanaBrowseMode)');
+    // The Strategikon does the same on its own query, for both places a Lipsanotheca is shown: the
+    // Run's held case and the Enchiridion's full reference.
+    expect(strategikon).toContain('lipsanaBrowseModeFromSearch(search)');
+    expect(strategikon).toContain('withLipsanaBrowseMode(search, mode)');
+    expect(strategikon).toContain("lipsanaBrowseModeHref(mode, 'lipsanotheca')");
+    expect(strategikon).toContain("lipsanaBrowseModeHref(mode, 'enchiridion')");
+    // A tab is the same two-transport trigger the records are, so it navigates where it is given an
+    // address and sets local state where it is not.
+    expect(enchiridion).toContain('LIPSANA_BROWSE_MODES.map((mode) => (');
+    expect(enchiridion).toMatch(/<ReferenceTrigger\s*\r?\n\s*key=\{mode\}\s*\r?\n\s*to=\{browseModeHref\?\.\(mode\)\}/);
+    expect(enchiridion).toContain('onSelect={() => setLocalBrowseMode(mode)}');
+    // The scene identity is the PATH, so changing layout must not re-run a section transition.
+    expect(enchiridionSectionPath('/enchiridion/lipsana')).toBe('/enchiridion/lipsana');
   });
 });
