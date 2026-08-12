@@ -264,10 +264,90 @@ export interface LogEntry {
   side?: Side;
   /** 0-based half-move index, which numbers the score sheet. Move entries only. */
   ply?: number;
+  /** The marks drawn beside this line. Prose entries only; a move is named by its notation. */
+  marks?: readonly LogMark[];
 }
 
-/** Plain prose — a line that is not a move. */
-export const logNote = (text: string): LogEntry => ({ text });
+/**
+ * A mark one prose line wears — and, wherever it can, the mark IS the line.
+ *
+ * A reader takes a glyph faster than a word: it arrives whole, without being spelled out, and
+ * a column of them can be scanned rather than read. So a mark here is not decoration beside
+ * prose that still says the same thing — it REPLACES the words that classify the line, and
+ * what is left is only what the marks cannot say.
+ *
+ * The vocabulary is in two halves, and a row may take one from each:
+ *
+ * - **Outcome** — `victory`, `defeat`, `draw`. How it went, from the reading seat.
+ * - **Cause** — `checkmate`, `stalemate`, `resign`, `clock`. Why it went that way.
+ *
+ * Together they finish a sentence with no words in it at all: grave + hash is "lost to
+ * checkmate", wreath + flag is "won, they resigned", scales + boxed king is "stalemate".
+ * Those rows carry an EMPTY text deliberately — an empty line is the marks doing their whole
+ * job, not a hole. Rows whose cause has no glyph keep the clause that distinguishes them
+ * (`50 moves without a capture or pawn move`), and the rest of the vocabulary — `objective`,
+ * `check`, `gold`, `gold-loss` — marks a line that is not an ending.
+ *
+ * Every kind of prose line the Battle writes has a mark, because a log where only the
+ * interesting rows are marked is a log the reader has to read anyway to find out which rows
+ * those are. The exceptions are the two lines that classify nothing — a Run change narrating
+ * itself, and a browser-storage failure — and those keep their whole sentence.
+ *
+ * The value is set WHERE THE LINE IS WRITTEN, never re-derived by matching the rendered prose.
+ * Copy is edited; a regex over it goes quietly wrong at exactly the moment the wording
+ * improves, and there is no test that catches a mark that stopped appearing.
+ */
+export type LogMark =
+  | 'objective'
+  | 'check'
+  | 'victory'
+  | 'defeat'
+  | 'draw'
+  | 'checkmate'
+  | 'stalemate'
+  | 'resign'
+  | 'clock'
+  | 'gold'
+  | 'gold-loss';
+
+/** Plain prose — a line that is not a move — wearing the marks it earned. */
+export const logNote = (text: string, ...marks: LogMark[]): LogEntry =>
+  (marks.length ? { text, marks } : { text });
+
+/**
+ * A settled position's line together with the marks that belong to it. They are decided in
+ * ONE place so an outcome cannot be written without being marked as one — the alternative is a
+ * mark argument at each of the five call sites, four of which would eventually disagree.
+ *
+ * A checkmate and a stalemate say everything they have to say in two glyphs, so they write no
+ * text at all. Everything else keeps the clause that tells it apart from its siblings.
+ */
+function adjudicationEntry(
+  adjudication: Adjudication,
+  localSide: PlayingSide,
+  authored: boolean,
+): LogEntry {
+  const outcome = outcomeMark(adjudication.winner, localSide);
+  if (adjudication.kind === 'checkmate') return logNote('', outcome, 'checkmate');
+  if (adjudication.kind === 'stalemate') return logNote('', outcome, 'stalemate');
+  return logNote(adjudicationCopy(adjudication, localSide, authored), outcome);
+}
+
+/** Which of the three outcome marks a result wears, from the seat that is reading it. */
+function outcomeMark(winner: Winner, localSide: PlayingSide): LogMark {
+  if (winner === 'draw') return 'draw';
+  return winner === localSide ? 'victory' : 'defeat';
+}
+
+/**
+ * A Run notice's line, marked with the coin exactly when that notice moved the economy — and
+ * with WHICH coin, because the Run already draws gaining and losing gold as two different
+ * installed marks and the sign is the thing a reader most wants at a glance.
+ */
+function noticeEntry(notice: RunBattleNotice): LogEntry {
+  if (notice.goldTenths === undefined) return logNote(notice.log);
+  return logNote(notice.log, notice.goldTenths < 0 ? 'gold-loss' : 'gold');
+}
 
 /**
  * How many Event Log rows are kept. Every move writes one, so this is how far back the score
@@ -302,12 +382,15 @@ function moveEntries(notation: readonly string[], side: Side, startPly: number):
     .filter((entry) => entry.text !== '');
 }
 
-/** Log copy for a draw the position itself forces, same on every surface: the chess draw rules
- *  the level authored (ADR-0072) plus the dead position, which needs no authoring. */
+/** Log copy for a draw the position itself forces: the chess draw rules the level authored
+ *  (ADR-0072) plus the dead position, which needs no authoring.
+ *
+ *  The leading "Draw — " is GONE from all three, because the scales at the head of the row
+ *  already say it. What is left is the only part the mark cannot: which draw this was. */
 const DRAW_RULE_COPY: Record<RuleDrawKind | 'dead-position', string> = {
-  'fifty-move': 'Draw — 50 moves have passed without a capture or pawn move.',
-  threefold: 'Draw — the same position has occurred three times.',
-  'dead-position': 'Draw — neither side has the force left to deliver a checkmate.',
+  'fifty-move': '50 moves without a capture or pawn move',
+  threefold: 'The same position, three times',
+  'dead-position': 'Neither side can force a mate',
 };
 
 /** Result-screen "how it ended" line per draw kind (see resultDetail). */
@@ -373,10 +456,23 @@ function interactionAfterCommittedMove(
   return { selectedId: nextSelectedId, focusedId: nextFocusedId };
 }
 
-/** Result copy from THIS client's seat: in netplay 'you' is the local side, not 'player'. */
+/** Result copy from THIS client's seat: in netplay 'you' is the local side, not 'player'.
+ *  The outcome word is the mark's job, so these say only how it went. */
 function netOutcomeCopy(winner: Winner, localSide: PlayingSide): string {
-  if (winner === 'draw') return 'Draw — the skirmish is even.';
-  return winner === localSide ? 'Victory — the field is yours.' : 'Defeat — your force has fallen.';
+  if (winner === 'draw') return 'The skirmish is even';
+  return winner === localSide ? 'The field is yours' : 'Your force has fallen';
+}
+
+/** A concluded netplay match's line and its marks, decided together for the same reason
+ *  `adjudicationEntry` is: the seat that knows how it went is the seat that says so. */
+function netOutcomeEntry(
+  text: string,
+  winner: Winner,
+  localSide: PlayingSide,
+  cause?: LogMark,
+): LogEntry {
+  const outcome = outcomeMark(winner, localSide);
+  return cause ? logNote(text, outcome, cause) : logNote(text, outcome);
 }
 
 function adjudicationResultDetail(adjudication: Adjudication | null, localSide: PlayingSide, authored: boolean): string | null {
@@ -389,6 +485,13 @@ function adjudicationResultDetail(adjudication: Adjudication | null, localSide: 
   return DRAW_RESULT_DETAIL[adjudication.kind];
 }
 
+/**
+ * What a settled position's row SAYS, given that its marks already say how it went and why.
+ *
+ * Victory/Defeat/Draw and Checkmate/Stalemate are the marks' words, so they are not repeated
+ * here — `adjudicationEntry` writes those two kinds as marks with no text. What is left is the
+ * draws that need a clause to be told apart, and the authored rule that gave its own name.
+ */
 function adjudicationCopy(
   adjudication: Adjudication,
   localSide: PlayingSide,
@@ -398,12 +501,9 @@ function adjudicationCopy(
     const detail = authored
       ? adjudication.rule.name?.trim()
       : victoryRuleDetailForSide(adjudication.rule, localSide);
-    return `${adjudication.winner === localSide ? 'Victory' : 'Defeat'}${detail ? ` — ${detail}.` : '.'}`;
+    return detail ?? '';
   }
-  if (adjudication.kind === 'checkmate') {
-    return adjudication.winner === localSide ? 'Checkmate — victory!' : 'Checkmate — defeat.';
-  }
-  if (adjudication.kind === 'stalemate') return 'Stalemate — the skirmish is a draw.';
+  if (adjudication.kind === 'checkmate' || adjudication.kind === 'stalemate') return '';
   return DRAW_RULE_COPY[adjudication.kind];
 }
 
@@ -828,7 +928,9 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       testMode: false,
       testMinCpuDelayMs: 0,
       reviewIndex: null,
-      log: extendLog(cur.log, [logNote('Defeat — your clock ran out.')]),
+      // Two marks, because the row states two facts: the Battle is lost, and the clock is
+      // why. A flag fall marked only as a defeat reads like any other loss on a scan.
+      log: extendLog(cur.log, [logNote('', 'defeat', 'clock')]),
     });
     persistMatch(get()); // game decided → drops the saved copy
   };
@@ -953,7 +1055,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
           const runTransform = runBattleTransformSink?.(enemyRes.game, enemyRes.events) ?? null;
           const transformedEnemyGame = runTransform?.game ?? enemyRes.game;
           // Whatever the Run just did to this board says so here, in the same commit.
-          for (const notice of runTransform?.notices ?? []) msgs.push(logNote(notice.log));
+          for (const notice of runTransform?.notices ?? []) msgs.push(noticeEntry(notice));
           const goldNotices = battleGoldNoticesFrom(runTransform?.notices ?? []);
           const afterEnv = envFor(transformedEnemyGame);
           // A full player→enemy round just elapsed: advance the survive clock, then re-check the
@@ -969,8 +1071,8 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
           const game = settled.state;
           const resultDetail = adjudicationResultDetail(settled.adjudication, 'player', !!cur.victoryOverride);
           if (settled.adjudication) {
-            msgs.push(logNote(adjudicationCopy(settled.adjudication, 'player', !!cur.victoryOverride)));
-          } else if (sideInCheck(game, 'player', afterEnv)) msgs.push(logNote('Your King is in check!'));
+            msgs.push(adjudicationEntry(settled.adjudication, 'player', !!cur.victoryOverride));
+          } else if (sideInCheck(game, 'player', afterEnv)) msgs.push(logNote('Your King', 'check'));
           // Turn returns to the player with no implicit selection. A unit explicitly selected
           // while the enemy reply was in flight is preserved if it survived; a capture clears it
           // instead of arbitrarily selecting the first remaining unit.
@@ -1161,12 +1263,12 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     });
     const msgs = moveEntries([san], piece.side, nextPly(s.log));
     // Whatever the Run just did to this board says so here, in the same commit.
-    for (const notice of runTransform?.notices ?? []) msgs.push(logNote(notice.log));
+    for (const notice of runTransform?.notices ?? []) msgs.push(noticeEntry(notice));
     const resultDetail = adjudicationResultDetail(settled.adjudication, 'player', !!s.victoryOverride);
     if (settled.adjudication) {
-      msgs.push(logNote(adjudicationCopy(settled.adjudication, 'player', !!s.victoryOverride)));
+      msgs.push(adjudicationEntry(settled.adjudication, 'player', !!s.victoryOverride));
     } else if (game.turn === 'enemy' && sideInCheck(game, 'enemy', enemyEnv)) {
-      msgs.push(logNote('Check!'));
+      msgs.push(logNote('', 'check'));
     }
     const interaction = interactionAfterCommittedMove(
       game,
@@ -1281,9 +1383,9 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     const msgs = moveEntries([san], piece.side, nextPly(s.log));
     const resultDetail = adjudicationResultDetail(settled.adjudication, localSide, !!s.victoryOverride);
     if (settled.adjudication) {
-      msgs.push(logNote(adjudicationCopy(settled.adjudication, localSide, !!s.victoryOverride)));
+      msgs.push(adjudicationEntry(settled.adjudication, localSide, !!s.victoryOverride));
     } else if (game.turn === 'player' || game.turn === 'enemy') {
-      if (sideInCheck(game, game.turn, postEnv)) msgs.push(logNote(game.turn === localSide ? 'Your King is in check!' : 'Check delivered.'));
+      if (sideInCheck(game, game.turn, postEnv)) msgs.push(logNote(game.turn === localSide ? 'Your King' : '', 'check'));
     }
 
     const interaction = interactionAfterCommittedMove(
@@ -1374,9 +1476,9 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     // An admin position change is not a played move, so it never notates — it is prose.
     const messages = [logNote(logLine)];
     // Whatever the Run just did to this board says so here, in the same commit.
-    for (const notice of runTransform?.notices ?? []) messages.push(logNote(notice.log));
+    for (const notice of runTransform?.notices ?? []) messages.push(noticeEntry(notice));
     if (settled.adjudication) {
-      messages.push(logNote(adjudicationCopy(settled.adjudication, 'player', !!s.victoryOverride)));
+      messages.push(adjudicationEntry(settled.adjudication, 'player', !!s.victoryOverride));
     }
     set({
       game,
@@ -1465,12 +1567,13 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     });
     const game = initial.state;
     const resultDetail = adjudicationResultDetail(initial.adjudication, 'player', !!victoryOverride);
-    const intro = opts.level
-      ? `Test play begins — objective: ${objectiveSummary(objective, objectiveCtx.kingSide)}.`
-      : `Skirmish begins — ${objectiveSummary(objective, objectiveCtx.kingSide)}.`;
+    // The flag at the head of the row says "this is the objective", so the line is the
+    // objective itself — "Skirmish begins" said only what an empty log already said, and
+    // which route you are on is not something the log has to keep repeating.
+    const intro = objectiveSummary(objective, objectiveCtx.kingSide);
     const log = initial.adjudication
-      ? [logNote(adjudicationCopy(initial.adjudication, 'player', !!victoryOverride)), logNote(intro)]
-      : [logNote(intro)];
+      ? [adjudicationEntry(initial.adjudication, 'player', !!victoryOverride), logNote(intro, 'objective')]
+      : [logNote(intro, 'objective')];
     // Arm the battle clock. An explicit opts.timeControl wins (the HUD's clock control /
     // "New skirmish" — a TimeControl times the game, null plays it untimed). Otherwise a
     // level uses its authored control (undefined ⇒ untimed), and a FREE skirmish (no
@@ -1565,10 +1668,10 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     });
     const game = initial.state;
     const youCommand = localSide === 'player' ? 'the vanguard' : 'the challenger';
-    const intro = `Multiplayer skirmish — ${objectiveBriefingForSide(victoryRules, localSide).summary}. You command ${youCommand}.`;
+    const intro = `${objectiveBriefingForSide(victoryRules, localSide).summary}. You command ${youCommand}.`;
     const log = initial.adjudication
-      ? [logNote(adjudicationCopy(initial.adjudication, localSide, !!victoryOverride)), logNote(intro)]
-      : [logNote(intro)];
+      ? [adjudicationEntry(initial.adjudication, localSide, !!victoryOverride), logNote(intro, 'objective')]
+      : [logNote(intro, 'objective')];
     const durableIntent = loadPersistedNetIntent(lobbyId, localSide);
     if (initial.adjudication && durableIntent) clearPersistedNetIntent(lobbyId, durableIntent.intentId);
     const restoredPending: PendingNetMove | null = !initial.adjudication && durableIntent
@@ -1729,7 +1832,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       testMode: false,
       testMinCpuDelayMs: 0,
       reviewIndex: null,
-      log: extendLog(s.log, [logNote('Defeat — you resigned.')]),
+      log: extendLog(s.log, [logNote('', 'defeat', 'resign')]),
     });
     persistMatch(get()); // game decided → drops the saved copy
   },
@@ -1744,9 +1847,9 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     const epoch = beginSession();
     const localSide = s.net.localSide;
     if (s.net.pendingMove) clearPersistedNetIntent(s.net.lobbyId, s.net.pendingMove.intentId);
-    const copy = reason === 'resign'
-      ? (winner === localSide ? 'Victory — your opponent resigned.' : 'Defeat — you resigned.')
-      : netOutcomeCopy(winner, localSide);
+    // A resignation says everything in two marks — the outcome, and the flag — so it writes no
+    // words. Which side gave up is the outcome mark's job, not a second sentence saying it.
+    const copy = reason === 'resign' ? '' : netOutcomeCopy(winner, localSide);
     set({
       game: { ...s.game, winner, turn: 'done' },
       selectedId: null,
@@ -1767,7 +1870,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
         terminalResult: reason === 'resign' ? null : s.net.terminalResult,
         authoritativeResult: { winner, reason },
       },
-      log: extendLog(s.log, [logNote(copy)]),
+      log: extendLog(s.log, [netOutcomeEntry(copy, winner, localSide, reason === 'resign' ? 'resign' : undefined)]),
     });
   },
 
@@ -1847,7 +1950,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       tick: checkpoint.tick,
       // Written out rather than read from RUN_BATTLE_UNDO_COST_TENTHS: this module takes only
       // types from run/model, so the price is spelled here and greps back to that constant.
-      log: extendLog(checkpoint.log, [logNote('Move undone — 10 gold paid.')]),
+      log: extendLog(checkpoint.log, [logNote('Move undone — −10', 'gold-loss')]),
       // The undone move's gold went back with it, so its markers stop rising too.
       goldNotices: [],
       resultDetail: checkpoint.resultDetail,
@@ -1894,7 +1997,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     });
     const game = settled.state;
     const log = settled.adjudication
-      ? extendLog(match.log, [logNote(adjudicationCopy(settled.adjudication, 'player', !!victoryOverride))])
+      ? extendLog(match.log, [adjudicationEntry(settled.adjudication, 'player', !!victoryOverride)])
       : match.log;
     set({
       game,
@@ -2081,7 +2184,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       sessionEpoch: epoch,
       clock: s.clock ? { ...s.clock, running: false } : null,
       reviewIndex: null,
-      log: extendLog(s.log, [logNote('Admin awarded victory to the player.')]),
+      log: extendLog(s.log, [logNote('Admin awarded victory', 'victory')]),
     });
     persistMatch(get());
     return true;

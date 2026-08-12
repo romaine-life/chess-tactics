@@ -903,6 +903,40 @@ test('condition icon projection keeps all four card properties and granted state
     ...athetize,
     metadata: { runtime: { ...athetize.metadata.runtime, variant: 'expunctio' } },
   }), /variant/);
+  // Event Log marks sit in an 18px seat beside a line of type, so they ship trimmed to their
+  // own ink for the same reason the action mark does.
+  let defeat = null;
+  for (const variant of ['check', 'victory', 'defeat', 'draw', 'checkmate', 'stalemate', 'resign', 'gold', 'gold-loss']) {
+    const mark = gameConditionIcon({
+      slot: `ui/kit/icons/game/${variant}.png`,
+      width: 51,
+      height: 51,
+      metadata: { runtime: {
+        ...cacochymic.metadata.runtime,
+        component: 'battle-log-mark',
+        variant,
+        nativeRole: 'battle-log-mark',
+        frameWidth: 51,
+        frameHeight: 51,
+      } },
+    });
+    assert.deepEqual(gameConditionIconSlot(mark.slot), { component: 'battle-log-mark', variant });
+    assert.equal(gameConditionIconMediaIssue(mark), null);
+    assert.match(gameConditionIconMediaIssue({ ...mark, width: 47 }), /square/);
+    if (variant === 'defeat') defeat = mark;
+  }
+  assert.match(gameConditionIconMediaIssue({
+    ...defeat,
+    metadata: { runtime: { ...defeat.metadata.runtime, variant: 'clock' } },
+  }), /variant/);
+  // The clock, the objective flag and the LOSS coin are NOT registered here: the log reuses the
+  // installed title-bar marks and the Run's own loss mark rather than forging a second of any of
+  // them (ADR-0059), so a slot for one would be a duplicate, not an addition. `gold` IS
+  // registered, because the Run's coin is a resource mark that states no direction and a payout
+  // needs one — a different fact, not the same fact drawn twice.
+  assert.equal(gameConditionIconSlot('ui/kit/icons/game/clock.png'), null);
+  assert.equal(gameConditionIconSlot('ui/run/resources/gold.png'), null);
+  assert.deepEqual(gameConditionIconSlot('ui/kit/icons/game/gold.png'), { component: 'battle-log-mark', variant: 'gold' });
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({ role: 'media' })), /icon role/);
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({ width: 32 })), /64x64/);
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({

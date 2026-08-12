@@ -9675,15 +9675,21 @@ body.loading-bootstrap .app-startup-status {
 
 .skirmish-log-card { min-height: 108px; }
 
-/* A log row is [side rail][move number][notation]. The rail marks WHOSE move the row
-   is, so it follows the mover — not the row's position in the list, which stops
+/* A log row is [side rail][move number or marks][notation]. The rail marks WHOSE move the
+   row is, so it follows the mover — not the row's position in the list, which stops
    alternating the moment a non-move line (a check, an adjudication) lands between two
-   moves. A row that is not a move carries no side and wears the quiet rail. */
+   moves. A row that is not a move carries no side and wears the quiet rail.
+
+   The second column is 40px rather than the 32 a move number needs, because a prose row
+   spends that same column on its marks and may wear TWO of them — a flag fall is a defeat
+   AND it is the clock. Two 18px seats plus their gap is exactly 40. Shrinking the marks to
+   fit 32 instead would have made both unreadable to save eight pixels off a column that is
+   right-aligned anyway, so the numbers have not moved relative to the notation beside them. */
 .skirmish-log-card li {
   align-items: start;
   display: grid;
   gap: 9px;
-  grid-template-columns: 4px 32px minmax(0, 1fr);
+  grid-template-columns: 4px 40px minmax(0, 1fr);
 }
 
 .skirmish-log-card li > span {
@@ -9719,6 +9725,173 @@ body.loading-bootstrap .app-startup-status {
   color: var(--skirmish-muted);
   font-style: normal;
   min-width: 0;
+}
+
+/* The marks a prose row wears, seated in the move-number column and hung off its right edge
+   so a marked line and a numbered line share one grid — the text after either starts in the
+   same place. Ordered as written, outcome before cause. */
+.skirmish-log-marks {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.skirmish-log-mark {
+  align-items: center;
+  block-size: 18px;
+  display: inline-flex;
+  inline-size: 18px;
+  justify-content: center;
+}
+
+/* Whatever a mark resolves to — a kit glyph drawn straight, or one of the Run's coin
+   components, each of which carries a seat size of its own — draws to THIS seat and no
+   further, so a tall hourglass, a flag and a round coin sit on one line at one size. Both
+   coins are named: the loss coin is a different component from the gain coin, and a rule
+   that covered only one let a 64px transaction mark overflow its row. The seat keeps its box
+   when a mark has no art decision yet, which is the reserved state working (ADR-0318). */
+.skirmish-log-mark > img,
+.skirmish-log-mark > .run-gold-icon,
+.skirmish-log-mark > .run-gold-transaction-icon {
+  block-size: 100%;
+  inline-size: 100%;
+}
+
+.skirmish-log-mark > img,
+.skirmish-log-mark > .run-gold-transaction-icon img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: contain;
+}
+
+/* ui/kit/icons/game/objective.png — ink 35x47 on a 64x64 canvas, and this is its SECOND seat.
+   A square seat draws with `contain`, which scales the canvas, so the untrimmed flag would
+   draw 27% smaller than the trimmed hourglass one row below it. The canvas is the seat divided
+   by the ink fraction and the negative margin re-centres it, which is the same arithmetic the
+   title bar's chips use. `verify:icon-seats` reads the INSTALLED bytes for both seats, so the
+   two declarations cannot quietly disagree with the art or with each other — and both go the
+   day the icon ships trimmed. */
+.skirmish-log-mark.is-objective {
+  --titlebar-mark-ink-fill: .734;
+}
+
+.skirmish-log-mark.is-objective > img {
+  --skirmish-log-mark-canvas: calc(18px / var(--titlebar-mark-ink-fill, 1));
+  block-size: var(--skirmish-log-mark-canvas);
+  inline-size: var(--skirmish-log-mark-canvas);
+  margin: calc((18px - var(--skirmish-log-mark-canvas)) / 2);
+  max-inline-size: none;
+}
+
+/* Studio > Log Marks: each catalog card draws the candidate on the ACTUAL Event Log rows,
+   in the log's own classes and grid, at the real 18px seat. A mark this small cannot be
+   judged from its 64px art — a headstone that reads at native size can arrive as a grey
+   lozenge — so the card shows the size the player gets, with the clock beside it and the
+   coin below it for company. Layout only; the rows keep the log's own type and rails. */
+.battle-log-mark-card-image {
+  block-size: auto;
+  min-block-size: 0;
+  padding: var(--ds-inset);
+}
+
+/* Both beat the base `.tileset-studio-card-image img`, which sizes a catalog image to an iso
+   TILE. The seat copy has to be exactly the 18px it is in the log, because that is the size
+   the decision is really about; the art beside it is fixed at 56px so sixteen candidates can
+   be told apart at a glance. Two sizes, on purpose — one is the truth, the other is legible. */
+.battle-log-mark-card-image .skirmish-log-mark > img {
+  block-size: 100%;
+  inline-size: 100%;
+  object-fit: contain;
+}
+
+.battle-log-mark-card-image .battle-log-mark-art {
+  block-size: 56px;
+  inline-size: 56px;
+}
+
+/* Log rows are a line of type, so these cards are wide rather than tile-shaped: at the
+   catalog's default 170px track the sample wraps every row onto two lines and stops looking
+   like the log it is quoting. Both class names are named so this beats that default wherever
+   the two rules happen to sit in the file. */
+.tileset-studio-grid.battle-log-mark-grid {
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
+/* A candidate card is the ART, then the lines that wear it. The art leads at a size where the
+   difference between two candidates is actually visible: at the 18px seat alone, sixteen cards
+   read as sixteen copies of one picture, and a comparison you cannot see is worse than none. */
+.battle-log-mark-candidate {
+  align-items: center;
+  display: grid;
+  gap: var(--ds-space-2);
+  grid-template-columns: 56px minmax(0, 1fr);
+  inline-size: 100%;
+}
+
+.battle-log-mark-art {
+  block-size: 56px;
+  image-rendering: pixelated;
+  inline-size: 56px;
+  object-fit: contain;
+}
+
+/* The copy decision, shown once above the art decision: what each row said before its mark
+   took the classifying word off it, beside what it says now. Two columns so the eye compares
+   line for line rather than remembering. */
+.battle-log-mark-prose {
+  display: grid;
+  gap: var(--ds-space-3);
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  margin-block-end: var(--ds-space-3);
+}
+
+/* Both columns start at the top and hold rows of one height, or the comparison stops being
+   line-for-line and the reader has to count instead of glance. */
+.battle-log-mark-prose-column {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-space-1);
+}
+
+/* The Before column is prose only — no rail, no marks — because that is exactly the state it
+   records: rows that looked alike because nothing told them apart. */
+.battle-log-mark-prose-column > ul {
+  color: var(--skirmish-muted);
+  display: grid;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: .92rem;
+  gap: 5px;
+  /* One row per line at the mark seat's own height, so Before line 4 sits beside Now line 4
+     even though only one of the two columns has marks in it. */
+  grid-auto-rows: 18px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.battle-log-mark-prose-column > ul > li {
+  align-content: center;
+  display: grid;
+}
+
+/* The sample's own rows take that same height for the same reason. */
+.battle-log-mark-prose .battle-log-mark-sample li {
+  align-items: center;
+  min-block-size: 18px;
+}
+
+
+/* The sample wears `.skirmish-log-card`, so the rows' grid, rails, type and mark seats are
+   the log's own rules rather than a second copy of them here — a copy is how a review
+   surface starts quietly disagreeing with the screen it claims to be showing. All this adds
+   is the block box the card needs and the start alignment a button would otherwise centre. */
+.battle-log-mark-sample {
+  display: block;
+  inline-size: 100%;
+  min-block-size: 0;
+  text-align: start;
 }
 
 .skirmish-log-card li.is-move em {
@@ -12043,7 +12216,14 @@ body.loading-bootstrap .app-startup-status {
   grid-template-columns: minmax(0, 1fr) 260px;
 }
 
-.tileset-studio-shell.is-catalog > .tileset-studio-grid {
+/* The catalog's scroll owner is the shell's DIRECT content child. Almost every category hands
+   back the grid itself, so the grid is that child; a category that needs a wrapper — because it
+   shows something above its grid — has to be named here too, or its content silently clips at
+   the shell's height with no way to reach the rest. Log Marks lost half its candidates to
+   exactly that. One rule listing both, so the next wrapper joins it instead of inventing a
+   second scroll. */
+.tileset-studio-shell.is-catalog > .tileset-studio-grid,
+.tileset-studio-shell.is-catalog > .battle-log-mark-page {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -23040,6 +23220,7 @@ button.tileset-relationship-cell {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
 
 /* Sectio wrap-art candidate rows: generated art is review-mounted around the
    live card faces; the negative insets come from each candidate's measured

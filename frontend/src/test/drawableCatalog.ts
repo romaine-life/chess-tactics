@@ -203,6 +203,11 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     'ui-kit-icons-knight-png',
     'ui-kit-icons-wrench-png',
     'ui-kit-icons-music-png',
+    // The battle clock's hourglass. The title bar draws it through its CSS variable, but the
+    // Event Log's clock mark resolves the role in JS, so the fixture has to carry it.
+    // `ui-kit-icons-game-defeat-png` is deliberately absent: the log's defeat seat is
+    // reserved until an art decision exists, and that is the state under test.
+    'ui-kit-icons-game-wait-png',
     'ui-kit-icons-game-cacochymic-png',
     'ui-kit-icons-game-eutactic-png',
     'ui-kit-icons-game-adlected-png',

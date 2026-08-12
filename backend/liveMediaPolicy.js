@@ -164,6 +164,11 @@ const RUN_STARTER_SELECTED_DERIVATIVE_BY_SLOT = Object.freeze({
 });
 const RUN_RESOURCE_ICON_COMPONENT = 'run-resource-icon';
 const RUN_RESOURCE_ICON_SLOT = /^ui\/run\/resources\/([a-z][a-z0-9-]{0,79})\.png$/;
+// Loss only. The gain-direction mark — coins rising behind a green arrow — was accepted under
+// ADR-0486 and RETIRED by ADR-0511 when no Run transaction paid gold in any more, and its slot
+// is retired in the database, so an upload to it is refused `media_slot_retired`. The Battle
+// log's Manubium row is now a gain consumer and would be the reason to bring it back; doing so
+// is a migration, not an edit here, and until then that row states its sign in the number.
 const RUN_GOLD_TRANSACTION_REVIEW_SLOTS = new Set([
   'ui/run/resources/lose-gold.png',
 ]);
@@ -197,6 +202,11 @@ const RUN_PROGRESS_ICON_COMPONENT = 'run-progress-icon';
 // than on a screen. Trimmed to its own ink like the position marks, because it
 // shares a row with a label instead of sitting in a padded 64x64 frame.
 const RUN_ACTION_ICON_COMPONENT = 'run-action-icon';
+// The mark one Event Log prose line wears, drawn in the column the move numbers take.
+// Trimmed to its own ink like the position and action marks, for the same reason: it
+// shares an 18px seat with a line of type instead of sitting in a padded 64x64 frame,
+// so transparent margin left on the canvas would come straight off the drawn glyph.
+const BATTLE_LOG_MARK_COMPONENT = 'battle-log-mark';
 // Each state and property is registered under the word the game says (ADR-0374): the slot,
 // the stored value and the name a player reads are one vocabulary.
 const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
@@ -218,6 +228,26 @@ const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
   // family the board verbs are drawn in rather than the Run-position marks, because
   // what it names is a button's effect, not a place in the War.
   'ui/kit/icons/game/athetize.png': Object.freeze({ component: RUN_ACTION_ICON_COMPONENT, variant: 'athetize' }),
+  // The four Event Log marks with no existing home. The clock's hourglass, the objective
+  // flag and the Run's two coins are already installed for the title bar and the board's
+  // rising gold, and the log reuses those verbatim rather than forging a second of any of
+  // them (ADR-0059) — so only these four are registered here.
+  'ui/kit/icons/game/check.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'check' }),
+  'ui/kit/icons/game/victory.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'victory' }),
+  'ui/kit/icons/game/defeat.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'defeat' }),
+  'ui/kit/icons/game/draw.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'draw' }),
+  // The CAUSE half of the vocabulary. An outcome mark and one of these finish a log line
+  // between them with no words in it, so each needs a glyph of its own.
+  'ui/kit/icons/game/checkmate.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'checkmate' }),
+  'ui/kit/icons/game/stalemate.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'stalemate' }),
+  'ui/kit/icons/game/resign.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'resign' }),
+  // Gold ARRIVING and gold LEAVING. The Run's coin is a resource mark and states no direction,
+  // so a row drawing it left the number to carry the sign alone. These are transaction marks:
+  // the coin stack the game already uses, carrying a green plus or a red minus. One drawing
+  // twice, differing in one stroke, because a pair that differs in its whole silhouette is
+  // slower to read than a pair that differs in its sign.
+  'ui/kit/icons/game/gold.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'gold' }),
+  'ui/kit/icons/game/gold-loss.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'gold-loss' }),
 });
 const CARD_TYPE_ROW_TEXTURE_COMPONENT = 'card-type-row-texture';
 const CARD_TYPE_ROW_TEXTURE_GROUP_ID = 'card-type-row-textures-pixen-v1';
@@ -1404,11 +1434,12 @@ function gameConditionIconMediaIssue(row, projectedRuntime = null) {
   if (row.domain !== 'ui-kit') return 'game condition icons require the ui-kit domain';
   if (row.role !== 'icon') return 'game condition icons require the icon role';
   if (row.media_type !== 'image/png') return 'game condition icons require image/png';
-  // Run-position and action marks sit unframed beside a label and ship trimmed to
-  // their own ink; the established unit-ability and card-property icons keep their
-  // full frame.
+  // Run-position, action and Event Log marks sit unframed beside a label or a line of
+  // type and ship trimmed to their own ink; the established unit-ability and
+  // card-property icons keep their full frame.
   const trimmed = contract.component === RUN_PROGRESS_ICON_COMPONENT
-    || contract.component === RUN_ACTION_ICON_COMPONENT;
+    || contract.component === RUN_ACTION_ICON_COMPONENT
+    || contract.component === BATTLE_LOG_MARK_COMPONENT;
   const rasterIssue = trimmed
     ? trimmedIconRasterIssue(row, 'Run position icons')
     : (Number(row.width) !== 64 || Number(row.height) !== 64
