@@ -57,6 +57,19 @@ action assembled separately in three places drifts by definition, and it had.
   related, and each button drew a second frame a few pixels inside the one the question needed. The
   box takes no padding, or the rail would stop short of the frame it has to reach, and the cells
   that ARE the controls take none either, so the wood reaches it.
+- **ONE seat height through both states.** Pressing a control must not resize the thing under the
+  cursor. The two states are different objects — a framed button and a framed box — so
+  `--run-abandon-seat-h` is stated once and derived twice: the resting button takes it directly,
+  and the box's frameless plate is that height less a rail a side, which lands the box at the same
+  height AND its wood on exactly the wood the button painted. **46px is read off the live DOM, not
+  chosen**: every button in every one of the three rails measures it, with a 7px frame and 32px of
+  oak inside. Both states are pinned to it because the resting height was EMERGENT — a 38px floor
+  plus the mark's line box — so a change to the button's font or its mark would have moved one
+  state and left the other where it was, silently. The rail is read from
+  `--le-chrome-inner-rail-w`, which `chromeFamilyRuntime` stamps from the installed chrome catalog,
+  so a retuned frame moves the plate with it rather than leaving a hardcoded number a few pixels
+  out. Shipped wrong twice on the way here — a 30px plate (44px box against a 46px button) and then
+  a 26px one derived from a 40px `min-block-size` that was only a FLOOR the mark already exceeded.
 - **It states NO stakes.** Abandon Run already says what it does; a sentence adding that abandoning
   loses the army, the gold and the Battle progress tells a player who just pressed Abandon Run
   nothing they have not already decided. It was carried over from the dialog without being
@@ -110,9 +123,10 @@ action assembled separately in three places drifts by definition, and it had.
 - The destructive path was driven end to end: a real click on the armed Abandon Run lands on
   `/play/select/run` reporting **No active Run**. A real click on Keep Run, and a real Escape,
   each return the seat to its resting control with the Run intact.
-- The seat barely moves when the question is asked: the resting verb is a 40px framed button and the
-  armed box is one 30px plate inside its own frame, 44px. Carrying the stakes made it three times
-  that; without them, arming reads as the control changing rather than the rail re-laying itself.
+- The seat does not move at all when the question is asked — verified on the live route in all three
+  rails, resting and armed both 46.00px to the hundredth. Carrying the stakes made the armed state
+  three times the resting height; without them, arming changes what the seat says and nothing about
+  its size.
 - `data-testid="abandon-run"` stays on the ARMING control, so anything that presses it presses the
   same thing it always did and then meets the question. The two answers are new ids.
 - No gameplay, RunSaveVersion, save-shape or database change. `abandon()` is untouched, including

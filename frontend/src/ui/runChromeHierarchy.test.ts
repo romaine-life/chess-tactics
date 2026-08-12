@@ -317,6 +317,14 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).toMatch(/\.run-abandon-box \{[\s\S]*?padding: 0;/);
     expect(styleCss).toMatch(/\.run-abandon-verbs \{[\s\S]*?padding: 0;/);
     expect(styleCss).not.toContain('.run-abandon-answers');
+    // ONE seat height through BOTH states — pressing a control must not resize the thing under the
+    // cursor. Stated once and derived twice: the resting button takes it directly, and the box's
+    // frameless plate is it less a rail a side, so the box comes out at the same height AND its
+    // wood lands on the wood the button painted. The rail is read from the installed chrome
+    // (chromeFamilyRuntime stamps it), never written out, so a retuned frame moves both together.
+    expect(styleCss).toMatch(/\.run-abandon-control,\s*\r?\n\.run-abandon-box \{\s*\r?\n\s*--run-abandon-seat-h: 46px;/);
+    expect(styleCss).toMatch(/\.run-abandon-control \.app-header-button \{[\s\S]*?block-size: var\(--run-abandon-seat-h\);/);
+    expect(styleCss).toContain('--run-abandon-plate-h: calc(var(--run-abandon-seat-h) - 2 * var(--le-chrome-inner-rail-w, 7px));');
   });
 
   // Abandon Run already says what it does. A sentence spelling out that abandoning loses the Run

@@ -24164,16 +24164,31 @@ button.tileset-relationship-cell {
 /* Abandon Run asks its question in its own seat rather than over the screen: at rest one control,
    armed a Keep Run / Abandon Run pair. The control owns its own layout and its own button measure,
    because the three seats it stands in (the Sectio rail, the Deployment panel and the Battle HUD)
-   each wrapped it in a different row and sized it differently. */
+   each wrapped it in a different row and sized it differently.
+
+   ONE seat height through BOTH states. Pressing a control must not resize the thing under the
+   cursor, and the two states are different objects — a framed button and a framed box — so the
+   height is stated ONCE here and each derives its own measure from it. Declared on both roots
+   because they are alternatives, not nested: neither can inherit from the other.
+
+   46px is what the rail's buttons already measure, every one of them, in all three seats (read off
+   the live DOM, not chosen). Stating it and pinning BOTH states to it is what stops the two from
+   drifting: the resting height was emergent — a 38px floor plus the mark's line box — so a change
+   to the button's font or its mark would have moved one state and not the other, silently. */
+.run-abandon-control,
+.run-abandon-box {
+  --run-abandon-seat-h: 46px;
+}
+
 .run-abandon-control {
   display: grid;
   gap: var(--ds-inline-tight);
 }
 
 .run-abandon-control .app-header-button {
+  block-size: var(--run-abandon-seat-h);
   font-size: var(--ds-text-xs);
   inline-size: 100%;
-  min-block-size: 40px;
 }
 
 /* Armed, the question is ONE box holding its two answers, so the line between Keep Run and Abandon
@@ -24183,11 +24198,15 @@ button.tileset-relationship-cell {
    Start New Run's armed replacement wears. It carries no sentence: Abandon Run already says what
    it does, and a warning restating that is the dialog's body text outliving its dialog. */
 .run-abandon-box {
-  /* The plate a CELL paints when it IS the control. A framed rail button is a 40px box whose
-     9-slice eats a rail's width a side, so about 26px of it is oak; a cell has no frame — the
-     box's rails are its edges — so painting the neighbour's whole box would read heavier than
-     every framed control beside it. Same trade `.run-prep-box` records. */
-  --run-abandon-plate-h: 30px;
+  /* The plate a CELL paints when it IS the control, derived so the BOX comes out at the seat
+     height the resting verb already occupies. A cell has no frame of its own — the box's frame and
+     rail are its edges — so it paints everything the box's own 9-slice does not, which is the seat
+     less a rail a side. That also lands its wood on exactly the wood the framed button painted, so
+     arming changes what the seat says and nothing about its size.
+     Read from the installed rail rather than written out: `--le-chrome-inner-rail-w` is stamped
+     from the live chrome catalog (chromeFamilyRuntime), so a re-tuned frame moves this with it
+     instead of leaving a hardcoded plate a few pixels out. */
+  --run-abandon-plate-h: calc(var(--run-abandon-seat-h) - 2 * var(--le-chrome-inner-rail-w, 7px));
   /* NO padding: a rail has to reach the frame on both sides, and box padding would hold it short
      of them. */
   padding: 0;
