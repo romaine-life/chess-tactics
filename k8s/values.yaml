@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:0153bf5b64828ec2ab69efdf3b2494b7f3d6b6d83894fae12fd5d89d89ab198d"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:4d4590bda0cb49dda552d51438b7c3601251fe5da22f8d7afefe51e5705646c2"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Unit art: a deterministic Blender pixel filter, tuned per piece"
-  prNumber: "919"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/919"
-  commit: "8ba82c9a"
+  prTitle: "Show both forces' material in one title-bar box"
+  prNumber: "921"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/921"
+  commit: "b5664307"
 
 name: chess-tactics
 namespace: chess-tactics
