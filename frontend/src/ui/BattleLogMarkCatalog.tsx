@@ -34,13 +34,17 @@ import { StudioCatalogCard } from './studio/StudioCatalogCard';
 export const BATTLE_LOG_MARK_BATCH_IDS: readonly string[] = Object.freeze([
   'battle-log-defeat-mark-2026-08-11-v1',
   'battle-log-marks-2026-08-12-v1',
+  'battle-log-cause-marks-2026-08-12-v1',
 ]);
 
 const SEAT_LABEL: Readonly<Record<BattleLogForgedMark, string>> = Object.freeze({
+  victory: 'Victory (outcome)',
+  defeat: 'Defeat (outcome)',
+  draw: 'Draw (outcome)',
+  checkmate: 'Checkmate (cause)',
+  stalemate: 'Stalemate (cause)',
+  resign: 'Resigned (cause)',
   check: 'Check',
-  victory: 'Victory',
-  defeat: 'Defeat',
-  draw: 'Draw',
 });
 
 /**
@@ -56,11 +60,12 @@ const SAMPLE_ROWS: readonly LogEntry[] = Object.freeze([
   logNote('Your King', 'check'),
   logNote("Knight's fork — 5", 'gold'),
   logNote('Move undone — 10', 'gold-loss'),
-  logNote('Checkmate', 'victory'),
-  logNote('Checkmate', 'defeat'),
-  logNote('Out of time', 'defeat', 'clock'),
-  logNote('You resigned', 'defeat'),
-  logNote('Stalemate', 'draw'),
+  logNote('', 'victory', 'checkmate'),
+  logNote('', 'defeat', 'checkmate'),
+  logNote('', 'defeat', 'clock'),
+  logNote('', 'defeat', 'resign'),
+  logNote('', 'victory', 'resign'),
+  logNote('', 'draw', 'stalemate'),
   logNote('The same position, three times', 'draw'),
   { text: 'Nxb5+', side: 'player', ply: 10 },
 ]);
@@ -80,6 +85,7 @@ const REPLACED_PROSE: readonly string[] = Object.freeze([
   'Checkmate — defeat.',
   'Defeat — your clock ran out.',
   'Defeat — you resigned.',
+  'Victory — your opponent resigned.',
   'Stalemate — the skirmish is a draw.',
   'Draw — the same position has occurred three times.',
   'Nxb5+',
@@ -120,19 +126,24 @@ export function battleLogMarkLabel(version: AdminLiveMediaVersion): string {
   return index === Number.MAX_SAFE_INTEGER ? 'Candidate' : `Option ${String(index).padStart(2, '0')}`;
 }
 
-/** The art already installed for the seats NOT being decided, so a candidate is judged beside
- *  what it will actually sit among rather than beside empty boxes. */
-function installedElsewhere(
-  catalog: AdminLiveMediaCatalog | null,
-  seat: BattleLogForgedMark,
-): Partial<Record<BattleLogForgedMark, string>> {
+/**
+ * Art for every seat: what is installed, or failing that this seat's FIRST candidate.
+ *
+ * The seats are reserved until the owner installs one, which means a page built only from
+ * installed art shows a column of empty boxes and demonstrates nothing — and since a marked
+ * row's whole text can be the marks, several rows would be blank end to end. So the review
+ * previews the first candidate wherever nothing is installed. It is a preview and the page
+ * says so: nothing here is runtime art until Install says it is.
+ */
+function seatArt(catalog: AdminLiveMediaCatalog | null): Partial<Record<BattleLogForgedMark, string>> {
   if (!catalog) return {};
   const resolved: Partial<Record<BattleLogForgedMark, string>> = {};
-  for (const other of BATTLE_LOG_FORGED_MARKS) {
-    if (other === seat) continue;
-    const slot = catalog.slots.find((entry) => entry.slot === BATTLE_LOG_MARK_SLOT[other]);
+  for (const seat of BATTLE_LOG_FORGED_MARKS) {
+    const slot = catalog.slots.find((entry) => entry.slot === BATTLE_LOG_MARK_SLOT[seat]);
     const active = catalog.versions.find((version) => version.id === slot?.activeVersionId);
-    if (active?.media) resolved[other] = active.media.url;
+    const fallback = battleLogMarkOptions(catalog, seat)[0];
+    const media = active?.media ?? fallback?.media;
+    if (media) resolved[seat] = media.url;
   }
   return resolved;
 }
@@ -144,7 +155,7 @@ export interface BattleLogMarkState {
   options: AdminLiveMediaVersion[];
   selected: AdminLiveMediaVersion | null;
   setSelectedId: (id: string) => void;
-  otherSeats: Partial<Record<BattleLogForgedMark, string>>;
+  seatArt: Partial<Record<BattleLogForgedMark, string>>;
   error: string;
   refresh: () => void;
 }
@@ -171,9 +182,9 @@ export function useBattleLogMark(): BattleLogMarkState {
     setSelectedId('');
   }, []);
   const options = useMemo(() => catalog ? battleLogMarkOptions(catalog, seat) : [], [catalog, seat]);
-  const otherSeats = useMemo(() => installedElsewhere(catalog, seat), [catalog, seat]);
+  const art = useMemo(() => seatArt(catalog), [catalog]);
   const selected = options.find((version) => version.id === selectedId) ?? options[0] ?? null;
-  return { catalog, seat, setSeat, options, selected, setSelectedId, otherSeats, error, refresh };
+  return { catalog, seat, setSeat, options, selected, setSelectedId, seatArt: art, error, refresh };
 }
 
 /** Bind the accepted slot to its application-UI media role. Until this exists the log has no
@@ -200,25 +211,42 @@ async function bindApplicationUiRole(seat: BattleLogForgedMark): Promise<void> {
   });
 }
 
-/** The rows, drawn by the SAME component the Event Log draws them with — the review would be
- *  worthless if it could agree with itself while disagreeing with the log (ADR-0059). */
+/**
+ * One candidate: the art itself, then ONLY the rows that wear it.
+ *
+ * The first version of this card drew the whole twelve-row log on every candidate. Eleven of
+ * those rows are identical from card to card and the twelfth changes by 18 pixels, so sixteen
+ * candidates looked like sixteen copies of the same picture — the page made the decision
+ * harder than no page at all.
+ *
+ * So the difference gets the top of the card at a size where the art is actually legible, and
+ * what follows is only the lines this seat appears on. Context for the whole vocabulary is
+ * shown ONCE, in the before/after above the grid, rather than repeated sixteen times.
+ *
+ * The rows are drawn by the SAME `EventLogRow` the player gets — a review that re-types the
+ * markup can agree with itself while disagreeing with the log (ADR-0059).
+ */
 function MarksInLog({
   seat,
   src,
-  otherSeats,
+  seatArt,
 }: {
   seat: BattleLogForgedMark;
   src: string;
-  otherSeats: Partial<Record<BattleLogForgedMark, string>>;
+  seatArt: Partial<Record<BattleLogForgedMark, string>>;
 }): ReactElement {
-  const forgedSrc = { ...otherSeats, [seat]: src };
+  const forgedSrc = { ...seatArt, [seat]: src };
+  const rows = SAMPLE_ROWS.filter((entry) => entry.marks?.includes(seat));
   return (
-    <span className="skirmish-log-card battle-log-mark-sample">
-      <ul>
-        {SAMPLE_ROWS.map((entry, index) => (
-          <EventLogRow key={`${entry.text}-${index}`} entry={entry} forgedSrc={forgedSrc} />
-        ))}
-      </ul>
+    <span className="battle-log-mark-candidate">
+      <img className="battle-log-mark-art" src={src} alt="" draggable={false} />
+      <span className="skirmish-log-card battle-log-mark-sample">
+        <ul>
+          {rows.map((entry, index) => (
+            <EventLogRow key={`${entry.text}-${index}`} entry={entry} forgedSrc={forgedSrc} />
+          ))}
+        </ul>
+      </span>
     </span>
   );
 }
@@ -230,7 +258,11 @@ function MarksInLog({
  * lost the word that classified it because the glyph now carries that word faster than reading
  * it does. Shown once, at the top, rather than repeated on every candidate card.
  */
-export function BattleLogProseComparison(): ReactElement {
+export function BattleLogProseComparison({
+  seatArt: art,
+}: {
+  seatArt: Partial<Record<BattleLogForgedMark, string>>;
+}): ReactElement {
   return (
     <div className="battle-log-mark-prose">
       <div className="battle-log-mark-prose-column">
@@ -240,11 +272,11 @@ export function BattleLogProseComparison(): ReactElement {
         </ul>
       </div>
       <div className="battle-log-mark-prose-column">
-        <span className="skirmish-eyebrow">Now</span>
+        <span className="skirmish-eyebrow">Now — previewing option 01 wherever nothing is installed</span>
         <span className="skirmish-log-card battle-log-mark-sample">
           <ul>
             {SAMPLE_ROWS.map((entry, index) => (
-              <EventLogRow key={`${entry.text}-${index}`} entry={entry} />
+              <EventLogRow key={`${entry.text}-${index}`} entry={entry} forgedSrc={art} />
             ))}
           </ul>
         </span>
@@ -254,14 +286,14 @@ export function BattleLogProseComparison(): ReactElement {
 }
 
 export function BattleLogMarkCatalog({ state }: { state: BattleLogMarkState }): ReactElement {
-  const { catalog, seat, options, selected, setSelectedId, otherSeats, error } = state;
+  const { catalog, seat, options, selected, setSelectedId, seatArt, error } = state;
   if (error) return <p role="alert">{error}</p>;
   if (!catalog) return <p role="status">Loading candidates…</p>;
   return (
     // ONE element, not a fragment: the Studio shell is a two-column grid (content, controls
     // rail), so a category that hands back two children puts its second one in the rail.
     <div className="battle-log-mark-page">
-      <BattleLogProseComparison />
+      <BattleLogProseComparison seatArt={seatArt} />
       {options.length ? (
         <div className="tileset-studio-grid battle-log-mark-grid" data-testid="battle-log-mark-grid">
           {options.map((version) => (
@@ -271,7 +303,7 @@ export function BattleLogMarkCatalog({ state }: { state: BattleLogMarkState }): 
               badge={`${version.media!.width}×${version.media!.height}`}
               selected={selected?.id === version.id}
               onSelect={() => setSelectedId(version.id)}
-              media={<MarksInLog seat={seat} src={version.media!.url} otherSeats={otherSeats} />}
+              media={<MarksInLog seat={seat} src={version.media!.url} seatArt={seatArt} />}
               imageClassName="battle-log-mark-card-image"
               textExtra={typeof version.metadata.concept === 'string'
                 ? <small>{version.metadata.concept}</small>

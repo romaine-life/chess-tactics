@@ -187,6 +187,11 @@ const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
   'ui/kit/icons/game/victory.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'victory' }),
   'ui/kit/icons/game/defeat.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'defeat' }),
   'ui/kit/icons/game/draw.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'draw' }),
+  // The CAUSE half of the vocabulary. An outcome mark and one of these finish a log line
+  // between them with no words in it, so each needs a glyph of its own.
+  'ui/kit/icons/game/checkmate.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'checkmate' }),
+  'ui/kit/icons/game/stalemate.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'stalemate' }),
+  'ui/kit/icons/game/resign.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'resign' }),
 });
 const CARD_TYPE_ROW_TEXTURE_COMPONENT = 'card-type-row-texture';
 const CARD_TYPE_ROW_TEXTURE_GROUP_ID = 'card-type-row-textures-pixen-v1';

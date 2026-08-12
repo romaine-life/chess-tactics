@@ -269,22 +269,29 @@ export interface LogEntry {
 }
 
 /**
- * A mark one prose line wears — and, wherever it can, the mark IS the line's first word.
+ * A mark one prose line wears — and, wherever it can, the mark IS the line.
  *
  * A reader takes a glyph faster than a word: it arrives whole, without being spelled out, and
  * a column of them can be scanned rather than read. So a mark here is not decoration beside
- * prose that still says the same thing — it REPLACES the word that names what kind of line
- * this is, and the words that remain are only what the mark cannot say. "Checkmate — defeat."
- * becomes the grave and the word *Checkmate*; "Draw — the same position has occurred three
- * times." becomes the scales and *The same position, three times*.
+ * prose that still says the same thing — it REPLACES the words that classify the line, and
+ * what is left is only what the marks cannot say.
+ *
+ * The vocabulary is in two halves, and a row may take one from each:
+ *
+ * - **Outcome** — `victory`, `defeat`, `draw`. How it went, from the reading seat.
+ * - **Cause** — `checkmate`, `stalemate`, `resign`, `clock`. Why it went that way.
+ *
+ * Together they finish a sentence with no words in it at all: grave + hash is "lost to
+ * checkmate", wreath + flag is "won, they resigned", scales + boxed king is "stalemate".
+ * Those rows carry an EMPTY text deliberately — an empty line is the marks doing their whole
+ * job, not a hole. Rows whose cause has no glyph keep the clause that distinguishes them
+ * (`50 moves without a capture or pawn move`), and the rest of the vocabulary — `objective`,
+ * `check`, `gold`, `gold-loss` — marks a line that is not an ending.
  *
  * Every kind of prose line the Battle writes has a mark, because a log where only the
  * interesting rows are marked is a log the reader has to read anyway to find out which rows
  * those are. The exceptions are the two lines that classify nothing — a Run change narrating
  * itself, and a browser-storage failure — and those keep their whole sentence.
- *
- * A line may wear more than one, because outcome and cause are different facts and one row can
- * hold both: a flag fall is a defeat AND it is the clock.
  *
  * The value is set WHERE THE LINE IS WRITTEN, never re-derived by matching the rendered prose.
  * Copy is edited; a regex over it goes quietly wrong at exactly the moment the wording
@@ -296,6 +303,9 @@ export type LogMark =
   | 'victory'
   | 'defeat'
   | 'draw'
+  | 'checkmate'
+  | 'stalemate'
+  | 'resign'
   | 'clock'
   | 'gold'
   | 'gold-loss';
@@ -308,14 +318,19 @@ export const logNote = (text: string, ...marks: LogMark[]): LogEntry =>
  * A settled position's line together with the marks that belong to it. They are decided in
  * ONE place so an outcome cannot be written without being marked as one — the alternative is a
  * mark argument at each of the five call sites, four of which would eventually disagree.
+ *
+ * A checkmate and a stalemate say everything they have to say in two glyphs, so they write no
+ * text at all. Everything else keeps the clause that tells it apart from its siblings.
  */
 function adjudicationEntry(
   adjudication: Adjudication,
   localSide: PlayingSide,
   authored: boolean,
 ): LogEntry {
-  const text = adjudicationCopy(adjudication, localSide, authored);
-  return logNote(text, outcomeMark(adjudication.winner, localSide));
+  const outcome = outcomeMark(adjudication.winner, localSide);
+  if (adjudication.kind === 'checkmate') return logNote('', outcome, 'checkmate');
+  if (adjudication.kind === 'stalemate') return logNote('', outcome, 'stalemate');
+  return logNote(adjudicationCopy(adjudication, localSide, authored), outcome);
 }
 
 /** Which of the three outcome marks a result wears, from the seat that is reading it. */
@@ -448,10 +463,16 @@ function netOutcomeCopy(winner: Winner, localSide: PlayingSide): string {
   return winner === localSide ? 'The field is yours' : 'Your force has fallen';
 }
 
-/** A concluded netplay match's line and its mark, decided together for the same reason
+/** A concluded netplay match's line and its marks, decided together for the same reason
  *  `adjudicationEntry` is: the seat that knows how it went is the seat that says so. */
-function netOutcomeEntry(text: string, winner: Winner, localSide: PlayingSide): LogEntry {
-  return logNote(text, outcomeMark(winner, localSide));
+function netOutcomeEntry(
+  text: string,
+  winner: Winner,
+  localSide: PlayingSide,
+  cause?: LogMark,
+): LogEntry {
+  const outcome = outcomeMark(winner, localSide);
+  return cause ? logNote(text, outcome, cause) : logNote(text, outcome);
 }
 
 function adjudicationResultDetail(adjudication: Adjudication | null, localSide: PlayingSide, authored: boolean): string | null {
@@ -465,11 +486,11 @@ function adjudicationResultDetail(adjudication: Adjudication | null, localSide: 
 }
 
 /**
- * What a settled position's row SAYS, given that its mark already says how it went.
+ * What a settled position's row SAYS, given that its marks already say how it went and why.
  *
- * Victory/Defeat/Draw are the mark's words, so they are not repeated here. A row whose rule
- * carries no detail says nothing at all — which is the mark doing its whole job, and is why
- * an empty line is a legitimate result rather than a hole.
+ * Victory/Defeat/Draw and Checkmate/Stalemate are the marks' words, so they are not repeated
+ * here — `adjudicationEntry` writes those two kinds as marks with no text. What is left is the
+ * draws that need a clause to be told apart, and the authored rule that gave its own name.
  */
 function adjudicationCopy(
   adjudication: Adjudication,
@@ -482,10 +503,7 @@ function adjudicationCopy(
       : victoryRuleDetailForSide(adjudication.rule, localSide);
     return detail ?? '';
   }
-  // Checkmate and stalemate need only their NAME: the mark beside it says which way it went,
-  // and a stalemate is a draw by definition rather than by anything worth a clause.
-  if (adjudication.kind === 'checkmate') return 'Checkmate';
-  if (adjudication.kind === 'stalemate') return 'Stalemate';
+  if (adjudication.kind === 'checkmate' || adjudication.kind === 'stalemate') return '';
   return DRAW_RULE_COPY[adjudication.kind];
 }
 
@@ -912,7 +930,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       reviewIndex: null,
       // Two marks, because the row states two facts: the Battle is lost, and the clock is
       // why. A flag fall marked only as a defeat reads like any other loss on a scan.
-      log: extendLog(cur.log, [logNote('Out of time', 'defeat', 'clock')]),
+      log: extendLog(cur.log, [logNote('', 'defeat', 'clock')]),
     });
     persistMatch(get()); // game decided → drops the saved copy
   };
@@ -1814,7 +1832,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       testMode: false,
       testMinCpuDelayMs: 0,
       reviewIndex: null,
-      log: extendLog(s.log, [logNote('You resigned', 'defeat')]),
+      log: extendLog(s.log, [logNote('', 'defeat', 'resign')]),
     });
     persistMatch(get()); // game decided → drops the saved copy
   },
@@ -1829,9 +1847,9 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     const epoch = beginSession();
     const localSide = s.net.localSide;
     if (s.net.pendingMove) clearPersistedNetIntent(s.net.lobbyId, s.net.pendingMove.intentId);
-    const copy = reason === 'resign'
-      ? (winner === localSide ? 'Your opponent resigned' : 'You resigned')
-      : netOutcomeCopy(winner, localSide);
+    // A resignation says everything in two marks — the outcome, and the flag — so it writes no
+    // words. Which side gave up is the outcome mark's job, not a second sentence saying it.
+    const copy = reason === 'resign' ? '' : netOutcomeCopy(winner, localSide);
     set({
       game: { ...s.game, winner, turn: 'done' },
       selectedId: null,
@@ -1852,7 +1870,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
         terminalResult: reason === 'resign' ? null : s.net.terminalResult,
         authoritativeResult: { winner, reason },
       },
-      log: extendLog(s.log, [netOutcomeEntry(copy, winner, localSide)]),
+      log: extendLog(s.log, [netOutcomeEntry(copy, winner, localSide, reason === 'resign' ? 'resign' : undefined)]),
     });
   },
 

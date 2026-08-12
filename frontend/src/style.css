@@ -9577,14 +9577,19 @@ body.loading-bootstrap .app-startup-status {
   padding: var(--ds-inset);
 }
 
-/* Beats the base `.tileset-studio-card-image img`, which sizes a catalog image to an iso
-   TILE. A mark drawn here has to be the 18px it is in the log — the whole point of the page
-   is judging it at the size the player gets, so a card that enlarges it answers the wrong
-   question. */
+/* Both beat the base `.tileset-studio-card-image img`, which sizes a catalog image to an iso
+   TILE. The seat copy has to be exactly the 18px it is in the log, because that is the size
+   the decision is really about; the art beside it is fixed at 56px so sixteen candidates can
+   be told apart at a glance. Two sizes, on purpose — one is the truth, the other is legible. */
 .battle-log-mark-card-image .skirmish-log-mark > img {
   block-size: 100%;
   inline-size: 100%;
   object-fit: contain;
+}
+
+.battle-log-mark-card-image .battle-log-mark-art {
+  block-size: 56px;
+  inline-size: 56px;
 }
 
 /* Log rows are a line of type, so these cards are wide rather than tile-shaped: at the
@@ -9593,6 +9598,24 @@ body.loading-bootstrap .app-startup-status {
    the two rules happen to sit in the file. */
 .tileset-studio-grid.battle-log-mark-grid {
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
+/* A candidate card is the ART, then the lines that wear it. The art leads at a size where the
+   difference between two candidates is actually visible: at the 18px seat alone, sixteen cards
+   read as sixteen copies of one picture, and a comparison you cannot see is worse than none. */
+.battle-log-mark-candidate {
+  align-items: center;
+  display: grid;
+  gap: var(--ds-space-2);
+  grid-template-columns: 56px minmax(0, 1fr);
+  inline-size: 100%;
+}
+
+.battle-log-mark-art {
+  block-size: 56px;
+  image-rendering: pixelated;
+  inline-size: 56px;
+  object-fit: contain;
 }
 
 /* The copy decision, shown once above the art decision: what each row said before its mark

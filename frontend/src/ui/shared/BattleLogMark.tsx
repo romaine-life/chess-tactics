@@ -36,6 +36,9 @@ export const BATTLE_LOG_MARK_MEDIA_ROLE = Object.freeze({
   victory: 'ui-kit-icons-game-victory-png',
   defeat: 'ui-kit-icons-game-defeat-png',
   draw: 'ui-kit-icons-game-draw-png',
+  checkmate: 'ui-kit-icons-game-checkmate-png',
+  stalemate: 'ui-kit-icons-game-stalemate-png',
+  resign: 'ui-kit-icons-game-resign-png',
 } as const);
 
 /** The live-media slot behind each, named for review and installation. */
@@ -44,13 +47,18 @@ export const BATTLE_LOG_MARK_SLOT = Object.freeze({
   victory: 'ui/kit/icons/game/victory.png',
   defeat: 'ui/kit/icons/game/defeat.png',
   draw: 'ui/kit/icons/game/draw.png',
+  checkmate: 'ui/kit/icons/game/checkmate.png',
+  stalemate: 'ui/kit/icons/game/stalemate.png',
+  resign: 'ui/kit/icons/game/resign.png',
 } as const);
 
 /** A mark whose art this seat owns, as opposed to one it borrows from elsewhere. */
 export type BattleLogForgedMark = keyof typeof BATTLE_LOG_MARK_SLOT;
 
+/** Outcome marks first, then the causes they pair with — the order a row wears them, and the
+ *  order the review page offers the decisions in. */
 export const BATTLE_LOG_FORGED_MARKS: readonly BattleLogForgedMark[] =
-  Object.freeze(['check', 'victory', 'defeat', 'draw'] as const);
+  Object.freeze(['victory', 'defeat', 'draw', 'checkmate', 'stalemate', 'resign', 'check'] as const);
 
 export function isBattleLogForgedMark(mark: LogMark): mark is BattleLogForgedMark {
   return (BATTLE_LOG_FORGED_MARKS as readonly string[]).includes(mark);
@@ -79,7 +87,10 @@ const MARK_LABEL: Readonly<Record<LogMark, string>> = Object.freeze({
   victory: 'Victory',
   defeat: 'Defeat',
   draw: 'Draw',
-  clock: 'Clock',
+  checkmate: 'Checkmate',
+  stalemate: 'Stalemate',
+  resign: 'Resigned',
+  clock: 'Out of time',
   gold: 'Gold claimed',
   'gold-loss': 'Gold paid',
 });

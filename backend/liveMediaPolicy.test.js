@@ -872,7 +872,7 @@ test('condition icon projection keeps all four card properties and granted state
   // Event Log marks sit in an 18px seat beside a line of type, so they ship trimmed to their
   // own ink for the same reason the action mark does.
   let defeat = null;
-  for (const variant of ['check', 'victory', 'defeat', 'draw']) {
+  for (const variant of ['check', 'victory', 'defeat', 'draw', 'checkmate', 'stalemate', 'resign']) {
     const mark = gameConditionIcon({
       slot: `ui/kit/icons/game/${variant}.png`,
       width: 51,

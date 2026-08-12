@@ -1203,7 +1203,7 @@ describe('skirmish store: battle clock', () => {
     expect(s.game.winner).toBe('enemy');
     expect(s.game.turn).toBe('done');
     expect(s.clock).toEqual({ remainingMs: 0, running: false, incrementMs: 0 });
-    expect(s.log[0].text).toBe('Out of time');
+    expect(s.log[0].text).toBe('');
     // The row states two facts and wears both marks: the Battle is lost, and the clock is
     // why. Marking it only as a defeat would make a flag fall scan like any other loss.
     expect(s.log[0].marks).toEqual(['defeat', 'clock']);
@@ -1228,7 +1228,7 @@ describe('skirmish store: battle clock', () => {
     // Let the reply and landing beat finish, then let the restored player clock flag.
     vi.advanceTimersByTime(3_500);
     expect(useSkirmish.getState().game.winner).toBe('enemy');
-    expect(useSkirmish.getState().log[0].text).toBe('Out of time');
+    expect(useSkirmish.getState().log[0].marks).toEqual(['defeat', 'clock']);
     expect(useSkirmish.getState().canUndoLastPlayerMove()).toBe(true);
 
     expect(useSkirmish.getState().undoLastPlayerMove()).toBe(true);
@@ -1267,7 +1267,7 @@ describe('checkmate ends the game the instant it is delivered', () => {
     expect(s.game.winner).toBe('player'); // Victory, resolved on the mating move itself
     expect(s.game.turn).toBe('done');
     expect(s.game.pieces.find((p) => p.id === 'ek')?.alive).toBe(true); // King never had to be captured
-    expect(s.log[0].text).toMatch(/checkmate/i);
+    expect(s.log[0]).toEqual({ text: '', marks: ['victory', 'checkmate'] });
 
     // No enemy reply is pending — the game is already over.
     vi.runAllTimers();
@@ -2059,8 +2059,8 @@ describe('local resign', () => {
     expect(s.selectedId).toBeNull();
     expect(s.focusedId).toBeNull();
     expect(s.clock?.running).toBe(false);
-    expect(s.log[0].text).toBe('You resigned');
-    expect(s.log[0].marks).toEqual(['defeat']);
+    // The grave and the white flag finish the sentence between them; no words left.
+    expect(s.log[0]).toEqual({ text: '', marks: ['defeat', 'resign'] });
   });
 
   it('does not decide a netplay match locally', () => {
@@ -2109,9 +2109,8 @@ describe('netplay resign', () => {
     expect(s.game.winner).toBe('player');
     expect(s.game.turn).toBe('done');
     expect(s.selectedId).toBeNull();
-    // The wreath carries "Victory", so the line says only how it was won.
-    expect(s.log[0].text).toBe('Your opponent resigned');
-    expect(s.log[0].marks).toEqual(['victory']);
+    // Read from the winning seat, so the same event wears the wreath rather than the grave.
+    expect(s.log[0]).toEqual({ text: '', marks: ['victory', 'resign'] });
     // A redelivered result frame must not overwrite the decided game.
     useSkirmish.getState().concludeNet('enemy', 'resign');
     expect(useSkirmish.getState().game.winner).toBe('player');
@@ -2123,8 +2122,8 @@ describe('netplay resign', () => {
     useSkirmish.getState().concludeNet('player', 'resign');
     const s = useSkirmish.getState();
     expect(s.game.winner).toBe('player');
-    expect(s.log[0].text).toBe('You resigned');
-    expect(s.log[0].marks).toEqual(['defeat']);
+    // The grave and the white flag finish the sentence between them; no words left.
+    expect(s.log[0]).toEqual({ text: '', marks: ['defeat', 'resign'] });
   });
 
   it('lets the first authoritative resignation resolve a different local disputed verdict', () => {
@@ -2142,6 +2141,6 @@ describe('netplay resign', () => {
     expect(resolved.game.winner).toBe('player');
     expect(resolved.net?.terminalResult).toBeNull();
     expect(resolved.net?.authoritativeResult).toEqual({ winner: 'player', reason: 'resign' });
-    expect(resolved.log[0].text).toBe('Your opponent resigned');
+    expect(resolved.log[0]).toEqual({ text: '', marks: ['victory', 'resign'] });
   });
 });

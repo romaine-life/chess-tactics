@@ -14,7 +14,9 @@ import {
 
 describe('BattleLogMarks', () => {
   it('names one slot and one app-ui role per forged mark, so two seats cannot drift', () => {
-    expect(BATTLE_LOG_FORGED_MARKS).toEqual(['check', 'victory', 'defeat', 'draw']);
+    // Outcomes first, then the causes they pair with — the order a row wears them.
+    expect(BATTLE_LOG_FORGED_MARKS)
+      .toEqual(['victory', 'defeat', 'draw', 'checkmate', 'stalemate', 'resign', 'check']);
     for (const mark of BATTLE_LOG_FORGED_MARKS) {
       expect(BATTLE_LOG_MARK_SLOT[mark]).toBe(`ui/kit/icons/game/${mark}.png`);
       expect(BATTLE_LOG_MARK_MEDIA_ROLE[mark]).toBe(`ui-kit-icons-game-${mark}-png`);
@@ -47,7 +49,9 @@ describe('BattleLogMarks', () => {
     const markup = renderToStaticMarkup(<BattleLogMarks marks={['defeat', 'clock']} />);
     expect(markup.indexOf('data-battle-log-mark="defeat"'))
       .toBeLessThan(markup.indexOf('data-battle-log-mark="clock"'));
-    expect(markup).toContain('aria-label="Defeat, Clock"');
+    // The label is where the replaced words still exist: a row with no text at all still
+    // reads as a sentence to a screen reader.
+    expect(markup).toContain('aria-label="Defeat, Out of time"');
   });
 
   it('reuses the marks the game already has for the clock, the flag and the coins', () => {

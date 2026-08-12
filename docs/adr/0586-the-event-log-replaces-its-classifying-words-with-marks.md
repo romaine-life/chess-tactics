@@ -31,9 +31,14 @@ find out which rows are the interesting ones.
 
 ## Decision
 
-**A mark REPLACES the word that classified its line.** Not decoration beside prose that still
+**A mark REPLACES the words that classified its line.** Not decoration beside prose that still
 says the same thing — the classifier moves into the column the move numbers take, and the text
-keeps only what the mark cannot say.
+keeps only what the marks cannot say.
+
+The vocabulary is in two halves, and an ending takes one from each: an **outcome** (victory,
+defeat, draw) and a **cause** (checkmate, stalemate, resign, clock). Together they finish the
+sentence with no words in it at all, and those rows carry an EMPTY text deliberately — an empty
+line is the marks doing their whole job, not a hole.
 
 | Line, before | Mark | Line, now |
 | --- | --- | --- |
@@ -42,10 +47,12 @@ keeps only what the mark cannot say.
 | `Your King is in check!` | check | `Your King` |
 | `Knight's fork — 5 gold claimed.` | gold | `Knight's fork — 5` |
 | `Move undone — 10 gold paid.` | gold-loss | `Move undone — 10` |
-| `Checkmate — victory!` | victory | `Checkmate` |
-| `Checkmate — defeat.` | defeat | `Checkmate` |
-| `Defeat — your clock ran out.` | defeat + clock | `Out of time` |
-| `Stalemate — the skirmish is a draw.` | draw | `Stalemate` |
+| `Checkmate — victory!` | victory + checkmate | *(nothing)* |
+| `Checkmate — defeat.` | defeat + checkmate | *(nothing)* |
+| `Defeat — your clock ran out.` | defeat + clock | *(nothing)* |
+| `Defeat — you resigned.` | defeat + resign | *(nothing)* |
+| `Victory — your opponent resigned.` | victory + resign | *(nothing)* |
+| `Stalemate — the skirmish is a draw.` | draw + stalemate | *(nothing)* |
 | `Draw — the same position has occurred three times.` | draw | `The same position, three times` |
 
 - **Every kind of prose line gets a mark**, not just the ones worth stopping on. The two
@@ -55,9 +62,10 @@ keeps only what the mark cannot say.
 - **A line may wear two**, because outcome and cause are different facts and one row can hold
   both: a flag fall is a defeat AND it is the clock.
 
-- **A row whose whole meaning is its mark says nothing at all.** `Check!` becomes the mark
-  alone. An empty line is a legitimate result here rather than a hole, and the mark's
-  `aria-label` is where that word still exists for a screen reader.
+- **A row whose whole meaning is its marks says nothing at all.** Six of the twelve line kinds
+  end up with no text: `Check!` is the mark alone, and every standard ending is its outcome and
+  its cause. An empty line is a legitimate result here rather than a hole, and the marks'
+  `aria-label` is where those words still exist for a screen reader — "Defeat, Out of time".
 
 - **The mark is set WHERE THE LINE IS WRITTEN**, never re-derived by matching the rendered
   prose. `logNote(text, ...marks)` takes them; `adjudicationEntry` and `netOutcomeEntry` decide
@@ -76,8 +84,9 @@ keeps only what the mark cannot say.
   [ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md) forbids, and it
   would let the log and the screen beside it show two different coins.
 
-- **Four marks had no existing home** — `check`, `victory`, `defeat`, `draw` — and get their
-  own slots in the kit's game-icon family under a new `battle-log-mark` runtime component.
+- **Seven marks had no existing home** — the three outcomes, the three causes that are not the
+  clock, and `check` — and get their own slots in the kit's game-icon family under a new
+  `battle-log-mark` runtime component.
   Like the Run-position and action marks they ship **trimmed to their own ink**: the seat is
   18px and draws with `contain`, which scales the canvas, so transparent margin left on a 64×64
   frame would come straight off the drawn glyph.
@@ -103,7 +112,7 @@ keeps only what the mark cannot say.
 
 **The pixels are the owner's call, not the agent's.** Candidates are judged in **Studio → Log
 Marks**, a catalog category reached by clicking its tab
-([ADR-0058](0058-every-route-is-click-reachable.md)). A seat selector picks which of the four
+([ADR-0058](0058-every-route-is-click-reachable.md)). A seat selector picks which of the seven
 is being decided; every candidate for it is drawn on the **real log rows at the real 18px
 seat**, beside the marks already installed for the others. A mark this small cannot be judged
 from its 64px art — a headstone that reads beautifully at native size can arrive at the seat as
@@ -117,11 +126,12 @@ should be judged by sight rather than described.
   twelve line kinds lost their opening clause.
 - `LogEntry.marks` is additive and optional, so a persisted match resumes with its old rows
   unmarked and shows their full original sentences. No `PersistedMatch` version bump and no Run
-  save migration follows — this is presentation plus four additive live-media slots, each
+  save migration follows — this is presentation plus seven additive live-media slots, each
   recoverable by retiring it.
-- Until the owner installs one per seat, `check`, `victory`, `defeat` and `draw` rows render
-  their reserved empty seat. A `Check!` row therefore currently shows nothing at all. That is
-  the contract working, and it is also the strongest argument for installing all four together.
+- Until the owner installs one per seat, every forged mark renders its reserved empty seat —
+  and because an ending row’s whole text is now its marks, those rows are blank end to end.
+  That is the contract working, and it is also why the review page previews the first candidate
+  wherever nothing is installed: a page of empty boxes demonstrates nothing.
 - The vocabulary is a list, so a fifth mark is a variant rather than a second seat. Whatever is
   added must pass the same test: does it REPLACE a word, and does the game already draw it?
 - `verify:icon-seats` now covers four rules rather than two, and will fail if either untrimmed
