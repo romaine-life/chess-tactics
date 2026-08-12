@@ -364,6 +364,28 @@ and don't tell the user screenshots are impossible. Use the helper below.
    does — the armies are not yet in contact, so a capture is out of reach and only a
    long-range check or fork can land — so craft a Battle that is already joined.
 
+   Any change to a player-facing screen additionally runs the mobile gate, which drives
+   the real routes in a device-emulated Chrome (touch points, coarse pointer, phone UA)
+   and measures the rendered DOM:
+   ```
+   npm run verify:mobile -- '<vite-url>'
+   npm run verify:mobile -- '<vite-url>' --profile phone-landscape --route '/settings'
+   ```
+   It reports five things per route per device: the page scrolling sideways, a control
+   that cannot be scrolled into view, a control clipped under 60% of itself, content
+   stranded in a container that cannot scroll, and a hit box under 44x44. A control below
+   the fold is NOT a finding — the gate scrolls it into view and re-measures, so only a
+   genuinely unreachable control fails. **This is why it exists:** the narrow-width chrome
+   is a band of overrides that neutralise baked desktop offsets, and when the menu shell
+   was rebuilt into the twin screen the band stopped reaching the destination row — every
+   Settings and Play destination tab rendered at centre x = -56, entirely off the left
+   edge, and nothing in the test suite could see it.
+
+   The Level Editor is deliberately outside its route set (a desktop authoring surface).
+   Pass `--route` to audit anything not listed. Portrait on a real device still shows the
+   rotate gate, so the gate reports portrait routes as GATED rather than passing them;
+   `--ignore-rotate-gate` measures the layout underneath when working on portrait.
+
 This works on ANY live route by selector — no per-target fixture, so there's no "new
 screen ⇒ flail" cliff. `frontend/scripts/shot.mjs` is the implementation.
 

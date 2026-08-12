@@ -26714,6 +26714,95 @@ button.tileset-relationship-cell {
   /* Touch-target floor for the small in-panel controls (WCAG ~44px). */
   .settings-chrome-button,
   .app-header-button { min-block-size: 44px; }
+
+  /* --- Twin-screen destination row (the rot this band did not cover) ------------------
+     The rules above were written when a destination was a single `.settings-main-frame`
+     beside the rail. The menu shell has since become the TWIN SCREEN: the persistent menu
+     column stays mounted and a destination fills the second track as its own row of
+     FIXED-width columns (`.menu-dest` → `.menu-dest-tabs` 322px + `.menu-dest-action`
+     572px), pulled left by the shared `--rail-pull-*` so it seats under the rail's own
+     desktop offset. This band reset the RAIL's transform and never the row's, so every
+     destination tab landed off the left edge — measured centre x = -56 on a 844px
+     viewport, i.e. Settings' General/Audio/Gameplay and Play's Current Run / Start New
+     Run were unreachable at any scroll. `npm run verify:mobile` is what measures this.
+
+     Neutralise the pull at its SHARED SOURCE (the vars `.menu-dest` derives from) rather
+     than restating `transform: none` per element, so the row and the rail can never
+     disagree again — the same reasoning that put the pull in vars in the first place.
+     Then let the row STACK: at this width there is no arrangement of a 322px tab column
+     beside a 572px panel that fits, so columns become full-width rows and the shell
+     scrolls, exactly as the single-column rules above already intend. */
+  .main-menu-twin-screen .settings-shell {
+    --rail-pull-x: 0px;
+    --rail-pull-y: 0px;
+    /* Stack as a FLEX column, not the desktop grid. Every column in this shell carries
+       `min-block-size: 0` (they are scroll hosts on the desktop), which zeroes their
+       contribution to an auto grid track's minimum — so a definite-height shell squeezed the
+       two tracks to 169px/121px against content needing 223px/636px, and each column's
+       `overflow: visible` contents then painted straight over the column below (Settings'
+       General tab landed on top of the menu's own Settings button). Flex items with
+       `flex: none` cannot be squeezed below their content, so the stack is exact and the
+       shell — which is already the scroll host here — scrolls. */
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;                               /* twin-screen sets gap:0 for abutting columns */
+  }
+  .main-menu-twin-screen .settings-shell > * { flex: none; }
+
+  .menu-dest {
+    flex: none;
+    flex-direction: column;
+    inline-size: 100%;
+    min-inline-size: 0;
+    gap: 10px;
+    transform: none;
+  }
+
+  /* Only the WIDTH is wrong when stacked — the left inset is `--col-side-inset`, which is
+     col1's own button inset by construction, so keeping it is what makes a destination
+     button line up with the menu button above it. */
+  .menu-dest-col {
+    inline-size: 100%;
+    max-inline-size: 100%;
+    min-inline-size: 0;
+  }
+  .menu-dest-tabs,
+  .menu-dest-action {
+    inline-size: 100%;
+    max-inline-size: 100%;
+  }
+  /* The rail primitive pins its own 322px through the placement attribute — (0,2,0), so the
+     plain-class rules above lose to it and the tab column stayed desktop-width. Reset it at
+     the same selector that sets it rather than escalating specificity elsewhere. */
+  .apparatus-rail-column[data-apparatus-rail-placement="open"] {
+    inline-size: 100%;
+  }
+  /* The action column clips by design (its rows paint ornaments past their own edge). Stacked
+     it is the tallest thing on the page, so clipping strands its controls — let the shell's
+     scroll reach them instead. */
+  .menu-dest-action { overflow: visible; }
+
+  /* Play's column 2 is a grid whose second track scrolls; stacked it must not also try to
+     fill a viewport-height track it no longer owns. */
+  .play-source-rail { grid-template-rows: auto auto; }
+
+  /* Enchiridion is a real destination that sizes itself from --layout-vw minus the rail
+     pull and a fixed tab column — an expression that resolves to ~58px here. Stack it on
+     the same terms as every other destination. */
+  .menu-dest > .enchiridion-workspace {
+    flex-direction: column;
+    inline-size: 100%;
+    max-inline-size: 100%;
+  }
+  .menu-dest > .enchiridion-workspace > .enchiridion-section-rail {
+    inline-size: 100%;
+    padding-inline-start: 0;
+  }
+  .menu-dest > .enchiridion-workspace > .enchiridion-content {
+    inline-size: 100%;
+    padding-inline-start: 0;
+  }
 }
 
 /* -- Landscape-phone tweaks (narrow AND short — i.e. a phone held sideways). ------- */
