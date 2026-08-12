@@ -110,6 +110,63 @@ describe('auth session owner', () => {
     expect(controller.getSnapshot()).toEqual({ phase: 'authenticated', status: authenticated });
   });
 
+  it('notices a session that expired while the shell was claiming it was live', async () => {
+    const anonymous: AuthStatus = { user: { signed_in: false }, reachable: true };
+    const readStatus = vi.fn()
+      .mockResolvedValueOnce(authenticated)
+      .mockResolvedValueOnce(anonymous);
+    let clock = 0;
+    const controller = createAuthSessionController(readStatus, 0, () => clock);
+    await controller.start();
+    expect(controller.getSnapshot().phase).toBe('authenticated');
+
+    // This is the whole defect: before the owner re-read on its own, the shell went on
+    // presenting this account until some account-gated call happened to fail — which in a game
+    // that needs no session to play could be never.
+    clock += 5 * 60_000;
+    await controller.wake(controller.reprobeIntervalMs());
+    expect(controller.getSnapshot().phase).toBe('anonymous');
+  });
+
+  it('quickens while signed out and stays patient while signed in', async () => {
+    const anonymous: AuthStatus = { user: { signed_in: false }, reachable: true };
+    const readStatus = vi.fn().mockResolvedValue(anonymous);
+    const controller = createAuthSessionController(readStatus, 0, () => 0);
+    await controller.start();
+
+    // Signed out is the impatient case: someone is probably signing in right now.
+    expect(controller.reprobeIntervalMs()).toBe(20_000);
+    controller.replaceUser({ signed_in: true, email: 'player@example.com' });
+    expect(controller.reprobeIntervalMs()).toBe(5 * 60_000);
+  });
+
+  it('collapses a flurry of returns into one read', async () => {
+    const readStatus = vi.fn().mockResolvedValue(authenticated);
+    let clock = 0;
+    const controller = createAuthSessionController(readStatus, 0, () => clock);
+    await controller.start();
+    expect(readStatus).toHaveBeenCalledTimes(1);
+
+    // Focus, visibilitychange and online all fire when someone comes back to a tab. They are one
+    // arrival, not three, and the identity provider should be asked once.
+    clock += 100;
+    await Promise.all([controller.wake(), controller.wake(), controller.wake()]);
+    expect(readStatus).toHaveBeenCalledTimes(1);
+
+    clock += 3_000;
+    await controller.wake();
+    expect(readStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it('never wakes alongside the startup probe that is still retrying', async () => {
+    // `start` owns an unbounded retry loop until it gets an authoritative answer. A second reader
+    // racing it would have nothing to add and everything to confuse.
+    const readStatus = vi.fn().mockResolvedValue(unavailable);
+    const controller = createAuthSessionController(readStatus, 10_000, () => 0);
+    void controller.start();
+    await expect(controller.wake()).resolves.toBeNull();
+  });
+
   it('names identities so a consumer compares them without reading them', () => {
     expect(authSessionIdentityKey(authenticated)).toBe('account:player@example.com');
     expect(authSessionIdentityKey({ user: { signed_in: false }, reachable: true })).toBe('anonymous');

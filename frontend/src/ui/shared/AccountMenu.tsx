@@ -18,6 +18,18 @@ interface AccountMenuProps {
   /** Persist a new display name (empty clears it). Rejects on failure. */
   onRename: (name: string) => Promise<void>;
   onSignOut: () => void;
+  /**
+   * Show the re-authenticate row: this account may publish game content, but credentials were
+   * last presented more than eight hours ago, so admin writes are refused until it signs in again
+   * (ADR-0576, decision 3). The session is untouched — this is not a signed-out state, and the
+   * menu must not present it as one.
+   *
+   * It lives here because this is where a signed-in owner already goes to act on their account,
+   * and because an admin should be able to fix this BEFORE a save is rejected rather than after.
+   */
+  needsReauthentication?: boolean;
+  /** Send the owner through the provider for credentials, returning to the current page. */
+  onReauthenticate?: () => void;
   /** This seat's place in the trailing cluster, for the leaf wood's phase (ADR-0433). */
   surfacePhase: number;
   /** How many people are observing this account's run right now; 0 shows nothing. */
@@ -32,7 +44,19 @@ const NAME_MAX = 40;
 
 const initial = (name: string): string => (name.trim()[0] || '?').toUpperCase();
 
-export function AccountMenu({ name, email, avatarUrl, surfacePhase, watcherCount = 0, onRename, onSignOut, defaultOpen, defaultEditing }: AccountMenuProps): ReactElement {
+export function AccountMenu({
+  name,
+  email,
+  avatarUrl,
+  surfacePhase,
+  watcherCount = 0,
+  onRename,
+  onSignOut,
+  needsReauthentication,
+  onReauthenticate,
+  defaultOpen,
+  defaultEditing,
+}: AccountMenuProps): ReactElement {
   const watched = watcherCount > 0;
   const [open, setOpen] = useState(Boolean(defaultOpen));
   const [editing, setEditing] = useState(Boolean(defaultEditing));
@@ -162,6 +186,20 @@ export function AccountMenu({ name, email, avatarUrl, surfacePhase, watcherCount
             <img className="account-menu-glyph" src={installedUiMedia('ui-kit-icons-sign-out-png')} alt="" aria-hidden="true" />
           </button>
         </div>
+      )}
+      {open && needsReauthentication && (
+        // Worded as what it is — publishing needs a fresh sign-in — not as an expiry or an error.
+        // Nothing is lost and nothing is broken; the account simply has to prove itself again
+        // before it changes what every player sees.
+        <button
+          type="button"
+          className="account-menu-reauth"
+          role="menuitem"
+          onClick={onReauthenticate}
+          title="Publishing game content needs a recent sign-in"
+        >
+          Sign in again to publish
+        </button>
       )}
     </div>
   );

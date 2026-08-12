@@ -19,38 +19,15 @@ const port = 31347;
 const authPort = 31348;
 const staticDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ct-netplay-'));
 
-// Minimal OIDC stand-in with three distinct identities: host, guest, and a true
-// observer who never takes a seat. No access token is signed-out. Mirrors
-// smoke-test.js's mock.
-const HOST_USER = { email: 'player@example.com', name: 'Tactics Player', role: 'pending' };
-const GUEST_USER = { email: 'rival@example.com', name: 'Lobby Rival', role: 'pending' };
-const OBSERVER_USER = { email: 'observer@example.com', name: 'Lobby Observer', role: 'pending' };
-const mockAuthIssuer = `http://127.0.0.1:${authPort}`;
-const mockAuth = http.createServer((req, res) => {
-  if (req.url === '/.well-known/openid-configuration') {
-    res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({
-      issuer: mockAuthIssuer,
-      authorization_endpoint: `${mockAuthIssuer}/api/auth/oauth2/authorize`,
-      token_endpoint: `${mockAuthIssuer}/api/auth/oauth2/token`,
-      userinfo_endpoint: `${mockAuthIssuer}/api/auth/oauth2/userinfo`,
-      jwks_uri: `${mockAuthIssuer}/api/auth/jwks`,
-    }));
-    return;
-  }
-  if (req.url !== '/api/auth/oauth2/userinfo') { res.writeHead(404); res.end('not found'); return; }
-  const token = String(req.headers.authorization || '').replace(/^Bearer /, '');
-  if (!token) {
-    res.writeHead(401, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ error: 'invalid_token' }));
-    return;
-  }
-  const user = token === 'rival'
-    ? GUEST_USER
-    : (token === 'observer' ? OBSERVER_USER : HOST_USER);
-  res.writeHead(200, { 'content-type': 'application/json' });
-  res.end(JSON.stringify({ sub: token, ...user }));
-});
+// OIDC stand-in with three distinct identities: host, guest, and a true observer who never takes
+// a seat. It implements the authorization-code flow rather than a bare userinfo lookup, because a
+// session is now established by completing that flow — the backend holds the tokens and the
+// browser holds only an identifier.
+const { createMockIdentityProvider } = require('./mockIdentityProvider');
+
+const idp = createMockIdentityProvider({ port: authPort });
+const mockAuth = idp.server;
+const mockAuthIssuer = idp.issuer;
 
 // Boot the real server with NO database configured (DATABASE_URL / POSTGRES_* stripped
 // from the inherited env) so buildPool() returns null and it starts DB-free.
@@ -61,6 +38,9 @@ delete childEnv.POSTGRES_DATABASE;
 delete childEnv.POSTGRES_USER;
 Object.assign(childEnv, {
   NODE_ENV: 'test',
+  // Sessions are database rows, and this lane deliberately has no database. The store seam is
+  // gated on NODE_ENV=test AND this value together, so neither alone can reach it.
+  AUTH_SESSION_TEST_STORE: 'memory',
   PORT: String(port),
   AUTH_BASE_URL: `http://127.0.0.1:${authPort}`,
   PUBLIC_ORIGIN: 'https://chess-tactics.com',
@@ -144,9 +124,48 @@ function parseSseFrames(body) {
 }
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
-const asHost = { cookie: '__Host-chess-tactics-access=abc', ...JSON_HEADERS };
-const asGuest = { cookie: '__Host-chess-tactics-access=rival', ...JSON_HEADERS };
-const asObserver = { cookie: '__Host-chess-tactics-access=observer', ...JSON_HEADERS };
+
+/**
+ * Sign in for real and keep the session cookie the backend hands back.
+ *
+ * Follows the whole flow the browser would: /api/auth/sign-in mints the state and redirects, the
+ * provider answers with a code bound to the PKCE challenge, and the callback exchanges it. Nothing
+ * here fabricates a credential — if state binding, PKCE, the nonce, or the code exchange broke,
+ * every test in this file would stop authenticating.
+ */
+async function signInAs(subject) {
+  idp.actAs(subject);
+  const start = await request('GET', '/api/auth/sign-in?returnTo=%2F');
+  if (start.statusCode !== 302) throw new Error(`sign-in did not redirect: ${start.statusCode} ${start.body}`);
+  const stateCookie = (start.headers['set-cookie'] || [])
+    .map((value) => value.split(';', 1)[0])
+    .join('; ');
+
+  const authorize = await new Promise((resolve, reject) => {
+    const req = http.request(start.headers.location, (res) => {
+      res.resume();
+      resolve({ statusCode: res.statusCode, location: res.headers.location });
+    });
+    req.on('error', reject);
+    req.end();
+  });
+  if (authorize.statusCode !== 302) throw new Error(`authorize did not redirect: ${authorize.statusCode}`);
+
+  const callbackUrl = new URL(authorize.location);
+  const callback = await request('GET', `${callbackUrl.pathname}${callbackUrl.search}`, { cookie: stateCookie });
+  if (callback.statusCode !== 302) throw new Error(`callback failed: ${callback.statusCode} ${callback.body}`);
+  const session = (callback.headers['set-cookie'] || [])
+    .map((value) => value.split(';', 1)[0])
+    .find((value) => value.startsWith('__Host-chess-tactics-session='));
+  if (!session) throw new Error('callback established no session cookie');
+  return session;
+}
+
+// Filled in during setup, once the server is listening. Read at call time by every default
+// parameter below, so the tests keep saying "act as the guest" and mean a real signed-in guest.
+let asHost = JSON_HEADERS;
+let asGuest = JSON_HEADERS;
+let asObserver = JSON_HEADERS;
 const post = (p, headers, body = '{}') => request('POST', p, headers, body);
 const get = (p, headers) => request('GET', p, headers);
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -160,8 +179,16 @@ async function main() {
   await new Promise((r) => mockAuth.listen(authPort, r));
   await startServer();
 
-  // Auth gate: the lobby list requires sign-in.
+  // Auth gate: the lobby list requires sign-in. Asserted before any sign-in happens, so it cannot
+  // pass merely because no session had been established yet.
   assert((await get('/api/lobbies')).statusCode === 401, 'anonymous lobby list must 401');
+
+  // Three real sign-ins through the real flow. Each returns a session cookie naming a row the
+  // server holds; the tokens behind them never leave the backend.
+  asHost = { cookie: await signInAs('abc'), ...JSON_HEADERS };
+  asGuest = { cookie: await signInAs('rival'), ...JSON_HEADERS };
+  asObserver = { cookie: await signInAs('observer'), ...JSON_HEADERS };
+  assert(asHost.cookie !== asGuest.cookie, 'each sign-in establishes its own session');
 
   // --- Canonical level authority + one-shot Start -------------------------------
   const hosted = await post('/api/lobbies', asHost);

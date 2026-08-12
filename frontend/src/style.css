@@ -18834,6 +18834,24 @@ button.tileset-relationship-cell {
   outline-offset: 2px;
 }
 
+.account-menu-reauth {
+  appearance: none;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  display: block;
+  font: inherit;
+  inline-size: 100%;
+  margin: 0;
+  padding: 0;
+  text-align: start;
+}
+
+.account-menu-reauth:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
+
 .account-menu-glyph {
   block-size: 32px;
   flex: none;
