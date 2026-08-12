@@ -65,7 +65,7 @@ rail, where five marks stack in a column.
   marks, in the same turn: ten of them at `--ds-text-xs` were the wall of type the marks
   replaced, and keeping both would have been the reading problem with a picture stapled to
   it. What the label said is not lost — it is the tip's TITLE, above the sentence the tip
-  already carried. The key is 60.9px instead of 90.9px, and the card 199px instead of 289px.
+  already carried. The key is 60.9px instead of 95.3px, and the card 199px instead of 302px.
   A corner-seated cap was tried and is 13px shorter again; it is rejected because at 42px
   wide this card has no free corner, so the letter landed on the grid lattice, on the
   cursor's brackets and on both magnifier lenses — and a card whose premise is that its
