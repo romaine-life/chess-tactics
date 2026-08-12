@@ -260,14 +260,23 @@ export function CommandCardMarkReview(): ReactElement {
     [catalog],
   );
 
-  /** The version armed for each command: the owner's pick, else that command's first
-   *  candidate, so the card is complete on arrival instead of ten empty seats. */
+  /**
+   * The version armed for each command — ONLY where the owner armed one.
+   *
+   * Deliberately not "else the first candidate": once a card is installed its chosen marks
+   * stop being candidates, so a first-candidate default would arm the runners-up on arrival
+   * and Install would silently replace every mark with the option that lost. Arming is an
+   * act, and an unarmed command keeps what it already paints.
+   */
   const chosen = useMemo(() => {
     const map = new Map<SkirmishShortcutIconVariant, AdminLiveMediaVersion>();
     for (const entry of SKIRMISH_SHORTCUT_CARD) {
       const list = candidates.get(entry.variant) ?? [];
-      if (!list.length) continue;
-      map.set(entry.variant, list.find((version) => version.id === picked[entry.variant]) ?? list[0]);
+      const armedVersion = list.find((version) => version.id === picked[entry.variant])
+        // Nothing is installed for this command yet, so its first candidate is not a
+        // replacement for anything — the card would otherwise open with a hole in it.
+        ?? (skirmishShortcutIconUrl(entry.variant) ? undefined : list[0]);
+      if (armedVersion) map.set(entry.variant, armedVersion);
     }
     return map;
   }, [candidates, picked]);
