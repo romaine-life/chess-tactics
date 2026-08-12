@@ -99,6 +99,11 @@ import {
   RunCardPoolCatalog,
 } from './RunCardPoolStudio';
 import { RunCardArtReviewCatalog } from './RunCardArtReview';
+import { RunSectioArtReview } from './RunSectioArtReview';
+import { LipsanonReview } from './LipsanonReview';
+import { BrushIconReview } from './BrushIconReview';
+import { RunProgressIconReview } from './RunProgressIconReview';
+import { MenuIconReview } from './MenuIconReview';
 import { RunCardOutlineCatalog, RunCardOutlineViewer } from './RunCardOutlineStudio';
 import { RunCardSizeCatalog, RunCardSizeViewer } from './RunCardSizeStudio';
 import { RunCardPromptCatalog, RunCardPromptViewer } from './RunCardPromptStudio';
@@ -138,7 +143,7 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'deployment' | 'gym' | 'solver' | 'cardlayout' | 'cardsize' | 'carddivider' | 'cardicons' | 'cardfit' | 'cardpool' | 'cardoutline' | 'cardprompts' | 'cardartreview' | 'screenart' | 'lipsanonmat' | 'actionmarks' | 'adlectiomark' | 'runrailmarks';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'deployment' | 'gym' | 'solver' | 'cardlayout' | 'cardsize' | 'carddivider' | 'cardicons' | 'cardfit' | 'cardpool' | 'cardoutline' | 'cardprompts' | 'cardartreview' | 'sectioart' | 'lipsanonart' | 'brushicons' | 'runrailicons' | 'menuicons' | 'screenart' | 'lipsanonmat' | 'actionmarks' | 'adlectiomark' | 'runrailmarks';
 
 // Every prop KIND present in the catalog, in definition order — DERIVED from PROP_DEFS so a new
 // kind (e.g. 'rock') is a filter facet automatically. Hardcoding ['tree','house'] here silently
@@ -282,7 +287,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => Boolean(value && studioFamilies.some((family) => family.id === value));
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'deployment' || value === 'gym' || value === 'solver' || value === 'cardlayout' || value === 'cardsize' || value === 'carddivider' || value === 'cardicons' || value === 'cardfit' || value === 'cardpool' || value === 'cardoutline' || value === 'cardprompts' || value === 'cardartreview' || value === 'screenart' || value === 'lipsanonmat' || value === 'actionmarks' || value === 'adlectiomark' || value === 'runrailmarks';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'deployment' || value === 'gym' || value === 'solver' || value === 'cardlayout' || value === 'cardsize' || value === 'carddivider' || value === 'cardicons' || value === 'cardfit' || value === 'cardpool' || value === 'cardoutline' || value === 'cardprompts' || value === 'cardartreview' || value === 'sectioart' || value === 'lipsanonart' || value === 'brushicons' || value === 'runrailicons' || value === 'menuicons' || value === 'screenart' || value === 'lipsanonmat' || value === 'actionmarks' || value === 'adlectiomark' || value === 'runrailmarks';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -2150,6 +2155,31 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
           Candidates only. Accepting a card is done from Card Prompts, one card at a time.
         </p>
       ),
+    },
+    {
+      id: 'sectioart', label: 'Sectio Art', hint: 'Sectio card-row wrap candidates, mounted in the band they ship in.',
+      main: <RunSectioArtReview />,
+      controls: <p className="tileset-view-note">Review only.</p>,
+    },
+    {
+      id: 'lipsanonart', label: 'Lipsanon Art', hint: 'Every lipsanon icon candidate in the live catalog, mounted together.',
+      main: <LipsanonReview />,
+      controls: <p className="tileset-view-note">Review only.</p>,
+    },
+    {
+      id: 'brushicons', label: 'Brush Icons', hint: 'Level Editor brush icon candidates, mounted together.',
+      main: <BrushIconReview />,
+      controls: <p className="tileset-view-note">Review only.</p>,
+    },
+    {
+      id: 'runrailicons', label: 'Run Rail Icons', hint: 'Run title-bar and rail icon candidates, mounted together.',
+      main: <RunProgressIconReview />,
+      controls: <p className="tileset-view-note">Review only.</p>,
+    },
+    {
+      id: 'menuicons', label: 'Menu Icons', hint: 'Main-menu icon treatments, mounted together.',
+      main: <MenuIconReview />,
+      controls: <p className="tileset-view-note">Review only.</p>,
     },
     {
       id: 'cardpool', label: 'Card Pool', hint: 'Re-derive the offer catalog live: piece material, footprint rules, the density cost curve, and where the rarity bands land.',
