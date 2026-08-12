@@ -7,7 +7,7 @@ refines:
   - "[ADR-0569](0569-the-invariant-title-bar-cluster-is-one-divided-box.md)"
 ---
 
-# ADR-0587: The Controls head is one divided block, on the panel's own marble
+# ADR-0588: The Controls head is one divided block, on the panel's own marble
 
 ## Context
 
