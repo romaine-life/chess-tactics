@@ -26891,6 +26891,14 @@ button.tileset-relationship-cell {
     grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
+  /* The bar's two anchors are `auto` tracks, so once brand + lane exceed the row they shrink
+     below their content and spill across each other again — which is how the Strategikon's
+     "‹ Back to Run" ended up painted over the whole title breadcrumb, making Battle /
+     Strategikon / Chartulary untappable. A three-level trail is not a phone affordance
+     anyway: shed the TRAIL and keep the brand and the screen it names, the same way this bar
+     already sheds its objective and Run identity chips when it gets tight. */
+  .brand-lockup-route { display: none; }
+
   /* --- Twin-screen destination row (the rot this band did not cover) ------------------
      The rules above were written when a destination was a single `.settings-main-frame`
      beside the rail. The menu shell has since become the TWIN SCREEN: the persistent menu
@@ -26978,6 +26986,56 @@ button.tileset-relationship-cell {
   .menu-dest > .enchiridion-workspace > .enchiridion-content {
     inline-size: 100%;
     padding-inline-start: 0;
+  }
+
+  /* --- Strategikon (the in-Run / in-Battle reference shell) ---------------------------
+     Built as columns of fixed rails: the workspace is `322px + rest`, and a section with a
+     secondary rail nests ANOTHER `322px + rest` inside it. That is 644px of rail before any
+     content, so on a 390px phone the section tabs came out 16–36% visible and the panels
+     overflowed containers that clip. Stack it on the same terms as the menu shell: rails
+     become full-width rows above their content, and the panes that clip by design at a width
+     where they fit are given a scroll instead.
+
+     Stack as a FLEX column, not a one-column grid, for the same reason the menu shell does:
+     every pane here carries `min-block-size: 0` (they are scroll hosts on the desktop), which
+     zeroes its contribution to an auto grid track's minimum, so a definite-height workspace
+     squeezes the rows and the content panel paints straight over the rail above it — the
+     section tabs stayed reachable but a tap on "Chartulary" landed on the panel covering it.
+     `flex: none` items cannot be squeezed below their content. */
+  .strategikon-workspace-layout,
+  .strategikon-pane.has-secondary-rail {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .strategikon-workspace-layout > *,
+  .strategikon-pane.has-secondary-rail > * {
+    flex: none;
+    min-inline-size: 0;
+  }
+  /* The rail docks to the workspace edge by stepping back out of the body inset — that is a
+     COLUMN's exemption (ADR-0297). Stacked it is a row and would just sit off the left edge. */
+  .strategikon-pane > .enchiridion-section-rail {
+    margin-inline-start: 0;
+  }
+  .strategikon-workspace .shell-workspace-body-content {
+    overflow: hidden auto;
+  }
+
+  /* Three 132px filter minimums plus a button do not fit a phone; one per row does. */
+  .enchiridion-card-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Browser + detail side by side has a 556px floor. Stack, and scroll. */
+  .enchiridion-lipsanon-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    overflow: hidden auto;
+  }
+  .enchiridion-card-gallery-layout {
+    grid-template-rows: auto auto;
+    overflow: hidden auto;
   }
 }
 

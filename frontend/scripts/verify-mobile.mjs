@@ -153,12 +153,36 @@ function measure() {
   // How much of an element survives every clipping ancestor AND the viewport. This is the
   // number that matters: a control translated off the left edge is 100% "laid out" and 0%
   // reachable, and only the intersection tells them apart.
+  //
+  // Overflow only clips a descendant that the clipping box actually CONTAINS. An out-of-flow
+  // box escapes ancestors that do not establish its containing block, and this app leans on
+  // that: its screens are position:fixed, while `#root` collapses to a small box because
+  // almost nothing is in flow inside it. Walking blindly upward therefore intersected every
+  // control with a 370x460 `#root` and called a plainly visible Strategikon nav 0% visible.
+  const containingBlockFor = (style) => (
+    style.position !== 'static'
+    || style.transform !== 'none'
+    || style.filter !== 'none'
+    || style.perspective !== 'none'
+  );
   const visibleFraction = (el) => {
     const rect = el.getBoundingClientRect();
     if (area(rect) === 0) return 0;
     let clip = { left: 0, top: 0, right: vw, bottom: vh, width: vw, height: vh };
+    // `effective` is how the subtree we are carrying upward presents to the NEXT ancestor. It
+    // has to be re-evaluated at every step, not read once off the element: here the button is
+    // static, but `.scene-boundary` several levels up is position:fixed, which takes the whole
+    // screen out of `#root`'s reach. Checking only the element's own position missed that and
+    // blamed a collapsed `#root` for clipping the entire app.
+    let effective = getComputedStyle(el).position;
     for (let node = el.parentElement; node && node !== document.documentElement; node = node.parentElement) {
       const style = getComputedStyle(node);
+      const canClip = effective === 'fixed'
+        ? (style.transform !== 'none' || style.filter !== 'none' || style.perspective !== 'none')
+        : effective === 'absolute' ? containingBlockFor(style) : true;
+      if (style.position === 'fixed' || style.position === 'absolute') effective = style.position;
+      else if (canClip) effective = 'static';
+      if (!canClip) continue;
       const clipsX = style.overflowX !== 'visible';
       const clipsY = style.overflowY !== 'visible';
       if (!clipsX && !clipsY) continue;
