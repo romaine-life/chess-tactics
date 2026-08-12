@@ -25,14 +25,13 @@ import {
 import { KitScroll } from './KitScroll';
 import { RunCard } from './RunCard';
 import { InnerChromeBox } from './shared/ChromeBox';
+import { CHROME_STRUCTURAL_FILL_ROLE } from './shared/chromeSurfacePolicy';
 import {
   RunCardGoldTierDivider,
   runCardTierLabel,
   useRunCardGoldTierDividerSource,
 } from './shared/RunCardGoldTierDivider';
 import { useRunCardCostCrownSource } from './shared/runCardCostCrown';
-import { ChromeButton } from './shared/ChromeButton';
-import { chromeUnitClassNames } from './chromeUnitRegistry';
 
 interface HeldCard {
   owned: RunOwnedCard;
@@ -104,17 +103,12 @@ export function HeldCardCodex({
           onRarityFilterChange={setRarityFilter}
           count={visible.length}
           testIdPrefix="strategikon-chartulary"
+          scope={thisCombatAvailable ? {
+            label: 'This Combat',
+            active: thisCombatOnly,
+            onToggle: () => setThisCombatOnly((value) => !value),
+          } : undefined}
         />
-        {thisCombatAvailable ? (
-          <ChromeButton
-            unit="inner-text-button"
-            className={chromeUnitClassNames('inner-text-button', 'app-header-button', thisCombatOnly && 'active')}
-            aria-pressed={thisCombatOnly}
-            onClick={() => setThisCombatOnly((value) => !value)}
-          >
-            This Combat
-          </ChromeButton>
-        ) : null}
         <KitScroll className="enchiridion-card-gallery-scroll">
           <div
             className="enchiridion-card-gallery-browser"
@@ -141,7 +135,7 @@ export function HeldCardCodex({
               </section>
             ))}
             {!groups.length ? (
-              <InnerChromeBox className="enchiridion-empty">
+              <InnerChromeBox className="enchiridion-empty" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
                 <h3>{all.length ? 'No matching cards' : 'No cards held'}</h3>
                 <p>
                   {all.length

@@ -17,6 +17,19 @@ concurrency:
   group: docker-build-check-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.git_ref || '' }}
   cancel-in-progress: true
 
+# Every job here runs `npm ci` in frontend/, and `onnxruntime-node`'s install script downloads its
+# CUDA execution provider from a GitHub release whenever the platform is Linux/x64 and the .so is
+# absent — which is every runner. That ~200MB fetch failed three jobs in one afternoon (ECONNRESET
+# twice, 503 once), each passing on a blind re-run, and it is pure waste: nothing in this repo
+# imports onnxruntime-node at all. It arrives as a required dependency of
+# @huggingface/transformers, whose only consumer is a browser web worker running the 'webgpu' |
+# 'wasm' backends through onnxruntime-web. Every other binary is bundled in the npm tarball, so
+# skipping leaves the package importable on CPU; the CUDA EP needs an NVIDIA GPU no runner has.
+# The env var is read ahead of npm config on purpose — the equivalent .npmrc key is an unknown npm
+# config, so it warns on every npm command in frontend/ and says it stops working in the next major.
+env:
+  ONNXRUNTIME_NODE_INSTALL_CUDA: skip
+
 jobs:
   backend-tests:
     name: Test backend
