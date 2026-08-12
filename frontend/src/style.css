@@ -12039,7 +12039,14 @@ body { font-size: 17px; }
   grid-template-columns: minmax(0, 1fr) 260px;
 }
 
-.tileset-studio-shell.is-catalog > .tileset-studio-grid {
+/* The catalog's scroll owner is the shell's DIRECT content child. Almost every category hands
+   back the grid itself, so the grid is that child; a category that needs a wrapper — because it
+   shows something above its grid — has to be named here too, or its content silently clips at
+   the shell's height with no way to reach the rest. Log Marks lost half its candidates to
+   exactly that. One rule listing both, so the next wrapper joins it instead of inventing a
+   second scroll. */
+.tileset-studio-shell.is-catalog > .tileset-studio-grid,
+.tileset-studio-shell.is-catalog > .battle-log-mark-page {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
