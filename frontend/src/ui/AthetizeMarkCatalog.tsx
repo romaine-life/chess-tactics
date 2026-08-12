@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import {
   acceptLiveMediaVersions,
-  fetchAdminLiveMediaCatalog,
   reviewLiveMediaVersion,
   type AdminLiveMediaCatalog,
   type AdminLiveMediaVersion,
 } from '../net/liveMediaAdmin';
+import { useAdminLiveMediaCatalog } from './studio/useAdminLiveMediaCatalog';
 import { fetchAdminDrawableCatalog, saveDrawableAsset } from '../net/drawableCatalogAdmin';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { ChromeButton } from './shared/ChromeButton';
@@ -75,18 +75,8 @@ export interface AthetizeMarkState {
 
 /** One fetch and one selection, shared by the grid and the controls rail. */
 export function useAthetizeMark(): AthetizeMarkState {
-  const [catalog, setCatalog] = useState<AdminLiveMediaCatalog | null>(null);
-  const [error, setError] = useState('');
+  const { catalog, error, refresh } = useAdminLiveMediaCatalog();
   const [selectedId, setSelectedId] = useState('');
-  const [nonce, setNonce] = useState(0);
-  const refresh = useCallback(() => setNonce((value) => value + 1), []);
-  useEffect(() => {
-    let active = true;
-    void fetchAdminLiveMediaCatalog()
-      .then((next) => { if (active) setCatalog(next); })
-      .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : String(reason)); });
-    return () => { active = false; };
-  }, [nonce]);
   const options = useMemo(() => catalog ? athetizeMarkOptions(catalog) : [], [catalog]);
   const selected = options.find((version) => version.id === selectedId) ?? options[0] ?? null;
   return { catalog, options, selected, selectedId, setSelectedId, error, refresh };

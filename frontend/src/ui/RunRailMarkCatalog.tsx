@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import {
   acceptLiveMediaVersions,
-  fetchAdminLiveMediaCatalog,
   reviewLiveMediaVersion,
   type AdminLiveMediaCatalog,
   type AdminLiveMediaVersion,
 } from '../net/liveMediaAdmin';
+import { useAdminLiveMediaCatalog } from './studio/useAdminLiveMediaCatalog';
 import { fetchAdminDrawableCatalog, saveDrawableAsset } from '../net/drawableCatalogAdmin';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
@@ -99,18 +99,8 @@ export interface RunRailMarkState {
 }
 
 export function useRunRailMarks(): RunRailMarkState {
-  const [catalog, setCatalog] = useState<AdminLiveMediaCatalog | null>(null);
-  const [error, setError] = useState('');
+  const { catalog, error, refresh } = useAdminLiveMediaCatalog();
   const [selectedIds, setSelectedIds] = useState<Record<string, string>>({});
-  const [nonce, setNonce] = useState(0);
-  const refresh = useCallback(() => setNonce((value) => value + 1), []);
-  useEffect(() => {
-    let active = true;
-    void fetchAdminLiveMediaCatalog()
-      .then((next) => { if (active) setCatalog(next); })
-      .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : String(reason)); });
-    return () => { active = false; };
-  }, [nonce]);
   const select = useCallback((slot: string, id: string) => {
     setSelectedIds((previous) => ({ ...previous, [slot]: id }));
   }, []);
@@ -165,10 +155,11 @@ export function RunRailMarkCatalog({ state }: { state: RunRailMarkState }): Reac
           <h3>{seat.label}</h3>
           <p className="tileset-catalog-note">{seat.idea}</p>
           {options.length ? (
-            <div className="tileset-studio-grid">
+            <div className="tileset-studio-grid studio-seat-grid">
               {options.map((version) => (
                 <StudioCatalogCard
                   key={version.id}
+                  className="studio-seat-card"
                   title={runRailMarkLabel(version)}
                   badge={`${version.media!.width}×${version.media!.height}`}
                   selected={(selectedIds[seat.slot] ?? options[0]?.id) === version.id}

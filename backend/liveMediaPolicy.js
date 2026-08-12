@@ -20,6 +20,34 @@ const PREDRAWN_BOARD_PROOF_RENDERER = 'LevelEditor/PredrawnBoardLayer';
 // make every new mark a backend edit, which is how a gate stops being run.
 const MAIN_MENU_MARK_FITTED_EXCEPTION_SCHEMA = 'main-menu-mark-fitted-production-exception-v1';
 const MAIN_MENU_MARK_FITTED_TRANSFORM = 'ink-crop-lanczos-fit-height-52-even-quantize-48-center-64';
+/**
+ * The ink height a fitted mark is packed to, PER SEAT.
+ *
+ * The comment below says the list is every mark drawn into a fitted rail seat, and that two marks
+ * stacked in one rail must share an ink height or one silently reads a different size — a property
+ * of the SEAT. The height was nevertheless a single constant, which meant "fitted mark" implicitly
+ * meant "fitted to the main menu's box". A second rail with a different measured box could not
+ * state the truth about itself: the Enchiridion's section rail carries 40px of ink (measured on its
+ * installed Units and Lipsana marks), so a mark fitted to 40 and declaring 52 would be a lie and a
+ * mark fitted to 52 would stand a size larger than the five it joins.
+ *
+ * 52 stays the default, so every already-accepted row keeps validating against exactly what it
+ * stored. A seat with its own box declares it here (ADR-0588).
+ */
+const FITTED_MARK_INK_HEIGHT_DEFAULT = 52;
+const FITTED_MARK_INK_HEIGHT_BY_SLOT = Object.freeze({
+  'ui/kit/icons/tileset-studio.png': 40,
+});
+
+function fittedMarkInkHeight(slot) {
+  const declared = FITTED_MARK_INK_HEIGHT_BY_SLOT[String(slot || '')];
+  return Number.isInteger(declared) ? declared : FITTED_MARK_INK_HEIGHT_DEFAULT;
+}
+
+/** The exact packer transform for a seat, derived from its ink height so the two cannot drift. */
+function fittedMarkTransform(slot) {
+  return `ink-crop-lanczos-fit-height-${fittedMarkInkHeight(slot)}-even-quantize-48-center-64`;
+}
 // The list is every mark drawn into a FITTED RAIL SEAT, which is why it is not confined to the
 // main menu's own five. The seat scales the whole 64x64 canvas to a fixed size and lets the
 // asset's transparent padding decide how big the mark reads, so any two marks stacked in one
@@ -49,6 +77,9 @@ const MAIN_MENU_MARK_FITTED_SLOTS = Object.freeze([
   'ui/kit/icons/shortcuts/promotion-zones.png',
   'ui/kit/icons/shortcuts/zoom-in.png',
   'ui/kit/icons/shortcuts/zoom-out.png',
+  // The Enchiridion section rail's Terrain mark. Its seat carries 40px of ink, not 52 —
+  // see FITTED_MARK_INK_HEIGHT_BY_SLOT (ADR-0588).
+  'ui/kit/icons/tileset-studio.png',
 ]);
 
 const LIPSANON_ICON_COMPONENT = 'run-lipsanon-icon';
@@ -1012,8 +1043,8 @@ function mainMenuMarkMediaIssue(row, projectedRuntime = null) {
 
   const metadata = mediaVersionMetadata(row);
   if (Number(metadata.canvas) !== 64) return 'A main-menu mark requires metadata.canvas 64';
-  if (Number(metadata.inkHeight) !== 52) {
-    return 'A main-menu mark requires metadata.inkHeight 52, the one height the whole rail is fitted to';
+  if (Number(metadata.inkHeight) !== fittedMarkInkHeight(row.slot)) {
+    return `A fitted mark requires metadata.inkHeight ${fittedMarkInkHeight(row.slot)}, the one height ITS rail is fitted to`;
   }
   if (metadata.evenInkDimensions !== true) {
     return 'A main-menu mark requires metadata.evenInkDimensions true, so its ink centres exactly on an even canvas';
@@ -2221,8 +2252,10 @@ function nativeMediaEvidenceIssue(row) {
     if (
       Number(row.width) !== 64 || Number(row.height) !== 64
       || Number(evidence.outputWidth) !== 64 || Number(evidence.outputHeight) !== 64
-      || Number(evidence.inkHeight) !== 52
-    ) return 'ADR-0560 fitted mark evidence must declare a 64x64 canvas holding exactly 52px of ink';
+      || Number(evidence.inkHeight) !== fittedMarkInkHeight(row.slot)
+    ) {
+      return `ADR-0560 fitted mark evidence must declare a 64x64 canvas holding exactly ${fittedMarkInkHeight(row.slot)}px of ink`;
+    }
     if (
       !Number.isFinite(Number(evidence.sourceWidth)) || Number(evidence.sourceWidth) <= 0
       || !Number.isFinite(Number(evidence.sourceHeight)) || Number(evidence.sourceHeight) <= 0
@@ -2231,7 +2264,7 @@ function nativeMediaEvidenceIssue(row) {
       !normalizedSha(evidence.outputSha256)
       || normalizedSha(evidence.outputSha256) !== normalizedSha(row.blob_sha256)
       || !normalizedSha(evidence.sourceSha256)
-      || evidence.transform !== MAIN_MENU_MARK_FITTED_TRANSFORM
+      || evidence.transform !== fittedMarkTransform(row.slot)
     ) return 'ADR-0560 fitted mark evidence must authorize these bytes and name its exact transform';
     return null;
   }
@@ -2327,6 +2360,8 @@ module.exports = {
   MAIN_MENU_MARK_FITTED_EXCEPTION_SCHEMA,
   MAIN_MENU_MARK_FITTED_TRANSFORM,
   MAIN_MENU_MARK_FITTED_SLOTS,
+  fittedMarkInkHeight,
+  fittedMarkTransform,
   mainMenuMarkSlot,
   mainMenuMarkMediaIssue,
   RUN_CARD_COST_COIN_COMPONENT,

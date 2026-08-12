@@ -5486,14 +5486,6 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": "body",
-      "surfaceHash": "6f499c15c9504594096b0bf7cc67a074b598114a89e83e9599111150312cf62f",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
       "selector": "button.active",
       "surfaceHash": "2604582899c13f9fc50bb11aadc686cb5712d1ea8d347b49603463760027465d",
       "occurrence": 1
