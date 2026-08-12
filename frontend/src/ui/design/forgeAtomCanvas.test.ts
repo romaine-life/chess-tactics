@@ -2,7 +2,7 @@
 // forge is an untyped .mjs; vitest runs this via esbuild (no typecheck). The pad
 // logic it exercises is plain JS.
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PNG } from 'pngjs';
@@ -31,11 +31,19 @@ function opaqueBox(png: PNG) {
   };
 }
 function padded(srcW: number, srcH: number, cw = 64, ch = 64, margin = 2): PNG {
+  // Every call used to leave its directory behind. Six per run, every run, into
+  // the directory the whole machine shares: that is how the system temp
+  // directory reaches tens of thousands of entries and starts charging every
+  // other test for its own size. Read the result, then take the scratch away.
   const dir = mkdtempSync(join(tmpdir(), 'padcanvas-'));
-  const f = join(dir, 'g.png');
-  writeFileSync(f, solidPng(srcW, srcH));
-  padToCanvas(f, cw, ch, margin);
-  return PNG.sync.read(readFileSync(f));
+  try {
+    const f = join(dir, 'g.png');
+    writeFileSync(f, solidPng(srcW, srcH));
+    padToCanvas(f, cw, ch, margin);
+    return PNG.sync.read(readFileSync(f));
+  } finally {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+  }
 }
 
 describe('padToCanvas (ADR-0026 glyph canvas)', () => {

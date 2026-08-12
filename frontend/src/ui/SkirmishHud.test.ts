@@ -23,6 +23,7 @@ describe('Skirmish HUD shortcuts', () => {
   it('shows R as Deselect all in the command card', () => {
     expect(SHORTCUT_BINDINGS.r).toEqual({
       kind: 'deselect',
+      icon: 'deselect',
       label: 'Deselect all',
       hint: 'Clear the selected and focused units',
     });
@@ -63,6 +64,7 @@ describe('Skirmish HUD shortcuts', () => {
 
     expect(SHORTCUT_BINDINGS.t).toEqual({
       kind: 'clear-overlays',
+      icon: 'clear-overlays',
       label: 'Clear all',
       hint: 'Turn off all board overlays',
     });
@@ -100,6 +102,7 @@ describe('Skirmish HUD shortcuts', () => {
     expect(SHORTCUT_BINDINGS.d).toEqual({
       kind: 'toggle',
       flag: 'showPromotionZones',
+      icon: 'promotion-zones',
       label: 'Promotion zones',
       hint: 'View pawn promotion zones',
     });

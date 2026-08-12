@@ -7268,6 +7268,85 @@ async function main() {
     throw new Error(`Unexpected editor resolve: ${resolvedEditor.statusCode} ${resolvedEditor.body}`);
   }
 
+  // Automated verification observes documents; it must not be able to CREATE one (ADR-0586).
+  // Resolve is where a working copy is born, so `intent: observe` has to reach this request too —
+  // rewriting only the edit-session open left every screenshot of a document-less editor URL
+  // minting an "Untitled level" on the owner's account and then observing what it had just made.
+  const observedExistingResolve = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: playerCookie, 'content-type': 'application/json' },
+    JSON.stringify({ level_id: 'smoke-1', intent: 'observe' }),
+  );
+  const observedExistingBody = JSON.parse(observedExistingResolve.body);
+  if (
+    observedExistingResolve.statusCode !== 200 ||
+    observedExistingBody.document.document_id !== smokeDocumentId ||
+    observedExistingBody.document.revision !== 1
+  ) {
+    throw new Error(`Observing resolve should attach to the existing working copy unchanged: ${observedExistingResolve.statusCode} ${observedExistingResolve.body}`);
+  }
+
+  const observedMissingResolve = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: playerCookie, 'content-type': 'application/json' },
+    JSON.stringify({ level_id: 'smoke-observe-absent', intent: 'observe' }),
+  );
+  if (
+    observedMissingResolve.statusCode !== 404 ||
+    JSON.parse(observedMissingResolve.body).error !== 'editor_document_not_found_for_level'
+  ) {
+    throw new Error(`Observing resolve must refuse to initialize a missing working copy: ${observedMissingResolve.statusCode} ${observedMissingResolve.body}`);
+  }
+
+  const observedCreateResolve = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: playerCookie, 'content-type': 'application/json' },
+    JSON.stringify({ intent: 'observe', level: { formatVersion: 2, id: 'draft', name: 'Untitled level', board: { cols: 10, rows: 10, heightLevels: 1 } } }),
+  );
+  if (
+    observedCreateResolve.statusCode !== 409 ||
+    JSON.parse(observedCreateResolve.body).error !== 'observation_cannot_create_editor_document'
+  ) {
+    throw new Error(`Observing resolve must refuse a create-shaped body: ${observedCreateResolve.statusCode} ${observedCreateResolve.body}`);
+  }
+
+  // The header carries the same declaration as the body field, exactly as the edit-session open
+  // already accepts it, so a caller that cannot reshape a body still observes.
+  const observedHeaderResolve = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: playerCookie, 'content-type': 'application/json', 'x-level-editor-session-intent': 'observe' },
+    JSON.stringify({ level_id: 'smoke-observe-absent' }),
+  );
+  if (observedHeaderResolve.statusCode !== 404) {
+    throw new Error(`Observing intent must be honoured from the header: ${observedHeaderResolve.statusCode} ${observedHeaderResolve.body}`);
+  }
+
+  const invalidIntentResolve = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: playerCookie, 'content-type': 'application/json' },
+    JSON.stringify({ level_id: 'smoke-1', intent: 'peek' }),
+  );
+  if (
+    invalidIntentResolve.statusCode !== 400 ||
+    JSON.parse(invalidIntentResolve.body).error !== 'invalid_editor_document_resolve_intent'
+  ) {
+    throw new Error(`An unknown resolve intent must be refused, not treated as write: ${invalidIntentResolve.statusCode} ${invalidIntentResolve.body}`);
+  }
+
+  // Prove the refusals wrote nothing: the refused level still has no working copy, so an ordinary
+  // WRITE resolve reaches the canonical lookup rather than finding a document observation left behind.
+  const absentAfterObservation = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: playerCookie, 'content-type': 'application/json' },
+    JSON.stringify({ level_id: 'smoke-observe-absent' }),
+  );
+  if (
+    absentAfterObservation.statusCode !== 404 ||
+    JSON.parse(absentAfterObservation.body).error !== 'saved_level_not_found'
+  ) {
+    throw new Error(`Observing resolve left a working copy behind: ${absentAfterObservation.statusCode} ${absentAfterObservation.body}`);
+  }
+
   // Every owner page targets the same editable working copy. Page sessions
   // authenticate and attribute writes; lease state is not mutation authority.
   const primaryOpen = await openEditorEditSession(smokeDocumentId, {
