@@ -55,6 +55,7 @@ import { acquireNetSeatLease } from '../game/netSeatLease';
 import { objectiveSummary, victoryRulesForObjective } from '../core/objectives';
 import { objectiveBriefingForSide } from '../game/objectiveBriefing';
 import { BattleClockChip } from './BattleClockChip';
+import { BattleMaterialChip } from './BattleMaterialChip';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { decodeBoard } from './boardCode';
@@ -1470,6 +1471,9 @@ function SkirmishSession(props: SkirmishProps = {}) {
         also seats it in the Run's bar). Keeping the centre chip present means
         the turn plate and objective always flank a real element, so the clock stays
         page-centred over the title bar's diamond (equal-width flanks, see style.css).
+        The two material boxes are a MATCHED PAIR hugging that clock for the same reason
+        (ADR-0575): one box for both forces would have pushed the clock off the diamond,
+        and a pair on either side cannot.
         Every box in the bar is one hover/keyboard target that names itself — that is
         what a frame costs its width for (TitleBarStatusTip). */}
       <TitleBarStatusTip
@@ -1484,7 +1488,9 @@ function SkirmishSession(props: SkirmishProps = {}) {
         <strong>{turnLabel}</strong>
         <small>{game.winner ? 'Skirmish Complete' : 'Live Board'}</small>
       </TitleBarStatusTip>
+      <BattleMaterialChip relation="self" />
       <BattleClockChip />
+      <BattleMaterialChip relation="opponent" />
       <TitleBarStatusTip
         className="skirmish-status-chip skirmish-objective"
         label={`Objective. ${objectiveGoal}`}

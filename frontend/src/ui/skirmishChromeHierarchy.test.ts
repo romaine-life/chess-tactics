@@ -92,6 +92,21 @@ describe('Skirmish chrome hierarchy', () => {
     expect(titleContent.match(/<TitleBarStatusTip\b/g)).toHaveLength(2);
     expect(titleContent).toContain('<BattleClockChip />');
     expect(battleClockChip).toContain('<TitleBarStatusTip');
+    // Material is a MATCHED PAIR hugging the clock, never one combined box (ADR-0575): the two
+    // flanks are what hold the clock over the title bar's nailhead diamond, and an odd number of
+    // added boxes would have slid it off. The pair is also its own component rather than markup
+    // here, so the Run's bar shows the same two boxes from the same place the clock comes from.
+    expect(titleContent).toMatch(
+      /<BattleMaterialChip relation="self" \/>\s*<BattleClockChip \/>\s*<BattleMaterialChip relation="opponent" \/>/,
+    );
+    expect(titleContent).not.toMatch(/skirmish-material/);
+    // The two flank chips share ONE width; that is the whole mechanism, so it cannot quietly
+    // become a per-chip size.
+    expect(styleCss).toMatch(
+      /\.skirmish-topbar-status \.skirmish-turn-plate,\s*\.skirmish-topbar-status \.skirmish-objective\s*\{[\s\S]*?min-inline-size:\s*150px;/,
+    );
+    // And the pair's own readout holds a stable width for the same reason.
+    expect(styleCss).toMatch(/\.skirmish-material-points\s*\{[\s\S]*?min-inline-size:\s*2ch;/);
     expect(titleContent).not.toMatch(/<TitleBarStatus\b[^T]/);
     expect(skirmish).not.toContain("from '../core/clock'");
     expect(titleContent).not.toMatch(/<div\b[^>]*skirmish-status-chip/);

@@ -4713,6 +4713,51 @@ h1 {
   color: var(--threat);
 }
 
+/* Material: one box per force, a live Pawn in that army's palette and the points it is still
+   worth (ADR-0575). Shaped like a Run measure — mark, then value, hugging — because that is
+   what it is: an icon and its number. The frame and the control height come from
+   .skirmish-status-chip; this is inner layout only. */
+.skirmish-material {
+  gap: var(--ds-inline-tight);
+}
+
+.skirmish-material-points {
+  color: #eaf6ff;
+  font: var(--ds-weight-strong) var(--ds-text-md)/1 var(--ds-font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .04em;
+  /* The READOUT owns a stable width, exactly as the clock's does, and here it is what keeps
+     the row SYMMETRIC: the two boxes flank the battle clock, so a one-digit force beside a
+     two-digit one would slide the clock off the title bar's nailhead diamond. Two tabular
+     digits is the width every real board needs — a full chess army is 39 points — and the
+     span grows past it rather than clipping if a Run ever fields a three-digit force. */
+  min-inline-size: 2ch;
+  text-align: center;
+}
+
+/* The mark is a live unit sprite rather than a forged kit glyph, so it answers to the bar's
+   shared mark seat through the ink-fraction mechanism above — AlphaBoundIcon draws visible ink
+   at 82% of its box BY CONSTRUCTION (alphaBoundIconLayout's fill), for every sprite, so the
+   fraction is stated once here and is not a per-asset measurement. The drawn Pawn then lands at
+   the same size as the hourglass beside it and the surplus box bleeds back out. */
+.skirmish-material-mark {
+  --titlebar-mark-ink-fill: .82;
+  --titlebar-mark-canvas: calc(var(--titlebar-mark-seat) / var(--titlebar-mark-ink-fill));
+  block-size: var(--titlebar-mark-canvas);
+  display: grid;
+  flex: none;
+  inline-size: var(--titlebar-mark-canvas);
+  margin: calc((var(--titlebar-mark-seat) - var(--titlebar-mark-canvas)) / 2);
+  place-items: center;
+}
+
+/* The sprite fills the seat the mark box just sized; the 58px utility default is for dense
+   pickers, not a title-bar row. */
+.skirmish-material-mark .utility-piece-icon {
+  block-size: 100%;
+  inline-size: 100%;
+}
+
 .skirmish-field {
   container-name: board-view-seat;
   container-type: size;
@@ -9702,6 +9747,21 @@ body.loading-bootstrap .app-startup-status {
     font-size: var(--ds-text-xs);
     gap: 2px;
   }
+
+  /* The material pair sheds with the row it sits in: same smaller face, same tight gap, so a
+     Run's bar does not narrow its measures around two boxes that kept the comfortable size.
+     The stable two-digit readout goes as well. That width exists to hold the row SYMMETRIC
+     about the battle clock, and this bar's clock left the nailhead diamond the moment the
+     identity chip did — so it is buying nothing here. The Skirmish bar keeps both, because
+     nothing has been dropped from it at this width and its clock is still on the diamond. */
+  .app-shell-titlebar .run-topbar-status .skirmish-material {
+    gap: 2px;
+  }
+
+  .app-shell-titlebar .run-topbar-status .skirmish-material-points {
+    font-size: var(--ds-text-xs);
+    min-inline-size: 0;
+  }
 }
 
 @media (max-width: 860px) {
@@ -9800,6 +9860,18 @@ body.loading-bootstrap .app-startup-status {
     --skirmish-status-chip-inset: var(--ds-space-1);
     --titlebar-mark-seat: 18px;
     gap: var(--ds-space-1);
+  }
+
+  /* That floor is now the design call the note above said it would take, and the material pair
+     is what pays it. Below 860 the lane closes on the row far enough that the last Run measure
+     runs under it, and the pair is the row's newest arrival rather than something it was already
+     built around — the clock and the four measures were AT the floor before material existed.
+     Nothing else in the bar is asked to give up a box to make room for it.
+     The Skirmish bar's whole status row is already gone at this width (its summary moves into
+     Controls), so this is the same answer both bars give: a stacked narrow Battle reads its
+     forces off the board and its Controls, not off the title bar. */
+  .app-shell-titlebar .run-topbar-status .skirmish-material {
+    display: none;
   }
 }
 
