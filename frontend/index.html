@@ -31,10 +31,14 @@
         color: #dbe7ea;
         display: flex;
         font-family: "Advance Wars 2 GBA", sans-serif;
-        font-size: 19px;
+        /* The house font's design brick is em/16, so it only lands on whole pixels at
+           multiples of 16px. 19px gave a 1.1875px brick — the very first string the
+           player sees was drawn off the grid. */
+        font-size: 16px;
+        word-spacing: .5px;
         inset: 0;
         justify-content: center;
-        letter-spacing: 0.02em;
+        letter-spacing: 0;
         opacity: 1;
         position: fixed;
         transition: opacity 350ms linear;

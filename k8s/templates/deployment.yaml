@@ -84,7 +84,7 @@ spec:
             - name: ADMIN_EMAILS
               value: {{ .Values.adminEmails | quote }}
             {{- end }}
-            {{- if .Values.tokenEncryptionSecret }}
+            {{- if .Values.externalSecret }}
             # Encrypts the OAuth tokens held in `auth_sessions` (ADR-0576). The session cookie's
             # token is hashed; these two cannot be, because the backend must present them to the
             # identity provider to renew — so they are encrypted at rest instead.
@@ -99,10 +99,10 @@ spec:
             - name: AUTH_TOKEN_ENCRYPTION_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.tokenEncryptionSecret.name | quote }}
-                  key: {{ .Values.tokenEncryptionSecret.key | default "key" | quote }}
+                  name: chess-tactics-oauth
+                  key: AUTH_TOKEN_ENCRYPTION_KEY
             {{- end }}
-            {{- if .Values.oidcClientSecret }}
+            {{- if .Values.externalSecret }}
             # A Backend-For-Frontend is a confidential OAuth client
             # (draft-ietf-oauth-browser-based-apps-26 §6.1.3.1), so the backend authenticates
             # itself on every token request rather than relying on PKCE alone.
@@ -114,8 +114,8 @@ spec:
             - name: OIDC_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.oidcClientSecret.name | quote }}
-                  key: {{ .Values.oidcClientSecret.key | default "secret" | quote }}
+                  name: chess-tactics-oauth
+                  key: OIDC_CLIENT_SECRET
             {{- end }}
             {{- if and (ne (include "chess-tactics.isTestEnv" .) "true") .Values.serviceAccountClientId }}
             # Headless AI training Jobs (POST /api/train-runs) run THIS image with a

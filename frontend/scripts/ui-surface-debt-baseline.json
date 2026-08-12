@@ -5486,14 +5486,6 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": "body",
-      "surfaceHash": "6f499c15c9504594096b0bf7cc67a074b598114a89e83e9599111150312cf62f",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
       "selector": "button.active",
       "surfaceHash": "2604582899c13f9fc50bb11aadc686cb5712d1ea8d347b49603463760027465d",
       "occurrence": 1
@@ -5608,14 +5600,6 @@
       "context": "",
       "selector": "steps() just advances the frame index. !important clears the global `* { animation: none }` OS-reduce reset (~6477): Windows \"animations off\" reports prefers-reduced-motion falsely, and ambient scenery must not freeze for those players (deploy-drop/ADR-0048 precedent). The EXPLICIT in-game choice (:root.reduce-motion) does freeze it, to frame 0 = the exact static art. NO image-rendering override: the sheet must be resampled exactly like the scene canvas under it (smooth cover scaling, not pixelated). */ .scene-backdrop-anim",
       "surfaceHash": "8eadaa9f2cca9b3aed4bc6ee1b2e7d91c8c50357eeac4ad157b7abf73624e7d7",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
-      "selector": "the chrome carries the connection to the global bar. */ :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .skirmish-card h2.kit-panel-title",
-      "surfaceHash": "f78227b301fc01c2133857005ac0128f938882866a936cf8ee5de7d1d8ddb690",
       "occurrence": 1
     },
     {

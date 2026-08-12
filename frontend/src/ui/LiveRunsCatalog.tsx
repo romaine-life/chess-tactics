@@ -33,8 +33,8 @@ export function LiveRunsCatalog(): ReactElement {
       {runs.length === 0 ? <p className="tileset-catalog-note">Nobody has a Run in progress.</p> : null}
       <ul className="live-run-list">
         {runs.map((run) => (
-          <li key={run.owner_email} className="live-run">
-            <span className="live-run-player">{run.owner_email}</span>
+          <li key={run.handle} className="live-run">
+            <span className="live-run-player">{run.owner_label}</span>
             <span className="live-run-caption">{liveRunCaption(run)}</span>
             <span className="live-run-seen">{relativeTimeLabel(run.updated_at)}</span>
             <a

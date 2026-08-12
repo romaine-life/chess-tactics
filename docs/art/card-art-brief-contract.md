@@ -115,6 +115,9 @@ the moment is a group portrait and has to be rewritten.**
   their acts, and the bench of strong acts with no cast free for them.
 - [`run-card-worlds-v3.json`](run-card-worlds-v3.json) — all 69 default-rules formation cards,
   authored across the three layers, with the seats and the shared-art count each carries today.
+- [`run-card-art-prompts-v3.json`](run-card-art-prompts-v3.json) — the exact prompt behind every
+  illustration, its SHA-256, and the Codex thread that generated it. The chain from a card’s pixels
+  back to its brief, in git rather than only in the database.
 - `run-card-family-prompts-v2.json` and `run-king-prompts-v2.json` — left exactly as accepted, as
   the record of what shipped. Do not brief from them.
 

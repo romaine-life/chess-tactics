@@ -44,6 +44,13 @@ import { ScreenArtCatalog, ScreenArtViewer, useScreenArtCatalog } from './Screen
 import { LipsanonMatCatalog, LipsanonMatViewer, useLipsanonMatCatalog } from './LipsanonMatReview';
 import { AthetizeMarkCatalog, AthetizeMarkControls, useAthetizeMark } from './AthetizeMarkCatalog';
 import { RunRailMarkCatalog, RunRailMarkControls, useRunRailMarks } from './RunRailMarkCatalog';
+import { BrushMarkCatalog, BrushMarkControls, useBrushMarks } from './BrushMarkCatalog';
+import { MenuMarkCatalog, MenuMarkControls, useMenuMarks } from './MenuMarkCatalog';
+import { RunProgressMarkCatalog, RunProgressMarkControls, useRunProgressMarks } from './RunProgressMarkCatalog';
+import { RunSectioWrapCatalog, RunSectioWrapControls, useRunSectioWraps } from './RunSectioWrapCatalog';
+import { LipsanonArtCatalog, LipsanonArtControls, useLipsanonArt } from './LipsanonArtCatalog';
+import { TerrainMarkCatalog, TerrainMarkControls, useTerrainMarks } from './TerrainMarkCatalog';
+import { CommandCardMarkCatalog, CommandCardMarkControls, useCommandCardMarks } from './CommandCardMarkCatalog';
 import { ChromeLabCatalog, ChromeLabViewer, CHROME_LAB_TARGETS, defaultChromeLabTargetId } from './ChromeLab';
 import { RailLab } from './RailLab';
 import { GameLabCatalog, GameLabViewer } from './GameLab';
@@ -100,6 +107,7 @@ import {
   RUN_CARD_POOL_MIN_TEXT_SIZE,
   RunCardPoolCatalog,
 } from './RunCardPoolStudio';
+import { RunCardArtReviewCatalog } from './RunCardArtReview';
 import { RunCardOutlineCatalog, RunCardOutlineViewer } from './RunCardOutlineStudio';
 import { RunCardSizeCatalog, RunCardSizeViewer } from './RunCardSizeStudio';
 import { RunCardPromptCatalog, RunCardPromptViewer } from './RunCardPromptStudio';
@@ -139,7 +147,7 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'deployment' | 'gym' | 'solver' | 'cardlayout' | 'cardsize' | 'carddivider' | 'cardicons' | 'cardfit' | 'cardpool' | 'cardoutline' | 'cardprompts' | 'screenart' | 'lipsanonmat' | 'actionmarks' | 'adlectiomark' | 'runrailmarks' | 'kiticons' | 'liveruns';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'deployment' | 'gym' | 'solver' | 'cardlayout' | 'cardsize' | 'carddivider' | 'cardicons' | 'cardfit' | 'cardpool' | 'cardoutline' | 'cardprompts' | 'screenart' | 'lipsanonmat' | 'actionmarks' | 'adlectiomark' | 'runrailmarks' | 'brushmark' | 'menumarks' | 'runprogressmarks' | 'sectiowrap' | 'lipsanonart' | 'terrainmark' | 'commandcardmarks' | 'cardartreview' | 'kiticons' | 'liveruns';
 
 // Every prop KIND present in the catalog, in definition order — DERIVED from PROP_DEFS so a new
 // kind (e.g. 'rock') is a filter facet automatically. Hardcoding ['tree','house'] here silently
@@ -283,7 +291,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => Boolean(value && studioFamilies.some((family) => family.id === value));
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'deployment' || value === 'gym' || value === 'solver' || value === 'cardlayout' || value === 'cardsize' || value === 'carddivider' || value === 'cardicons' || value === 'cardfit' || value === 'cardpool' || value === 'cardoutline' || value === 'cardprompts' || value === 'screenart' || value === 'lipsanonmat' || value === 'actionmarks' || value === 'adlectiomark' || value === 'runrailmarks' || value === 'kiticons' || value === 'liveruns';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'deployment' || value === 'gym' || value === 'solver' || value === 'cardlayout' || value === 'cardsize' || value === 'carddivider' || value === 'cardicons' || value === 'cardfit' || value === 'cardpool' || value === 'cardoutline' || value === 'cardprompts' || value === 'screenart' || value === 'lipsanonmat' || value === 'actionmarks' || value === 'adlectiomark' || value === 'runrailmarks' || value === 'brushmark' || value === 'menumarks' || value === 'runprogressmarks' || value === 'sectiowrap' || value === 'lipsanonart' || value === 'terrainmark' || value === 'commandcardmarks' || value === 'cardartreview' || value === 'kiticons' || value === 'liveruns';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -292,6 +300,34 @@ const isTerrainPairId = (value: string | null): value is TerrainPairId => Boolea
 const isUnitAssetId = (value: string | null): value is string => Boolean(
   value && (unitAssetById(value) || /^candidate:[0-9a-f-]{36}$/i.test(value)),
 );
+
+/**
+ * Addresses that used to be their own SCREEN hanging off the Studio's path — `/studio` plus a
+ * flag, matched in App.tsx before the Studio ever rendered, so the screen had no category rail,
+ * no Controls panel and no way in but a hand-passed URL. Each is a category now; the flag selects
+ * it and the route writer, which rebuilds the query from scratch, drops the flag on the first
+ * write. Old links therefore keep working and canonicalise themselves, exactly as the path
+ * aliases above do (ADR-0588). `check-studio-surfaces.mjs` fails the build on a new one.
+ *
+ * This table is the whole migration surface: it does not grow. A new review surface is a
+ * category from the start and is reached by `?cat=<id>`.
+ */
+const LEGACY_REVIEW_SCREEN_CATEGORY: Readonly<Record<string, StudioCategory>> = Object.freeze({
+  brushIconReview: 'brushmark',
+  menuIconReview: 'menumarks',
+  runProgressIconReview: 'runprogressmarks',
+  runSectioReview: 'sectiowrap',
+  lipsanonReview: 'lipsanonart',
+  terrainMarkReview: 'terrainmark',
+  commandCardMarkReview: 'commandcardmarks',
+});
+
+function legacyReviewScreenCategory(params: URLSearchParams): StudioCategory | null {
+  for (const [flag, category] of Object.entries(LEGACY_REVIEW_SCREEN_CATEGORY)) {
+    if (params.get(flag) === '1') return category;
+  }
+  return null;
+}
 
 const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const defaults = studioDefaults();
@@ -318,6 +354,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const vk = params.get('vk');
   const normalizedVk = vk === 'wallasset' ? 'wallart' : vk;
   const isCardIconReviewAlias = params.get('runIconPairReview') === '1';
+  const legacyReviewCategory = legacyReviewScreenCategory(params);
   const lab = params.get('lab');
   const view = params.get('view');
   const collection = params.get('collection');
@@ -366,8 +403,8 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const rail = params.get('rail');
   // Destination is decoupled from category — any mode is valid with any category,
   // so the URL is taken at face value (no normalization).
-  const studioMode = isCardIconReviewAlias || isUnitStudioAlias || isNineSliceAlias || isPropLabAlias || isTileCompareAlias || isSurfaceLabAlias || isSceneAnimAlias || isDoodadEditorAlias || isArtworkCompareAlias || isWallCandidatesAlias ? 'viewer' : isStudioMode(mode) ? mode : defaults.studioMode;
-  const routeCategory = isCardIconReviewAlias ? 'cardicons' : isUnitStudioAlias ? 'units' : isNineSliceAlias ? 'assets' : isPropLabAlias ? 'props' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isDoodadEditorAlias ? 'doodads' : isArtworkCompareAlias ? 'pages' : isWallCandidatesAlias ? 'walls' : isStudioCategory(normalizedCat) ? normalizedCat : undefined;
+  const studioMode = legacyReviewCategory ? 'catalog' : isCardIconReviewAlias || isUnitStudioAlias || isNineSliceAlias || isPropLabAlias || isTileCompareAlias || isSurfaceLabAlias || isSceneAnimAlias || isDoodadEditorAlias || isArtworkCompareAlias || isWallCandidatesAlias ? 'viewer' : isStudioMode(mode) ? mode : defaults.studioMode;
+  const routeCategory = legacyReviewCategory ?? (isCardIconReviewAlias ? 'cardicons' : isUnitStudioAlias ? 'units' : isNineSliceAlias ? 'assets' : isPropLabAlias ? 'props' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isDoodadEditorAlias ? 'doodads' : isArtworkCompareAlias ? 'pages' : isWallCandidatesAlias ? 'walls' : isStudioCategory(normalizedCat) ? normalizedCat : undefined);
   const routeTileFilter = view === 'board' ? 'board' : isTileFilter(collection) ? collection : defaults.tileFilter;
   const explicitLabMode = isLabMode(lab) ? lab : undefined;
   const brushParam = params.get('brush');
@@ -651,6 +688,13 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const lipsanonMat = useLipsanonMatCatalog();
   const athetizeMark = useAthetizeMark();
   const runRailMarks = useRunRailMarks();
+  const brushMarks = useBrushMarks();
+  const menuMarks = useMenuMarks();
+  const runProgressMarks = useRunProgressMarks();
+  const runSectioWraps = useRunSectioWraps();
+  const lipsanonArt = useLipsanonArt();
+  const terrainMarks = useTerrainMarks();
+  const commandCardMarks = useCommandCardMarks();
   const adlectioMark = useAdlectioMarkCatalog();
   const [selectedAdlectioMarkId, setSelectedAdlectioMarkId] = useState('');
   const [surfaceSearch, setSurfaceSearch] = useState('');
@@ -1838,9 +1882,44 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       controls: <AthetizeMarkControls state={athetizeMark} />,
     },
     {
-      id: 'runrailmarks', label: 'Run Rail Marks', hint: 'The marks Run preparation’s Current Run and Start New Run tabs wear. Every candidate is mounted on a real rail tab at native size — the seat it ships in, not the title bar’s measure chip. Install binds the selected one.',
+      id: 'runrailmarks', label: 'Run Rail Marks', hint: 'The marks Run preparation’s Continue and New tabs wear. Every candidate is mounted on a real rail tab at native size — the seat it ships in, not the title bar’s measure chip. Install binds the selected one.',
       main: <RunRailMarkCatalog state={runRailMarks} />,
       controls: <RunRailMarkControls state={runRailMarks} />,
+    },
+    {
+      id: 'terrainmark', label: 'Terrain Mark', hint: 'The mark the Enchiridion’s Terrain section wears. Every candidate is mounted in the real section rail with that one seat swapped, so it is read against the five marks it stands beside. Install binds the selected one.',
+      main: <TerrainMarkCatalog state={terrainMarks} />,
+      controls: <TerrainMarkControls state={terrainMarks} />,
+    },
+    {
+      id: 'commandcardmarks', label: 'Command Card Marks', hint: 'The ten marks the Battle command card wears. Each key’s candidates were generated on their own, so the card is COMPOSED here — arm a candidate per command and it lights in the real card above. Install accepts all ten in one act.',
+      main: <CommandCardMarkCatalog state={commandCardMarks} />,
+      controls: <CommandCardMarkControls />,
+    },
+    {
+      id: 'menumarks', label: 'Menu Marks', hint: 'Whole candidate SETS for the five main-menu marks. A mark is only judged against the other four in its column, so each card is a complete rail through the primitive the menu paints. Install accepts the whole set in one act.',
+      main: <MenuMarkCatalog state={menuMarks} />,
+      controls: <MenuMarkControls state={menuMarks} />,
+    },
+    {
+      id: 'brushmark', label: 'Brush Mark', hint: 'Candidates for the Level Editor’s brush tool, mounted in the registered action toolbar beside the tools they ship with. Review only — the pencil stays until a candidate completes its role-native production pass.',
+      main: <BrushMarkCatalog state={brushMarks} />,
+      controls: <BrushMarkControls state={brushMarks} />,
+    },
+    {
+      id: 'runprogressmarks', label: 'Run Title-Bar Marks', hint: 'The Ataraxia, Conflict, Battle and Gold marks the persistent Run title bar names, each mounted in the real measure row at native pixels. Install binds the selected one per seat.',
+      main: <RunProgressMarkCatalog state={runProgressMarks} />,
+      controls: <RunProgressMarkControls state={runProgressMarks} />,
+    },
+    {
+      id: 'sectiowrap', label: 'Sectio Wrap', hint: 'Wrap candidates for the Sectio’s card row, each mounted around live card faces at the geometry the Sectio would give it. Install puts the approved wrap in the live Sectio.',
+      main: <RunSectioWrapCatalog state={runSectioWraps} />,
+      controls: <RunSectioWrapControls state={runSectioWraps} />,
+    },
+    {
+      id: 'lipsanonart', label: 'Lipsanon Art', hint: 'Candidate and installed lipsanon icons at 64×64, so a new one can be read against the family it joins. Review only — nothing here is installed.',
+      main: <LipsanonArtCatalog state={lipsanonArt} />,
+      controls: <LipsanonArtControls />,
     },
     {
       id: 'lipsanonmat', label: 'Lipsanon Mat', hint: 'Candidate surfaces for the lipsanon offers to sit on, mounted over the chosen backdrop with live lipsanon cards. Review only — nothing here is installed.',
@@ -2152,6 +2231,11 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       id: 'cardsize', label: 'Card Size', hint: 'Tune how large the Bona Vacantia grant and the Sectio print their card rows, and the drift and light those cards carry.',
       main: <RunCardSizeCatalog onOpen={() => openViewer('cardsize')} />,
       controls: <button type="button" className="tileset-view-action" data-testid="open-run-card-size" onClick={() => openViewer('cardsize')}>Open Card Size</button>,
+    },
+    {
+      id: 'cardartreview', label: 'Card Art', hint: 'Every card illustration on the face it ships on, grouped by the King world it belongs to, with the raw candidate beneath each so the frame’s crop is visible.',
+      main: <div className="tileset-studio-scroll"><RunCardArtReviewCatalog /></div>,
+      controls: <p className="tileset-view-note">Candidates only. Accepting a card is done from Card Prompts, one card at a time.</p>,
     },
     {
       id: 'cardpool', label: 'Card Pool', hint: 'Re-derive the offer catalog live: piece material, footprint rules, the density cost curve, and where the rarity bands land.',

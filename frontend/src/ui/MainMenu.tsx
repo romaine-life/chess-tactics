@@ -10,9 +10,11 @@ import {
   enchiridionCardFromPath,
   enchiridionCardHrefUnderFilters,
   enchiridionCardsHref,
+  enchiridionLipsanaHref,
   enchiridionLipsanonFromPath,
-  enchiridionLipsanonHref,
+  enchiridionLipsanonHrefUnderBrowse,
   enchiridionSectionFromPath,
+  lipsanaBrowseModeFromSearch,
 } from './enchiridionRoute';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { useOpenRailTab } from './shared/railOpenIntent';
@@ -124,6 +126,7 @@ export function MainMenu({
   const openDest = useOpenRailTab(MODE_RAIL_ADDRESSES, dest);
   const enchiridionSection = enchiridionSectionFromPath(path);
   const enchiridionCardFilters = enchiridionCardFiltersFromSearch(search);
+  const lipsanaBrowseMode = lipsanaBrowseModeFromSearch(search);
   // Only cold startup builds the shell in ordered rungs. During an ordinary return home,
   // the complete menu must already be composed behind the incoming scene boundary so the
   // director crossfades its background and controls as one painted scene (ADR-0462).
@@ -193,7 +196,11 @@ export function MainMenu({
                       <Enchiridion
                         section={enchiridionSection}
                         selectedLipsanonId={enchiridionLipsanonFromPath(path)}
-                        lipsanonHref={enchiridionLipsanonHref}
+                        // Picking a relic keeps the layout it was picked in, the same way picking a
+                        // card face keeps the filters it was found under.
+                        lipsanonHref={(lipsanonId) => enchiridionLipsanonHrefUnderBrowse(lipsanonId, lipsanaBrowseMode)}
+                        lipsanaBrowseMode={lipsanaBrowseMode}
+                        lipsanaBrowseModeHref={enchiridionLipsanaHref}
                         selectedCardId={enchiridionCardFromPath(path)}
                         cardHref={(cardId) => enchiridionCardHrefUnderFilters(cardId, enchiridionCardFilters)}
                         cardFilters={enchiridionCardFilters}

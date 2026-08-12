@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { reportAuthSessionFailure, startAuthSession } from '../net/authSession';
-import { deleteActiveRun, loadActiveRun, saveActiveRun } from '../net/activeRun';
+import { adoptGuestRun, deleteActiveRun, loadActiveRun, saveActiveRun } from '../net/activeRun';
 import { HttpError } from '../net/http';
+import { clearGuestRunKey, readGuestRunKey } from './guestIdentity';
 import {
   UnsupportedRunSaveError,
   migrateRunSaveDocument,
@@ -44,12 +45,24 @@ export interface RunAdoptionConflict {
   accountRun: RunDocument;
 }
 
+/**
+ * Whose server-held Run document this store is writing to (ADR-0588).
+ *
+ * `'account'` is the signed-in player's row. `'guest'` is the row a signed-out player's browser
+ * owns through the opaque key in `guestIdentity`. `null` is browser-only play — which is what
+ * every signed-out player used to get, and is still what a browser that cannot mint a key gets.
+ *
+ * One field rather than a pair of booleans: a store cannot be linked to both documents at once,
+ * and two flags could say that it was.
+ */
+export type RunRemoteOwner = 'account' | 'guest' | null;
+
 export interface ActiveRunState {
   run: RunDocument | null;
   hydrated: boolean;
   syncing: boolean;
-  /** True only after this store has successfully joined the signed-in account document. */
-  accountLinked: boolean;
+  /** Which server document this store has joined, or null while play is browser-only. */
+  remoteOwner: RunRemoteOwner;
   remoteRevision: number;
   persistenceError: string | null;
   adoptionConflict: RunAdoptionConflict | null;
@@ -70,7 +83,8 @@ function isUnsupportedRunDocument(error: unknown): boolean {
 function queueRemoteSave(run: RunDocument): void {
   saveChain = saveChain.then(async () => {
     const state = useActiveRun.getState();
-    if (!state.accountLinked || state.adoptionConflict) return;
+    if (!state.remoteOwner || state.adoptionConflict) return;
+    const owner = state.remoteOwner;
     useActiveRun.setState({ syncing: true });
     try {
       const saved = await saveActiveRun(run, state.remoteRevision);
@@ -98,8 +112,14 @@ function queueRemoteSave(run: RunDocument): void {
           }
         } catch { /* retain the original conflict below */ }
       }
+      if (owner === 'guest' && error instanceof HttpError && error.status === 401) {
+        // The browser could not mint a guest key, so there is no identity to persist under. This
+        // is not a failure to report: it is the local-only play signed-out players always had.
+        useActiveRun.setState({ remoteOwner: null, persistenceError: null, syncing: false });
+        return;
+      }
       if (reportAuthSessionFailure(error)) {
-        useActiveRun.setState({ accountLinked: false, persistenceError: null, syncing: false });
+        useActiveRun.setState({ remoteOwner: null, persistenceError: null, syncing: false });
         return;
       }
       useActiveRun.setState({ persistenceError: 'Run progress is saved in this browser, but cloud sync is waiting.', syncing: false });
@@ -107,6 +127,90 @@ function queueRemoteSave(run: RunDocument): void {
     }
     useActiveRun.setState({ syncing: false });
   });
+}
+
+/**
+ * Hand this browser's guest Run row to the account that just signed in (ADR-0588).
+ *
+ * The guest key is forgotten once the server has answered, because the row it named is gone
+ * either way — moved onto the account, or released because the account was already playing
+ * something. Keeping it would leave a signed-in player holding write authority over a row that is
+ * no longer theirs, and would make a later sign-out silently resume an identity already absorbed.
+ *
+ * A failure here is not fatal to signing in. The key is kept so the next hydrate tries again,
+ * which is the correct outcome: the guest row still exists and still belongs to this browser.
+ */
+async function adoptGuestRunForAccount(): Promise<void> {
+  if (!readGuestRunKey()) return;
+  try {
+    await adoptGuestRun();
+    clearGuestRunKey();
+  } catch {
+    // Left for the next hydrate. The account read below is unaffected — it reads the account's
+    // own row, which is simply not yet holding the guest's Run.
+  }
+}
+
+/**
+ * The signed-out hydration (ADR-0588).
+ *
+ * A guest's browser is the authority on their Run, which is the same rule `campaign_progress`
+ * already states for guest campaign progress. So the local Run wins whenever there is one, and the
+ * server row is read for the case that makes guest persistence worth having at all: local storage
+ * lost or unreadable, with the row still holding the Run.
+ *
+ * That is why this needs no two-way chooser like the account path. An account's two Runs can come
+ * from two devices and only a person can pick between them; a guest row is written by exactly one
+ * browser, so there is never a second party to consult.
+ */
+async function guestHydration(
+  set: (partial: Partial<ActiveRunState>) => void,
+  browserRun: RunDocument | null,
+): Promise<void> {
+  const settled = { hydrated: true, remoteOwner: 'guest' as const, adoptionConflict: null, persistenceError: null };
+  // No key means this browser has never persisted a guest Run. Reading would mint the identity
+  // that only playing should mint, so start local: the first save creates the key and its row
+  // together.
+  if (!readGuestRunKey()) {
+    recordCompletedRun(browserRun);
+    set({ ...settled, run: browserRun, remoteRevision: 0 });
+    return;
+  }
+  let remote;
+  try {
+    remote = await loadActiveRun();
+  } catch {
+    recordCompletedRun(browserRun);
+    // Play stays in this browser for the session, exactly as a failed account hydrate does. The
+    // link is dropped rather than kept with a revision of 0: the row may be well past that, and a
+    // save carrying a stale token would spend every mutation losing a conflict it cannot settle.
+    set({
+      ...settled,
+      remoteOwner: null,
+      run: browserRun,
+      remoteRevision: 0,
+      persistenceError: 'Run progress is available in this browser; cloud sync could not be reached.',
+    });
+    return;
+  }
+  let guestRun: RunDocument | null = null;
+  if (remote.run) {
+    try {
+      guestRun = normalizeRunDocument(remote.run);
+    } catch (error) {
+      // A row written by an older build. The browser's Run replaces it on the next save; a guest
+      // has no second device whose copy might still be readable.
+      if (!isUnsupportedRunDocument(error)) throw error;
+    }
+  }
+  const run = browserRun ?? guestRun;
+  recordCompletedRun(run);
+  writeLocalRun(run);
+  set({ ...settled, run, remoteRevision: remote.revision });
+  // AFTER the state is applied, because the queued save reads the store to find out which
+  // document it is writing to — and would skip itself entirely against the pre-hydrate state.
+  // The row catches up whenever the browser is ahead of it.
+  if (browserRun && (!guestRun || guestRun.id !== browserRun.id)) queueRemoteSave(browserRun);
 }
 
 const activeRunGlobal = globalThis as typeof globalThis & {
@@ -133,7 +237,7 @@ function createActiveRunStore() {
   run: readLocalRun(),
   hydrated: false,
   syncing: false,
-  accountLinked: false,
+  remoteOwner: null,
   remoteRevision: 0,
   persistenceError: null,
   adoptionConflict: null,
@@ -144,10 +248,13 @@ function createActiveRunStore() {
     try {
       const me = (await startAuthSession()).user;
       if (!me.signed_in) {
-        recordCompletedRun(browserRun);
-        set({ run: browserRun, hydrated: true, accountLinked: false, persistenceError: null });
+        await guestHydration(set, browserRun);
         return;
       }
+      // Inherit whatever this browser was playing as a guest BEFORE reading the account, so the
+      // row read below is already the adopted one. The Run's own content still merges by the
+      // rules further down — this settles which server row is the account's, not which Run wins.
+      await adoptGuestRunForAccount();
       const remote = await loadActiveRun();
       let accountRun: RunDocument | null = null;
       let accountRunUnsupported = false;
@@ -164,7 +271,7 @@ function createActiveRunStore() {
         set({
           run: browserRun,
           hydrated: true,
-          accountLinked: true,
+          remoteOwner: 'account',
           remoteRevision: remote.revision,
           adoptionConflict: null,
           persistenceError: browserRun
@@ -181,7 +288,7 @@ function createActiveRunStore() {
         set({
           run: accountRun,
           hydrated: true,
-          accountLinked: true,
+          remoteOwner: 'account',
           remoteRevision: remote.revision,
           adoptionConflict: { browserRun, accountRun },
           // Same as the save path above: the conflict speaks for itself where it is answered.
@@ -200,7 +307,7 @@ function createActiveRunStore() {
       set({
         run,
         hydrated: true,
-        accountLinked: true,
+        remoteOwner: 'account',
         remoteRevision: remote.revision,
         persistenceError: null,
       });
@@ -212,7 +319,7 @@ function createActiveRunStore() {
       set({
         run: browserRun,
         hydrated: true,
-        accountLinked: false,
+        remoteOwner: null,
         persistenceError: signedOut
           ? null
           : 'Run progress is available in this browser; cloud sync could not be reached.',
@@ -239,7 +346,7 @@ function createActiveRunStore() {
     set({
       run,
       hydrated: true,
-      accountLinked: true,
+      remoteOwner: 'account',
       remoteRevision: revision,
       adoptionConflict: null,
       persistenceError: null,
@@ -252,7 +359,7 @@ function createActiveRunStore() {
     // that go on to write a REPLACEMENT Run under the same account.
     writeLocalRun(null);
     set({ run: null, adoptionConflict: null, persistenceError: null });
-    if (!get().accountLinked) return;
+    if (!get().remoteOwner) return;
     // The DELETE belongs IN the save chain, not merely behind it. Behind it only stops an
     // already-queued PUT from resurrecting the Run; inside it also stops the reverse, where a
     // Run started moments later queues its PUT while this DELETE is still in flight and has its

@@ -31,6 +31,12 @@ concurrency:
   group: build-and-deploy
   cancel-in-progress: false
 
+# Skip onnxruntime-node's CUDA execution provider download in every job that runs `npm ci`. See the
+# same declaration in docker-build-check.yaml for why it is waste rather than a tradeoff: nothing in
+# this repo imports onnxruntime-node, and no runner has the GPU the EP needs.
+env:
+  ONNXRUNTIME_NODE_INSTALL_CUDA: skip
+
 jobs:
   backend-tests:
     name: Test backend

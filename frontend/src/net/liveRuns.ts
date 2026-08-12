@@ -5,7 +5,11 @@ import { HttpError } from './http';
 // starts no work on the player's side; observation begins when a watcher actually arrives.
 
 export interface LiveRunPresence {
-  owner_email: string;
+  /** Null for a guest Run — a guest has no address. Render owner_label, never this. */
+  owner_email: string | null;
+  owner_kind: 'account' | 'guest';
+  /** Always present: the email for an account, "Guest <prefix>" for a guest. */
+  owner_label: string;
   /** Opaque, derived from the owner. The watch ADDRESS is built from this, never the email. */
   handle: string;
   run_id: string | null;

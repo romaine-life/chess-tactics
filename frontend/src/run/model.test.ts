@@ -200,9 +200,23 @@ describe('formation card catalog', () => {
       .sort();
     expect(signatures).toEqual(['pawn@0,0|queen@0,1']);
     expect(queenPawnCards.every((card) => card.rarity === 'rare')).toBe(true);
-    // Art is keyed to (footprint, roster), so Queen and Pawn owns its own illustration
-    // rather than borrowing the lone Queen's.
-    expect(queenPawnCards.every((card) => card.artId === '0001-pq')).toBe(true);
+    // ADR-0579: a card dealable under the default rules owns its illustration, keyed to its own
+    // id rather than to the (footprint, roster) family it shares with re-seatings of itself.
+    expect(queenPawnCards.every((card) => card.artId === card.id)).toBe(true);
+  });
+
+  it('gives per-card art to the default-rules deck and keeps family art for everything wider', () => {
+    const dealable = RUN_CARD_DECK.filter((card) => cardAllowedByRules(card, DEFAULT_RUN_RULES));
+    const wider = RUN_CARD_DECK.filter((card) => !cardAllowedByRules(card, DEFAULT_RUN_RULES));
+    // Every card the market can actually deal has a picture of its own, which is what ends the
+    // shared-illustration duplication ADR-0520 shipped.
+    expect(dealable).toHaveLength(69);
+    expect(dealable.every((card) => card.artId === card.id)).toBe(true);
+    expect(new Set(dealable.map((card) => card.artId)).size).toBe(dealable.length);
+    // And nothing outside that deck loses the art it already resolves to: per-card art is only
+    // affordable for a bounded deck, so the wider catalog keeps the family key.
+    expect(wider.length).toBeGreaterThan(0);
+    expect(wider.every((card) => /^[0-9]+-[pkbrq]+$/.test(card.artId ?? ''))).toBe(true);
   });
 
   it('gives every card one coordinate per unit and keeps coordinates unique', () => {
@@ -835,9 +849,9 @@ describe('Manubiae — what the board pays for', () => {
     // The catalog is the source. A named constant that disagreed with it would be a second
     // price for the same deed, which is exactly what naming the category was meant to end.
     expect(RUN_MANUBIAE.map((entry) => entry.id)).toEqual([
-      'advantageous-capture', 'knight-fork', 'royal-fork', 'long-capture', 'humble-mate',
-      'discovered-check', 'long-check', 'double-check', 'en-passant', 'smothered-mate',
-      'promotion-mate', 'underpromotion-mate',
+      'advantageous-capture', 'knight-fork', 'capture-with-check', 'royal-fork', 'long-capture',
+      'humble-mate', 'discovered-check', 'long-check', 'double-check', 'en-passant',
+      'smothered-mate', 'promotion-mate', 'underpromotion-mate',
     ]);
     expect(new Set(RUN_MANUBIAE.map((entry) => entry.id)).size).toBe(RUN_MANUBIAE.length);
     expect(RUN_EN_PASSANT_BOUNTY_TENTHS).toBe(50);
@@ -864,6 +878,13 @@ describe('Manubiae — what the board pays for', () => {
     // Eight squares, because that is the width of a standard chessboard — the one reach every
     // player already has a feel for, even though no board in this game is that shape.
     expect(RUN_LONG_REACH_SQUARES).toBe(8);
+    // A capture with check sits at the same noticing pole and for the same reason: the capture is
+    // one the player wanted anyway and the check is the flourish on it. Its safety clause is what
+    // keeps it from teaching a donation rather than what makes it dear, so it is priced beside the
+    // royal fork and under the checks that have to be engineered.
+    expect(manubiumGoldTenths({ id: 'capture-with-check' })).toBe(10);
+    expect(manubiumGoldTenths({ id: 'capture-with-check' }))
+      .toBeLessThan(manubiumGoldTenths({ id: 'discovered-check' }));
   });
 
   it('prices a mating underpromotion by the piece the Pawn chose instead of a Queen', () => {

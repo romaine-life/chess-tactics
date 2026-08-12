@@ -303,6 +303,7 @@ export const RUN_ROYAL_FORK_MIN_VICTIM_VALUE = PIECE_VALUE.rook;
 
 export type ManubiumId =
   | 'advantageous-capture'
+  | 'capture-with-check'
   | 'royal-fork'
   | 'discovered-check'
   | 'double-check'
@@ -459,6 +460,12 @@ export const RUN_MANUBIAE: readonly ManubiumDefinition[] = Object.freeze([
     goldTenths: null,
     // Written from the rate rather than beside it, so the sentence cannot drift from the gold.
     priceNote: `${knightForkGoldTenths(2)} for two prongs, ${knightForkGoldTenths(3)} for three, ${knightForkGoldTenths(4)} for four, ${knightForkGoldTenths(5)} for five`,
+  },
+  {
+    id: 'capture-with-check',
+    name: 'Capture with check',
+    earnedBy: 'Take an enemy unit and give check with the same move, and leave the unit that took where nothing of theirs attacks it. A capture that hangs it earns nothing — they answer the check by taking it back, and the free move was yours to give. Any unit may earn it, and the check need not come from the unit that took: a line the capture opened counts.',
+    goldTenths: GOLD_SCALE,
   },
   {
     id: 'royal-fork',
@@ -1077,11 +1084,34 @@ function cardFootprintId(formation: readonly RunCardFormationCell[]): string {
  * scene. Splitting art by footprint as well as roster is what lets the picture answer the
  * arrangement: the same four people hold a corner, a line, and a column differently.
  */
-function cardCompositionArtId(
+export function cardFamilyArtId(
   pieces: readonly AdlectablePieceType[],
   formation: readonly RunCardFormationCell[],
 ): string {
   return `${cardFootprintId(formation)}-${cardComposition(pieces)}`;
+}
+
+/**
+ * ADR-0579: a card DEALABLE under the default rules owns its illustration, keyed to its own id.
+ * Everything wider keeps the (footprint, roster) family key above.
+ *
+ * The split exists because per-card art is only affordable for a bounded deck. At `cardSpan: 2`
+ * that deck is 69 cards, and 69 pictures is a batch somebody can actually author and review; the
+ * full 272-card catalog is not. So the narrow deck gets art that can answer which seat each piece
+ * is in, and the 203 cards outside it keep resolving to the family illustration that is already
+ * installed for them rather than resolving to nothing.
+ *
+ * The consequence to know: widening `cardSpan` past 2 re-exposes cards whose family art still
+ * resolves but which have no picture of their own. That is a known, bounded gap, not a break.
+ */
+function cardArtId(
+  id: string,
+  pieces: readonly AdlectablePieceType[],
+  formation: readonly RunCardFormationCell[],
+): string {
+  return formationSpan(formation) <= DEFAULT_RUN_RULES.cardSpan
+    ? id
+    : cardFamilyArtId(pieces, formation);
 }
 
 /**
@@ -1351,7 +1381,7 @@ const formationCard = (
     id,
     pieces: [...pieces],
     formation: formation.map((cell) => ({ ...cell })),
-    artId: cardCompositionArtId(pieces, formation),
+    artId: cardArtId(id, pieces, formation),
     value: pieces.reduce((total, piece) => total + PIECE_VALUE[piece], 0),
     rarity: runCardRarity(pieces, formation),
   });

@@ -64,6 +64,8 @@ const {
   MAIN_MENU_MARK_FITTED_EXCEPTION_SCHEMA,
   MAIN_MENU_MARK_FITTED_SLOTS,
   MAIN_MENU_MARK_FITTED_TRANSFORM,
+  fittedMarkInkHeight,
+  fittedMarkTransform,
   mainMenuMarkMediaIssue,
   mainMenuMarkSlot,
   nativeMediaEvidenceIssue,
@@ -132,6 +134,60 @@ test('raster native evidence is required to identify the exact uploaded bytes', 
   assert.equal(nativeMediaEvidenceIssue(raster()), null);
 });
 
+test('a downscale of a generated source is native, and recapture of accepted art is not', () => {
+  const sourceSha = 'c'.repeat(64);
+  const supersampled = (evidence = {}) => raster({
+    width: 400,
+    height: 280,
+    native_evidence: {
+      schema: 'supersampled-native-v1',
+      sourceKind: 'generation',
+      native1x: true,
+      spatialResampling: false,
+      sourceWidth: 1536,
+      sourceHeight: 1024,
+      sourceSha256: sourceSha,
+      outputWidth: 400,
+      outputHeight: 280,
+      outputSha256: originalSha,
+      transform: 'lanczos3-cover-fit-400x280',
+      ...evidence,
+    },
+  });
+
+  // The general form: no per-decision branch, no owner-approved-exception ceremony.
+  assert.equal(nativeMediaEvidenceIssue(supersampled()), null);
+  assert.equal(nativeMediaEvidenceIssue(supersampled({ sourceKind: 'render' })), null);
+
+  // Recapture is what ADR-0076 was defending against and it stays unsayable: the source kind is a
+  // closed set, so finished delivery art cannot be declared as the thing that was downscaled.
+  assert.match(
+    nativeMediaEvidenceIssue(supersampled({ sourceKind: 'accepted-asset' })),
+    /never accepted delivery art/,
+  );
+  assert.match(nativeMediaEvidenceIssue(supersampled({ sourceKind: undefined })), /never accepted delivery art/);
+
+  // It has to actually come DOWN from something larger, and say how.
+  assert.match(
+    nativeMediaEvidenceIssue(supersampled({ sourceWidth: 400, sourceHeight: 280 })),
+    /strictly larger source raster/,
+  );
+  assert.match(
+    nativeMediaEvidenceIssue(supersampled({ sourceWidth: 320, sourceHeight: 240 })),
+    /strictly larger source raster/,
+  );
+  assert.match(nativeMediaEvidenceIssue(supersampled({ transform: '   ' })), /exact downscale transform/);
+  assert.match(nativeMediaEvidenceIssue(supersampled({ sourceSha256: 'nope' })), /name the source raster/);
+
+  // And it authorizes these bytes and this geometry, exactly as the strict path does.
+  assert.match(nativeMediaEvidenceIssue(supersampled({ outputSha256: replacementSha })), /authorize these exact bytes/);
+  assert.match(nativeMediaEvidenceIssue(supersampled({ outputWidth: 401 })), /output dimensions must equal/);
+
+  // A downscale is native, so it may not also claim to be a resample.
+  assert.match(nativeMediaEvidenceIssue(supersampled({ native1x: false })), /native1x must be true/);
+  assert.match(nativeMediaEvidenceIssue(supersampled({ spatialResampling: true })), /spatialResampling false/);
+});
+
 test('ADR-0560 main-menu marks carry a typed projection instead of staying bridge-only', () => {
   const row = (overrides = {}, metadata = {}) => ({
     slot: 'ui/main-menu/icons-carved/settings.png',
@@ -146,7 +202,11 @@ test('ADR-0560 main-menu marks carry a typed projection instead of staying bridg
   assert.equal(mainMenuMarkMediaIssue(row()), null);
   for (const slot of MAIN_MENU_MARK_FITTED_SLOTS) {
     assert.equal(mainMenuMarkSlot(slot), slot);
-    assert.equal(mainMenuMarkMediaIssue(row({ slot })), null, slot);
+    assert.equal(
+      mainMenuMarkMediaIssue(row({ slot }, { inkHeight: fittedMarkInkHeight(slot) })),
+      null,
+      slot,
+    );
   }
   assert.equal(mainMenuMarkSlot('ui/kit/icons/design-index.png'), null);
   assert.match(
@@ -157,6 +217,11 @@ test('ADR-0560 main-menu marks carry a typed projection instead of staying bridg
   assert.match(mainMenuMarkMediaIssue(row({ width: 128, height: 128 })), /64x64 icon canvas/);
   assert.match(mainMenuMarkMediaIssue(row({}, { canvas: 128 })), /metadata\.canvas 64/);
   assert.match(mainMenuMarkMediaIssue(row({}, { inkHeight: 48 })), /metadata\.inkHeight 52/);
+  // A seat with its own box asks for ITS height, not the menu's.
+  assert.match(
+    mainMenuMarkMediaIssue(row({ slot: 'ui/kit/icons/tileset-studio.png' })),
+    /metadata\.inkHeight 40/,
+  );
   assert.match(mainMenuMarkMediaIssue(row({}, { evenInkDimensions: false })), /evenInkDimensions/);
   assert.match(mainMenuMarkMediaIssue(row({ media_type: 'image/webp' })), /image\/png/);
   assert.match(mainMenuMarkMediaIssue(row({ domain: 'ui' })), /ui-kit domain/);
@@ -189,10 +254,33 @@ test('ADR-0560 fitted main-menu marks record their resampling instead of claimin
   });
 
   assert.equal(nativeMediaEvidenceIssue(mark()), null);
-  // Every slot the marks and the shared kit gear occupy, and nothing else.
+  // Every slot the marks and the shared kit gear occupy, and nothing else. Each states the ink
+  // height of ITS OWN seat: the Enchiridion section rail carries 40px where the menu carries 52,
+  // and a mark fitted to one box cannot claim the other (ADR-0588).
   for (const slot of MAIN_MENU_MARK_FITTED_SLOTS) {
-    assert.equal(nativeMediaEvidenceIssue(mark({ slot })), null, slot);
+    assert.equal(
+      nativeMediaEvidenceIssue(mark(
+        { slot },
+        { inkHeight: fittedMarkInkHeight(slot), transform: fittedMarkTransform(slot) },
+      )),
+      null,
+      slot,
+    );
   }
+  // A seat with its own box refuses the default, and the default refuses that seat's box.
+  assert.equal(fittedMarkInkHeight('ui/kit/icons/tileset-studio.png'), 40);
+  assert.equal(fittedMarkInkHeight('ui/main-menu/icons-carved/settings.png'), 52);
+  assert.match(
+    nativeMediaEvidenceIssue(mark({ slot: 'ui/kit/icons/tileset-studio.png' })),
+    /exactly 40px of ink/,
+  );
+  assert.match(
+    nativeMediaEvidenceIssue(mark(
+      { slot: 'ui/kit/icons/tileset-studio.png' },
+      { inkHeight: 40, transform: MAIN_MENU_MARK_FITTED_TRANSFORM },
+    )),
+    /authorize these bytes/,
+  );
   assert.match(
     nativeMediaEvidenceIssue(mark({ slot: 'ui/kit/icons/design-index.png' })),
     /restricted to the main-menu mark slots/,

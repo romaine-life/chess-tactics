@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
-import { liveMediaForSlot, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
-import { runCardArtSlot, runCardName } from '../run/cardNames';
+import { liveMediaForSlot, optionalLiveMediaForSlot, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
+import { runCardArtSlots, runCardName } from '../run/cardNames';
 import { cardContentsLabel, type RunCardDefinition, type RunCardOffer } from '../run/model';
 import { RunCardFace, type RunCardFaceTuning, type RunCardOutlineRendering } from './RunCardFace';
 import { runCardFaceContent, runCardFrameSlot } from './runCardFaceContent';
@@ -9,6 +9,12 @@ import { runCardFloatClock } from './runCardLife';
 
 // One trading-card face shared by live play and reference surfaces. Runtime hosts add only
 // interaction around the projected face; formations, names, art, value, and flavor stay canonical.
+/** The card's own slot when its illustration is installed, else the family slot beneath it. */
+function runCardArtSlotInCatalog(card: Parameters<typeof runCardArtSlots>[0]): string {
+  const slots = runCardArtSlots(card);
+  return slots.find((slot) => optionalLiveMediaForSlot(slot)) ?? slots[slots.length - 1]!;
+}
+
 export function RunCard({
   card,
   identityCard,
@@ -22,10 +28,16 @@ export function RunCard({
   tuning,
   crownUrl,
   markFill,
+  artUrlOverride,
   onSelect,
 }: {
   card: RunCardDefinition | RunCardOffer;
   identityCard?: RunCardDefinition | RunCardOffer;
+  /**
+   * Draw these bytes instead of the installed slot. Review surfaces only: a candidate is not in
+   * the runtime catalog, so handing the URL in is the only way to see it on a real card face.
+   */
+  artUrlOverride?: string;
   /** `grant` is a free take rather than a purchase: same face and affordance, no price. */
   mode: 'sectio' | 'reference' | 'grant';
   emptyPieceIndices?: readonly number[];
@@ -64,7 +76,7 @@ export function RunCard({
     <RunCardFace
       card={faceContent}
       frameUrl={liveMediaForSlot(frameSlot).media.immutableUrl}
-      artUrl={resolvedLiveMediaUrl(runCardArtSlot(identity))}
+      artUrl={artUrlOverride ?? resolvedLiveMediaUrl(runCardArtSlotInCatalog(identity))}
       frameGeometry={runCardFrameGeometryForSlot(frameSlot)}
       outlineRendering={outlineRendering}
       {...(tuning === undefined ? {} : { tuning })}

@@ -262,16 +262,81 @@ describe('Run chrome hierarchy', () => {
   });
 
   it('keeps Run abandonment at the bottom of Controls and removes redundant Battle resignation', () => {
-    expect(runScreen).toContain('function useRunAbandon');
-    expect(runScreen).toContain("title: 'Abandon this Run?'");
-    expect(runScreen).toContain("tone: 'danger'");
+    expect(runScreen).toContain('export function RunAbandonControl');
     expect(runScreen).toContain('navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false })');
     expect(runScreen).toContain('data-testid="abandon-run"');
-    expect(skirmishHud).toContain('onAbandonRun?: (() => void) | null');
+    expect(skirmishHud).toContain('abandonRun?: ReactNode;');
     expect(skirmishHud).toContain('<span className="skirmish-eyebrow">Run</span>');
     expect(skirmish).toContain('canResign: !isRunPlay');
     expect(skirmishHud).toContain('canResign && !game.winner');
     expect(runScreen).not.toContain('TitleBarControlContribution');
+  });
+
+  // Abandoning asks in the seat that raised the question — the verb SPLITS into its two answers,
+  // the same confirmation Start New Run uses for replacing an active Run (ADR-0571/0585). No
+  // dialog is opened over the Run being discussed.
+  it('confirms Abandon Run in its own seat instead of a popup', () => {
+    expect(runScreen).not.toContain('useConfirm');
+    expect(runScreen).not.toContain("title: 'Abandon this Run?'");
+    expect(runScreen).toContain("testId: 'run-abandon-keep',");
+    expect(runScreen).toContain("testId: 'run-abandon-confirm',");
+    // The safe answer leads, as it did in the dialog it replaces.
+    expect(runScreen).toMatch(/testId: 'run-abandon-keep',[\s\S]{0,400}?testId: 'run-abandon-confirm',/);
+    // ...and the dialog's two safeties are kept: focus lands on it, Escape keeps the Run. Found by
+    // its test id rather than a ref, because an answer is DECLARED to ChromeVerbRow rather than
+    // rendered here — the point of that primitive, and not worth a ref for one focus call.
+    expect(runScreen).toMatch(/document\.querySelector<HTMLElement>\('\[data-testid="run-abandon-keep"\]'\)\?\.focus\(\);/);
+    expect(runScreen).toMatch(/event\.key === 'Escape'[\s\S]{0,90}?setArmed\(false\);/);
+    // ONE control in three seats — the Sectio rail, the Deployment panel, and the Battle HUD,
+    // which is handed the CONTROL rather than a callback that would open something over the
+    // board. A second copy of it in the HUD is the parallel ADR-0059 names.
+    expect(runScreen.match(/<RunAbandonControl\b/g) ?? []).toHaveLength(3);
+    expect(skirmishHud).not.toContain('data-testid="abandon-run"');
+    expect(skirmishHud).toContain('{abandonRun}');
+    // The RESTING verb's material stays the SEAT's: the Run's rails wear the oak, the HUD's
+    // Controls panel does not, so the HUD's copy names no fill and keeps the field its neighbours
+    // wear (ADR-0433). Armed, the question is a box and the box settles its own materials.
+    expect(runScreen).toContain('<RunAbandonControl fillSurface={null} />');
+  });
+
+  // The armed question is ONE box holding its two answers. Two framed buttons in a row with a gap
+  // is what this kit puts between things that are NOT related; the line between Keep Run and
+  // Abandon Run is the box's own column line, laid and capped from its topology where it meets the
+  // frame at either end (ADR-0242/0571/0585).
+  it('draws the armed answers as cells of one box rather than framed buttons in a row', () => {
+    expect(runScreen).toMatch(
+      /<DividedInnerChromeBox\b[\s\S]{0,400}?className="run-abandon-box"[\s\S]{0,400}?columns=\{verbColumns\(answers\)\}[\s\S]{0,200}?fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/,
+    );
+    // The answers are ChromeVerbRow's cells, not a private copy of one (ADR-0059).
+    expect(runScreen).toContain('<ChromeVerbRow verbs={answers} className="run-abandon-verbs" cellClassName="run-abandon-verb" />');
+    expect(runScreen).toMatch(/const answers: readonly ChromeVerb\[\] = \[/);
+    expect(runScreen).not.toContain('run-abandon-answers');
+    expect(runScreen).not.toMatch(/<ChromeButton[^>]*data-testid="run-abandon-confirm"/);
+    // The box takes no padding, or its rail would stop short of the frame it has to reach; the
+    // cells that ARE the controls take none either, so the wood reaches it.
+    expect(styleCss).toMatch(/\.run-abandon-box \{[\s\S]*?padding: 0;/);
+    expect(styleCss).toMatch(/\.run-abandon-verbs \{[\s\S]*?padding: 0;/);
+    expect(styleCss).not.toContain('.run-abandon-answers');
+    // ONE seat height through BOTH states — pressing a control must not resize the thing under the
+    // cursor. Stated once and derived twice: the resting button takes it directly, and the box's
+    // frameless plate is it less a rail a side, so the box comes out at the same height AND its
+    // wood lands on the wood the button painted. The rail is read from the installed chrome
+    // (chromeFamilyRuntime stamps it), never written out, so a retuned frame moves both together.
+    expect(styleCss).toMatch(/\.run-abandon-control,\s*\r?\n\.run-abandon-box \{\s*\r?\n\s*--run-abandon-seat-h: 46px;/);
+    expect(styleCss).toMatch(/\.run-abandon-control \.app-header-button \{[\s\S]*?block-size: var\(--run-abandon-seat-h\);/);
+    expect(styleCss).toContain('--run-abandon-plate-h: calc(var(--run-abandon-seat-h) - 2 * var(--le-chrome-inner-rail-w, 7px));');
+  });
+
+  // Abandon Run already says what it does. A sentence spelling out that abandoning loses the Run
+  // tells a player who pressed Abandon Run nothing they did not just decide — it was the dialog's
+  // body text surviving its dialog, and it goes with the dialog (ADR-0585). The QUESTION is still
+  // asked: it is the armed group's accessible name.
+  it('states no stakes beside the two answers', () => {
+    expect(runScreen).not.toContain('permanently removed');
+    expect(runScreen).not.toContain('This cannot be undone');
+    expect(runScreen).not.toContain('run-abandon-stakes');
+    expect(styleCss).not.toContain('.run-abandon-stakes');
+    expect(runScreen).toMatch(/data-testid="run-abandon-armed"\s*\r?\n\s*role="group"\s*\r?\n\s*aria-label="Abandon this Run\?"/);
   });
 
   it('uses the gold transaction cue and transfers adlected cards into the Chartulary', () => {
@@ -604,6 +669,26 @@ describe('Run chrome hierarchy', () => {
   });
 
   /**
+   * ADR-0589. The army roster is the Prosopography, so the Strategikon's adoption is the Run Army
+   * view's too — they are one component. The ledger is the structural box and every row in it is a
+   * control, so the two take OPPOSITE materials: a row that IS the button wears the oak (the shape
+   * SectionBox's `press` member already ships), phased from the roster index the renderer is walking
+   * rather than from DOM position (ADR-0063). The filter row is one field like the Cards gallery's,
+   * not three oak triggers standing on the vista.
+   */
+  it('opposes the ledger box and its rows, and makes the roster filters one field', () => {
+    expect(runArmyWorkspace).toMatch(/className="run-roster-filters"\s*\r?\n\s*fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
+    expect(styleCss).toMatch(/\.run-roster-filters\s*\{[\s\S]*?padding:\s*var\(--ds-space-2\) var\(--ds-inset\);/);
+    expect(runArmyWorkspace).toMatch(/className="run-army-ledger-grid"[\s\S]*?fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
+    expect(runArmyWorkspace).toContain('className="run-army-profile-stats" fillRole={CHROME_STRUCTURAL_FILL_ROLE}');
+    expect(runArmyWorkspace).toContain('{units.map((unit, index) => (');
+    expect(runArmyWorkspace).toMatch(
+      /className="run-army-ledger-row"\s*\r?\n\s*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}\s*\r?\n\s*style=\{leafSurfacePhase\(index\)\}/,
+    );
+    expect(styleCss).not.toMatch(/\.run-army-ledger-row[^}]*:nth-child/);
+  });
+
+  /**
    * ADR-0557. The screens a Battle or a Run ENDS on are one family the player meets in one
    * moment, so they adopt the leaf material together — a half-adopted family reads as a bug
    * the first time a Battle is lost. Every one of them declares adoption with the single host
@@ -899,7 +984,11 @@ describe('Run chrome hierarchy', () => {
     expect(runCard).not.toContain('RunCardScene');
     expect(runCard).toContain('const identity = identityCard ?? card');
     expect(runCard).toContain('runCardName(identity)');
-    expect(runCard).toContain('runCardArtSlot(identity)');
+    // ADR-0579: a dealable card owns a slot of its own and the family slot stays installed under
+    // it, so the face resolves the first one the hydrated catalog actually has rather than a single
+    // fixed slot. Still one identity, still one shared face.
+    expect(runCard).toContain('runCardArtSlotInCatalog(identity)');
+    expect(runCard).toContain('runCardArtSlots(card)');
     // Name, flavor, contents and cost all arrive already projected, so RunCard has no
     // reason to reach for the card's authored text itself.
     expect(runCard).not.toContain('runCardFlavor(');

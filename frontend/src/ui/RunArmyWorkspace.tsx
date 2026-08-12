@@ -21,7 +21,11 @@ import { ChromeDividedGridRow, DividedInnerChromeBox } from './shared/ChromeDivi
 import { Tooltip } from './shared/InfoTip';
 import { RunUnitInspectionScene } from './RunUnitInspectionScene';
 import { ChromeButton } from './shared/ChromeButton';
-import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
+import {
+  CHROME_LEAF_FILL_SURFACE,
+  CHROME_STRUCTURAL_FILL_ROLE,
+  leafSurfacePhase,
+} from './shared/chromeSurfacePolicy';
 import { KitScroll } from './KitScroll';
 
 export type RunRosterOrder = 'type' | 'value' | 'ability' | 'acquired';
@@ -219,8 +223,16 @@ function RunRosterFilters({
   filters: RunArmyFilters;
   onChange: (filters: RunArmyFilters) => void;
 }): ReactElement {
+  // The row is ONE structural field holding three terminal controls, exactly as the Cards
+  // gallery's filter row is (ADR-0433/ADR-0510). Unfilled, its three oak triggers stood on the
+  // vista with nothing stating that they belong to one another.
   return (
-    <section className="run-roster-filters" aria-label="Army filters">
+    <InnerChromeBox
+      as="section"
+      className="run-roster-filters"
+      fillRole={CHROME_STRUCTURAL_FILL_ROLE}
+      aria-label="Army filters"
+    >
       <label style={{ ['--run-roster-filter-index' as string]: 0 } as CSSProperties}>
         <span>Order</span>
         <HouseSelect
@@ -262,7 +274,7 @@ function RunRosterFilters({
           fillSurface={CHROME_LEAF_FILL_SURFACE}
         />
       </label>
-    </section>
+    </InnerChromeBox>
   );
 }
 
@@ -410,7 +422,7 @@ export function RunArmyWorkspace({
                   {rank ? <span>{rank}</span> : null}
                 </p>
                 <RunUnitTraitList run={run} unit={selected} />
-                <InnerChromeBox className="run-army-profile-stats">
+                <InnerChromeBox className="run-army-profile-stats" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
                   <dl>
                     <div><dt>Value</dt><dd>{PIECE_VALUE[selected.type]}</dd></div>
                     <div><dt>Status</dt><dd>{unitRunStatus(run, selected)}</dd></div>
@@ -450,17 +462,25 @@ export function RunArmyWorkspace({
           <span>{formatArmySize(run.army.length)}</span>
         </header>
         <RunRosterFilters filters={filters} onChange={onFiltersChange} />
+        {/* The ledger is the structural box and every row in it is a control, so the two take
+            opposite materials (ADR-0433): marble on the box that establishes the region, oak on
+            each row that ends the interaction tree. A row's wood is phased from its place in the
+            roster the renderer is walking, never from DOM position (ADR-0063), so the column is
+            cut from one plank run instead of stamping the same grain per unit. */}
         <DividedInnerChromeBox
           className="run-army-ledger-grid"
           columns={['var(--run-army-row-block-size, 158px)', 'minmax(0, 1fr)', '112px']}
           scroll
           contentRef={ledgerRef}
+          fillRole={CHROME_STRUCTURAL_FILL_ROLE}
           aria-label="Persistent army"
         >
-          {units.map((unit) => (
+          {units.map((unit, index) => (
             <ChromeDividedGridRow
               as="button"
               className="run-army-ledger-row"
+              data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+              style={leafSurfacePhase(index)}
               aria-label={`${profileAction ? 'Select' : 'Inspect'} ${runUnitDisplayName(unit)}`}
               onClick={() => {
                 ledgerScrollTop.current = ledgerRef.current?.scrollTop ?? 0;
