@@ -22810,6 +22810,65 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
+/* Terrain-mark review. One seat changes here rather than a whole set, so the page reuses the
+   mark-review layout above and adds only what a single-seat comparison needs: the pair of real
+   Enchiridion rails at the top, and four columns of specimens below it. Every specimen is a real
+   rail tab, so this file must not touch the seat, the mark or the label — only where the columns
+   sit on the page. */
+.terrain-mark-review-panel {
+  /* Content-sized, and the SCREEN scrolls. Stretched to the screen row (the default) the panel is
+     pinned to the viewport height, its two bands then split that height between them, and both
+     clip mid-rail — six seats and sixteen seats each showing two or three. This page is long by
+     nature: sixteen candidates in a column is longer than any real rail. */
+  align-self: start;
+  grid-column: 1;
+  grid-row: 2;
+  margin-inline: auto;
+  /* Four 322px specimen columns plus their gaps, same measure as the menu review. */
+  max-inline-size: 1480px;
+  inline-size: 100%;
+}
+
+/* Each band takes the height its rails actually need, and the SCREEN scrolls. Left to the
+   default `1fr` rows this panel splits its height between the comparison band and the specimen
+   band, and both clip mid-rail — six seats and sixteen seats each showing three. The page is
+   long by nature: sixteen candidates in a column is longer than any real rail. */
+.terrain-mark-review-panel > .le-outer-panel-content {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-inline);
+}
+
+/* The two comparison rails stand apart from the specimen columns below them, so the eye reads
+   "installed vs chosen" as one thing and the candidate grid as another. */
+.terrain-mark-review-rails {
+  padding-block-end: var(--ds-inline);
+}
+
+/* A specimen tab carries the candidate's code as a trailing badge, so the seat keeps the exact
+   mark and the exact word the live rail draws and still says which candidate it is. The tab is a
+   two-column grid (mark slot, label); a trailing child needs a third column declared by the
+   consumer's own tab class, the same way `.ce-campaign-tab` declares one for its lock — without
+   it the badge starts a new ROW under the mark and is clipped by the tab's own height. */
+.terrain-mark-review-tab {
+  grid-template-columns: var(--settings-tab-icon-slot) minmax(0, 1fr) auto;
+}
+
+/* Neutralise the shared label nudge for the badge so it stays in its own grid cell. */
+.terrain-mark-review-tab > span.terrain-mark-review-code {
+  transform: none;
+}
+
+.terrain-mark-review-code {
+  align-items: center;
+  color: #f0e4c4;
+  display: inline-flex;
+  font-size: 0.8rem;
+  justify-content: center;
+  letter-spacing: 0.08em;
+  text-shadow: 0 2px 0 #02070b;
+}
+
 /* Studio > Action Marks: each catalog card carries the candidate in the SAME button the
    Expunctio row paints, in both states that control has — offered, and refused. Layout
    only; the buttons bring their own kit frame and the catalog never restyles the seat it
