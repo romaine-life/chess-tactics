@@ -10,6 +10,7 @@ import { HeldCardCodex } from './HeldCardCodex';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { useOpenRailTab } from './shared/railOpenIntent';
 import { InnerChromeBox, ShellWorkspace } from './shared/ChromeBox';
+import { CHROME_STRUCTURAL_FILL_ROLE } from './shared/chromeSurfacePolicy';
 import {
   StrategikonContentSceneSlot,
   StrategikonReferenceSceneSlot,
@@ -38,7 +39,7 @@ function UnavailableRunReference({ title, copy }: { title: string; copy: string 
     <main className="strategikon-reference">
       <section className="enchiridion-panel enchiridion-panel-unframed strategikon-unavailable-panel">
         <h2 className="settings-section-title">{title}</h2>
-        <InnerChromeBox className="enchiridion-empty">
+        <InnerChromeBox className="enchiridion-empty" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
           <h3>No persistent Run is attached</h3>
           <p>{copy}</p>
         </InnerChromeBox>
