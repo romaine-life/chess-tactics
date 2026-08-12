@@ -6,7 +6,7 @@ refines:
   - "[ADR-0540](0540-the-board-pays-manubiae-for-named-tactics.md)"
 ---
 
-# ADR-0583: A capture that gives check is paid for the tempo
+# ADR-0584: A capture that gives check is paid for the tempo
 
 ## Context
 
