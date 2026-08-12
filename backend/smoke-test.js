@@ -5014,11 +5014,12 @@ async function main() {
     const spriteValues = [];
     for (const palette of palettes) for (const direction of directions) {
       const base = spriteParams.length;
-      spriteParams.push(assetId, palette, direction, storedSprite.sha256, storedSprite.blob_key, storedSprite.width, storedSprite.height, storedSprite.byte_length);
-      spriteValues.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8})`);
+      // `rung` is part of the key since migration 78; a base sprite's rung is its width.
+      spriteParams.push(assetId, palette, direction, storedSprite.width, storedSprite.sha256, storedSprite.blob_key, storedSprite.width, storedSprite.height, storedSprite.byte_length);
+      spriteValues.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9})`);
     }
     await queryDb(
-      `INSERT INTO unit_sprites (asset_id, palette, direction, sha256, blob_key, width, height, byte_length) VALUES ${spriteValues.join(',')}`,
+      `INSERT INTO unit_sprites (asset_id, palette, direction, rung, sha256, blob_key, width, height, byte_length) VALUES ${spriteValues.join(',')}`,
       spriteParams,
     );
   };
@@ -5082,8 +5083,8 @@ async function main() {
       [assetId, family, secondUnitId],
     );
     await queryDb(
-      `INSERT INTO unit_sprites (asset_id, palette, direction, sha256, blob_key, width, height, byte_length)
-       SELECT $1, palette, direction, sha256, blob_key, width, height, byte_length
+      `INSERT INTO unit_sprites (asset_id, palette, direction, rung, sha256, blob_key, width, height, byte_length)
+       SELECT $1, palette, direction, rung, sha256, blob_key, width, height, byte_length
          FROM unit_sprites WHERE asset_id = $2`,
       [assetId, secondUnitId],
     );

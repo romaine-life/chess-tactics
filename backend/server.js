@@ -22284,13 +22284,15 @@ async function seedUnitCatalogFromLiveSource() {
       for (const palette of UNIT_PALETTE_IDS) for (const direction of UNIT_DIRECTION_IDS) {
         const sprite = asset.sprites[palette][direction];
         await client.query(
-          `INSERT INTO unit_sprites (asset_id, palette, direction, sha256, blob_key, width, height, byte_length)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-           ON CONFLICT (asset_id, palette, direction) DO UPDATE SET
+          // The key carries `rung` since migration 78, and a base sprite's rung IS its
+          // authored width -- the same rule the migration backfilled existing rows with.
+          `INSERT INTO unit_sprites (asset_id, palette, direction, rung, sha256, blob_key, width, height, byte_length)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           ON CONFLICT (asset_id, palette, direction, rung) DO UPDATE SET
              sha256 = EXCLUDED.sha256, blob_key = EXCLUDED.blob_key,
              width = EXCLUDED.width, height = EXCLUDED.height,
              byte_length = EXCLUDED.byte_length, updated_at = now()`,
-          [asset.id, palette, direction, sprite.sha256, unitBlobKey(sprite.sha256),
+          [asset.id, palette, direction, sprite.width, sprite.sha256, unitBlobKey(sprite.sha256),
             sprite.width, sprite.height, sprite.byteLength],
         );
       }
@@ -22773,13 +22775,16 @@ app.put('/api/admin/unit-assets/:id/sprites/:palette/:direction', async (req, re
         throw unitMutationError('accepted_unit_asset_locked', 409, 'Create a candidate before replacing accepted sprite frames.');
       }
       await client.query(
-        `INSERT INTO unit_sprites (asset_id, palette, direction, sha256, blob_key, width, height, byte_length)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         ON CONFLICT (asset_id, palette, direction) DO UPDATE SET
+        // As above: `rung` joined the key in migration 78 and a base sprite's rung is
+        // the width it was authored at.
+        `INSERT INTO unit_sprites (asset_id, palette, direction, rung, sha256, blob_key, width, height, byte_length)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         ON CONFLICT (asset_id, palette, direction, rung) DO UPDATE SET
            sha256 = EXCLUDED.sha256, blob_key = EXCLUDED.blob_key,
            width = EXCLUDED.width, height = EXCLUDED.height,
            byte_length = EXCLUDED.byte_length, updated_at = now()`,
-        [id, palette, direction, sha256, blobKey, inspected.width, inspected.height, req.body.length],
+        [id, palette, direction, inspected.width, sha256, blobKey,
+          inspected.width, inspected.height, req.body.length],
       );
       const updated = await client.query(
         `UPDATE unit_assets SET row_revision = row_revision + 1, updated_at = now(), updated_by = $2
