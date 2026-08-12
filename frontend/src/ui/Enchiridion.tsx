@@ -51,12 +51,16 @@ import {
   ENCHIRIDION_CARD_FILTERS_ALL,
   ENCHIRIDION_SECTIONS,
   ENCHIRIDION_SECTION_LABEL,
+  LIPSANA_BROWSE_MODES,
+  LIPSANA_BROWSE_MODE_DEFAULT,
+  LIPSANA_BROWSE_MODE_LABEL,
   enchiridionSectionHref,
   type CardGoldFilter,
   type CardRarityFilter,
   type CardUnitFilter,
   type EnchiridionCardFilters,
   type EnchiridionSection,
+  type LipsanaBrowseMode,
 } from './enchiridionRoute';
 import { installedUiMedia } from './installedUiMedia';
 import { STRATEGIKON_CARD_MARK_CLASS, useStrategikonCardsIcon } from './strategikonNavigation';
@@ -663,7 +667,9 @@ function statisticFor(statistics: LipsanaStatistics, lipsanonId: LipsanonId) {
   return statistics[lipsanonId] ?? { timesPicked: 0, battlesWonWhileHeld: 0 };
 }
 
-type LipsanonBrowseMode = 'rows' | 'grouped';
+// The two browse layouts and their labels live in the route module, because the address is what
+// validates them (see enchiridionRoute).
+export type { LipsanaBrowseMode } from './enchiridionRoute';
 
 // One reference entry control in two transports (ADR-0256): a host that gives records
 // addresses (lipsana, cards) renders a NavButton whose route is the record's address
@@ -684,6 +690,8 @@ export function LipsanaCodex({
   framed = true,
   selectedLipsanonId = null,
   lipsanonHref,
+  browseMode: addressedBrowseMode = null,
+  browseModeHref,
 }: {
   lipsanonIds?: readonly LipsanonId[];
   title?: string;
@@ -693,12 +701,21 @@ export function LipsanaCodex({
   selectedLipsanonId?: LipsanonId | null;
   /** When present, lipsanon selection navigates to this address instead of setting local state. */
   lipsanonHref?: (lipsanonId: LipsanonId) => string;
+  /** The route-addressed browse layout; read only when browseModeHref makes it navigational. */
+  browseMode?: LipsanaBrowseMode | null;
+  /** When present, choosing a layout navigates to this address instead of setting local state. */
+  browseModeHref?: (mode: LipsanaBrowseMode) => string;
 }): ReactElement {
   const [localSelectedId, setLocalSelectedId] = useState<LipsanonId>(lipsanonIds[0] ?? RUN_LIPSANA[0].id);
   // Routed hosts derive the selection from the address every render; an unknown or
   // absent lipsanon address falls back to the first visible lipsanon without rewriting the URL.
   const selectedId = lipsanonHref ? (selectedLipsanonId ?? lipsanonIds[0] ?? RUN_LIPSANA[0].id) : localSelectedId;
-  const [browseMode, setBrowseMode] = useState<LipsanonBrowseMode>('rows');
+  // The layout follows the same two-transport rule the selection does: addressed where a host gives
+  // it an href, local state where one does not. That is what makes the grouped case linkable.
+  const [localBrowseMode, setLocalBrowseMode] = useState<LipsanaBrowseMode>(LIPSANA_BROWSE_MODE_DEFAULT);
+  const browseMode = browseModeHref
+    ? (addressedBrowseMode ?? LIPSANA_BROWSE_MODE_DEFAULT)
+    : localBrowseMode;
   const [statistics, setStatistics] = useState<LipsanaStatistics>({});
   const [statisticsStatus, setStatisticsStatus] = useState<'loading' | 'account' | 'browser'>('loading');
   const browsePanelId = useId();
@@ -741,27 +758,25 @@ export function LipsanaCodex({
       {lipsanonIds.length ? (
         <div className="enchiridion-lipsanon-layout">
           <div className="enchiridion-lipsanon-browser">
+            {/* Each layout is its own address, so a tab is the same ReferenceTrigger the records
+                are: a NavButton to that address under a host that gives it one, a plain selection
+                button under one that does not (ADR-0256). One control, two transports. */}
             <div className="le-seg enchiridion-lipsanon-view-tabs" role="tablist" aria-label="Lipsanon browsing layout">
-              <ChromeButton unit="inner-text-button"
-                data-testid="lipsanon-view-rows"
-                role="tab"
-                aria-controls={browsePanelId}
-                aria-selected={browseMode === 'rows'}
-                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', browseMode === 'rows' && 'active')}
-                onClick={() => setBrowseMode('rows')}
-              >
-                Rows
-              </ChromeButton>
-              <ChromeButton unit="inner-text-button"
-                data-testid="lipsanon-view-grouped"
-                role="tab"
-                aria-controls={browsePanelId}
-                aria-selected={browseMode === 'grouped'}
-                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', browseMode === 'grouped' && 'active')}
-                onClick={() => setBrowseMode('grouped')}
-              >
-                Grouped
-              </ChromeButton>
+              {LIPSANA_BROWSE_MODES.map((mode) => (
+                <ReferenceTrigger
+                  key={mode}
+                  to={browseModeHref?.(mode)}
+                  onSelect={() => setLocalBrowseMode(mode)}
+                  data-testid={`lipsanon-view-${mode}`}
+                  data-chrome-unit="inner-text-button"
+                  role="tab"
+                  aria-controls={browsePanelId}
+                  aria-selected={browseMode === mode}
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', browseMode === mode && 'active')}
+                >
+                  {LIPSANA_BROWSE_MODE_LABEL[mode]}
+                </ReferenceTrigger>
+              ))}
             </div>
             <div
               id={browsePanelId}
@@ -1253,6 +1268,8 @@ export function EnchiridionReference({
   cardHref,
   cardFilters,
   cardFiltersHref,
+  lipsanaBrowseMode = null,
+  lipsanaBrowseModeHref,
 }: {
   section: EnchiridionSection;
   framed: boolean;
@@ -1262,6 +1279,8 @@ export function EnchiridionReference({
   cardHref?: (cardId: string) => string;
   cardFilters?: EnchiridionCardFilters | null;
   cardFiltersHref?: (filters: EnchiridionCardFilters) => string;
+  lipsanaBrowseMode?: LipsanaBrowseMode | null;
+  lipsanaBrowseModeHref?: (mode: LipsanaBrowseMode) => string;
 }): ReactElement {
   if (section === 'terrain') return <TerrainSection framed={framed} />;
   if (section === 'manubiae') return <ManubiaeSection framed={framed} />;
@@ -1276,7 +1295,17 @@ export function EnchiridionReference({
       />
     );
   }
-  if (section === 'lipsana') return <LipsanaCodex framed={framed} selectedLipsanonId={selectedLipsanonId} lipsanonHref={lipsanonHref} />;
+  if (section === 'lipsana') {
+    return (
+      <LipsanaCodex
+        framed={framed}
+        selectedLipsanonId={selectedLipsanonId}
+        lipsanonHref={lipsanonHref}
+        browseMode={lipsanaBrowseMode}
+        browseModeHref={lipsanaBrowseModeHref}
+      />
+    );
+  }
   if (section === 'ataraxia') return <AtaraxiaSection framed={framed} />;
   return <UnitsSection framed={framed} />;
 }
@@ -1290,6 +1319,8 @@ export function Enchiridion({
   cardHref,
   cardFilters = null,
   cardFiltersHref,
+  lipsanaBrowseMode = null,
+  lipsanaBrowseModeHref,
   showSectionRail = true,
   sceneInstanceKey = `enchiridion/${section ?? 'root'}`,
   framed = true,
@@ -1308,6 +1339,10 @@ export function Enchiridion({
   cardFilters?: EnchiridionCardFilters | null;
   /** When present, changing a card filter navigates to this address. */
   cardFiltersHref?: (filters: EnchiridionCardFilters) => string;
+  /** The route-addressed lipsana browse layout; see LipsanaCodex. */
+  lipsanaBrowseMode?: LipsanaBrowseMode | null;
+  /** When present, choosing a lipsana browse layout navigates to this address. */
+  lipsanaBrowseModeHref?: (mode: LipsanaBrowseMode) => string;
   showSectionRail?: boolean;
   sceneInstanceKey?: string;
   framed?: boolean;
@@ -1329,6 +1364,8 @@ export function Enchiridion({
             cardHref={cardHref}
             cardFilters={cardFilters}
             cardFiltersHref={cardFiltersHref}
+            lipsanaBrowseMode={lipsanaBrowseMode}
+            lipsanaBrowseModeHref={lipsanaBrowseModeHref}
           />
         </EnchiridionContentSceneSlot>
       ) : null}

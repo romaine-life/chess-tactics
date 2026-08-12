@@ -67,6 +67,61 @@ export function enchiridionLipsanonFromPath(path: string): LipsanonId | null {
   return id && RUN_LIPSANA.some((lipsanon) => lipsanon.id === id) ? (id as LipsanonId) : null;
 }
 
+// The lipsana section browses its records two ways, and WHICH way is part of the address for the
+// same reason the cards gallery's filters are: a browse layout is a thing worth linking someone to.
+// Held as component state it was reachable only by pressing a tab, so no link could put a reader on
+// the grouped case — the unlinkable review surface that costs a navigation every time it comes up.
+
+export const LIPSANA_BROWSE_MODES = ['rows', 'grouped'] as const;
+export type LipsanaBrowseMode = typeof LIPSANA_BROWSE_MODES[number];
+
+/** Rows is what a bare /enchiridion/lipsana means, and what every unknown value falls back to. */
+export const LIPSANA_BROWSE_MODE_DEFAULT: LipsanaBrowseMode = 'rows';
+
+export const LIPSANA_BROWSE_MODE_LABEL: Readonly<Record<LipsanaBrowseMode, string>> = {
+  rows: 'Rows',
+  grouped: 'Grouped',
+};
+
+const LIPSANA_BROWSE_PARAM = 'browse';
+
+/**
+ * The browse layout a query addresses. An absent, empty or unknown value reads as rows rather than
+ * throwing or erasing the address — a hand-typed `?browse=tiles` shows the rows, which is the honest
+ * answer to "no such layout".
+ */
+export function lipsanaBrowseModeFromSearch(search: string): LipsanaBrowseMode {
+  const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  const raw = params.get(LIPSANA_BROWSE_PARAM);
+  return LIPSANA_BROWSE_MODES.find((mode) => mode === raw) ?? LIPSANA_BROWSE_MODE_DEFAULT;
+}
+
+/**
+ * `search` with the browse layout set — the default REMOVED rather than written, so the bare address
+ * stays the bare address. Every other param the host was carrying survives, which is what lets the
+ * Strategikon put this on an address it does not own the rest of.
+ */
+export function withLipsanaBrowseMode(search: string, mode: LipsanaBrowseMode): string {
+  const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  if (mode === LIPSANA_BROWSE_MODE_DEFAULT) params.delete(LIPSANA_BROWSE_PARAM);
+  else params.set(LIPSANA_BROWSE_PARAM, mode);
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
+/** The address of the lipsana section under one browse layout. */
+export function enchiridionLipsanaHref(mode: LipsanaBrowseMode): string {
+  return `${enchiridionSectionHref('lipsana')}${withLipsanaBrowseMode('', mode)}`;
+}
+
+/** The address of one lipsanon's record, keeping the layout the reader was browsing under. */
+export function enchiridionLipsanonHrefUnderBrowse(
+  lipsanonId: LipsanonId,
+  mode: LipsanaBrowseMode,
+): string {
+  return `${enchiridionLipsanonHref(lipsanonId)}${withLipsanaBrowseMode('', mode)}`;
+}
+
 /** The address of one card face in the main-menu Enchiridion gallery. */
 export function enchiridionCardHref(cardId: string): string {
   return `/enchiridion/cards/${runCardSlug(cardId)}`;
