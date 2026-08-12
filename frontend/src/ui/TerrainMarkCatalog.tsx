@@ -19,10 +19,10 @@ import { enchiridionSectionHref } from './enchiridionRoute';
  * rail's OWN measured box — ink exactly 40px tall, centred, 12px of margin above and below — so
  * what is being judged is the drawing, not a size difference (ADR-0026, ADR-0560).
  *
- * A mark can only be judged against the five it stands beside, so the comparison at the top is
- * the REAL `EnchiridionSectionRail` with one seat swapped, not a lookalike column. Below it the
- * candidates stand in their own rails — four concepts side by side, sixteen seats each, at the
- * pitch the Enchiridion stacks them at. Nothing is installed until the owner installs one.
+ * A mark can only be judged against the five it stands beside, so the first two columns are the
+ * REAL `EnchiridionSectionRail` — installed, and the selection — not a lookalike column. The four
+ * concept columns beside them hold their sixteen candidates each, in their own rails, at the pitch
+ * the Enchiridion stacks them at. Nothing is installed until the owner installs one.
  */
 export const TERRAIN_MARK_BATCH_ID = 'terrain-mark-2026-08-11-pixellab';
 export const TERRAIN_MARK_SLOT = 'ui/kit/icons/tileset-studio.png';
@@ -94,9 +94,10 @@ export function terrainMarkCandidates(catalog: AdminLiveMediaCatalog): Map<strin
   return grouped;
 }
 
-/** The real Enchiridion rail, with Terrain optionally wearing a candidate instead. Shown ONCE,
- *  as the comparison at the top: the neighbours are what a mark is judged against, and they are
- *  the same five on every card, so repeating them 64 times says nothing a card can be read for. */
+/** The real Enchiridion rail, with Terrain optionally wearing a candidate instead. Drawn TWICE —
+ *  installed, and the selection — as the first two columns. The neighbours are what a mark is
+ *  judged against, and they are the same five for every candidate, so a copy per candidate would
+ *  say nothing a column can be read for. */
 function RailPreview({ mark }: { mark?: string }): ReactElement {
   return (
     <EnchiridionSectionRail
@@ -132,30 +133,34 @@ export function TerrainMarkCatalog({ state }: { state: TerrainMarkState }): Reac
   const selected = all.find((version) => version.id === selectedId) ?? null;
   if (error) return <p role="alert">{error}</p>;
   if (!catalog) return <p role="status">Loading candidates…</p>;
+  // ONE row of columns: the two whole rails first, then a column per concept. Not a rail band
+  // stacked above the candidates — a six-seat rail is ~600px tall, so on any window shorter than
+  // that it filled the screen and every candidate was below the fold, which is exactly what
+  // "where are my candidates" looked like. Side by side, the comparison keeps its full size, the
+  // columns start at the top of the same viewport, and one horizontal scroll reaches the whole
+  // batch. Every column has the same shape — heading, note, rail — so nothing is clipped by a
+  // neighbour that is built differently.
   return (
-    <div data-testid="terrain-mark-catalog">
-      <section className="terrain-mark-seat">
-        <h3>The rail</h3>
-        <p className="tileset-catalog-note">
-          Installed on the left, the selected candidate on the right — the five neighbours a
-          Terrain mark is actually judged against.
-        </p>
-        <div className="terrain-mark-rails">
-          <RailPreview />
-          {selected?.media ? <RailPreview mark={selected.media.url} /> : null}
-        </div>
+    <div className="terrain-mark-columns" data-testid="terrain-mark-catalog">
+      <section className="terrain-mark-column terrain-mark-column-rail">
+        <h3>Installed</h3>
+        <p className="tileset-catalog-note">What the Enchiridion paints today.</p>
+        <RailPreview />
       </section>
-      {/* One COLUMN per concept, each a real rail of its sixteen seats. Not catalog cards: a card
-          is 360px wide because a rail tab is, so sixteen of them run three-across down a very long
-          page and the mark — the only thing being judged — ends up a fraction of a mostly empty
-          card. Stacked in their own rail the seats sit at the pitch the Enchiridion stacks them at,
-          four concepts read side by side, and the whole batch is one screen of scrolling. */}
-      <div className="terrain-mark-specimens">
-        {TERRAIN_MARK_CONCEPTS.map((concept) => {
+      <section className="terrain-mark-column terrain-mark-column-rail">
+        <h3>{selected ? terrainMarkCode(selected) : 'Selected'}</h3>
+        <p className="tileset-catalog-note">
+          {selected
+            ? 'The candidate in the rail, beside the five marks it would stand with.'
+            : 'Pick a candidate and it stands here, beside the five marks it would join.'}
+        </p>
+        {selected?.media ? <RailPreview mark={selected.media.url} /> : null}
+      </section>
+      {TERRAIN_MARK_CONCEPTS.map((concept) => {
           const entries = grouped.get(concept.key) ?? [];
           return (
             <section
-              className="terrain-mark-concept"
+              className="terrain-mark-column"
               data-testid={`terrain-mark-concept-${concept.key}`}
               key={concept.key}
             >
@@ -182,7 +187,6 @@ export function TerrainMarkCatalog({ state }: { state: TerrainMarkState }): Reac
             </section>
           );
         })}
-      </div>
       {!all.length ? <p>No candidates are uploaded for this batch.</p> : null}
     </div>
   );
@@ -243,8 +247,8 @@ export function TerrainMarkControls({ state }: { state: TerrainMarkState }): Rea
         The installed grass cube is both plainer and SHORTER than the marks it stands beside —
         40×35 of ink where Units and Lipsana are 40 tall. Every candidate is packed to the rail's
         own measured box: ink exactly 40px tall, centred, 12px of margin above and below. Each
-        candidate stands in a real rail seat, so the columns are the comparison; picking one moves
-        it into the rail at the top, beside the five marks it would stand with.
+        candidate stands in a real rail seat, so the columns are the comparison; picking one puts it
+        in the Selected rail, second from the left, beside the five marks it would stand with.
       </p>
       <button
         type="button"

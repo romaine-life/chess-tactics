@@ -23071,34 +23071,10 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
-/* One seat per concept in the Terrain Mark category: a heading, its note, then the grid of
-   candidate rails. Same shape as the Run seats above it — layout only, because the cards mount
-   the real rail and a review that re-sizes the thing it is judging proves nothing about it. */
-.terrain-mark-seat {
-  display: grid;
-  gap: var(--ds-inline-tight);
-}
-
-.terrain-mark-seat > h3,
-.terrain-mark-seat > p {
-  margin: 0;
-}
-
 /* Menu mark sets are whole five-tab rails rather than single glyphs, so their cards need a track
    wide enough for the rail's own fixed column instead of the shared thumbnail measure. */
 .menu-mark-grid {
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-}
-
-/* The two comparison rails at the top of the Terrain Mark category — installed beside the
-   selected candidate. This is the ONLY place the whole rail is drawn: the neighbours are the
-   same five on every candidate, so a card repeating them says nothing the card can be read for.
-   The cards below hold the Terrain SEAT alone. */
-.terrain-mark-rails {
-  align-items: start;
-  display: flex;
-  gap: var(--ds-inline);
-  overflow-x: auto;
 }
 
 /* A card that mounts a real CONTROL rather than a cut-out asset.
@@ -23126,25 +23102,38 @@ button.tileset-relationship-cell {
   inline-size: 100%;
 }
 
-/* Four concepts side by side, each its own rail of sixteen seats. One row, always: a wrapped
-   concept is one that can no longer be read against the other three, which is the whole job. */
-.terrain-mark-specimens {
+/* ONE row of columns — the two whole rails, then a column per concept. A column is a heading, a
+   note and a rail, and they are all built that way so none is clipped by a neighbour with a
+   different shape. One row, always: a wrapped column is one that can no longer be read against
+   the others, which is the whole job, so the row scrolls sideways instead of breaking. */
+.terrain-mark-columns {
   align-items: start;
   display: flex;
   gap: var(--ds-inline);
   overflow-x: auto;
+  /* Every column starts at the same line whatever its note wrapped to, so the seats in one column
+     sit level with the seats in the next and the marks can be read across. */
+  align-content: start;
 }
 
-.terrain-mark-concept {
+.terrain-mark-column {
+  align-content: start;
   display: grid;
+  /* The rail sets the width; the heading and note wrap inside it rather than widening it. */
+  flex: 0 0 var(--main-menu-tab-column-w, 322px);
   gap: var(--ds-inline-tight);
+  inline-size: var(--main-menu-tab-column-w, 322px);
 }
 
-.terrain-mark-concept > h3,
-.terrain-mark-concept > p {
+.terrain-mark-column > h3,
+.terrain-mark-column > p {
   margin: 0;
-  /* The rail sets the column width; the note wraps inside it rather than widening it. */
-  max-inline-size: var(--main-menu-tab-column-w, 322px);
+}
+
+/* The note is two lines on some columns and one on others. Reserving both keeps every rail
+   starting on the same line, which is what makes the columns comparable across. */
+.terrain-mark-column > p {
+  min-block-size: 2.8em;
 }
 
 /* A specimen tab carries its candidate's code as a trailing badge, so the seat keeps the exact
