@@ -68,9 +68,10 @@ describe('Run card names', () => {
     ));
     expect(queenPawnCards).toHaveLength(1);
     expect(queenPawnCards.every((card) => runCardName(card) === 'The Last Attendant')).toBe(true);
-    // One illustration per (footprint, roster): Queen behind a Pawn is its own scene.
+    // ADR-0579: one illustration per CARD for the default-rules deck, so the slot is addressed by
+    // the card's own id rather than by the (footprint, roster) family.
     expect(queenPawnCards.every((card) => (
-      runCardArtSlot(card) === 'ui/run/card-art/0001-pq/illustration.png'
+      runCardArtSlot(card) === `ui/run/card-art/${card.id}/illustration.png`
     ))).toBe(true);
   });
 

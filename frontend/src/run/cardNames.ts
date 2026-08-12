@@ -4,6 +4,7 @@ import {
   RUN_CARD_BY_ID,
   RUN_CARD_CATALOG,
   RUN_CARD_DECK,
+  cardFamilyArtId,
   runCardDefinition,
   cardContentsLabel,
   type RunArmyPieceType,
@@ -721,6 +722,27 @@ export function runCardFlavor(card: NameableRunCard): string {
 }
 
 /** Stable semantic live-media slot for one canonical core Units card. */
+/**
+ * Where this card's illustration may live, best first.
+ *
+ * ADR-0579 gives a dealable card its own slot, and the family slot stays installed underneath it.
+ * Until a card's own illustration is ACCEPTED there are no bytes at the per-card slot, and
+ * `liveMediaForSlot` treats an absent required slot as a render failure — so a consumer resolves
+ * the first slot the hydrated catalog actually has. That makes installing the batch a card-at-a-time
+ * promotion rather than a flag day: every card that has not been promoted yet keeps drawing the
+ * family art it draws today.
+ */
+export function runCardArtSlots(card: NameableRunCard): readonly string[] {
+  const preferred = runCardArtSlot(card);
+  const family = card.pieces.length
+    ? `ui/run/card-art/${cardFamilyArtId(
+      card.pieces as readonly AdlectablePieceType[],
+      (card as { formation?: readonly { x: number; y: number }[] }).formation ?? [],
+    )}/illustration.png`
+    : preferred;
+  return preferred === family ? [preferred] : [preferred, family];
+}
+
 export function runCardArtSlot(card: NameableRunCard): string {
   // Starter cards own their art identity just as firmly as the core deck. A shared
   // composition never aliases their accepted illustration bytes (ADR-0414).

@@ -30081,3 +30081,74 @@ button.section-box-head {
   position: static;
   transform: none;
 }
+
+/* A catalog body that is not the shared .tileset-studio-grid still has to own its own scroll:
+   .tileset-studio-main is overflow:hidden by design, so a body that does not claim the scroll is
+   simply clipped. Layout only -- no surface paint. */
+.tileset-studio-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* --- Run card art review (ADR-0579) -------------------------------------------------------
+   Every candidate on the card face it ships on. The cards are drawn at their real size and
+   scaled down as a whole, so what is judged is the real composition -- the art window crop,
+   the frame over it, the name and the coin -- rather than a re-laid-out approximation. */
+.run-card-art-review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-6, 24px);
+  padding: var(--ds-space-6, 24px);
+}
+.run-card-art-review-note {
+  margin: 0;
+  padding: 0 var(--ds-space-4, 16px) var(--ds-space-4, 16px);
+  font-size: var(--ds-text-sm, 0.9rem);
+  opacity: 0.75;
+}
+.run-card-art-review-world > h2 {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ds-space-3, 12px);
+  margin: 0 0 var(--ds-space-4, 16px);
+  font-size: var(--ds-text-lg, 1.1rem);
+}
+.run-card-art-review-world > h2 > span {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.6;
+  font-size: var(--ds-text-sm, 0.9rem);
+}
+.run-card-art-review-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--ds-space-6, 24px);
+  align-items: start;
+}
+.run-card-art-review-item {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2, 8px);
+}
+/* The card draws at its authored size; the seat is what shrinks. */
+.run-card-art-review-item > :first-child {
+  zoom: 0.42;
+  transform-origin: top left;
+}
+.run-card-art-review-item > figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--ds-text-xs, 0.78rem);
+  line-height: 1.4;
+}
+.run-card-art-review-item > figcaption > em { opacity: 0.7; }
+.run-card-art-review-item > figcaption > code { opacity: 0.45; font-size: 0.9em; }
+/* The raw candidate beside the mounted face: the frame crops, and it is worth seeing what it cut.
+   No border of its own -- surface paint belongs to registered shared chrome (ADR-0059). */
+.run-card-art-review-item > figcaption > img {
+  margin-top: var(--ds-space-2, 8px);
+  width: 100%;
+  image-rendering: pixelated;
+}

@@ -37,7 +37,9 @@
       "name": "Sole Surviving Issue",
       "where": "France · Troyes 1420, and after",
       "act": "Fifth son. His brothers died one after another until the crown reached him, and then a treaty disinherited him anyway. Kept as-is; the act only needs to stop being a man standing at a shut gate.",
-      "moment": "Rising out of a chair to receive somebody, mid-movement, in a hall dressed for a court that is not there."
+      "moment": "The king rising out of his chair to receive somebody, caught mid-movement, in a hall dressed for a court that is not there.",
+      "monarch": "Charles VII of France",
+      "monarchNote": "Fifth son. His elder brothers died one after another until the crown reached him; disinherited at Troyes in 1420, uncrowned for years, mocked as the King of Bourges."
     },
     {
       "cardId": "entered-without-objection",
@@ -64,7 +66,9 @@
       "name": "Entered Without Objection",
       "where": "England · Westminster, 30 September 1399",
       "act": "The parliament roll recorded Richard II's renunciation as voluntary. Nobody in the hall said otherwise, and the column ruled for objections reached the binder empty.",
-      "moment": "The roll turned and weighted flat on a table, the king one of several men leaning over it and not the largest."
+      "moment": "The roll turned and weighted flat on a table, the king one of several men leaning over it and not the largest.",
+      "monarch": "Henry IV of England",
+      "monarchNote": "Took the throne in 1399 by a deposition the parliament roll recorded as Richard II’s voluntary renunciation."
     },
     {
       "cardId": "his-grace",
@@ -92,7 +96,9 @@
       "name": "His Grace",
       "where": "England · London, summer 1483",
       "act": "Two names stood before his, were declared illegitimate, and then were absent from the record. The protected starter card; it should not move.",
-      "moment": "A clerk striking two lines through a genealogy while the king reads it over his shoulder, half out of the light."
+      "moment": "A clerk striking two lines through a genealogy while the king reads it over his shoulder, half out of the light.",
+      "monarch": "Richard III of England",
+      "monarchNote": "Two names stood before his: Edward V and Richard of Shrewsbury, declared illegitimate in 1483 and then absent from the record."
     },
     {
       "cardId": "one-left-at-the-marker",
@@ -123,7 +129,9 @@
       "name": "One Left at the Marker",
       "where": "England · the hundreds, 1274–75",
       "act": "Commissioners recorded boundaries and franchises from sworn local memory, because the memory was the evidence. At each marker a boy was struck so that he would remember the place.",
-      "moment": "The instant before the blow, the rest of the party already walking on."
+      "moment": "The king’s own hand on the boy’s shoulder at the marker, holding him in place for the blow, the rest of the party already walking on.",
+      "monarch": "Edward I of England",
+      "monarchNote": "The Hundred Rolls inquests of 1274-75 sent commissioners into every hundred to record boundaries and franchises from sworn local memory."
     },
     {
       "cardId": "household-roll",
@@ -152,7 +160,9 @@
       "name": "The Household Roll",
       "where": "England · Valor Ecclesiasticus, 1535",
       "act": "Every monastic income in the realm was counted before a single house was dissolved. The survey came first, and the same roll had once served a household of forty.",
-      "moment": "A figure going into a column on a board propped against cloister stone — a valuation, not a seizure."
+      "moment": "The king’s own hand writing a figure into a column on an inventory board propped against cloister stone — a valuation, not a seizure.",
+      "monarch": "Henry VIII of England",
+      "monarchNote": "The Valor Ecclesiasticus of 1535 counted every monastic income in the realm before the houses were dissolved. The survey came first."
     },
     {
       "cardId": "called-to-the-bounds",
@@ -183,7 +193,9 @@
       "name": "Called to the Bounds",
       "where": "England · Rogationtide, after 1547",
       "act": "Most processions were banned and the perambulation was deliberately kept, because walking the line was how a parish still knew where it ran. Kept because it is a walk, not another piece of paper.",
-      "moment": "A boy lifted to touch the corner post so that he will remember it — the instant his hand reaches the wood."
+      "moment": "The boy king himself lifted up to touch the corner post so that he will remember where the line runs — the instant his hand reaches the wood.",
+      "monarch": "Edward VI of England",
+      "monarchNote": "The 1547 injunctions banned most processions but deliberately preserved the Rogationtide perambulation, because walking the line was how a parish still knew where it ran."
     },
     {
       "cardId": "turning-stone",
@@ -211,10 +223,12 @@
         "anchor": "Henry VIII · Dissolution (2 of 3)"
       },
       "displacedBecause": "Third English land-and-church survey on the slate, and the second Dissolution card. Replaced.",
-      "name": "Earth of Every County",
-      "where": "Hungary · Székesfehérvár, the coronation mound",
-      "act": "The mound was built of earth carried in from every county of the realm. The newly crowned king rode up it and cut his sword to the four points of the compass, which is how he undertook to defend all of it.",
-      "moment": "The horse's forefeet reaching the top of a mound made of somebody else's fields, with the men who carried the earth standing off it."
+      "name": "Sworn from the Hill",
+      "where": "Hungary · Székesfehérvár, 1310",
+      "act": "Crowned at last with the right crown in the right place, he rode to the top of the coronation hill with the sword in his hand and promised from it to defend the realm. The promise is the part that made it count.",
+      "moment": "The king’s horse getting its forefeet onto the top of the hill and his sword coming up, with the men who walked him there still below the crest.",
+      "monarch": "Charles I of Hungary",
+      "monarchNote": "Crowned three times. Only the third, at Székesfehérvár in 1310 with the Holy Crown, was accepted as having happened at all."
     },
     {
       "cardId": "within-the-old-bounds",
@@ -245,7 +259,9 @@
       "name": "Confirmed on the Road",
       "where": "Sweden · the Eriksgata",
       "act": "Elected at the Stone of Mora by one province, the new king then had to ride the circuit of all the others and be confirmed by each assembly in turn, taking local men as hostages along the way. One king refused the hostages; it was taken as an insult, because it meant he did not fear them.",
-      "moment": "Three provincial men mounting up to ride with him as sureties, at the moment the last one takes the reins."
+      "moment": "The king taking the last hostage’s reins into his own hand as three provincial men mount up to ride the circuit with him as sureties.",
+      "monarch": "Magnus Eriksson of Sweden",
+      "monarchNote": "Lifted onto the Stone of Mora at three years old in 1319 and left underage for thirteen years. His Eriksgata finally rode in 1335 — the first one whose king is named in the record — and his own landslag then regulated the circuit in detail."
     },
     {
       "cardId": "staggered-muster",
@@ -276,7 +292,9 @@
       "name": "A Ship From Every District",
       "where": "Denmark · the leidang",
       "act": "The coast was divided into districts that each owed one ship, and those into smaller districts that each owed one man to crew it. A royal charter of 1085 fines the people of certain lands for neglecting it. The arithmetic is exact and the ships are wooden.",
-      "moment": "Three men from three districts standing on a beach beside a keel that is one crew short, and the tide already going."
+      "moment": "The king counting aloud what actually came, on a beach where a keel stands one crew short and the tide is already going.",
+      "monarch": "Canute IV of Denmark",
+      "monarchNote": "Called the leding to the Limfjord in 1085 for an invasion of England. Too few came, the fleet dispersed, he fined the defaulters, and the revolt that started over those fines killed him the next year."
     },
     {
       "cardId": "muster-incomplete",
@@ -307,7 +325,9 @@
       "name": "Measured and Entered",
       "where": "Castile · Seville, from 1248",
       "act": "Seville capitulated in November 1248 and Ferdinand III began handing the city out himself — to nobles, to orders, and to the foot soldiers who had helped take it. The book records each beneficiary, what he got, its measurement and where it stood.",
-      "moment": "A cord being drawn across a doorway to measure a lot, with the clerk waiting to write the number and the man who will live there holding one end."
+      "moment": "The king holding one end of the measuring cord across a doorway himself, the clerk waiting to write the number, the settler holding the other end.",
+      "monarch": "Ferdinand III of Castile",
+      "monarchNote": "Seville capitulated in November 1248 and he began handing the city out himself, to nobles, to orders, and to the foot soldiers who had helped take it."
     },
     {
       "cardId": "witness-to-the-oath",
@@ -334,7 +354,9 @@
       "name": "Witness to the Oath",
       "where": "England · Clarendon, January 1164",
       "act": "Sixteen articles read out and assented to in one sitting, written down the same afternoon, and disputed for the rest of the reign. The agreeing is the only part anybody later argued about.",
-      "moment": "The reader lowering the sheet, the assent given, and the bishop's posture already regretting it."
+      "moment": "The king’s hand still flat on the sheet he has just had read out, the assent given, and the bishop’s posture already regretting it.",
+      "monarch": "Henry II of England",
+      "monarchNote": "The Constitutions of Clarendon, 1164: sixteen articles read out and assented to by the bishops in one sitting, then written down and disputed for the rest of the reign."
     },
     {
       "cardId": "anointed-late",
@@ -361,7 +383,9 @@
       "name": "The Ploughman's Shoes, Produced",
       "where": "Bohemia · Vyšehrad, eve of the coronation",
       "act": "The coronation order required the king to go to Vyšehrad the night before and be shown a pair of bast shoes and a satchel said to have belonged to a ploughman his dynasty descended from. Charles IV put them on in 1347.",
-      "moment": "The shoes coming out of the chest and being held up at chest height, and the king looking at them rather than at the man holding them."
+      "moment": "The shoes coming out of the chest and being held up at chest height, and the king looking at them rather than at the man holding them.",
+      "monarch": "Charles IV of Bohemia",
+      "monarchNote": "His own coronation order required the king to go to Vyšehrad on the eve and be shown a ploughman’s bast shoes and satchel. He put them on in 1347."
     },
     {
       "cardId": "the-anointing",
@@ -388,7 +412,9 @@
       "name": "The Anointing",
       "where": "Francia · Soissons, 751",
       "act": "The anointing is what made him king in place of the dynasty he displaced. The church went in first and he followed, and he came out ahead of it. The strongest act on the slate; it should not move.",
-      "moment": "Two men on church steps in the same stride, the one in front carrying the oil, neither drawn larger than the other."
+      "moment": "The bishop’s foot on the top step and the king’s on the one below, both in the same stride, the oil going up the stairs in front of him.",
+      "monarch": "Pepin the Short",
+      "monarchNote": "Anointed in 751 and again by Pope Stephen II in 754. The anointing is what made him king in place of the dynasty he had displaced; the church went first, and he followed."
     },
     {
       "cardId": "homage-withheld",
@@ -416,7 +442,9 @@
       "name": "Shown the Way Out",
       "where": "Novgorod · 1136, and after",
       "act": "The assembly expelled its prince and from then on hired them under written contract: no more than fifty retainers, no land, no trade, and out again on any breach. This is the one card where the commoners hold the power and the king is the one being handled.",
-      "moment": "A prince mounted to leave with one retainer, and a townsman holding the gate open for him rather than shut."
+      "moment": "A prince mounted to leave with one retainer, and a townsman holding the gate open for him rather than shut.",
+      "monarch": "Vsevolod Mstislavich of Novgorod",
+      "monarchNote": "Ruled from 1117 under conditions the assembly set, and was expelled by it in 1136. Every prince after him served under a written charter."
     },
     {
       "cardId": "homage-done-mounted",
@@ -444,7 +472,9 @@
       "name": "Homage Done Mounted",
       "where": "France · Saint-Clair-sur-Epte, 911",
       "act": "Land in exchange for homage. Homage is sworn kneeling and unarmed; what was sworn from the saddle was entered under the same heading, and argued about for a century.",
-      "moment": "The exact instant the two pairs of hands meet, one above the other, the horse's head higher than the crown."
+      "moment": "The king reaching up from the ground to take the mounted man’s hands between his own, the horse’s head higher than his crown, and neither of them moving to fix that.",
+      "monarch": "Charles the Simple",
+      "monarchNote": "The grant at Saint-Clair-sur-Epte in 911 bought off a Viking army with land in exchange for homage. How well the homage was performed was argued about for a century."
     }
   ],
   "bench": [
@@ -581,5 +611,6 @@
     "by": "owner (Nelson)",
     "date": "2026-08-11",
     "note": "Slate signed off. Casts fixed, six anchors re-anchored, two realms to nine."
-  }
+  },
+  "monarchRule": "Each card names the monarch under whose reign the act it is named for is best attested. The monarch drives the regalia, period and setting and never appears on the card face."
 }
