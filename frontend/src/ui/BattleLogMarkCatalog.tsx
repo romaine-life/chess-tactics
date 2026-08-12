@@ -363,10 +363,12 @@ export function BattleLogMarkControls({ state }: { state: BattleLogMarkState }):
   return (
     <>
       <p className="tileset-catalog-note">
-        A mark REPLACES the word that classified its line, because a glyph is read faster than a
-        word. Four seats need art; the clock, the objective flag and the two coins are already
+        A mark REPLACES the words that classified its line, because a glyph is read faster than a
+        word. An ending takes an outcome and a cause, and between them the row needs no words at
+        all. Seven seats need art; the clock, the objective flag and the two coins are already
         installed elsewhere and the log borrows those. Each option is drawn on the real rows at
-        the real 18px seat. Nothing is installed until you install one.
+        the real 18px seat. Nothing is installed until you install one — until then the rows
+        above preview option 01.
       </p>
       {/* The same labelled select the Studio picks its category with — four seats need
           deciding and this page shows one at a time, which is a choice, not a toggle. */}
