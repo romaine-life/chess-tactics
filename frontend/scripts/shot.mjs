@@ -37,8 +37,10 @@ import puppeteer from 'puppeteer-core';
 import {
   assertObservationPatchConsumed,
   installObservationSessionPatch,
+  isEditorDocumentResolveRequest,
   isLevelEditorUrl,
   isObservationSessionState,
+  observationResolveRefusal,
   watchEditSessionOpens,
 } from './shot-editor-session.mjs';
 
@@ -539,6 +541,33 @@ try {
     });
     if (!authState?.signed_in) throw new Error('local screenshot sign-in did not establish the owner session');
   }
+  // Skipping the sign-in navigation is NOT enough to make this browser anonymous: the local dev
+  // backend hands a loopback request an owner session whether or not one was asked for, so
+  // `/api/auth/me` answers signed-in from a cookie-less profile and the page opens private routes
+  // anyway. Answer that one request in the page instead. The script's other signed-out mock lives
+  // inside CDP request interception, which only exists behind --abort-request*, and interception
+  // wedges Vite dev-server module requests (see installObservationSessionPatch) — so this uses the
+  // same window.fetch patch the observation rewrite does and costs the module graph nothing.
+  if (anonymous) {
+    await page.evaluateOnNewDocument(() => {
+      const nativeFetch = window.fetch.bind(window);
+      window.fetch = async (input, init) => {
+        const isRequest = typeof Request !== 'undefined' && input instanceof Request;
+        let path;
+        try {
+          path = new URL(isRequest ? input.url : String(input), location.href).pathname;
+        } catch {
+          return nativeFetch(input, init);
+        }
+        const method = String(init?.method ?? (isRequest ? input.method : 'GET') ?? 'GET').toUpperCase();
+        if (method !== 'GET' || path !== '/api/auth/me') return nativeFetch(input, init);
+        return new Response(JSON.stringify({ signed_in: false }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      };
+    });
+  }
 
   // Visual verification is an authenticated observer, never a synthetic editing participant. Rewrite
   // the Level Editor's session-open INSIDE the page rather than through CDP request interception:
@@ -547,7 +576,21 @@ try {
   // requests to prove the rewrite was consumed needs no interception at all.
   const targetIsLevelEditor = isLevelEditorUrl(url);
   const editSessionOpens = targetIsLevelEditor ? watchEditSessionOpens(page) : null;
-  if (targetIsLevelEditor) await installObservationSessionPatch(page);
+  let observationResolveRefused = null;
+  if (targetIsLevelEditor) {
+    await installObservationSessionPatch(page);
+    // Resolve is where a working copy is BORN. An observing capture attaches to one that already
+    // exists or is refused; record the refusal so the run reports that fact instead of minting a
+    // document nobody asked for and screenshotting it.
+    page.on('response', async (response) => {
+      if (observationResolveRefused) return;
+      if (!isEditorDocumentResolveRequest(response.request().method(), response.url())) return;
+      let body;
+      try { body = await response.text(); } catch { return; }
+      const refusal = observationResolveRefusal(response.status(), body);
+      if (refusal) observationResolveRefused = { ...refusal, status: response.status() };
+    });
+  }
 
   // CDP interception is genuinely REQUIRED here, and this is the only place in this script that
   // still uses it: --abort-request* injects real transport failures on an arbitrary url substring,
@@ -1307,6 +1350,20 @@ try {
       process.exitCode = 7;
       throw new Error('atomic surface assertion failed');
     }
+  }
+
+  // A refused observing resolve is reported BEFORE any pixels are written. The editor renders an
+  // error state when its document never arrives, and a PNG of that error is worth less than the
+  // one fact the run actually learned: this URL has no document to observe.
+  if (observationResolveRefused) {
+    console.error(`Level Editor capture has nothing to observe: ${observationResolveRefused.reason}.`);
+    console.error(`  url: ${url}`);
+    console.error(`  server: HTTP ${observationResolveRefused.status} ${observationResolveRefused.error}`);
+    console.error('  Capture a levelId (or ?document=<id>) whose working copy already exists, open the');
+    console.error('  editor once yourself to create it, or pass --anonymous to capture a signed-out');
+    console.error('  editor that stores nothing.');
+    process.exitCode = 6;
+    throw new Error('observing Level Editor capture refused to create a document');
   }
 
   if (select) {
