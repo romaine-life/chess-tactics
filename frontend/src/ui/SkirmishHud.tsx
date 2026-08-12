@@ -253,8 +253,12 @@ export type SkirmishHudProps = {
   netInteractive?: boolean;
   /** Development-only owner calibration for a temporary pre-drawn plate candidate. */
   onOpenPredrawnRegistration?: (() => void) | null;
-  /** Permanently end the active Run. RunScreen owns confirmation and persistence. */
-  onAbandonRun?: (() => void) | null;
+  /**
+   * The Run's own Abandon control, seated in the Controls panel. The Run hands over the CONTROL
+   * rather than a callback: it confirms in its own seat now (a Keep Run / Abandon Run split, no
+   * dialog over the board), so the HUD owns a seat for it and never a second copy of it.
+   */
+  abandonRun?: ReactNode;
   /** Battle-context reference workspace. The route owns whether it is open. */
   strategikonPath?: string | null;
   strategikonSearch?: string;
@@ -290,7 +294,7 @@ export function SkirmishHud({
   returnLabel = 'Back',
   netInteractive = true,
   onOpenPredrawnRegistration = null,
-  onAbandonRun = null,
+  abandonRun = null,
   strategikonPath = null,
   strategikonSearch = '',
   controlsContent,
@@ -779,21 +783,11 @@ export function SkirmishHud({
                 ) : null}
               </div>
             </div>
-            {onAbandonRun && !net ? (
-              <>
-                <div className="skirmish-view-group">
-                  <span className="skirmish-eyebrow">Run</span>
-                  <div className="run-meta-navigation">
-                  <ChromeButton unit="inner-text-button"
-                    className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
-                    data-testid="abandon-run"
-                    onClick={onAbandonRun}
-                  >
-                    Abandon Run
-                  </ChromeButton>
-                  </div>
-                </div>
-              </>
+            {abandonRun && !net ? (
+              <div className="skirmish-view-group">
+                <span className="skirmish-eyebrow">Run</span>
+                {abandonRun}
+              </div>
             ) : null}
             {adminAuth.isAdmin && !net ? (
               <div className="skirmish-view-group">

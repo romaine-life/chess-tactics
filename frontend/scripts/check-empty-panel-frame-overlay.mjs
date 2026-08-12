@@ -1208,7 +1208,7 @@ if (!/<InnerChromeBox[\s\S]*?className=\{`skirmish-promotion-picker is-\$\{side\
   || !/<ChromeButton unit="inner-text-button"[\s\S]*?chromeUnitClassNames\('inner-text-button',\s*'skirmish-hud-tab'/.test(skirmishHud)
   || !/<ChromeButton[\s\S]*?unit="inner-text-button"[\s\S]*?chromeUnitClassNames\('inner-text-button',\s*'app-header-button',\s*'skirmish-grid-key'/.test(commandCardKey)
   // The card carries no per-key label any more; the tip does. A key that grew one back
-  // would restate the wall of type this replaced (ADR-0584).
+  // would restate the wall of type this replaced (ADR-0586).
   || /skirmish-grid-label/.test(commandCardKey)
   || !/<Tooltip[\s\S]*?triggerIsInteractive/.test(commandCardKey)) {
   failures.push('Skirmish promotion must use its registered anchored inner composition while tab and command-grid controls inherit existing registered inner units');

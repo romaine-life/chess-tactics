@@ -18,7 +18,7 @@ const runBattleUndoButton = readFileSync(new URL('./RunBattleUndoButton.tsx', im
 const runArmyWorkspace = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
 const chromeUnitRegistry = readFileSync(new URL('./chromeUnitRegistry.ts', import.meta.url), 'utf8');
 // The command card's key is one shared component, painted by the Controls tab and by the
-// Studio review that composes its marks (ADR-0584). Its registered-unit assertions follow
+// Studio review that composes its marks (ADR-0586). Its registered-unit assertions follow
 // it there; the HUD keeps only the empty-slot cell it still renders itself.
 const commandCardKey = readFileSync(new URL('./shared/CommandCardKey.tsx', import.meta.url), 'utf8');
 
@@ -236,7 +236,7 @@ describe('Skirmish chrome hierarchy', () => {
     expect(skirmishHud).toContain('style={leafSurfacePhase(index)}');
     expect(skirmishHud).toContain('SHORTCUT_KEY_ROWS.flat().map((key, index) =>');
     // The command card hands each key its place in the authored grid and the key phases its
-    // own wood from it, so both painters of the card get the same planks (ADR-0584).
+    // own wood from it, so both painters of the card get the same planks (ADR-0586).
     expect(skirmishHud).toContain('index={index}');
     expect(commandCardKey).toContain('const surfacePhase = leafSurfacePhase(index);');
     expect(stepper).toContain('style={leafSurfacePhase(0)}');
