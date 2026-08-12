@@ -18,7 +18,7 @@ contract and `docs/runtime-asset-contract.md` for promotion.
 - Main menu mode rail.
   The production rail has five live DOM controls: **Play**, **Editor**, **Lobbies**,
   **Enchiridion**, and **Settings**. **Play** opens the sole player-facing mode, Run,
-  directly. It mounts no second mode rail: Run's Current Run / Start New Run column sits
+  directly. It mounts no second mode rail: Run's **Continue / New** column (ADR-0582) sits
   immediately beside the main-menu rail and its selected detail follows. Campaign,
   Skirmish, and Levels remain implemented for direct development review but have no
   ordinary game entry (ADR-0514). The historical five-mode row art remains a design

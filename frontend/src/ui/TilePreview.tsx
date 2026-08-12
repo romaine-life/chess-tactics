@@ -1826,7 +1826,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       controls: <AthetizeMarkControls state={athetizeMark} />,
     },
     {
-      id: 'runrailmarks', label: 'Run Rail Marks', hint: 'The marks Run preparation’s Current Run and Start New Run tabs wear. Every candidate is mounted on a real rail tab at native size — the seat it ships in, not the title bar’s measure chip. Install binds the selected one.',
+      id: 'runrailmarks', label: 'Run Rail Marks', hint: 'The marks Run preparation’s Continue and New tabs wear. Every candidate is mounted on a real rail tab at native size — the seat it ships in, not the title bar’s measure chip. Install binds the selected one.',
       main: <RunRailMarkCatalog state={runRailMarks} />,
       controls: <RunRailMarkControls state={runRailMarks} />,
     },

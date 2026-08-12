@@ -1,5 +1,16 @@
 const LEVEL_EDITOR_PATHS = new Set(['/editor/level', '/edit', '/level-editor']);
 const EDIT_SESSION_OPEN_PATH = /^\/api\/editor-documents\/[^/]+\/edit-sessions$/;
+const DOCUMENT_RESOLVE_PATH = /^\/api\/editor-documents\/resolve$/;
+
+/** The two refusals an observing resolve can earn from the server. Named here so the capture can
+ *  report the FACT it hit — no document for this level, or a URL that would create one — instead of
+ *  surfacing a bare HTTP status from somewhere inside the editor's bootstrap. */
+export const OBSERVATION_RESOLVE_REFUSALS = {
+  editor_document_not_found_for_level:
+    'no editor document exists for this level yet, and an observing capture will not create one',
+  observation_cannot_create_editor_document:
+    'this editor URL carries no levelId, so opening it would create a new working copy',
+};
 
 export function isLevelEditorUrl(value) {
   try {
@@ -22,9 +33,30 @@ export function isEditSessionOpenRequest(method, requestUrl) {
   }
 }
 
+/** The request that DECIDES WHETHER A DOCUMENT EXISTS AT ALL. Resolve both attaches to a working
+ *  copy and, for a URL that has none, creates one — so a capture that rewrites only the session-open
+ *  observes a document it silently brought into being. Same predicate shape as the open, and shared
+ *  with the tally for the same reason. */
+export function isEditorDocumentResolveRequest(method, requestUrl) {
+  if (method !== 'POST') return false;
+  try {
+    return DOCUMENT_RESOLVE_PATH.test(new URL(requestUrl).pathname);
+  } catch {
+    return false;
+  }
+}
+
+/** Which document-touching request this is, or null for everything else. One classifier so the
+ *  page-side rewrite and the node-side tally cannot drift apart about what needed rewriting. */
+export function editorDocumentObservationKind(method, requestUrl) {
+  if (isEditSessionOpenRequest(method, requestUrl)) return 'edit-session-open';
+  if (isEditorDocumentResolveRequest(method, requestUrl)) return 'resolve';
+  return null;
+}
+
 export function observationOpenPostData({ targetIsLevelEditor, method, requestUrl, postData }) {
   if (!targetIsLevelEditor) return null;
-  if (!isEditSessionOpenRequest(method, requestUrl)) return null;
+  if (!editorDocumentObservationKind(method, requestUrl)) return null;
   try {
     const body = JSON.parse(postData || '{}');
     if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
@@ -64,7 +96,10 @@ export async function installObservationSessionPatch(page) {
   const source = `
 (() => {
   const EDIT_SESSION_OPEN_PATH = ${EDIT_SESSION_OPEN_PATH.toString()};
+  const DOCUMENT_RESOLVE_PATH = ${DOCUMENT_RESOLVE_PATH.toString()};
   const isEditSessionOpenRequest = ${isEditSessionOpenRequest.toString()};
+  const isEditorDocumentResolveRequest = ${isEditorDocumentResolveRequest.toString()};
+  const editorDocumentObservationKind = ${editorDocumentObservationKind.toString()};
   const observationOpenPostData = ${observationOpenPostData.toString()};
   const KEY = ${JSON.stringify(OBSERVATION_TALLY_KEY)};
 
@@ -91,7 +126,7 @@ export async function installObservationSessionPatch(page) {
       return nativeFetch(input, init);
     }
     const method = String(init?.method ?? (isRequest ? input.method : 'GET') ?? 'GET').toUpperCase();
-    if (!isEditSessionOpenRequest(method, href)) return nativeFetch(input, init);
+    if (!editorDocumentObservationKind(method, href)) return nativeFetch(input, init);
 
     const tally = loadTally();
     tally.sessionOpens += 1;
@@ -133,21 +168,38 @@ export async function installObservationSessionPatch(page) {
   await page.evaluateOnNewDocument(source);
 }
 
-/** Record every edit-session open the BROWSER made, across every transport. `page.on('request')`
- *  needs no interception, so this observation costs the page nothing. Compared against the
- *  page-side tally it proves the rewrite was consumed — an open this process saw but the patch did
- *  not rewrite means the app reached the network by some path `window.fetch` does not cover, and
- *  the run would silently be an EDITING participant in the owner's live document. */
+/** Record every document-touching request the BROWSER made, across every transport.
+ *  `page.on('request')` needs no interception, so this observation costs the page nothing. Compared
+ *  against the page-side tally it proves the rewrite was consumed — a request this process saw but
+ *  the patch did not rewrite means the app reached the network by some path `window.fetch` does not
+ *  cover, and the run would silently be an EDITING participant in the owner's live document, or
+ *  would MINT one of its own. */
 export function watchEditSessionOpens(page) {
   const opens = [];
   page.on('request', (request) => {
-    if (isEditSessionOpenRequest(request.method(), request.url())) opens.push(request.url());
+    if (editorDocumentObservationKind(request.method(), request.url())) opens.push(request.url());
   });
   return opens;
 }
 
-/** Throw unless every observed session-open went through the page-side rewrite. Zero opens is a
- *  legitimate outcome (a capture may never open a session); an open that ESCAPED the patch is not. */
+/** Report the server's refusal of an observing resolve as the fact the capture actually hit. A
+ *  refusal is the contract working: the run asked to look at a document that does not exist, or at
+ *  a URL whose only outcome is a new one. Returns null for every other response. */
+export function observationResolveRefusal(status, body) {
+  if (status !== 404 && status !== 409) return null;
+  let error;
+  try {
+    error = (typeof body === 'string' ? JSON.parse(body) : body)?.error;
+  } catch {
+    return null;
+  }
+  const reason = OBSERVATION_RESOLVE_REFUSALS[error];
+  return reason ? { error, reason } : null;
+}
+
+/** Throw unless every observed document-touching request went through the page-side rewrite. Zero
+ *  is a legitimate outcome (a capture may never resolve or open a session); one that ESCAPED the
+ *  patch is not. */
 export async function assertObservationPatchConsumed(page, observedOpens) {
   const tally = await page.evaluate((key) => {
     try {

@@ -204,6 +204,15 @@ and don't tell the user screenshots are impossible. Use the helper below.
    Level Editor captures automatically use an authenticated observation-only session: the real
    private document renders without gaining write access or changing its working copy. Do not
    replace this with a normal headless editor visit.
+   That observation now covers the request a document is BORN in, not just the one that joins it
+   (ADR-0586). A capture **attaches to a working copy that already exists, or fails** — it never
+   creates one. So an editor URL with no `levelId` and no `document` is refused before any pixels
+   are written, naming the fact rather than a status:
+   `Level Editor capture has nothing to observe`. Point the capture at a `levelId` (or
+   `?document=<id>`) whose working copy exists, open the editor once yourself to create it, or pass
+   `--anonymous` for a signed-out editor that stores nothing. Every capture of a bare
+   `/editor/level` used to mint an **Untitled level** on Nelson's account and photograph that; do
+   not "fix" a refusal by taking the levelId back out of the URL.
    Output defaults to `frontend/tmp-shots/shot.png` (gitignored). **Default to showing the
    small PNG inline — never substitute a link + description for the pixels.**
 
@@ -691,13 +700,6 @@ already handled inside `pr-gate`:
 - **`gh pr checks --json` does not emit `[]` when no checks are registered.** It prints a
   plain-English sentence, sometimes on stdout with exit 0 and sometimes on stderr with exit 1.
   Parse the payload; do not key off the exit code or scan only one stream.
-- **"every check I can see has passed" is not "CI passed".** `gh pr checks` lists the check RUNS
-  that exist right now, and a workflow's runs appear only once its suite starts dispatching them.
-  Poll a freshly-pushed PR and you get the one check that registered so far — green, and
-  meaningless. `pr-gate` reported READY on #924 with 1 of 3 checks and the branch was merged on a
-  third of its CI. It now also reads the head commit's **check suites** and refuses to settle
-  while any is `queued` or `in_progress`. A hand-written loop over `gh pr checks` alone cannot
-  see this at all.
 
 A watch must speak on every poll, not only on success — `pr-gate` heartbeats elapsed/pending
 to stderr so a live wait is never mistaken for a dead one.

@@ -80,6 +80,7 @@ const RunSectioArtReview = lazy(() => import('./RunSectioArtReview').then((modul
 const RunProgressIconReview = lazy(() => import('./RunProgressIconReview').then((module) => ({ default: module.RunProgressIconReview })));
 const BrushIconReview = lazy(() => import('./BrushIconReview').then((module) => ({ default: module.BrushIconReview })));
 const MenuIconReview = lazy(() => import('./MenuIconReview').then((module) => ({ default: module.MenuIconReview })));
+const CommandCardMarkReview = lazy(() => import('./CommandCardMarkReview').then((module) => ({ default: module.CommandCardMarkReview })));
 
 const SCENE_LOADING_MIN_MS = 350;
 const STARTUP_STAGE_BEAT_MS = 140;
@@ -815,6 +816,7 @@ function renderScene(scene: ScenePath, search: string): ReactElement {
   if (path === '/studio' && new URLSearchParams(search).get('brushIconReview') === '1') return <BrushIconReview />;
   if (path === '/studio' && new URLSearchParams(search).get('runProgressIconReview') === '1') return <RunProgressIconReview />;
   if (path === '/studio' && new URLSearchParams(search).get('menuIconReview') === '1') return <MenuIconReview />;
+  if (path === '/studio' && new URLSearchParams(search).get('commandCardMarkReview') === '1') return <CommandCardMarkReview />;
   if (path === '/studio' || path === '/tileset-studio') return <TilesetStudio />;
   // Wall review lives in the Studio proper: an owner proof only counts from a game-owned
   // surface, and this bespoke path is not one. The studio's route writer canonicalises this
