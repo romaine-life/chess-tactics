@@ -55,8 +55,11 @@ style knob, and three things follow from it rather than from the caller:
   rather than chosen to match by eye: the same 61px seat, 40px mark slot, 44px drawn glyph,
   11px gap and `--menu-label-stroke-*` outline. A menu button and this button are the same act
   one screen apart, and two seats that agree by eye drift the first time either is retuned.
-  Mark and word centre as ONE group, where a rail tab left-aligns them — a tab is one of a
-  stack whose marks line up down the rail; this is a single band with nothing to align to.
+  Mark then word, filling the cell, and the label is the rail tabs' own `FittedTabLabel` — a
+  band can be half a narrow column wide once the replacement question arms, and at 32px
+  "Abandon and Start" overruns it. Ellipsis cut the verb mid-word; the menu's answer to a long
+  label has always been to shrink it until it fits, and reusing that fitter is the same reuse
+  the rest of this decision is about.
 - **The mark is resolved by the row, never passed in.** "Confirm" is one fact across the whole
   app, so it is one drawing (ADR-0059) under one role, `ui-kit-icons-confirm-png`. A caller
   that could hand its own glyph could put a different one on the same act on the next screen —

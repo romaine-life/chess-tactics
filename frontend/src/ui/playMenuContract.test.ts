@@ -389,7 +389,11 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(style).toMatch(/\.chrome-verb-row--confirm \{[\s\S]*?--chrome-verb-confirm-h: 61px;/);
     expect(style).toMatch(/\.chrome-verb-row--confirm \{[\s\S]*?--chrome-verb-confirm-mark-slot: 40px;/);
     expect(style).toMatch(/\.chrome-verb-row--confirm \.section-box-member-verb \{[\s\S]*?font-size: var\(--ds-text-lg\);/);
-    expect(style).toMatch(/\.chrome-verb-label \{[\s\S]*?-webkit-text-stroke: var\(--menu-label-stroke-w\) var\(--menu-label-stroke-ink\);/);
+    expect(style).toMatch(/\.chrome-verb-label strong \{[\s\S]*?-webkit-text-stroke: var\(--menu-label-stroke-w\) var\(--menu-label-stroke-ink\);/);
+    // The label is the rail tabs' own fitter, not an ellipsis: armed, "Abandon and Start" shares
+    // its row with "Keep Run", and at 32px that overruns half a narrow column.
+    expect(verbRow).toContain('<FittedTabLabel className="chrome-verb-label">{verb.label}</FittedTabLabel>');
+    expect(style).toMatch(/\.chrome-verb-row--confirm \{[\s\S]*?--settings-tab-icon-slot: var\(--chrome-verb-confirm-mark-slot\);/);
     // Seated AFTER the two consumers that size their own band, because source order is the
     // tie-break at equal specificity and moving it above them restores the small type.
     expect(style.indexOf('.chrome-verb-row--confirm .section-box-member-verb {'))

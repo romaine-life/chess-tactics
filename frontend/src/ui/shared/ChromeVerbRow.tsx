@@ -1,5 +1,6 @@
 import { type ReactElement, type ReactNode } from 'react';
 import { ChromeDividedGridRow } from './ChromeDividedGrid';
+import { FittedTabLabel } from './FittedTabLabel';
 import { NavButton } from './NavButton';
 import { installedUiMediaIfPresent } from '../installedUiMedia';
 import { CHROME_LEAF_FILL_SURFACE, leafSurfacePhase } from './chromeSurfacePolicy';
@@ -75,10 +76,12 @@ export function verbColumns(verbs: readonly ChromeVerb[]): readonly string[] {
  * its own frame, which would draw a control sitting INSIDE the cell a few pixels in from the rail
  * that already bounds it. Same reset the section box's full-width verbs use.
  */
-function VerbCell({ verb, index, className, confirmMarkSrc }: {
+function VerbCell({ verb, index, className, commits, confirmMarkSrc }: {
   verb: ChromeVerb;
   index: number;
   className?: string;
+  /** Whether this verb's ROW holds a commitment — see ChromeVerbRow. */
+  commits: boolean;
   confirmMarkSrc?: string;
 }): ReactElement {
   const seat = {
@@ -90,16 +93,27 @@ function VerbCell({ verb, index, className, confirmMarkSrc }: {
     'aria-label': verb.ariaLabel,
     title: verb.title,
   };
-  // A committing verb is a mark and a word, seated like the main menu's own buttons. The mark is
-  // aria-hidden: "confirm" is what the label already says, and a reader that announced it twice
-  // would say the glyph's name in front of the verb.
+  // A committing verb is a mark and a word, seated exactly as the main menu's own buttons seat
+  // them — mark slot, then label — and the label is the SAME fitter the rail tabs use. A verb
+  // band can be half a narrow column wide (armed, "Abandon and Start" shares its row with "Keep
+  // Run"), and at the menu's 32px that overruns; ellipsis there cut the verb mid-word, where the
+  // menu's answer to a long label has always been to shrink it until it fits.
+  //
+  // The mark is aria-hidden: "confirm" is what the label already says, and a reader that
+  // announced it twice would say the glyph's name in front of the verb.
+  //
+  // Every cell of a committing row is lettered and fitted; only the verb that COMMITS carries the
+  // mark seat. An empty seat on its neighbour would read as art that failed to load, so the
+  // unmarked cell simply has no mark column.
   const mark = verb.confirm ? confirmMarkSrc ?? confirmMarkUrl() : null;
-  const body: ReactNode = verb.confirm ? (
-    <span className="chrome-verb-commit">
-      <span className="chrome-verb-mark" aria-hidden="true">
-        {mark ? <img src={mark} alt="" draggable={false} /> : null}
-      </span>
-      <span className="chrome-verb-label">{verb.label}</span>
+  const body: ReactNode = commits ? (
+    <span className={`chrome-verb-commit${verb.confirm ? '' : ' is-unmarked'}`}>
+      {verb.confirm ? (
+        <span className="chrome-verb-mark" aria-hidden="true">
+          {mark ? <img src={mark} alt="" draggable={false} /> : null}
+        </span>
+      ) : null}
+      <FittedTabLabel className="chrome-verb-label">{verb.label}</FittedTabLabel>
     </span>
   ) : verb.label;
   if (verb.to !== undefined && !verb.disabled) {
@@ -150,6 +164,7 @@ export function ChromeVerbRow({ verbs, className, cellClassName, confirmMarkSrc 
           verb={verb}
           index={index}
           className={cellClassName}
+          commits={commits}
           confirmMarkSrc={confirmMarkSrc}
         />
       ))}

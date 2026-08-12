@@ -29394,6 +29394,11 @@ button.run-card-formation-cell {
   --chrome-verb-confirm-h: 61px;
   --chrome-verb-confirm-mark-slot: 40px;
   --chrome-verb-confirm-mark-size: 44px;
+  /* The rail tab's own label box, declared by the name the shared fitter reads. `FittedTabLabel`
+     sizes its box from `--settings-tab-icon-slot` — mounted outside a `.settings-tab`, that token
+     has no value and the box has no height to fit against. It is the same 40px seat, so it is
+     stated here rather than a second number being invented for it. */
+  --settings-tab-icon-slot: var(--chrome-verb-confirm-mark-slot);
   min-block-size: var(--chrome-verb-confirm-h);
   padding: 0;
 }
@@ -29408,16 +29413,28 @@ button.run-card-formation-cell {
   text-transform: uppercase;
 }
 
-/* Mark and word travel together and centre as ONE group, where a rail tab left-aligns them: a tab
-   is one of a stack whose marks must line up down the rail, and this is a single band across a
-   card with nothing above or below to align to. */
+/* Mark then word, filling the cell — the rail tab's own arrangement, at the rail tab's own gap.
+   The label track is `minmax(0, 1fr)` for the same reason the tab's is: the shared fitter shrinks
+   its text against the box it is GIVEN, so a content-sized track would never look overrun and the
+   text would never shrink. */
 .chrome-verb-commit {
   align-items: center;
   column-gap: 11px;
   display: grid;
-  grid-template-columns: auto minmax(0, auto);
-  justify-items: start;
-  max-inline-size: 100%;
+  grid-template-columns: var(--chrome-verb-confirm-mark-slot) minmax(0, 1fr);
+  inline-size: 100%;
+}
+
+/* The answer BESIDE the commitment — Keep Run, while the replacement question is open. It keeps
+   the band and the lettering and drops the mark COLUMN with the mark: an empty 40px seat there
+   would read as art that failed to load rather than as the one verb that is not the confirm. */
+.chrome-verb-commit.is-unmarked {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.chrome-verb-commit.is-unmarked .chrome-verb-label {
+  justify-items: center;
+  text-align: center;
 }
 
 /* Reserved, not conditional: the slot holds its width whether or not the mark's art is installed,
@@ -29444,15 +29461,15 @@ button.run-card-formation-cell {
   transform: translate(-50%, -50%);
 }
 
-/* The menu label's outline, from the one place that states it — the same declaration
+/* The label is `FittedTabLabel`, so `.settings-tab-label` already gives it the rail tab's box and
+   the shrink-to-fit the menu has always answered a long label with. Only the TYPE is stated here,
+   and the outline comes from the one place that states it — the same declaration
    `.settings-tab strong` takes, so the two cannot drift (see --menu-label-stroke-*). */
-.chrome-verb-label {
+.chrome-verb-label strong {
   -webkit-text-stroke: var(--menu-label-stroke-w) var(--menu-label-stroke-ink);
-  min-inline-size: 0;
-  overflow: hidden;
+  font-size: var(--ds-text-lg);
+  letter-spacing: 0;
   paint-order: stroke fill;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* A verb BESIDE the commitment — Keep Run, while the replacement question is open — keeps the
