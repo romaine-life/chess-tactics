@@ -80,7 +80,7 @@ describe('Enchiridion and Strategikon reference contract', () => {
   });
 
   /**
-   * ADR-0589. Every reference section wears ADR-0433's hierarchy: a record box takes the structural
+   * ADR-0636. Every reference section wears ADR-0433's hierarchy: a record box takes the structural
    * marble, a control takes the oak. Adoption is declared on the shared FRAME so both transports of
    * the same gallery agree — annotating the Strategikon host alone would make one screen wear two
    * materials depending on whether it was reached from a Battle or from the main menu, which is the
@@ -142,7 +142,7 @@ describe('Enchiridion and Strategikon reference contract', () => {
   });
 
   /**
-   * ADR-0589's recorded material EXCEPTION. The grouped case shows the relics themselves, so the art
+   * ADR-0636's recorded material EXCEPTION. The grouped case shows the relics themselves, so the art
    * is the control's whole body: the trigger paints no seat, no frame and no material, and the press
    * is answered by the art lighting up. A wooden seat under each one made the case a box of buttons
    * holding pictures of relics rather than a case of relics. The named rows view is where a lipsanon

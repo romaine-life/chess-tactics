@@ -100,7 +100,7 @@ already filters candidates to avoid showing.
   (`sectiowrap`) as readily as a card grid.
 - If a surface genuinely needs something a category cannot express, the fix is to grow the category
   contract in `TilePreview.tsx`, the way `ApparatusRailTab` grew props instead of tolerating
-  lookalikes ([ADR-0558](0558-a-menu-language-rail-tab-is-the-primitive-or-it-fails-the-build.md), [ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)).
+  lookalikes ([ADR-0633](0633-a-menu-language-rail-tab-is-the-primitive-or-it-fails-the-build.md), [ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)).
 - Roughly 260 lines of per-screen CSS went away with the shells. The categories reuse
   `tileset-studio-grid` and `StudioCatalogCard`, so re-skinning the Studio now re-skins them too.
 - Owner proofs recorded from these surfaces still carry `surfaceUrl: window.location.href`, which is

@@ -58,7 +58,7 @@ or stacked-rail geometry.
 
 ## More Information
 
-- Partially supersedes [ADR-0064](0064-victory-conditions-two-list-model.md):
+- Partially supersedes [ADR-0617](0617-victory-conditions-two-list-model.md):
   its event model remains accepted; only the separately framed overlay
   presentation is retired.
 - Partially supersedes

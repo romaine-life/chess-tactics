@@ -120,7 +120,7 @@ export function ruleOutcome(rule: VictoryRule): Winner {
 /**
  * Resolve authored event rules to the FIRST rule that decides the game, plus the winner it declares —
  * or `{ winner: null, rule: null }` while undecided. Pure. Rules are checked in ORDER, top-to-bottom
- * (ADR-0064): the first rule whose conditions ALL hold wins. Presets seed lose rules above win rules,
+ * (ADR-0617): the first rule whose conditions ALL hold wins. Presets seed lose rules above win rules,
  * so a settled turn that trips both resolves as a loss (defeat-first — e.g. Survive's clock reaches N
  * on the turn the last player piece is wiped). The fired rule is returned so the result screen / log
  * can name the exact condition that ended the battle (its authored `name`) instead of the mode label.
@@ -150,10 +150,10 @@ const loseRule = (name: string, ...conds: VictoryCondition[]): VictoryRule => ({
 const winRule = (name: string, ...conds: VictoryCondition[]): VictoryRule => ({ name, if: conds, do: [act('win', 'player')] });
 
 /**
- * Expand a legacy `objective` preset into the if-then rule model (ADR-0064) — the ONLY place the 5
+ * Expand a legacy `objective` preset into the if-then rule model (ADR-0617) — the ONLY place the 5
  * stored modes are defined in terms of rules. `evaluateObjective` and the store both route through
  * it, so preset and authored levels share one evaluator. Lose rules are seeded ABOVE win rules so
- * first-match ordering reproduces the pre-ADR-0064 defeat-first semantics exactly (the only
+ * first-match ordering reproduces the pre-ADR-0617 defeat-first semantics exactly (the only
  * theoretical shift is rival-kings' both-Kings-fall tie → loss, unreachable since one move removes
  * only one King).
  */
@@ -190,7 +190,7 @@ export function victoryRulesForLevel(level: Level, ctx: ObjectiveContext = {}): 
 
 /**
  * Resolve a level objective to a winner, or `null` while undecided. Pure. Thin wrapper over the
- * two-list model (ADR-0064): expands the preset, then evaluates it defeat-first. Kept as the
+ * two-list model (ADR-0617): expands the preset, then evaluates it defeat-first. Kept as the
  * entry point for every preset (non-authored) game so existing call sites read unchanged.
  */
 export function evaluateObjective(state: GameState, objective: ObjectiveType, ctx: ObjectiveContext = {}): Winner {

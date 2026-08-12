@@ -10726,7 +10726,7 @@ async function main() {
   }
 
   // Growing the playable grid over a plate is a declared owner operation, not a stale artifact
-  // (ADR-0516). It records `predrawnGridDetached`, and from then on the environment-geometry
+  // (ADR-0630). It records `predrawnGridDetached`, and from then on the environment-geometry
   // comparison is the owner's answered question rather than a canonical gate — so the same Save
   // the rejection above proves is fail-closed must SUCCEED once the grid is detached.
   const detachedGrownCells = { ...coverChangedBoard.cells };

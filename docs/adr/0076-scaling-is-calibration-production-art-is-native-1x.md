@@ -254,6 +254,6 @@ ADR-0075's recapture-acceptance allowance.
 - Related decisions: [ADR-0014](0014-ui-chrome-low-fidelity-aesthetic.md),
   [ADR-0039](0039-tile-top-and-side-are-composable-layers.md),
   [ADR-0040](0040-feature-tiles-own-geometry-generate-material.md),
-  [ADR-0063](0063-section-dividers-are-a-1d-bar-primitive-teeing-into-the-rail.md),
+  [ADR-0618](0618-section-dividers-are-a-1d-bar-primitive-teeing-into-the-rail.md),
   [ADR-0073](0073-unit-art-is-live-storage-backed-content.md), and
   [ADR-0075](0075-unit-directions-are-blender-authored.md).

@@ -225,7 +225,7 @@ export function validatePlayability(level: Level): PlayabilityResult {
     }
   }
 
-  // P6 — authored victory (ADR-0064): when a level overrides the preset with its own event rules,
+  // P6 — authored victory (ADR-0617): when a level overrides the preset with its own event rules,
   // EVERY faction with units on the board must have a path to WINNING. That single check also
   // guarantees a path to losing — a faction loses whenever another faction wins, and with two-plus
   // factions each able to win, everyone can also lose — so a separate "can it lose?" check is pure
@@ -244,7 +244,7 @@ export function validatePlayability(level: Level): PlayabilityResult {
     }
   }
 
-  // P7 — authored victory names (ADR-0064): the editor is a MASTER-DETAIL list keyed on each event's
+  // P7 — authored victory names (ADR-0617): the editor is a MASTER-DETAIL list keyed on each event's
   // name, and the result screen shows the fired rule's name, so every event needs a non-empty name
   // and no two may collide. The editor assigns unique defaults; this gates a hand-cleared field or a
   // rename into a duplicate. Preset rules are always name-clean, so only authored victory is checked.

@@ -3902,7 +3902,7 @@ export function LevelEditor(): ReactElement {
   const initialParTurns = localDraft?.parTurns ?? initialCampaignLevel?.parTurns ?? urlParTurns;
   const [parAuthored, setParAuthoredState] = useState<boolean>(initialParTurns !== undefined);
   const [parTurns, setParTurnsState] = useState<number>(initialParTurns ?? LEVEL_PAR_TURNS_MIN);
-  // Victory conditions (ADR-0064): `victory` is the working win/lose lists — always the truth for
+  // Victory conditions (ADR-0617): `victory` is the working win/lose lists — always the truth for
   // this level's outcome, edited in the RULES panel. Seeded from the objective preset for a level
   // that never customized them; a level stores `victory` only when the lists diverge from that
   // preset (see victoryForSave), which keeps preset levels' bodies clean and out of the dirty check.
@@ -6254,7 +6254,7 @@ export function LevelEditor(): ReactElement {
   // written; optional fields are sent only when their editor surfaces define them. Setup spawning is
   // authored through events, with legacy placement/roster read only as an import/playback fallback.
   // The factions offered in each condition's "IF <faction>" dropdown — one per side, labelled by the
-  // board's assigned palette (ADR-0064). Maps to the engine's player/enemy side; true multi-faction
+  // board's assigned palette (ADR-0617). Maps to the engine's player/enemy side; true multi-faction
   // (two distinct enemies) is future work.
   // The factions offered in each rule's "IF <faction>" dropdown, named by the role they play.
   const victoryFactions = useMemo((): FactionOption[] => FACTION_ROLES.map((side) => ({
@@ -6263,7 +6263,7 @@ export function LevelEditor(): ReactElement {
   })), [factionRoleLabels]);
   // A level stores `victory` only when the lists DIVERGE from the objective preset — else the
   // preset drives it (keeps preset bodies clean + out of the dirty check, and preserves
-  // capture-king's runtime kingSide direction-awareness for an untouched King Assault). ADR-0064.
+  // capture-king's runtime kingSide direction-awareness for an untouched King Assault). ADR-0617.
   const victoryForSave = useMemo(
     () => (rulesEqual(victory, victoryRulesForObjective(objective, { surviveTurns })) ? undefined : victory),
     [victory, objective, surviveTurns],

@@ -116,7 +116,7 @@ export const ZONE_COLORS = ['teal', 'blue', 'red', 'gold', 'violet', 'slate', 'a
 export type ObjectiveType = 'capture-all' | 'capture-king' | 'rival-kings' | 'survive' | 'reach';
 export const OBJECTIVE_TYPES = ['capture-all', 'capture-king', 'rival-kings', 'survive', 'reach'] as const satisfies readonly ObjectiveType[];
 
-// ---- Victory conditions (ADR-0064) -----------------------------------------------------------
+// ---- Victory conditions (ADR-0617) -----------------------------------------------------------
 // An ORDERED list of if-then RULES (the RTS-editor trigger model): each rule is `IF <conditions>
 // THEN <win|lose>`. Rules are checked top-to-bottom and the FIRST whose conditions all hold decides
 // the game — so precedence is rule ORDER (presets seed lose rules above win rules, which gives
@@ -135,7 +135,7 @@ export interface PieceFilter {
 }
 
 /**
- * One predicate over a settled GameState — the "IF" vocabulary (ADR-0064). Pure + serializable.
+ * One predicate over a settled GameState — the "IF" vocabulary (ADR-0617). Pure + serializable.
  * - `eliminate`: `side` has no living piece matching `filter` ({type:'king'} = royal capture; no
  *   filter = full wipe).
  * - `reach`: a PAWN of `side` reaches the level's objective zone (pawn-only; a pawn that promotes
@@ -171,7 +171,7 @@ export interface VictoryRule {
 }
 
 /**
- * A level's authored win/lose logic (ADR-0064): an ORDERED list of if-then rules, evaluated once
+ * A level's authored win/lose logic (ADR-0617): an ORDERED list of if-then rules, evaluated once
  * per settled turn top-to-bottom — the FIRST rule whose conditions all hold decides the game.
  * Absent on a Level ⇒ derived from the `objective` preset (`victoryRulesForObjective`), the same
  * opt-in back-compat pattern as the other rules fields. When present it OVERRIDES the preset (the
@@ -429,7 +429,7 @@ export interface Level {
   runRules?: {
     occultDagger?: boolean;
   };
-  // Authored victory conditions (ADR-0064). Absent ⇒ the `objective` preset defines win/lose
+  // Authored victory conditions (ADR-0617). Absent ⇒ the `objective` preset defines win/lose
   // (see victoryRulesForObjective); when present it OVERRIDES the preset — the two-list model
   // that lets one level combine several win and several lose conditions. Optional + back-compat
   // like the other rules fields; `objective` stays required (mode label + fallback outcome copy).
@@ -530,7 +530,7 @@ const LEGACY_EVENT_KINDS = ['spawn', 'pawn-promotion'] as const;
 const LEVEL_EVENT_TRIGGER_KINDS = ['setup', 'unit-enters-zone'] as const;
 const LEVEL_EVENT_ACTION_KINDS = ['spawn', 'promote', 'castle', 'chess-draws'] as const;
 
-/** Structural errors for a single victory condition (ADR-0064). Shape/enum checks only. */
+/** Structural errors for a single victory condition (ADR-0617). Shape/enum checks only. */
 function conditionErrors(c: unknown, path: string): string[] {
   if (!c || typeof c !== 'object' || Array.isArray(c)) return [`${path} must be a condition object`];
   const cond = c as { kind?: unknown };
@@ -566,7 +566,7 @@ function conditionErrors(c: unknown, path: string): string[] {
   return errs;
 }
 
-/** Structural errors for one `do` action (ADR-0064): a win/lose declaration for a side. */
+/** Structural errors for one `do` action (ADR-0617): a win/lose declaration for a side. */
 function actionErrors(a: unknown, path: string): string[] {
   if (!a || typeof a !== 'object' || Array.isArray(a)) return [`${path} must be an action object`];
   const act = a as { kind?: unknown; side?: unknown };
@@ -576,7 +576,7 @@ function actionErrors(a: unknown, path: string): string[] {
   return errs;
 }
 
-/** Structural errors for an authored `Level.victory` (ADR-0064) — an ORDERED array of `{ if, do }`
+/** Structural errors for an authored `Level.victory` (ADR-0617) — an ORDERED array of `{ if, do }`
  * event rules. An empty list is legal SHAPE (validatePlayability P6 rejects a set that leaves a
  * faction unable to win/lose); this only checks each rule has conditions + actions arrays and every
  * condition / action is well-formed. */

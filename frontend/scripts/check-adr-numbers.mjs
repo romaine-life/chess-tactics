@@ -16,11 +16,18 @@
 // This guard is the missing half. `check-decision-log-index.mjs` proves every decision is INDEXED;
 // this one proves every decision is IDENTIFIED. Together they make a citation followable.
 //
-// The baseline holds the collisions that already exist. It is not permission — it is a worklist,
-// and it only shrinks: a number that has been made unique must be REMOVED from it, or this guard
-// fails. That is what stops the list being quietly topped up instead of drained. Renumbering one
-// is not a rename; every citation of that number has to be attributed to the right side first, and
-// getting that wrong recreates the #936 defect by hand.
+// The baseline is EMPTY, and the mechanism is kept anyway. It held the 23 collisions that already
+// existed and only ever shrank — a number made unique must be removed from it or this guard fails —
+// which is what let them be drained in reviewable batches instead of one unreviewable sweep. It is
+// the seam to reach for again if a collision ever has to be tolerated for a release; it is not
+// permission, and topping it up instead of draining it is the thing it was built to prevent.
+//
+// Renumbering is not a rename. Every citation of a shared number must be attributed to the right
+// side FIRST, or you recreate the #936 defect by hand. Two things that bit during the drain and
+// will bit again: `evidence.decision` strings in `liveMediaPolicy.js` are PERSISTED values on
+// accepted media rows, not references — 'ADR-0556' there means what is now ADR-0560 and must not be
+// touched — and `git grep` line numbers go stale the moment `main` moves, so anchor a rewrite on
+// distinctive text and require exactly one match.
 
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';

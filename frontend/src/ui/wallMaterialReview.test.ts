@@ -94,12 +94,12 @@ describe('wall slot identity', () => {
 });
 
 describe('wall candidate selection', () => {
-  it('accepts only candidates that already carry the ADR-0086 full-height frame', () => {
+  it('accepts only candidates that already carry the ADR-0628 full-height frame', () => {
     const canonical = version(FRAME_SLOT);
     const short = version(FRAME_SLOT, { media: { ...canonical.media!, height: 240 } });
     expect(hasCanonicalWallGeometry(canonical, wallSlotIdentity(FRAME_SLOT)!)).toBe(true);
     expect(hasCanonicalWallGeometry(short, wallSlotIdentity(FRAME_SLOT)!)).toBe(false);
-    // The pre-ADR-0086 bytes that shipped floating walls can never be picked up for review.
+    // The pre-ADR-0628 bytes that shipped floating walls can never be picked up for review.
     expect(wallReviewBatch(catalog([short])).candidates).toEqual([]);
   });
 

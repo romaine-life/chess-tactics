@@ -147,7 +147,7 @@ function ContinuePanel({ inventory }: { inventory: ContinueInventory }): ReactEl
       <div className="settings-panel-content continue-selector-panel">
         {/* No eyebrow over the one group in the column, and none over the card either: an
             eyebrow distinguishes a group from the ones beside it, and this column holds exactly
-            one (ADR-0556). It also ran a hairline rule straight across the live vista. The card
+            one (ADR-0631). It also ran a hairline rule straight across the live vista. The card
             names the activity and its verb says Continue; the section keeps the landmark. */}
         <section className="settings-section" aria-label="Continue">
           {selected ? (
@@ -390,12 +390,12 @@ function RunPanel({
   return (
     <>
       {/* Run's two destinations are menu-language rail buttons, so they ARE rail tabs — the same
-          primitive the main menu, Settings, Enchiridion and Strategikon mount (ADR-0558). They
+          primitive the main menu, Settings, Enchiridion and Strategikon mount (ADR-0633). They
           were hand-assembled from `inner-list-row` + settings-row classes before, and the
           lookalike drifted: its own gap, its own seat, its own plank-phase machinery, none of it
           tied to the rail standing beside it. The column carries no eyebrow — a section title
           distinguishes one group from others beside it, and this column holds exactly one
-          (ADR-0556). */}
+          (ADR-0631). */}
       <ApparatusRailColumn opens="panel-beside" className="play-run-choice-rail" placement="open" aria-label="Run">
         {!hydrated || loading ? (
           <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
@@ -407,9 +407,9 @@ function RunPanel({
             visible-but-disabled language). It keeps its place during an adoption conflict too:
             that question belongs to whoever is going to resume, and a card standing in the tab's
             seat removed the expected control from a player who was only ever going to start a
-            new Run (ADR-0557). The question is now what the tab OPENS.
+            new Run (ADR-0632). The question is now what the tab OPENS.
             An available tab carries its name and nothing else — the Battle position and Ataraxia
-            it used to restate are the first two facts of the detail column it opens (ADR-0556).
+            it used to restate are the first two facts of the detail column it opens (ADR-0631).
             ADR-0334's "No active Run" is the tab's detail line, which is why it appears only
             when the tab cannot be taken. The name is the ACT, not the object: Continue says what
             pressing it does, where "Current Run" named the thing behind it and left the player to
@@ -465,7 +465,7 @@ function RunPanel({
             so it is answered here, behind Continue, in the seat that already holds "what
             happens if I take this row". Someone starting a new Run never has to read it —
             starting one is itself a third answer, and it was already never blocked by the
-            question (ADR-0557). */}
+            question (ADR-0632). */}
         {choice === 'current' && presentation.adoptionConflict ? (
           <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Two active Runs" data-testid="run-detail-current">
             {/* No heading. "Two active Runs" only renamed the sentence directly under it, which
@@ -476,7 +476,7 @@ function RunPanel({
                   a single run-on sentence was the whole statement before, and both sides are
                   almost always the same War — so it read as a question with no information in
                   it. Each candidate is a labelled row list ending in its own verb, and the
-                  facts are the ones that actually separate two Runs (ADR-0557).
+                  facts are the ones that actually separate two Runs (ADR-0632).
 
                   A candidate is a GROUP of this card's rows, not a section boxed inside it: the
                   rails between the lede, each name, its facts and its Keep are the card's own,

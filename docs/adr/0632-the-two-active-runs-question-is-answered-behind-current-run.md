@@ -5,10 +5,10 @@ deciders: owner (Nelson) + Claude
 refines:
   - "[ADR-0334](0334-current-run-stays-visible-disabled-without-an-active-run.md)"
   - "[ADR-0290](0290-run-preparation-follows-play-master-detail-navigation.md)"
-  - "[ADR-0556](0556-run-preparation-chooses-in-a-tab-column-of-one-line-rows.md)"
+  - "[ADR-0631](0631-run-preparation-chooses-in-a-tab-column-of-one-line-rows.md)"
 ---
 
-# ADR-0557: The two-active-Runs question is answered behind Current Run
+# ADR-0632: The two-active-Runs question is answered behind Current Run
 
 ## Context
 

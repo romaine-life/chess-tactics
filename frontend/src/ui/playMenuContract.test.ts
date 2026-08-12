@@ -35,7 +35,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('&& primaryRunLandingSettled');
     expect(playMenu).not.toContain('play-hub-neutral');
     // Run's destinations are rail tabs, so their hover, seat, gap and stone slice are the
-    // primitive's — no Run-specific row class remains in the markup (ADR-0558). One dead
+    // primitive's — no Run-specific row class remains in the markup (ADR-0633). One dead
     // `.play-choice-row h4` rule survives in style.css from a same-day main change that gave
     // those slabs the rail label's outline by hand; the tabs inherit that outline structurally
     // now, so the rule selects nothing. Removing it renumbers the surface-debt baseline's
@@ -106,7 +106,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
 
   it('makes Run preparation the ordinary Play surface while retaining direct Continue', () => {
     // Both destinations are the shared rail tab, which carries the family's oak itself — the
-    // fill is stamped once by ApparatusRailColumn rather than per call site (ADR-0558).
+    // fill is stamped once by ApparatusRailColumn rather than per call site (ADR-0633).
     expect(playMenu).toContain('testId="run-choice-current"');
     // The tab is named for the ACT, not the object it acts on (ADR-0582). "Current Run" named the
     // thing behind the tab and left the press to be inferred; the pair reads Continue / New now.
@@ -177,14 +177,14 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // instead samples the slice one plank running down the list would give it, the same
     // recovery the rail tabs use for the `fixed` attachment Chromium forced us to drop.
     // The plank is the RAIL's now: one pitch, one derivation, shared with every other rail in
-    // the app. Run states only which seat each destination holds (ADR-0558).
+    // the app. Run states only which seat each destination holds (ADR-0633).
     expect(style).toMatch(/--settings-tab-surface-pitch:\s*calc\(61px \+ var\(--settings-rail-tab-gap, 37px\)\);/);
     expect(style).not.toContain('--play-choice-row-surface-pitch');
     // The pitch is only a constant because BOTH row states are one line — the empty state's
     // sentence is the row's end value, not a second line that would shift the plank when a Run
     // starts or ends. The seat is the main-menu button's, so the rows read as its siblings.
     // Seat and gap are not Run's to state: it mounts the same tab in the same column type as
-    // every other rail, so the two stacks cannot disagree by construction (ADR-0558).
+    // every other rail, so the two stacks cannot disagree by construction (ADR-0633).
     expect(playMenu).not.toContain('--settings-section-rows-gap');
     // And no eyebrow over the one group in the column — it named the column after the only thing
     // in it, and cost the first row its alignment with the first main-menu button (ADR-0556).
@@ -249,14 +249,14 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('className="play-detail-card run-adoption-conflict"');
     // The question is answered BEHIND Current Run, never in its seat: a card standing where the
     // row belongs removed an expected control from a player who was only going to start a new
-    // Run (ADR-0557). So the row's presence cannot depend on the conflict, and the conflict is
+    // Run (ADR-0632). So the row's presence cannot depend on the conflict, and the conflict is
     // rendered inside the detail column the row opens.
     expect(playMenu).not.toContain('!presentation.adoptionConflict &&');
     expect(playMenu).toContain("{choice === 'current' && presentation.adoptionConflict ? (");
     expect(playMenu).toMatch(/choice === 'current' && presentation\.adoptionConflict[\s\S]*?data-testid="run-adoption-conflict"/);
     // And it is stated ONCE. `adoptionConflict` is the state; a companion string in the shared
     // error channel repeated it in the choice column, beside a Start New Run the conflict has
-    // never gated. Both conflict branches leave that channel clear (ADR-0557).
+    // never gated. Both conflict branches leave that channel clear (ADR-0632).
     expect(runStore).not.toContain('This browser and account each have an active Run.');
     expect(runStore).not.toContain('Choose which active Run this account should keep.');
     expect(runStore.match(/adoptionConflict: \{ browserRun, accountRun \}/g)).toHaveLength(2);

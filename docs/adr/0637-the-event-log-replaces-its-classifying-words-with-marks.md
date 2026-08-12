@@ -8,7 +8,7 @@ refines:
   - "[ADR-0552](0552-athetize-is-a-card-struck-through.md)"
 ---
 
-# ADR-0598: The Event Log replaces its classifying words with marks
+# ADR-0637: The Event Log replaces its classifying words with marks
 
 ## Context
 

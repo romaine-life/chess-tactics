@@ -6,7 +6,7 @@ refines:
   - "[ADR-0242](0242-divided-inner-grids-own-one-rail-topology.md)"
   - "[ADR-0433](0433-leaf-chrome-uses-oak-over-structural-teal-fields.md)"
   - "[ADR-0475](0475-run-preparation-actions-follow-their-decision-content.md)"
-  - "[ADR-0556](0556-run-preparation-chooses-in-a-tab-column-of-one-line-rows.md)"
+  - "[ADR-0631](0631-run-preparation-chooses-in-a-tab-column-of-one-line-rows.md)"
 ---
 
 # ADR-0571: Start New Run is one box of cells, and its one disclosure reserves its space

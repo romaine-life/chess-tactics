@@ -39,7 +39,7 @@ export function useAnimationClock(isPlaying = true, frameCount = 9, frameMs = 15
  * The 8-way facing pad, as ONE divided box: nine compartments of one frame, parted by the box's
  * own rails, rather than nine framed squares in a grid with the panel showing through between
  * every pair of them. A seat is not a registered chrome unit — the unit is what brings a frame,
- * and the box already drew one (ADR-0570) — so the current facing is told by its GLYPH, which is
+ * and the box already drew one (ADR-0634) — so the current facing is told by its GLYPH, which is
  * the only thing that ever distinguished it here anyway.
  */
 export function FacingCompass({ direction, onSelect, onRotate, available, ariaLabel = 'Unit facing (8-way)' }: {

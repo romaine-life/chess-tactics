@@ -8,7 +8,7 @@ refines:
   - "[ADR-0290](0290-run-preparation-follows-play-master-detail-navigation.md)"
 ---
 
-# ADR-0556: Run preparation chooses in a tab column of one-line rows
+# ADR-0631: Run preparation chooses in a tab column of one-line rows
 
 ## Context
 

@@ -56,7 +56,7 @@ portrait frame would duplicate that chrome vocabulary.
 ## More Information
 
 - Partially supersedes the horizontal-only scope of
-  [ADR-0063](0063-section-dividers-are-a-1d-bar-primitive-teeing-into-the-rail.md).
+  [ADR-0618](0618-section-dividers-are-a-1d-bar-primitive-teeing-into-the-rail.md).
 - Extends [ADR-0092](0092-dividers-inherit-their-host-chrome-role.md).
 - Refines [ADR-0230](0230-run-shops-separate-buying-army-inspection-and-selling.md).
 - Upholds [ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)

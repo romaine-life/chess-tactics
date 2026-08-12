@@ -8,7 +8,7 @@ refines:
   - "[ADR-0433](0433-leaf-chrome-uses-oak-over-structural-teal-fields.md)"
 ---
 
-# ADR-0570: A pad of keys is one divided box
+# ADR-0634: A pad of keys is one divided box
 
 ## Context
 

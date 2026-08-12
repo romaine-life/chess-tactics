@@ -11,7 +11,7 @@ import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
 
 /**
- * Owner review for the two marks Run preparation's rail tabs wear — Continue and New (ADR-0558
+ * Owner review for the two marks Run preparation's rail tabs wear — Continue and New (ADR-0633
  * made those tabs the shared primitive, and a rail tab carries a mark; ADR-0582 named them).
  *
  * Judged in the seat it ships in: every candidate is mounted on a real `ApparatusRailTab`

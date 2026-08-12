@@ -5,7 +5,7 @@ deciders: Nelson, Claude
 partially_superseded_by: "[ADR-0144](0144-level-editor-events-use-the-shell-workspace.md)"
 ---
 
-# ADR-0064: Victory conditions are an if-then rule model
+# ADR-0617: Victory conditions are an if-then rule model
 
 A gameplay-rules ADR in the ADR-0050 family: `victory` is the fifth optional rules
 field on the `Level` schema (after `placement`/`roster`/`surviveTurns`/`timeControl`)

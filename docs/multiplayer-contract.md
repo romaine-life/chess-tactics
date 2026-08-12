@@ -6,7 +6,7 @@ This is the consolidated current-state contract for lobby gameplay, derived from
 [ADR-0079](adr/0079-lobby-recovery-pins-content-and-unresolved-intent.md), plus
 [ADR-0080](adr/0080-lobby-ambiguity-fails-closed-and-stays-resolvable.md) and
 [ADR-0503](adr/0503-pawns-arrive-before-their-promotion-choice.md).
-ADR-0064 governs ordered victory rules and ADR-0072 governs chess-draw and
+ADR-0617 governs ordered victory rules and ADR-0072 governs chess-draw and
 cross-consumer settlement parity.
 
 ## Identities and perspective

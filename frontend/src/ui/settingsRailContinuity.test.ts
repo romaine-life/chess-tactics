@@ -53,7 +53,7 @@ describe('settings-rail stone continuity is index-driven (ADR-0063)', () => {
     // ZERO direct renderers. Settings and the Campaign Editor were the last two, and both mount
     // <ApparatusRailTab> now — so the index is wired once, in the primitive, and a rail cannot
     // be added without it. check-rail-tab-primitive.mjs fails the build if one comes back
-    // (ADR-0558). The scan is proven live by the primitive itself matching, below.
+    // (ADR-0633). The scan is proven live by the primitive itself matching, below.
     expect(renderers.sort()).toEqual([]);
 
     for (const f of renderers) {

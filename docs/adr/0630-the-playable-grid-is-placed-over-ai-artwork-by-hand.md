@@ -10,7 +10,7 @@ refines:
   - "[ADR-0158](0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
 ---
 
-# ADR-0516: The playable grid is placed over AI artwork by hand
+# ADR-0630: The playable grid is placed over AI artwork by hand
 
 ## Context
 

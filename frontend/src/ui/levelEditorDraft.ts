@@ -40,7 +40,7 @@ export interface LevelEditorDraft {
   cardsDealt?: number;
   // The level's authored par in turns (ADR-0539), or undefined when it defers to the estimate.
   parTurns?: number;
-  // Authored victory conditions (ADR-0064), or undefined when the level uses the objective preset.
+  // Authored victory conditions (ADR-0617), or undefined when the level uses the objective preset.
   victory?: VictoryRules;
   // Authored non-victory events: setup spawns and trigger/action events.
   events?: LevelEvents;
@@ -619,9 +619,9 @@ const cleanParTurns = (raw: unknown): number | undefined => (
     : undefined
 );
 
-// A stored victory (ADR-0064 if-then rule list) survives the round-trip when it is an array; the
+// A stored victory (ADR-0617 if-then rule list) survives the round-trip when it is an array; the
 // contents came from our own serialize, so a light shape check is enough — the real gate is
-// validateLevel / validatePlayability at save time. (A pre-ADR-0064 `{win,lose}` draft is not an
+// validateLevel / validatePlayability at save time. (A pre-ADR-0617 `{win,lose}` draft is not an
 // array, so it resolves to undefined and the level falls back to its objective preset.)
 const cleanVictory = (raw: unknown): VictoryRules | undefined =>
   Array.isArray(raw) ? (raw as VictoryRules) : undefined;

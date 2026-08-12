@@ -4,7 +4,7 @@ date: 2026-07-12
 deciders: Nelson, Codex
 ---
 
-# ADR-0087: Grand Gallery wall faces are exact visual counterparts
+# ADR-0629: Grand Gallery wall faces are exact visual counterparts
 
 ## Context and Problem Statement
 
@@ -55,6 +55,6 @@ The bake and manifest obey these rules:
 
 ## More Information
 
-- Canonical wall geometry: [ADR-0086](0086-all-perimeter-walls-use-full-height-geometry.md)
+- Canonical wall geometry: [ADR-0628](0628-all-perimeter-walls-use-full-height-geometry.md)
 - Generated mirror assembly: [Asset generation contract](../asset-generation-contract.md)
 - Runtime reflection geometry: [Board render contract](../board-render-contract.md)

@@ -562,13 +562,13 @@ export interface SkirmishState {
    * reach destination cells, and which side fields THE King (kingSide, computed from
    * the starting pieces for level AND free games alike). */
   objectiveCtx: ObjectiveContext;
-  /** An authored win/lose OVERRIDE for this game (ADR-0064): `level.victory` when the level
+  /** An authored win/lose OVERRIDE for this game (ADR-0617): `level.victory` when the level
    * carried one, else null to fall back to the `objective` preset (victoryRulesForObjective,
    * resolved at eval time). Stored as the override — not the resolved rules — so `objective` +
    * `objectiveCtx` stay the single source of truth for preset games; the eval sites derive the
    * preset rules each turn, matching how evaluateObjective always worked. */
   victoryOverride: VictoryRules | null;
-  /** The name of the victory rule that just ENDED this game (ADR-0064), for the result screen's
+  /** The name of the victory rule that just ENDED this game (ADR-0617), for the result screen's
    * "how it ended" line — set the moment a rule fires, null otherwise (fresh game, or a win by
    * checkmate / clock / draw / resignation, which the screen shows as the plain objective goal). */
   resultDetail: string | null;
@@ -1556,7 +1556,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       ...(opts.level ? objectiveContextForLevel(opts.level) : {}),
       kingSide: kingSideOf(created.pieces),
     };
-    // The level's authored win/lose lists override the preset (ADR-0064); null ⇒ the eval sites
+    // The level's authored win/lose lists override the preset (ADR-0617); null ⇒ the eval sites
     // derive the `objective` preset each turn from objectiveCtx (kingSide / survive target).
     const victoryOverride: VictoryRules | null = opts.level?.victory ?? null;
     const initial = settleCommittedPosition(created, {
@@ -2007,7 +2007,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       turnsElapsed: match.turnsElapsed,
       objective: match.objective,
       objectiveCtx: match.objectiveCtx,
-      // Back-compat: a match saved before ADR-0064 has no override → preset (null).
+      // Back-compat: a match saved before ADR-0617 has no override → preset (null).
       victoryOverride,
       resultDetail: adjudicationResultDetail(settled.adjudication, 'player', !!victoryOverride),
       log,

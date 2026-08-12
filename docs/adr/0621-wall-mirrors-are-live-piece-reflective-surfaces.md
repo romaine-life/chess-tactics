@@ -4,7 +4,7 @@ date: 2026-07-11
 deciders: Nelson, Codex
 ---
 
-# ADR-0077: Wall mirrors are live piece-reflective surfaces
+# ADR-0621: Wall mirrors are live piece-reflective surfaces
 
 > **Superseded by [ADR-0596](0596-wall-mirrors-reflect-pieces-horizontally-in-screen-space.md)
 > (2026-07-11).** The live-mirror requirement remains, but the physical wall-plane

@@ -4,10 +4,10 @@ date: 2026-07-11
 deciders: Nelson, Codex
 ---
 
-# ADR-0083: Mirror aperture coverage is authored per asset
+# ADR-0625: Mirror aperture coverage is authored per asset
 
 > **Superseded by
-> [ADR-0086](0086-all-perimeter-walls-use-full-height-geometry.md)
+> [ADR-0628](0628-all-perimeter-walls-use-full-height-geometry.md)
 > (2026-07-12).** ADR-0086 retains exact one-to-one reflection and the authored
 > small/full-body aperture roles, but makes full-height generated geometry canonical for
 > every perimeter wall and retires the mirror-only tall wall variant.
@@ -158,11 +158,11 @@ and the taller mirror-bearing wall option remain unchanged.
 ## More Information
 
 - Superseded decision:
-  [ADR-0082](0082-wall-mirrors-are-exact-one-to-one-game-world-reflections.md)
+  [ADR-0624](0624-wall-mirrors-are-exact-one-to-one-game-world-reflections.md)
 - Facing and chirality:
-  [ADR-0081](0081-wall-mirrors-reflect-piece-facing-in-board-grid-space.md)
+  [ADR-0623](0623-wall-mirrors-reflect-piece-facing-in-board-grid-space.md)
 - Corridor and projection predecessor:
-  [ADR-0080](0080-wall-mirrors-reflect-along-the-board-grid-wall-normal.md)
+  [ADR-0622](0622-wall-mirrors-reflect-along-the-board-grid-wall-normal.md)
 - Derived current-state contracts:
   [Board render contract](../board-render-contract.md) and
   [Asset generation contract](../asset-generation-contract.md)
