@@ -6327,6 +6327,19 @@ const REQUIRED_SCHEMA_REPAIR_MIGRATIONS = new Map([
   ['active_runs', 44],
 ]);
 
+// How many Postgres connections one backend may hold.
+//
+// The deployed pod serves everybody and gets the full pool. A LOCAL dev backend serves exactly
+// one person, and there is no dev database — every `npm run dev` in every worktree is a client of
+// production Postgres. Twelve worktrees at the old flat 8 asked for 96 connections against a
+// server that allows 50, so a page load could not get a connection for its media bytes and the
+// live site answered 503 on blob reads while its API stayed green.
+//
+// KUBERNETES_SERVICE_HOST is set by the cluster and by nothing else, so it distinguishes the pod
+// from a laptop without a flag anyone has to remember to pass.
+const IN_CLUSTER = Boolean(process.env.KUBERNETES_SERVICE_HOST);
+const POOL_MAX = Number(process.env.PG_POOL_MAX) > 0 ? Number(process.env.PG_POOL_MAX) : (IN_CLUSTER ? 8 : 2);
+
 function buildPool() {
   if (databaseUrl) {
     // Azure managed Postgres requires TLS. Prod connects through the POSTGRES_HOST
@@ -6337,7 +6350,7 @@ function buildPool() {
     return new Pool({
       connectionString: databaseUrl,
       ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
-      max: 8,
+      max: POOL_MAX,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
     });
@@ -6361,7 +6374,7 @@ function buildPool() {
       // sslmode=require equivalent: encrypt in transit. The server is reachable
       // only through the Azure-internal firewall rule, never the public internet.
       ssl: { rejectUnauthorized: false },
-      max: 8,
+      max: POOL_MAX,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
       // Recycle connections before the AAD token TTL so reconnects fetch a fresh
