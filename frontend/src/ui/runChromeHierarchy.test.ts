@@ -262,16 +262,41 @@ describe('Run chrome hierarchy', () => {
   });
 
   it('keeps Run abandonment at the bottom of Controls and removes redundant Battle resignation', () => {
-    expect(runScreen).toContain('function useRunAbandon');
-    expect(runScreen).toContain("title: 'Abandon this Run?'");
-    expect(runScreen).toContain("tone: 'danger'");
+    expect(runScreen).toContain('export function RunAbandonControl');
     expect(runScreen).toContain('navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false })');
     expect(runScreen).toContain('data-testid="abandon-run"');
-    expect(skirmishHud).toContain('onAbandonRun?: (() => void) | null');
+    expect(skirmishHud).toContain('abandonRun?: ReactNode;');
     expect(skirmishHud).toContain('<span className="skirmish-eyebrow">Run</span>');
     expect(skirmish).toContain('canResign: !isRunPlay');
     expect(skirmishHud).toContain('canResign && !game.winner');
     expect(runScreen).not.toContain('TitleBarControlContribution');
+  });
+
+  // Abandoning asks in the seat that raised the question — the verb SPLITS into its two answers,
+  // the same confirmation Start New Run uses for replacing an active Run (ADR-0571/0578). No
+  // dialog is opened over the Run being discussed.
+  it('confirms Abandon Run in its own seat instead of a popup', () => {
+    expect(runScreen).not.toContain('useConfirm');
+    expect(runScreen).not.toContain("title: 'Abandon this Run?'");
+    expect(runScreen).toContain('data-testid="run-abandon-keep"');
+    expect(runScreen).toContain('data-testid="run-abandon-confirm"');
+    // The safe answer leads, as it did in the dialog it replaces.
+    expect(runScreen).toMatch(/data-testid="run-abandon-keep"[\s\S]{0,700}?data-testid="run-abandon-confirm"/);
+    // ...and the dialog's two safeties are kept: focus lands on it, Escape keeps the Run.
+    expect(runScreen).toContain('keepRef.current?.focus();');
+    expect(runScreen).toMatch(/event\.key === 'Escape'[\s\S]{0,90}?setArmed\(false\);/);
+    // ONE control in three seats — the Sectio rail, the Deployment panel, and the Battle HUD,
+    // which is handed the CONTROL rather than a callback that would open something over the
+    // board. A second copy of it in the HUD is the parallel ADR-0059 names.
+    expect(runScreen.match(/<RunAbandonControl\b/g) ?? []).toHaveLength(3);
+    expect(skirmishHud).not.toContain('data-testid="abandon-run"');
+    expect(skirmishHud).toContain('{abandonRun}');
+    // The material stays the SEAT's: the Run's rails wear the oak, the HUD's Controls panel does
+    // not, so the HUD's copy names no fill and keeps the field its neighbours wear (ADR-0433).
+    expect(runScreen).toContain('<RunAbandonControl fillSurface={null} />');
+    // The two answers are one question, so they share a row rather than stacking.
+    expect(styleCss).toMatch(/\.run-abandon-answers \{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+    expect(styleCss).toContain('.run-abandon-stakes');
   });
 
   it('uses the gold transaction cue and transfers adlected cards into the Chartulary', () => {

@@ -24061,6 +24061,43 @@ button.tileset-relationship-cell {
   margin-block-start: auto;
 }
 
+/* Abandon Run asks its question in its own seat rather than over the screen: at rest one control,
+   armed the stakes above a Keep Run / Abandon Run pair. The control owns its own layout and its
+   own button measure, because the three seats it stands in (the Sectio rail, the Deployment panel
+   and the Battle HUD) each wrapped it in a different row and sized it differently. */
+.run-abandon-control {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.run-abandon-control .app-header-button {
+  font-size: var(--ds-text-xs);
+  inline-size: 100%;
+  min-block-size: 40px;
+}
+
+/* The two answers are ONE question, so they share a row and split it evenly — a stacked pair
+   reads as two separate things to do. Neither wears a mark: the mark belongs to the control that
+   asked, and at half a rail's width there is no room for one beside the word anyway. */
+.run-abandon-answers {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.run-abandon-answers .app-header-button {
+  min-inline-size: 0;
+  padding-inline: var(--ds-space-1);
+}
+
+/* What the dialog's body said, in the same dimmed ink Start New Run's replacement warning uses —
+   the two confirmations in this game state their stakes in one voice. */
+.run-abandon-stakes {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+  font-size: var(--ds-text-xs);
+  margin: 0;
+}
+
 .run-expunctio-workspace {
   position: relative;
   z-index: 35;
