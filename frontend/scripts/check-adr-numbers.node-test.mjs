@@ -71,6 +71,16 @@ test('the baseline lists only numbers that are actually shared right now', () =>
   }
 });
 
+test('the guard does not scan its own fixtures, or it fails on itself', () => {
+  // This file's ADR-0100 and ADR-0999 are invented numbers proving the failure branches fire. The
+  // guard excludes its own two files for exactly that reason. Verified the honest way — by running
+  // the real scan, which is what caught this in CI after a local pass on an untracked file.
+  const source = readFileSync(new URL('./check-adr-numbers.mjs', import.meta.url), 'utf8');
+  assert.match(source, /const SELF = new Set\(\[/);
+  assert.match(source, /'frontend\/scripts\/check-adr-numbers\.node-test\.mjs',/);
+  assert.match(source, /!SELF\.has\(f\)/);
+});
+
 test('the baseline is complete: no unlisted collision is hiding in the tree', () => {
   const listed = new Set(baseline.duplicates);
   for (const [number, files] of live) {

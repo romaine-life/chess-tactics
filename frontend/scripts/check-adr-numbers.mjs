@@ -36,6 +36,17 @@ const CITATION = /\bADR-(\d{4})\b/g;
 /** Where a citation may appear. ADRs themselves are excluded: they link by filename. */
 const CITING_FILE = /\.(ts|tsx|js|mjs|cjs|css|md|ya?ml)$/;
 
+/**
+ * This guard's own files. Their `ADR-0100`/`ADR-0999` are FIXTURES — a number invented to prove the
+ * dangling-citation branch fires — not references to a decision, so scanning them makes the guard
+ * fail on itself. It did: the test passed locally while the file was still untracked and `git
+ * ls-files` could not see it, then failed in CI one commit later.
+ */
+const SELF = new Set([
+  'frontend/scripts/check-adr-numbers.mjs',
+  'frontend/scripts/check-adr-numbers.node-test.mjs',
+]);
+
 export const BASELINE_PATH = 'scripts/adr-duplicate-baseline.json';
 
 /** number -> [filename], for every ADR that owns a number. */
@@ -106,7 +117,9 @@ function repoRoot() {
 
 function trackedCitingFiles(root) {
   const out = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8', maxBuffer: 1 << 28 });
-  return out.split('\0').filter((f) => f && CITING_FILE.test(f) && !f.startsWith('docs/adr/'));
+  return out.split('\0').filter((f) => (
+    f && CITING_FILE.test(f) && !f.startsWith('docs/adr/') && !SELF.has(f)
+  ));
 }
 
 function run() {
