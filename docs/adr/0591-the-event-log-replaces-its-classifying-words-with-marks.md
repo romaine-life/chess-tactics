@@ -128,6 +128,15 @@ should be judged by sight rather than described.
   unmarked and shows their full original sentences. No `PersistedMatch` version bump and no Run
   save migration follows — this is presentation plus seven additive live-media slots, each
   recoverable by retiring it.
+- **Defeat is decided and installed:** option 115 of the plain family, content
+  `ce39f7df…282deeab9`, native 49x49, accepted into `ui/kit/icons/game/defeat.png` and bound
+  to `ui-kit-icons-game-defeat-png`. Every defeat line in the Event Log paints it. Six seats
+  remain open.
+- Acceptance refuses bytes that do not state they are native 1x, and the first upload pass
+  omitted `nativeEvidence` entirely — so EVERY seat would have failed at Install, not just the
+  one that was tried first. All 128 candidates now carry it. The claim is true of these:
+  PixelLab generates at 64x64 and `trimToInkSquare` only crops and pads, so the uploaded bytes
+  are the source at 1x.
 - Until the owner installs one per seat, every forged mark renders its reserved empty seat —
   and because an ending row’s whole text is now its marks, those rows are blank end to end.
   That is the contract working, and it is also why the review page previews the first candidate
