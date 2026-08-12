@@ -306,17 +306,40 @@ function ShellControlsHead({
       : [];
   if (!members.length) return name;
   const divided = members.length > 1;
-  // Equal tracks do not give equal compartments: a rail is drawn ON a grid line and covers half its
-  // width from the cell on each side, so a middle compartment pays that twice and an outer one once
-  // — its other edge is the panel's own rail, which takes nothing from this block. The openings are
-  // therefore stated as the share of the strip left over once the rails have had their width, and
-  // the axis adds each cell's half-rails back on top (ADR-0569).
-  const opening = `calc((100% - ${members.length - 1} * var(--le-chrome-inner-rail-w, 7px)) / ${members.length})`;
-  const axis = chromeDividedSeatAxis(members.length, opening, CHROME_DIVIDED_GRID_RAIL_HALF);
+  // Equal tracks do not give equal compartments (ADR-0569). Two different things are taken off a
+  // cell here, and both have to be given back or the openings are not equal:
+  //
+  //   - A RAIL is drawn ON a grid line and covers half its width from the cell on each side, so a
+  //     middle compartment pays that twice and an outer one once.
+  //   - The PANEL'S FRAME sits on top of the block's outer edges, because the block runs edge to
+  //     edge so its rails can reach that frame. That is the bigger bite by far: the first
+  //     compartment measured 42px of visible oak against 64px ones until this was stated.
+  //
+  // So the opening is the share of the strip left over once BOTH have had their width, and each
+  // track adds back exactly what is taken from it. `insets` do the same to the seat's content, so a
+  // mark centres in what can be SEEN rather than in the cell.
+  const coverStart = 'var(--shell-controls-frame-cover-start, 0px)';
+  const coverEnd = 'var(--shell-controls-frame-cover-end, 0px)';
+  const lane = `(100% - ${coverStart} - ${coverEnd} - ${members.length - 1} * var(--le-chrome-inner-rail-w, 7px))`;
+  const axis = chromeDividedSeatAxis(
+    members.length,
+    `calc(${lane} / ${members.length})`,
+    CHROME_DIVIDED_GRID_RAIL_HALF,
+  );
+  // A cell's covers are independent: the only cell of a single-column head has BOTH.
+  const coversFor = (index: number): { start: string | null; end: string | null } => ({
+    start: index === 0 ? coverStart : null,
+    end: index === members.length - 1 ? coverEnd : null,
+  });
+  const tracks = axis.tracks.map((track, index) => {
+    const cover = coversFor(index);
+    const added = [cover.start, cover.end].filter(Boolean);
+    return added.length ? `calc(${track} + ${added.join(' + ')})` : track;
+  });
   return (
     <DividedInnerChromeBox
       className="shell-controls-head"
-      columns={axis.tracks}
+      columns={tracks}
       framed={false}
     >
       <ChromeDividedGridRow spans="all" className="shell-controls-head-title-row">
@@ -338,14 +361,19 @@ function ShellControlsHead({
           // CSS rule beside it: the row's last child is the grid's own rail layer, so `:last-child`
           // is not the last seat, and a rule stated twice is a rule that can drift.
           const inset = axis.insets[index];
+          const cover = coversFor(index);
+          // Only a SEAT gives the taken width back as padding, so its mark centres in the opening.
+          // A compartment that holds other people's controls is a lane, not an opening: it takes
+          // the panel's own content inset like every other control in the column, and that inset is
+          // wider than the frame's cover anyway.
+          const seatPadding = section.press ? {
+            paddingInlineStart: cover.start ? `calc(${inset.start} + ${cover.start})` : inset.start,
+            paddingInlineEnd: cover.end ? `calc(${inset.end} + ${cover.end})` : inset.end,
+          } : undefined;
           const seat = {
             className: `shell-controls-head-section${section.press?.active ? ' active' : ''} ${section.className ?? ''}`.trim(),
             'data-chrome-fill-surface': section.press ? CHROME_LEAF_FILL_SURFACE : undefined,
-            style: {
-              paddingInlineStart: inset.start,
-              paddingInlineEnd: inset.end,
-              ...section.style,
-            },
+            style: { ...seatPadding, ...section.style },
             ...section.attrs,
           };
           return section.press ? (

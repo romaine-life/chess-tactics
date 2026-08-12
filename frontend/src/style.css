@@ -6176,6 +6176,19 @@ body.loading-bootstrap .app-startup-status {
   grid-area: rail;
 }
 
+/* How much of the panel's own frame rail sits ON TOP of a full-bleed child. The head block runs
+   edge to edge so its rails can reach that frame, which means the frame covers the head's first
+   and last compartments and nothing else — the outer compartments were 42px of visible oak beside
+   64px ones until the tracks were told about it. Measured from the rail the panel actually draws,
+   not from the box: the fill is held a little inside the panel so the rail can sit over its edge,
+   and that inset is rail the compartment keeps. */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) [data-shell-controls-panel] {
+  --shell-controls-frame-cover-start:
+    max(0px, calc(var(--le-chrome-outer-rail-w, 24px) - var(--le-outer-fill-box-left, 0px)));
+  --shell-controls-frame-cover-end:
+    max(0px, calc(var(--le-chrome-outer-rail-w, 24px) - var(--le-outer-fill-box-right, 0px)));
+}
+
 /* The titled shell is the one full-bleed contents exception: its title belongs
    to the fill box, while every real control beneath it returns to the shared
    contents boundary. */
@@ -18206,6 +18219,8 @@ button.tileset-relationship-cell {
    text and marks stay exactly where they were while its wood reaches the edge. */
 :root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel] {
   --le-outer-fill-box-right: 0px;
+  /* No rail is drawn on this edge, so nothing covers what reaches it. */
+  --shell-controls-frame-cover-end: 0px;
 }
 
 /* Persistent app-shell title bar (src/ui/shell/AppTitleBar) — rendered once by

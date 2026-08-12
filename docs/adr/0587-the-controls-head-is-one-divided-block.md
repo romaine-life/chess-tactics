@@ -55,14 +55,25 @@ in the panel. Which compartment is CURRENT is carried by the mark inside it (gra
 brightness), because a frameless compartment has no frame to light — the axis the title bar's music
 seat already uses.
 
-**Equal tracks do not give equal compartments** (ADR-0569). A rail is drawn ON a grid line and
-covers half its width from the cell on each side, so a middle compartment pays that twice and an
-outer one once — its other edge is the panel's rail, which takes nothing from this block. The
-opening is therefore stated as the share of the strip left over once the rails have had their
-width, and `chromeDividedSeatAxis` adds each cell's half-rails back on top. The matching insets
-come from that same call rather than from a positional CSS rule beside it: the row's last child is
-the grid's own rail layer, so `:last-child` is not the last seat. All five openings measure
-63.52 × 38.
+**Equal tracks do not give equal compartments** (ADR-0569), and here TWO different things are
+taken off a cell. A rail is drawn ON a grid line and covers half its width from the cell on each
+side, so a middle compartment pays that twice and an outer one once. And the panel's own FRAME sits
+on top of the block's outer edges, because the block runs edge to edge so its rails can reach that
+frame — which is by far the bigger bite, and the one that showed: the first compartment painted
+**42px** of visible oak beside 64px ones, measured off a real capture rather than off the box
+rects, which all read a tidy 63.52.
+
+So the opening is the share of the strip left over once BOTH have had their width, and each track
+adds back exactly what is taken from it. The cover is measured from the rail the panel actually
+draws (`--shell-controls-frame-cover-start/end`), so the viewport edge — where `chrome-rails-offscreen`
+draws no rail at all — states zero rather than assuming symmetry. The matching insets come from the
+same `chromeDividedSeatAxis` call rather than from a positional CSS rule beside it: the row's last
+child is the grid's own rail layer, so `:last-child` is not the last seat.
+
+All five compartments then paint the same width, verified on a scanline through a real capture:
+60/60/60/60/60 device pixels at 1440, with each mark's centre on its opening's centre. Residual
+±1px appears at widths where the Controls column is fractional, which is the browser's own
+device-pixel rounding of a lane that does not divide evenly.
 
 **Both head shapes are the same block.** A head given ordinary content instead of sections — the
 Level Editor's layer picker — is that block with a single column, so the rule under its name is the
