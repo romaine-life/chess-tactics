@@ -416,7 +416,7 @@ type LevelEditorLocalFallbackSnapshot = {
 
 // Bounded, only while an open document is waiting for its owner to sign back in. It covers a
 // sign-in completed in another tab, which produces no focus or online event in this one.
-const EDITOR_SIGNED_OUT_REPROBE_MS = 20_000;
+const PREDRAWN_READ_RETRY_MS = 20_000;
 const EDIT_SESSION_HEARTBEAT_MS = 20_000;
 const EDITOR_SHARED_SYNC_POLL_MS = 1_000;
 const OFFLINE_LEVEL_EDITOR_OWNER = 'offline-browser@local.invalid';
@@ -8287,23 +8287,20 @@ export function LevelEditor(): ReactElement {
     return () => window.removeEventListener('focus', retryAfterSignIn);
   }, [editorDocument, editorLoadError, editorReady]);
 
-  // While an open document is paused for sign-in, re-read the authoritative session so signing in
-  // — here or in another tab — resumes autosave without the owner having to reload and hope the
-  // browser recovery is picked back up. The probe also self-heals a spurious 401: if the session
-  // was in fact still valid, the very first read restores it.
+  // While an open document is paused for sign-in, read the authoritative session once so a
+  // spurious 401 self-heals immediately: if the session was in fact still valid, this first read
+  // restores it rather than leaving the board paused behind a lie.
+  //
+  // Noticing the actual sign-in — here or in another tab — is no longer this screen's job. The
+  // session owner re-reads for the whole application and quickens to the same cadence whenever it
+  // is not authenticated, so the scheduler that used to live here is now one shared clock instead
+  // of one per screen (ADR-0059). This supersedes ADR-0519's decision to poll only while paused;
+  // that scoping existed to avoid polling identity in the general case, and the general case is
+  // precisely what turned out to need it.
   useEffect(() => {
     if (cloudSaveState !== 'signed-out') return undefined;
-    const probe = (): void => { void refreshAuthSession(); };
-    const probeWhenVisible = (): void => { if (!document.hidden) probe(); };
-    const timer = window.setInterval(probeWhenVisible, EDITOR_SIGNED_OUT_REPROBE_MS);
-    window.addEventListener('focus', probe);
-    document.addEventListener('visibilitychange', probeWhenVisible);
-    probe();
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener('focus', probe);
-      document.removeEventListener('visibilitychange', probeWhenVisible);
-    };
+    void refreshAuthSession();
+    return undefined;
   }, [cloudSaveState]);
 
   // The artwork check is account-gated, so it dies with the session AND with the backend — and it
@@ -8342,7 +8339,7 @@ export function LevelEditor(): ReactElement {
     }
     const retry = (): void => setPredrawnValidationAttempt((attempt) => attempt + 1);
     const retryWhenVisible = (): void => { if (!document.hidden) retry(); };
-    const timer = window.setInterval(retryWhenVisible, EDITOR_SIGNED_OUT_REPROBE_MS);
+    const timer = window.setInterval(retryWhenVisible, PREDRAWN_READ_RETRY_MS);
     window.addEventListener('online', retry);
     window.addEventListener('focus', retry);
     document.addEventListener('visibilitychange', retryWhenVisible);

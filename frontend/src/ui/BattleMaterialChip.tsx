@@ -11,11 +11,12 @@ import { TitleBarStatusTip } from './shell/TitleBarControls';
 // not a second parallel readout).
 //
 // ONE box holding both forces, because material is one FACT — who is ahead, and by how much —
-// and a comparison has to be read in a single glance (ADR-0575). The two numbers first sat in
+// and a comparison has to be read in a single glance (ADR-0578). The two numbers first sat in
 // separate boxes flanking the battle clock, which kept the row symmetric about the clock and put
-// the clock's width between the two things the reader is comparing. Proximity wins: the numbers
-// are adjacent now, and the row's symmetry is restored by the objective chip matching this box
-// rather than by splitting it.
+// the clock's whole width between the two things the reader is comparing. Proximity wins. The row
+// gives up the clock being its midpoint rather than buying that back with an empty-widened
+// objective chip: on a Battle route the stud the clock was aligned to draws nothing at all
+// (measured), so the alignment was to an ornament the player cannot see. See style.css.
 //
 // It reads the mounted session store itself rather than taking totals as props, exactly as the
 // clock does: a caller that had to supply both sides' points would be re-deriving the board.
