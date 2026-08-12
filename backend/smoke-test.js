@@ -5615,19 +5615,34 @@ async function main() {
     throw new Error(`Design portfolio did not persist: ${savedPortfolio.statusCode} ${savedPortfolio.body}`);
   }
 
+  // A test-slot Host header confers nothing. This request used to be answered with a synthetic
+  // `test-slot@chess-tactics.local` writer purely because the host matched — the same defect as
+  // F7, on a path that writes real rows. ADR-0577 deleted it; deployed slots sign in like every
+  // other lane.
   const testSlotPortfolioWrite = await request(
     'PUT',
     '/api/design-portfolios/main-menu-acceptance',
     { host: 'chess-tactics-1.tank.dev.romaine.life', 'content-type': 'application/json' },
     JSON.stringify({ data: { review_statuses: { 'news-chrome': 'accepted' } } }),
   );
-  const testSlotPortfolioWriteBody = JSON.parse(testSlotPortfolioWrite.body);
+  if (testSlotPortfolioWrite.statusCode !== 401) {
+    throw new Error(`A host header must not confer a design portfolio writer: ${testSlotPortfolioWrite.statusCode} ${testSlotPortfolioWrite.body}`);
+  }
+
+  // The same write, signed in, is the ordinary path and still works.
+  const slotSignedPortfolioWrite = await request(
+    'PUT',
+    '/api/design-portfolios/main-menu-acceptance',
+    { host: 'chess-tactics-1.tank.dev.romaine.life', cookie: playerCookie, 'content-type': 'application/json' },
+    JSON.stringify({ data: { review_statuses: { 'news-chrome': 'accepted' } } }),
+  );
+  const slotSignedPortfolioWriteBody = JSON.parse(slotSignedPortfolioWrite.body);
   if (
-    testSlotPortfolioWrite.statusCode !== 200 ||
-    testSlotPortfolioWriteBody.portfolio.revision !== 2 ||
-    testSlotPortfolioWriteBody.portfolio.updated_by !== 'test-slot@chess-tactics.local'
+    slotSignedPortfolioWrite.statusCode !== 200 ||
+    slotSignedPortfolioWriteBody.portfolio.revision !== 2 ||
+    slotSignedPortfolioWriteBody.portfolio.updated_by !== 'player@example.com'
   ) {
-    throw new Error(`Test-slot design portfolio write should not require sign-in: ${testSlotPortfolioWrite.statusCode} ${testSlotPortfolioWrite.body}`);
+    throw new Error(`Signed-in slot design portfolio write failed: ${slotSignedPortfolioWrite.statusCode} ${slotSignedPortfolioWrite.body}`);
   }
 
   // --- Official (global) campaign tier (/api/official-campaigns): public GET,

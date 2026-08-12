@@ -8157,14 +8157,13 @@ async function requireAdmin(req, res) {
   return user;
 }
 
+// Writing a design portfolio requires a signed-in user, and nothing else grants it.
+//
+// This used to hand out a synthetic `test-slot@chess-tactics.local` writer to any request whose
+// Host satisfied `isDevAuthHost` — the second instance of F7's defect, on a path that writes real
+// rows to `design_portfolios`. Deleted for the same reason as the first: an identity conferred by
+// a request header is not an identity (ADR-0577). Deployed slots sign in.
 async function requireDesignPortfolioWriter(req, res) {
-  if (isDevAuthHost(req)) {
-    return {
-      email: 'test-slot@chess-tactics.local',
-      name: 'Test Slot',
-      role: 'designer',
-    };
-  }
   return requireUser(req, res);
 }
 
