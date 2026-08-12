@@ -92,7 +92,7 @@ describe('Skirmish chrome hierarchy', () => {
     expect(titleContent.match(/<TitleBarStatusTip\b/g)).toHaveLength(2);
     expect(titleContent).toContain('<BattleClockChip />');
     expect(battleClockChip).toContain('<TitleBarStatusTip');
-    // Material is ONE box holding both forces, seated AHEAD of the clock (ADR-0579). The two
+    // Material is ONE box holding both forces, seated AHEAD of the clock (ADR-0580). The two
     // numbers are a comparison, so nothing may stand between them — and the clock did, while
     // they were two boxes. It is its own component rather than markup here, so the Run's bar
     // shows the same box from the same place the clock comes from.

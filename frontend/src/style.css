@@ -4719,7 +4719,7 @@ h1 {
   color: var(--threat);
 }
 
-/* Material: ONE box holding both forces (ADR-0579) — a live Pawn in each army's palette and the
+/* Material: ONE box holding both forces (ADR-0580) — a live Pawn in each army's palette and the
    points it is still worth. Material is one FACT, who is ahead and by how much, so the two
    numbers have to be readable together; when they sat in separate boxes the battle clock stood
    between the very things being compared. The frame and the control height come from

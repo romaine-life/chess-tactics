@@ -4,7 +4,7 @@ date: 2026-08-11
 deciders: Nelson, Claude
 ---
 
-# ADR-0579: Both forces' material shares one box
+# ADR-0580: Both forces' material shares one box
 
 ## Context
 

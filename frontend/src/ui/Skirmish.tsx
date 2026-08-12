@@ -1470,7 +1470,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
       {/* The battle clock is ALWAYS present on every play surface (BattleClockChip also seats
         it in the Run's bar), so the two labelled panels always have a real element between
         them and the row never reads as a lopsided pair (equal-width flanks, see style.css).
-        Material is ONE box holding both forces (ADR-0579), seated ahead of the clock: the two
+        Material is ONE box holding both forces (ADR-0580), seated ahead of the clock: the two
         numbers are a comparison, so nothing may stand between them — the clock did, when they
         were two boxes.
         Every box in the bar is one hover/keyboard target that names itself — that is

@@ -525,7 +525,7 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain("import { BattleClockChip } from './BattleClockChip';");
     expect(runScreen).toContain('battlefieldMounted={battlefieldActive}');
     // Material answers to the same seat for the same reason, and sits ahead of the clock exactly
-    // as it does on the Skirmish bar, so every play surface reads alike (ADR-0579). ONE box holds
+    // as it does on the Skirmish bar, so every play surface reads alike (ADR-0580). ONE box holds
     // both forces — a comparison cannot have the clock standing in the middle of it. It rides in
     // and out WITH the clock: a force's points exist only while there is a board to count them
     // on, so it is not a Run measure.
