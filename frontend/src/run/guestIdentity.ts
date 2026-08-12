@@ -1,5 +1,5 @@
 /**
- * The identity a signed-out player's Run persists under (ADR-0588).
+ * The identity a signed-out player's Run persists under (ADR-0587).
  *
  * A guest holds an opaque key; the server holds only its SHA-256. That is the shape the auth
  * session cookie already uses and the shape the Level Editor's page credential already uses, so

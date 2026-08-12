@@ -6768,7 +6768,7 @@ async function main() {
     throw new Error(`Active Run did not delete: ${deletedRun.statusCode} ${deletedRun.body}`);
   }
 
-  // --- Guest-owned active Runs (ADR-0588) -----------------------------------
+  // --- Guest-owned active Runs (ADR-0587) -----------------------------------
   // A signed-out player had nowhere to put a Run at all: `owner_email` was the primary key, so the
   // row could not exist. These prove it does now, that it belongs to the GUEST and not to any
   // account, that one guest cannot read another's, and that signing in moves it across exactly
