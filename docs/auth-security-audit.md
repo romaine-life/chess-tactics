@@ -1,6 +1,10 @@
 # Authentication security audit and remediation plan
 
-**Status:** findings recorded, plan proposed, nothing implemented yet.
+**Status:** stages 0-2 and 4-6 implemented (ADR-0575, ADR-0576, ADR-0577). Stage 3 — the identity
+provider migration — has its dependency groundwork landed and verified, and its plugin swap
+designed but not written; see "Stage 3 status" below for why, and
+[`docs/oauth-provider-migration.md`](https://github.com/romaine-life/auth/blob/oauth-provider-migration/docs/oauth-provider-migration.md)
+in the `auth` repository.
 **Date:** 2026-08-11.
 **Scope:** the whole authentication surface of Chess Tactics — the browser, the backend
 (`backend/oidcAuth.js`, `backend/server.js`), the deployment chart, and the parts of the
@@ -397,3 +401,60 @@ These are product calls, not engineering ones.
    This is Stage 3, ahead of the Chess Tactics refresh work that depends on it.
 
 **No open decisions remain.** Implementation begins at Stage 0.
+
+---
+
+## 6. Stage 3 status, and the one thing it changed
+
+Stages 0-2 and 4-6 are implemented and green. Stage 3 is in the `auth` repository on
+`oauth-provider-migration`, and is deliberately not finished. What landed there is verified; what
+did not is named.
+
+**Landed and proven:** `better-auth` 1.6.11 → 1.6.27, `jose` 5 → 6,
+`@better-auth/oauth-provider@1.6.27` added. The jose major — feared to be the expensive part —
+cost exactly one line: v6 removed the `KeyLike` type alias, used once in a test. Every API the
+service uses is unchanged. Typecheck clean, 159/159 unit tests pass.
+
+**Designed, not written:** the plugin swap. It is not a rename, and three things make it its own
+change with its own rollout:
+
+1. **Clients move from static config into a database table.** The successor has no
+   `trustedClients` option; clients are rows created through `createOAuthClient`. Grafana's secret
+   comes from the environment, so the rows cannot be seeded in SQL — it needs idempotent
+   boot-time reconciliation.
+2. **One claims hook becomes three, and failure is silent.** `getAdditionalUserInfoClaim` feeds
+   `role`, `groups` and `apps` to both the id_token and userinfo today; the successor splits it
+   into `customIdTokenClaims`, `customUserInfoClaims` and `customAccessTokenClaims`. Grafana reads
+   `role` for its role mapping and Argo CD matches RBAC on `groups`. If those stop being emitted
+   nothing errors — Grafana quietly demotes every user to Viewer and Argo CD matches no rule.
+3. **Four new tables**, with `string[]` columns whose Postgres representation must come from
+   better-auth's own generator, and three old tables that may only be retired after cutover
+   because every live Grafana and Argo CD session is a row in them.
+
+**Why it stopped there.** That repository's tests are unit tests with no database, and this machine
+has no Postgres. The parts that would fail are precisely the ones no unit test reaches: the schema
+mapping, the client seeding, and whether a real id_token still carries `role` and `groups`. An
+identity-provider migration that has never completed one real login, landing on the service that
+gates the tools you would diagnose it with, is not something to merge on a green typecheck.
+
+### What this changed about decision 1
+
+**Per-client refresh lifetime exists in neither package.** `refreshTokenExpiresIn` is plugin-global
+in both, so the assumption behind decision 1 — that the migration would carry it — is wrong.
+
+The better answer is that the knob was in the wrong place. An authorization server sets a
+*maximum*; each relying party sets its own session policy beneath it. Grafana has
+`login_maximum_lifetime_duration` and its own rotation; Argo CD issues its own JWT with its own
+expiry. Raising the shared refresh lifetime to 90 days does not by itself lengthen a Grafana or
+Argo CD session. That removes the need for a bespoke extension to an authorization server's token
+lifetimes, which is code that should not be bespoke. **It is a change from what decision 1 assumed
+and wants confirming before rollout.**
+
+### The ordering constraint that now binds
+
+Fixing F5 without raising the refresh lifetime **shortens** Chess Tactics sessions instead of
+lengthening them. Today's rotation bug re-stamps the expiry on every refresh, so an active chain
+renews indefinitely and the 7-day setting never bites; correct rotation makes that wall real.
+
+The lifetime change and the F5 fix must therefore land in the same rollout, or the first deploy
+regresses the sessions ADR-0576 exists to keep alive.
