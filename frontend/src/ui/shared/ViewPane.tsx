@@ -602,34 +602,77 @@ export function ViewPane({
   }, [onMinimumZoomChange, onZoomChange, resolvedMinZoom, zoom]);
 
   // ── Touch gestures ──────────────────────────────────────────────────────────────────────
-  // A touch device has no wheel and no secondary button, so on a phone the camera could not be
-  // zoomed at all and an uncommitted premove chain could not be taken back. These supply both
-  // in the conventional touch idioms. Long press is offered ONLY where a viewport owner asked
-  // for `onSecondaryClick`, so a surface that does not claim the secondary press never grows a
-  // hidden gesture.
+  // A touch device has no wheel and no secondary button, so without these a phone cannot zoom
+  // the camera at all and cannot take back an uncommitted premove chain.
+  //
+  // TWO fingers own the camera; ONE finger is left entirely alone. That split is forced by the
+  // board: its cells are wall-to-wall hit targets that legitimately own the primary press
+  // (select, drag a piece), so a one-finger pan would fight gameplay for the same gesture —
+  // the map idiom, two fingers to move the view, is both conventional and unambiguous here.
+  //
+  // These run on the CAPTURE path, like the secondary button and for the same reason: a
+  // full-surface child must not be able to shield the viewport's own gesture. That is exactly
+  // what happened when this was first written on the bubbling path — every gesture was
+  // swallowed by the cell layer and nothing moved, which `npm run verify:touch` caught and no
+  // amount of reading the source did.
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
-  const pinchRef = useRef<{ distance: number } | null>(null);
+  const pinchRef = useRef<{
+    distance: number;
+    centroidX: number;
+    centroidY: number;
+    originX: number;
+    originY: number;
+    localWidth: number;
+    localHeight: number;
+    renderedWidth: number;
+    renderedHeight: number;
+  } | null>(null);
   const longPressRef = useRef<number | null>(null);
-  const longPressFiredRef = useRef(false);
+  const longPressOriginRef = useRef<{ x: number; y: number } | null>(null);
 
   const cancelLongPress = () => {
     if (longPressRef.current !== null) {
       window.clearTimeout(longPressRef.current);
       longPressRef.current = null;
     }
+    longPressOriginRef.current = null;
   };
 
-  const livePointerDistance = (): number => {
-    const [a, b] = [...pointersRef.current.values()];
-    if (!a || !b) return 0;
-    return Math.hypot(a.x - b.x, a.y - b.y);
-  };
+  const touchPoints = (): { x: number; y: number }[] => [...pointersRef.current.values()];
+  const pointerSpan = (points: { x: number; y: number }[]): number => (
+    points.length < 2 ? 0 : Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y)
+  );
+  const pointerCentroid = (points: { x: number; y: number }[]): { x: number; y: number } => ({
+    x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
+    y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
+  });
 
   // The pinch ratio steps a tier and then RE-BASELINES, so a long continuous pinch keeps
   // stepping instead of stopping once it passes the threshold once.
   const PINCH_IN = 1.25;
   const PINCH_OUT = 0.8;
   const LONG_PRESS_MS = 500;
+  // Travel that ends a long press. Generous, because a finger resting on glass drifts.
+  const LONG_PRESS_SLOP = 12;
+
+  const beginPinch = () => {
+    const points = touchPoints();
+    if (points.length < 2) { pinchRef.current = null; return; }
+    const stage = stageRef.current;
+    const rendered = stage?.getBoundingClientRect();
+    const centroid = pointerCentroid(points);
+    pinchRef.current = {
+      distance: pointerSpan(points),
+      centroidX: centroid.x,
+      centroidY: centroid.y,
+      originX: pan.x,
+      originY: pan.y,
+      localWidth: stage?.clientWidth ?? 0,
+      localHeight: stage?.clientHeight ?? 0,
+      renderedWidth: rendered?.width ?? 0,
+      renderedHeight: rendered?.height ?? 0,
+    };
+  };
 
   const startPan = (event: PointerEvent<HTMLElement>, claimPointer = true) => {
     event.preventDefault();
@@ -672,29 +715,100 @@ export function ViewPane({
 
   const startNonSecondaryPan = (event: PointerEvent<HTMLElement>) => {
     if (event.button === 2) return;
+    startPan(event);
+  };
+
+  // Touch bookkeeping, on the capture path. It never starts an ordinary drag: one finger is
+  // left to the bubbling handlers (and therefore to whatever child owns the surface), and the
+  // camera only claims the gesture once a SECOND finger says it is a camera gesture.
+  const trackTouchDown = (event: PointerEvent<HTMLElement>) => {
+    if (event.pointerType === 'mouse') return;
     pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    // A second finger converts the gesture into a pinch: drop the pan the first finger began
-    // so the camera does not slide while the two fingers are still settling.
-    if (pointersRef.current.size === 2) {
+    if (pointersRef.current.size >= 2) {
+      // Two fingers are unambiguous: take the gesture off whatever the first finger began.
       cancelLongPress();
       dragRef.current = null;
-      pinchRef.current = { distance: livePointerDistance() };
+      beginPinch();
       return;
     }
-    if (pointersRef.current.size > 2) return;
-    startPan(event);
-    longPressFiredRef.current = false;
-    if (event.pointerType !== 'mouse' && onSecondaryClick) {
+    if (!onSecondaryClick) return;
+    cancelLongPress();
+    longPressOriginRef.current = { x: event.clientX, y: event.clientY };
+    longPressRef.current = window.setTimeout(() => {
+      longPressRef.current = null;
+      longPressOriginRef.current = null;
+      // Only a press that stayed put carries the secondary meaning — the same distinction the
+      // mouse path draws between a right drag and a right click.
+      if (pointersRef.current.size !== 1) return;
+      onSecondaryClick();
+    }, LONG_PRESS_MS);
+  };
+
+  const trackTouchMove = (event: PointerEvent<HTMLElement>) => {
+    if (event.pointerType === 'mouse') return;
+    if (!pointersRef.current.has(event.pointerId)) return;
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    const origin = longPressOriginRef.current;
+    if (origin && Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > LONG_PRESS_SLOP) {
       cancelLongPress();
-      longPressRef.current = window.setTimeout(() => {
-        longPressRef.current = null;
-        // Only a press that never became a pan carries the secondary meaning — the same
-        // distinction the mouse path draws between a right drag and a right click.
-        if (didDragRef.current || !dragRef.current) return;
-        longPressFiredRef.current = true;
-        onSecondaryClick();
-      }, LONG_PRESS_MS);
     }
+
+    const pinch = pinchRef.current;
+    if (!pinch || pointersRef.current.size < 2) return;
+    // A camera gesture, so nothing underneath should also act on it.
+    event.preventDefault();
+    event.stopPropagation();
+    const points = touchPoints();
+    const distance = pointerSpan(points);
+    const centroid = pointerCentroid(points);
+
+    // Zoom first: a step re-baselines the whole gesture, because the pan origin it was
+    // measured against no longer means the same thing at the new scale.
+    if (distance > 0 && pinch.distance > 0) {
+      const ratio = distance / pinch.distance;
+      if (ratio > PINCH_IN) { stepZoom(1); beginPinch(); return; }
+      if (ratio < PINCH_OUT) { stepZoom(-1); beginPinch(); return; }
+    }
+
+    // Then drag: the centroid of the two fingers moves the camera, exactly as a mouse pan does.
+    const candidate = {
+      x: pinch.originX + clientDeltaToLocal(centroid.x - pinch.centroidX, pinch.localWidth, pinch.renderedWidth),
+      y: pinch.originY + clientDeltaToLocal(centroid.y - pinch.centroidY, pinch.localHeight, pinch.renderedHeight),
+    };
+    onViewInteraction?.();
+    onPanChange(coverViewport && coverPolygon
+      ? constrainPanToCoverViewport({ viewport: coverViewport, polygon: coverPolygon, zoom, from: pan, to: candidate })
+      : candidate);
+  };
+
+  const trackTouchEnd = (event: PointerEvent<HTMLElement>) => {
+    if (event.pointerType === 'mouse') return;
+    pointersRef.current.delete(event.pointerId);
+    cancelLongPress();
+    if (pointersRef.current.size < 2) pinchRef.current = null;
+  };
+
+  // The capture path has TWO viewport-owned gestures on it now — the secondary button and
+  // touch — and both are there for the same reason: a full-surface child must not be able to
+  // shield the viewport's own navigation. They are composed into one named handler per event
+  // so the wiring stays greppable (levelEditorBoardInput / runDeploymentRotateGesture pin
+  // these identifiers, which is what keeps ADR-0128's secondary-press contract from drifting).
+  const capturePointerDown = (event: PointerEvent<HTMLElement>) => {
+    startSecondaryPan(event);
+    trackTouchDown(event);
+  };
+  const capturePointerMove = (event: PointerEvent<HTMLElement>) => {
+    moveSecondaryPan(event);
+    trackTouchMove(event);
+  };
+  const capturePointerUp = (event: PointerEvent<HTMLElement>) => {
+    endSecondaryPan(event);
+    trackTouchEnd(event);
+  };
+  const cancelPointer = (event: PointerEvent<HTMLElement>) => {
+    trackTouchEnd(event);
+    endPan(event);
   };
 
   const movePan = (event: PointerEvent<HTMLElement>) => {
@@ -744,45 +858,15 @@ export function ViewPane({
 
   const moveNonSecondaryPan = (event: PointerEvent<HTMLElement>) => {
     if (dragRef.current?.secondary) return;
-    if (pointersRef.current.has(event.pointerId)) {
-      pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    }
-    const pinch = pinchRef.current;
-    if (pinch) {
-      const distance = livePointerDistance();
-      if (!distance || !pinch.distance) return;
-      const ratio = distance / pinch.distance;
-      if (ratio > PINCH_IN) { stepZoom(1); pinchRef.current = { distance }; }
-      else if (ratio < PINCH_OUT) { stepZoom(-1); pinchRef.current = { distance }; }
-      return;
-    }
-    // Any real movement means this is a drag, not a press being held.
-    if (didDragRef.current) cancelLongPress();
+    // A two-finger camera gesture has already claimed this on the capture path.
+    if (pinchRef.current) return;
     movePan(event);
   };
 
   const endPan = (event: PointerEvent<HTMLElement>) => {
-    // Release the gesture bookkeeping FIRST: during a pinch there is no drag to match on, so
-    // an early return below would strand the lifted finger in the map and the next touch would
-    // start life believing two fingers were already down.
-    pointersRef.current.delete(event.pointerId);
-    cancelLongPress();
-    if (pointersRef.current.size < 2) pinchRef.current = null;
-    const secondaryFired = longPressFiredRef.current;
-    longPressFiredRef.current = false;
-
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     dragRef.current = null;
-    // A long press already delivered the secondary meaning; the lift that ends it must not
-    // also read as a tap on whatever was underneath.
-    if (secondaryFired) {
-      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-        event.currentTarget.releasePointerCapture(event.pointerId);
-      }
-      window.setTimeout(() => { didDragRef.current = false; }, 0);
-      return;
-    }
     // Only a gesture that became a pan ever took the pointer.
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -834,13 +918,13 @@ export function ViewPane({
       aria-label={ariaLabel}
       data-min-zoom={resolvedMinZoom}
       data-max-zoom={resolvedMaxZoom}
-      onPointerDownCapture={startSecondaryPan}
+      onPointerDownCapture={capturePointerDown}
       onPointerDown={startNonSecondaryPan}
-      onPointerMoveCapture={moveSecondaryPan}
+      onPointerMoveCapture={capturePointerMove}
       onPointerMove={moveNonSecondaryPan}
-      onPointerUpCapture={endSecondaryPan}
+      onPointerUpCapture={capturePointerUp}
       onPointerUp={endPan}
-      onPointerCancel={endPan}
+      onPointerCancel={cancelPointer}
       onContextMenuCapture={(event) => event.preventDefault()}
       onWheel={zoomPane}
     >

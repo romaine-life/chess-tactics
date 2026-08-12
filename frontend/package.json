@@ -49,7 +49,8 @@
     "verify:scene-retention": "node scripts/verify-scene-retention.mjs",
     "verify:icon-seats": "node scripts/verify-icon-seats.mjs",
     "verify:no-freeze": "node scripts/verify-no-ui-block.mjs",
-    "verify:mobile": "node scripts/verify-mobile.mjs"
+    "verify:mobile": "node scripts/verify-mobile.mjs",
+    "verify:touch": "node scripts/verify-touch-input.mjs"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",

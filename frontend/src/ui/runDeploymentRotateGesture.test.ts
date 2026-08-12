@@ -17,7 +17,11 @@ describe('Run Deployment secondary-click turn', () => {
   // ADR-0128 kept the secondary DRAG pan-only because the board is wall-to-wall hit targets.
   // A press that never moved carried no navigation, and that is the only part claimed here.
   it('claims only a secondary release that never became a pan', () => {
-    expect(viewPane).toContain('onPointerDownCapture={startSecondaryPan}');
+    // The capture path now carries touch as well, so the two are composed into one named
+    // handler. What must not drift is that the SECONDARY press is still claimed there — a
+    // full-surface child must never be able to shield it by stopping the bubbling event.
+    expect(viewPane).toContain('onPointerDownCapture={capturePointerDown}');
+    expect(viewPane).toMatch(/const capturePointerDown = [^;]*?\{\s*startSecondaryPan\(event\);/s);
     expect(viewPane).toContain('secondary: event.button === 2,');
     expect(viewPane).toMatch(
       /if \(!didDragRef\.current && drag\.secondary\) \{\s*onSecondaryClick\?\.\(\);\s*\}/,

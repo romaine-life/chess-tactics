@@ -88,6 +88,19 @@ const ROUTES = [
   { path: '/run?craft=battle-victory&battle=4&lipsana=royal-tent', label: 'Run — Battle victory' },
   { path: '/run?craft=aftermath&battle=3&turns=21&seconds=402&fallen=2', label: 'Run — Aftermath' },
   { path: '/run?craft=victory&gold=400', label: 'Run — War victory' },
+  // Main-menu destinations beyond Play and Settings.
+  { path: '/lobbies', label: 'Lobbies' },
+  { path: '/enchiridion', label: 'Enchiridion' },
+  { path: '/enchiridion/units', label: 'Enchiridion — Units' },
+  { path: '/enchiridion/cards', label: 'Enchiridion — Cards' },
+  { path: '/enchiridion/lipsana', label: 'Enchiridion — Lipsana' },
+  // Run workspaces. `?to=` lands INSIDE the workspace rather than one click short of it, and
+  // `view=` selects the ledger the phase screen owns.
+  { path: '/run?craft=sectio&battle=3&gold=250&army=knight,rook&offers=q,pb-front,rr-vertical&view=army', label: 'Run — Army ledger' },
+  { path: '/run?craft=sectio&battle=3&gold=250&army=knight,rook&offers=q,pb-front,rr-vertical&view=lipsana', label: 'Run — Lipsana' },
+  { path: '/run?craft=battle&battle=4&lipsana=royal-tent&to=%2Frun%2Fstrategikon%2Fchartulary', label: 'Strategikon — Chartulary' },
+  { path: '/run?craft=battle&battle=4&lipsana=royal-tent&to=%2Frun%2Fstrategikon%2Fenchiridion', label: 'Strategikon — Enchiridion' },
+  { path: '/run?craft=battle&battle=4&lipsana=royal-tent&to=%2Frun%2Fstrategikon%2Flipsanotheca', label: 'Strategikon — Lipsanotheca' },
 ];
 
 const wantedProfiles = flagAll('profile');
