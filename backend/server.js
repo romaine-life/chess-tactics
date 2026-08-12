@@ -22442,9 +22442,9 @@ async function dbReadUnitCatalog({ includeArchived = false, queryable = null } =
       // enumerate them: a client that knows the asset, its revision and the width it
       // wants can derive the address, so a 49-rung ladder adds one short array here
       // rather than 14,112 entries and 3MB of JSON before the game draws anything.
-      if (!asset.rungs) asset.rungs = [];
+      if (!asset.rungCounts) asset.rungCounts = new Map();
       const rung = Number(row.rung ?? row.width);
-      if (!asset.rungs.includes(rung)) asset.rungs.push(rung);
+      asset.rungCounts.set(rung, (asset.rungCounts.get(rung) || 0) + 1);
       // `sprites` keeps carrying the BASE rung only, so every existing consumer reads
       // exactly what it read before and nothing has to learn about rungs to keep working.
       if (rung !== Number(asset.footprint?.sourceCanvasWidth ?? rung)) continue;
@@ -22458,8 +22458,18 @@ async function dbReadUnitCatalog({ includeArchived = false, queryable = null } =
       };
       asset.spriteCount += 1;
     }
+    // A rung is only STATED once it exists for every palette and facing. Stating a rung the
+    // moment any one of them has it is a promise the address cannot keep: a client derives
+    // `<asset>/<revision>/<palette>/<facing>/<width>.png` from this list, so a half-uploaded
+    // ladder would send a white knight to a URL only the navy bishop has, and answer 404 in
+    // the middle of a zoom. Partial upload is the normal state while a ladder is going in.
+    const fullLadder = UNIT_PALETTE_IDS.length * UNIT_DIRECTION_IDS.length;
     for (const asset of assets) {
-      asset.rungs = (asset.rungs || []).sort((a, b) => a - b);
+      asset.rungs = [...(asset.rungCounts || new Map())]
+        .filter(([, count]) => count >= fullLadder)
+        .map(([rung]) => rung)
+        .sort((a, b) => a - b);
+      delete asset.rungCounts;
       asset.complete = UNIT_PALETTE_IDS.every((palette) =>
         UNIT_DIRECTION_IDS.every((direction) => Boolean(asset.sprites[palette]?.[direction])));
     }
@@ -22749,15 +22759,34 @@ app.put('/api/admin/unit-assets/:id/sprites/:palette/:direction', async (req, re
     const before = await dbUnitAssetRow(id);
     if (!before) throw unitMutationError('unit_asset_not_found', 404);
     assertUnitRevision(before, expected);
-    if (inspected.width !== Number(before.source_canvas_width) || inspected.height !== Number(before.source_canvas_height)) {
-      throw unitMutationError('unit_sprite_canvas_mismatch', 400, {
-        expected: { width: Number(before.source_canvas_width), height: Number(before.source_canvas_height) },
-        actual: { width: inspected.width, height: inspected.height },
-      });
+    // Two different acts arrive on this route. Uploading art AT THE SOURCE CANVAS SIZE
+    // replaces the frame a family ships, which is why it is locked once accepted. Uploading
+    // any OTHER size adds a rung: the same piece authored for a zoom the camera can hold,
+    // sitting beside the accepted frame rather than over it (migration 78). Adding one is
+    // additive and reversible, so an accepted asset may take rungs while its frame stays shut.
+    const baseWidth = Number(before.source_canvas_width);
+    const baseHeight = Number(before.source_canvas_height);
+    const isBaseRung = inspected.width === baseWidth && inspected.height === baseHeight;
+    if (!isBaseRung) {
+      // A rung has to be the SAME PIECE at another size. Proportion is what says so, and
+      // one pixel of slack covers the rounding an integer height lands on.
+      const proportionalHeight = Math.round((inspected.width * baseHeight) / baseWidth);
+      if (
+        inspected.width < 1 || inspected.width > 4096
+        || Math.abs(inspected.height - proportionalHeight) > 1
+      ) {
+        throw unitMutationError('unit_sprite_rung_shape', 400, {
+          base: { width: baseWidth, height: baseHeight },
+          actual: { width: inspected.width, height: inspected.height },
+          expectedHeight: proportionalHeight,
+        });
+      }
     }
-    const familyRow = await pool.query('SELECT accepted_asset_id FROM unit_families WHERE family = $1', [before.family]);
-    if (String(familyRow.rows[0]?.accepted_asset_id || '') === id) {
-      throw unitMutationError('accepted_unit_asset_locked', 409, 'Create a candidate before replacing accepted sprite frames.');
+    if (isBaseRung) {
+      const familyRow = await pool.query('SELECT accepted_asset_id FROM unit_families WHERE family = $1', [before.family]);
+      if (String(familyRow.rows[0]?.accepted_asset_id || '') === id) {
+        throw unitMutationError('accepted_unit_asset_locked', 409, 'Create a candidate before replacing accepted sprite frames.');
+      }
     }
     const sha256 = crypto.createHash('sha256').update(req.body).digest('hex');
     const blobKey = unitBlobKey(sha256);
@@ -22767,11 +22796,12 @@ app.put('/api/admin/unit-assets/:id/sprites/:palette/:direction', async (req, re
       if (!current) throw unitMutationError('unit_asset_not_found', 404);
       assertUnitRevision(current, expected);
       if (current.status === 'archived') throw unitMutationError('unit_asset_archived', 409);
+      // Same split as above, re-checked under the row lock: only the accepted FRAME is shut.
       const lockedFamily = await client.query(
         'SELECT accepted_asset_id FROM unit_families WHERE family = $1 FOR UPDATE',
         [current.family],
       );
-      if (String(lockedFamily.rows[0]?.accepted_asset_id || '') === id) {
+      if (isBaseRung && String(lockedFamily.rows[0]?.accepted_asset_id || '') === id) {
         throw unitMutationError('accepted_unit_asset_locked', 409, 'Create a candidate before replacing accepted sprite frames.');
       }
       await client.query(
@@ -22791,7 +22821,9 @@ app.put('/api/admin/unit-assets/:id/sprites/:palette/:direction', async (req, re
           WHERE id = $1 RETURNING row_revision`,
         [id, user.email],
       );
-      await logUnitAssetEvent(client, current.family, id, 'sprite-uploaded', user.email, { palette, direction, sha256 });
+      await logUnitAssetEvent(client, current.family, id, 'sprite-uploaded', user.email, {
+        palette, direction, sha256, rung: inspected.width, baseRung: isBaseRung,
+      });
       const catalogRevision = await bumpUnitCatalog(client);
       return { rowRevision: Number(updated.rows[0].row_revision), catalogRevision };
     });
@@ -22799,6 +22831,8 @@ app.put('/api/admin/unit-assets/:id/sprites/:palette/:direction', async (req, re
       assetId: id,
       palette,
       direction,
+      rung: inspected.width,
+      baseRung: isBaseRung,
       rowRevision: result.rowRevision,
       catalogRevision: result.catalogRevision,
       sprite: { url: `/api/unit-sprites/${sha256}.png`, sha256, width: inspected.width, height: inspected.height, byteLength: req.body.length },
