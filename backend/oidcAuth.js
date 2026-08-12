@@ -305,6 +305,33 @@ function createOIDCSessionManager({
    * else — a timeout, a 5xx — is the provider being unreachable, which is not a sign-out, so the
    * session is left exactly as it was.
    */
+  // One refresh in flight per session, ever.
+  //
+  // Rotation with reuse detection makes concurrent refresh actively dangerous: two requests that
+  // both notice the access token is old both present the SAME refresh token, and the second
+  // presentation is indistinguishable from a stolen token being replayed. A correct provider
+  // answers that by revoking the whole family — so a burst of parallel requests would sign the
+  // player out, and the better the provider, the worse it gets.
+  //
+  // The provider gained exactly that behaviour in the same change this ships with, so this is not
+  // a hypothetical: without it, every page that fires several account-gated calls at once would
+  // eventually log someone out at the hour mark. Callers share one renewal and one rotated token.
+  //
+  // In-process is sufficient because the deployment is single-replica by hard invariant
+  // (k8s/templates/deployment.yaml `replicas: 1`), the same assumption the lobby store already
+  // rests on. A second replica would need this moved into the row.
+  const refreshesInFlight = new Map();
+
+  function refreshSessionOnce(record) {
+    const existing = refreshesInFlight.get(record.id);
+    if (existing) return existing;
+    const attempt = refreshSession(record).finally(() => {
+      if (refreshesInFlight.get(record.id) === attempt) refreshesInFlight.delete(record.id);
+    });
+    refreshesInFlight.set(record.id, attempt);
+    return attempt;
+  }
+
   async function refreshSession(record) {
     if (!record.refreshToken) return record;
     const result = await tokenRequest({
@@ -370,7 +397,7 @@ function createOIDCSessionManager({
     }
 
     if (record.accessExpiresAt && record.accessExpiresAt.getTime() - REFRESH_SKEW_MS <= at) {
-      record = await refreshSession(record);
+      record = await refreshSessionOnce(record);
       if (!record) {
         if (res) clearSessionCookie(res);
         return null;

@@ -494,3 +494,32 @@ test('the login state cookie stays Lax so the cross-site callback carries it', a
   // sign-in would fail its own state check.
   assert.match(stateCookie, /SameSite=Lax/);
 });
+
+test('concurrent requests share one refresh instead of racing the rotation', async () => {
+  const h = harness();
+  const { cookies } = await signIn(h);
+  const cookie = sessionCookie(cookies);
+
+  // An hour passes and the page fires several account-gated calls at once — a Run screen loading
+  // its army, its cards and its progression together, say.
+  h.clock.at += 61 * 60 * 1000;
+  const sessions = await Promise.all([
+    h.manager.readSession(cookie, responseRecorder()),
+    h.manager.readSession(cookie, responseRecorder()),
+    h.manager.readSession(cookie, responseRecorder()),
+    h.manager.readSession(cookie, responseRecorder()),
+  ]);
+
+  for (const session of sessions) {
+    assert.ok(session, 'a burst of parallel requests must not sign the player out');
+    assert.equal(session.user.email, 'nelson@example.com');
+  }
+
+  // Exactly one. Under a provider that rotates with reuse detection — which this one now does —
+  // a second presentation of the same refresh token is indistinguishable from a replayed stolen
+  // token, and the correct answer to that is to revoke the whole family. So racing here would not
+  // merely be wasteful; it would log the player out, and the better the provider the worse it gets.
+  const refreshes = h.provider.state.tokenRequests.filter((r) => r.grant_type === 'refresh_token');
+  assert.equal(refreshes.length, 1, `expected one refresh, saw ${refreshes.length}`);
+  assert.equal(h.provider.state.liveRefreshTokens.size, 1, 'exactly one refresh token survives');
+});
