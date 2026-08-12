@@ -205,7 +205,7 @@ and don't tell the user screenshots are impossible. Use the helper below.
    private document renders without gaining write access or changing its working copy. Do not
    replace this with a normal headless editor visit.
    That observation now covers the request a document is BORN in, not just the one that joins it
-   (ADR-0585). A capture **attaches to a working copy that already exists, or fails** — it never
+   (ADR-0586). A capture **attaches to a working copy that already exists, or fails** — it never
    creates one. So an editor URL with no `levelId` and no `document` is refused before any pixels
    are written, naming the fact rather than a status:
    `Level Editor capture has nothing to observe`. Point the capture at a `levelId` (or

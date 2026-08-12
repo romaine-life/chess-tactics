@@ -7268,7 +7268,7 @@ async function main() {
     throw new Error(`Unexpected editor resolve: ${resolvedEditor.statusCode} ${resolvedEditor.body}`);
   }
 
-  // Automated verification observes documents; it must not be able to CREATE one (ADR-0585).
+  // Automated verification observes documents; it must not be able to CREATE one (ADR-0586).
   // Resolve is where a working copy is born, so `intent: observe` has to reach this request too —
   // rewriting only the edit-session open left every screenshot of a document-less editor URL
   // minting an "Untitled level" on the owner's account and then observing what it had just made.

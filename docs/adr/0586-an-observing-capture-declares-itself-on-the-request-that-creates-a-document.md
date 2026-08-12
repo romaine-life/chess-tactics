@@ -7,7 +7,7 @@ refines:
   - "[ADR-0304](0304-level-editor-documents-are-live-shared-working-copies.md)"
 ---
 
-# ADR-0585: An observing capture declares itself on the request that CREATES a document, not only on the one that joins it
+# ADR-0586: An observing capture declares itself on the request that CREATES a document, not only on the one that joins it
 
 ## Context and Problem Statement
 
