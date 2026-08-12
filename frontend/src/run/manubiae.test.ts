@@ -364,11 +364,11 @@ describe("a Knight's fork, by how many prongs the enemy cannot answer", () => {
   });
 });
 
-describe('a capture and a check in the same move', () => {
-  it('pays a capture that gives check, seated on the square the capture landed on', () => {
-    // A Rook takes a Bishop and runs along the rank into the King from the square it took on.
-    // The capture wins nothing — a Rook for a Bishop is a losing trade — so the tempo is the
-    // whole of what is paid for here.
+describe('a capture and a check in the same move, with nothing left hanging', () => {
+  it('pays a capture that gives check from a square nothing of theirs attacks', () => {
+    // A Rook takes a Bishop and runs along the rank into the King from the square it took on,
+    // where nothing can reach it. The capture wins nothing — a Rook for a Bishop is a losing
+    // trade — so the tempo is the whole of what is paid for here.
     const rook = P('player', 'rook', 3, 6);
     const bishop = P('enemy', 'bishop', 3, 4);
     const king = P('enemy', 'king', 0, 4);
@@ -376,6 +376,29 @@ describe('a capture and a check in the same move', () => {
 
     expect(ids(got)).toEqual(['capture-with-check']);
     expect(got[0].at).toEqual({ x: 3, y: 4 });
+  });
+
+  it('pays nothing when the capture leaves the unit that took under attack', () => {
+    // The same take and the same check, with one of their Knights looking at the square it lands
+    // on. They answer the check by taking it, and the tempo the bounty is for was never bought.
+    const rook = P('player', 'rook', 3, 6);
+    const bishop = P('enemy', 'bishop', 3, 4);
+    const king = P('enemy', 'king', 0, 4);
+    const knight = P('enemy', 'knight', 5, 5);
+
+    expect(earned([rook, bishop, king, knight], rook, { x: 3, y: 4, capture: bishop.id })).toEqual([]);
+  });
+
+  it('asks what is LOOKING at the square, not what could legally take it', () => {
+    // The Queen takes a Pawn beside their King and is defended by the Rook behind her, so the
+    // King may not legally take her — and she is still standing where the King is looking. The
+    // bar is the plain board reading a player applies to their own unit.
+    const queen = P('player', 'queen', 2, 5);
+    const rook = P('player', 'rook', 4, 8); // defends the square she lands on, down the file
+    const pawn = P('enemy', 'pawn', 4, 3, { pawnForward: 'south' });
+    const king = P('enemy', 'king', 4, 2);
+
+    expect(earned([queen, rook, pawn, king], queen, { x: 4, y: 3, capture: pawn.id })).toEqual([]);
   });
 
   it('pays nothing for a capture that leaves the King alone', () => {
@@ -416,6 +439,20 @@ describe('a capture and a check in the same move', () => {
     const got = ids(earned([rook, bishop, victim, king], bishop, { x: 3, y: 3, capture: victim.id }));
 
     expect(got).toContain('discovered-check');
+    expect(got).toContain('capture-with-check');
+  });
+
+  it('asks about the unit that TOOK, not the one giving check', () => {
+    // The same discovery, with their Bishop looking at the Rook that gives the check. The unit
+    // standing somewhere new is the one that took, and it is safe; the checker was already where
+    // it was and the enemy has to answer the check before collecting anything.
+    const rook = P('player', 'rook', 2, 8);
+    const bishop = P('player', 'bishop', 2, 4);
+    const victim = P('enemy', 'knight', 3, 3);
+    const king = P('enemy', 'king', 2, 1);
+    const sniper = P('enemy', 'bishop', 0, 10); // strikes (2,8) along the diagonal, not (3,3)
+    const got = ids(earned([rook, bishop, victim, king, sniper], bishop, { x: 3, y: 3, capture: victim.id }));
+
     expect(got).toContain('capture-with-check');
   });
 

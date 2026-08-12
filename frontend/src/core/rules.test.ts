@@ -17,6 +17,7 @@ import {
   sideHasLegalMove,
   sideInCheck,
   smotheredMateBy,
+  unitIsAttacked,
   unitIsDefended,
   type MoveEnv,
 } from './rules';
@@ -401,6 +402,53 @@ describe('unitIsDefended', () => {
     const target = P('neutral', 'bishop', 4, 4);
     const rock = P('neutral', 'rock', 3, 3);
     expect(unitIsDefended(target, [target, rock], SIZE)).toBe(false);
+  });
+});
+
+describe('unitIsAttacked', () => {
+  it('says nothing is looking at a lone unit, and that an enemy on its square is', () => {
+    const target = P('player', 'bishop', 4, 4);
+    expect(unitIsAttacked(target, [target], SIZE)).toBe(false);
+
+    const foe = P('enemy', 'rook', 4, 0); // down the file it stands on
+    expect(unitIsAttacked(target, [target, foe], SIZE)).toBe(true);
+  });
+
+  it('does not count the unit\'s own side guarding the square', () => {
+    // The mirror of the defence question, and the reason both exist: a unit standing among its
+    // own men is defended and not attacked, and one number cannot say both.
+    const target = P('player', 'bishop', 4, 4);
+    const guard = P('player', 'rook', 4, 0);
+    expect(unitIsAttacked(target, [target, guard], SIZE)).toBe(false);
+    expect(unitIsDefended(target, [target, guard], SIZE)).toBe(true);
+  });
+
+  it('counts an enemy King eyeing the square even when the unit is defended', () => {
+    // Geometry, not legality. That King may not legally take a defended unit, and the unit is
+    // still standing where the King is looking — which is what the word means on the board.
+    const target = P('player', 'queen', 4, 4);
+    const king = P('enemy', 'king', 3, 3);
+    const guard = P('player', 'rook', 4, 0);
+    expect(unitIsAttacked(target, [target, king, guard], SIZE)).toBe(true);
+  });
+
+  it('counts a blocked enemy as none, and reads the board the pieces stand on', () => {
+    const target = P('player', 'pawn', 4, 4);
+    const rook = P('enemy', 'rook', 4, 0);
+    const blocker = P('enemy', 'knight', 4, 2); // their own man stops the ray short
+    expect(unitIsAttacked(target, [target, rook, blocker], SIZE)).toBe(false);
+
+    const near = P('enemy', 'king', 3, 4);
+    const pieces = [target, near];
+    expect(unitIsAttacked(target, pieces, SIZE)).toBe(true);
+    const env: MoveEnv = { fences: new Set([roadEdgeKey(3, 4, 4, 4)]) };
+    expect(unitIsAttacked(target, pieces, SIZE, env)).toBe(false);
+  });
+
+  it('an obstacle attacks nothing', () => {
+    const target = P('player', 'bishop', 4, 4);
+    const rock = P('neutral', 'rock', 3, 3);
+    expect(unitIsAttacked(target, [target, rock], SIZE)).toBe(false);
   });
 });
 

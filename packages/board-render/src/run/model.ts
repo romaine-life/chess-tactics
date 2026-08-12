@@ -464,7 +464,7 @@ export const RUN_MANUBIAE: readonly ManubiumDefinition[] = Object.freeze([
   {
     id: 'capture-with-check',
     name: 'Capture with check',
-    earnedBy: 'Take an enemy unit and give check with the same move. Any unit may earn it, and the check need not come from the unit that took — a line the capture opened counts.',
+    earnedBy: 'Take an enemy unit and give check with the same move, and leave the unit that took where nothing of theirs attacks it. A capture that hangs it earns nothing — they answer the check by taking it back, and the free move was yours to give. Any unit may earn it, and the check need not come from the unit that took: a line the capture opened counts.',
     goldTenths: GOLD_SCALE,
   },
   {

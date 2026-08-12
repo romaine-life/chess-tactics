@@ -865,9 +865,9 @@ describe('Manubiae — what the board pays for', () => {
     // player already has a feel for, even though no board in this game is that shape.
     expect(RUN_LONG_REACH_SQUARES).toBe(8);
     // A capture with check sits at the same noticing pole and for the same reason: the capture is
-    // one the player wanted anyway and the check is the flourish on it. It is the most frequently
-    // available entry in the catalog after the advantageous capture it usually rides along with,
-    // so it is priced under the checks that have to be engineered.
+    // one the player wanted anyway and the check is the flourish on it. Its safety clause is what
+    // keeps it from teaching a donation rather than what makes it dear, so it is priced beside the
+    // royal fork and under the checks that have to be engineered.
     expect(manubiumGoldTenths({ id: 'capture-with-check' })).toBe(10);
     expect(manubiumGoldTenths({ id: 'capture-with-check' }))
       .toBeLessThan(manubiumGoldTenths({ id: 'discovered-check' }));

@@ -24,6 +24,7 @@ import {
   sideCanCaptureUnit,
   sideHasLegalMove,
   smotheredMateBy,
+  unitIsAttacked,
   unitIsDefended,
   type MoveEnv,
 } from '../core/rules';
@@ -133,10 +134,10 @@ export interface EarnedManubium {
  */
 export function manubiaeEarnedBy(game: GameState, events: readonly GameEvent[]): EarnedManubium[] {
   const earned: EarnedManubium[] = [];
-  // Where a player capture landed, kept for the capture-with-check below: whether this move
-  // also checks is a question about the committed position, which is not read until the check
-  // shapes are, and by then the capture event has gone past.
-  let capturedOnto: Vec | null = null;
+  // The unit that made a player capture, kept for the capture-with-check below: whether this
+  // move also checks is a question about the committed position, which is not read until the
+  // check shapes are, and by then the capture event has gone past.
+  let capturingUnit: Piece | null = null;
   const pieceOf = (id: string) => game.pieces.find((piece) => piece.id === id);
   const moved = events.flatMap((event) => (event.kind === 'moved' ? [event] : []));
   // Where each unit set out from this move, which is the only thing a committed board cannot say
@@ -151,7 +152,7 @@ export function manubiaeEarnedBy(game: GameState, events: readonly GameEvent[]):
     // that is where the player is looking, and where the unit that earned it is. (For an en
     // passant those are different squares, which is the whole of that capture.)
     const at = { x: capturer.x, y: capturer.y };
-    capturedOnto ??= at;
+    capturingUnit ??= capturer;
     if (event.enPassant) earned.push({ award: { id: 'en-passant' }, at });
     // A unit is worth what it STARTED as, on both sides. That is already the Run's law off the
     // board -- the roster has no promotion concept and hands a queened pawn back as a Pawn --
@@ -233,20 +234,26 @@ export function manubiaeEarnedBy(game: GameState, events: readonly GameEvent[]):
   const checkers = kingCheckers('enemy', game.pieces, game.size, env);
   const checked = checkers.some((checker) => checker.side === 'player');
 
-  // Material and tempo in one move (ADR-0581). The player took something AND the enemy must now
-  // answer a check, so whatever they meant to do about the capture waits a move — which is the
-  // whole of why a capture with check is the stronger move to look for.
+  // Material, tempo, and nothing left hanging for it (ADR-0581). The player took something, the
+  // enemy must now answer a check rather than whatever they meant to do about the capture, AND
+  // the unit that took is not standing where anything of theirs can reach it. All three, or the
+  // move is not the one this is teaching.
   //
-  // It asks nothing about WHICH unit gives the check: a capture that opens a line behind it
-  // takes and checks in the same move exactly as a capture that checks from where it lands. Nor
-  // does it ask whether the capturing unit can be taken back, the way a fork must. A fork that
-  // can be taken never collects its second prong, so paying for one teaches a blunder; here the
-  // material is already in hand, and a recapture is the ordinary exchange it always was.
+  // The last clause is the whole force of the entry. A capture with check that leaves the
+  // capturing unit attacked is very often a donation dressed up as a tempo move: they answer the
+  // check by taking it, and the "free move" was the player's material walking off the board. So
+  // the bar is the plain board reading a player already applies to their own unit -- is anything
+  // looking at that square -- and not the harder legal question. An attacker that is pinned, or
+  // an enemy King eyeing a square it may not enter, still means the unit was left in the open.
+  //
+  // It asks nothing about WHICH unit gives the check: a capture that opens a line behind it takes
+  // and checks in the same move exactly as a capture that checks from where it lands. The unit
+  // that has to be safe is the one that TOOK, since that is the one standing somewhere new.
   //
   // Seated on the square the capture landed on, with the other capture deeds, rather than on the
   // checker -- that is the unit the player just played, and there is no second thing to look at.
-  if (capturedOnto && checked) {
-    earned.push({ award: { id: 'capture-with-check' }, at: capturedOnto });
+  if (capturingUnit && checked && !unitIsAttacked(capturingUnit, game.pieces, game.size, env)) {
+    earned.push({ award: { id: 'capture-with-check' }, at: { x: capturingUnit.x, y: capturingUnit.y } });
   }
 
   // A discovery needs no before-and-after comparison: the enemy King could not already have
