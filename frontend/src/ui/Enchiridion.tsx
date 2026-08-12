@@ -802,18 +802,23 @@ export function LipsanaCodex({
                 ) : (
                   <InnerChromeBox className="enchiridion-lipsanon-group" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
                     <ul className="enchiridion-lipsanon-group-grid" aria-label={title}>
-                      {/* Each seat is a control, so it wears the oak inside the marble case — the
-                          grid is a pegboard of wooden seats holding relics, not seven relics lying
-                          on the stone with nothing saying they can be pressed. Phased from the
-                          record's place in the list, like the rows view. */}
+                      {/* A seat is the kit's ASSET SWATCH — the registered unit for a choice whose
+                          art the feature sizes (ADR-0059). It brings its own frame and, being a
+                          registry leaf, takes the oak from the section frame's adoption; hand-rolling
+                          the seat instead painted a bare plank rectangle with no frame at all. Phased
+                          from the record's place in the list, like the rows view. */}
                       {visibleLipsana.map((lipsanon, index) => (
                         <li key={lipsanon.id}>
                           <ReferenceTrigger
                             to={lipsanonHref?.(lipsanon.id)}
                             onSelect={() => setLocalSelectedId(lipsanon.id)}
-                            data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                            data-chrome-unit="inner-asset-swatch"
                             style={leafSurfacePhase(index)}
-                            className={`enchiridion-lipsanon-grouped-trigger${selected.id === lipsanon.id ? ' is-active' : ''}`}
+                            className={chromeUnitClassNames(
+                              'inner-asset-swatch',
+                              'enchiridion-lipsanon-grouped-trigger',
+                              selected.id === lipsanon.id && 'is-active',
+                            )}
                             aria-label={`${lipsanon.name}. ${lipsanon.description}`}
                             aria-pressed={selected.id === lipsanon.id}
                           >

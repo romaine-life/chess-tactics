@@ -133,13 +133,30 @@ describe('Enchiridion and Strategikon reference contract', () => {
    */
   it('wears the oak on a reference row that is itself the control, phased from its own data', () => {
     expect(chromeUnitRegistry).toMatch(/id: 'inner-list-row'[\s\S]*?material: 'structural'/);
-    // Both browse views: the named row and the grouped icon seat. Each takes the phase from the
-    // record's index in the list being walked, never from DOM position (ADR-0063).
+    // Both browse views: the named row and the grouped seat. Each takes the phase from the record's
+    // index in the list being walked, never from DOM position (ADR-0063).
     expect(enchiridion).toContain('{visibleLipsana.map((lipsanon, index) => (');
     expect((enchiridion.match(/style=\{leafSurfacePhase\(index\)\}/g) ?? [])).toHaveLength(2);
-    expect((enchiridion.match(/data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}/g) ?? [])).toHaveLength(2);
+    expect(enchiridion).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
     expect(enchiridion).not.toMatch(/\.enchiridion-lipsanon-(?:row|grouped-trigger):nth-child/);
     expect(style).not.toMatch(/\.enchiridion-lipsanon-(?:rows|group-grid)[^}]*:nth-child/);
+  });
+
+  /**
+   * A grouped seat is the kit's registered ASSET SWATCH — the unit for a choice whose art the
+   * feature sizes (ADR-0059) — so it brings its own frame and takes the oak from the section frame's
+   * adoption because the registry calls it a leaf. Hand-rolling the seat instead shipped a bare
+   * plank rectangle with no frame, which is what zeroing a registered unit's border does.
+   */
+  it('builds a grouped lipsanon seat from the registered asset swatch, frame included', () => {
+    expect(chromeUnitRegistry).toMatch(/id: 'inner-asset-swatch'[\s\S]*?material: 'leaf'/);
+    expect(enchiridion).toContain('data-chrome-unit="inner-asset-swatch"');
+    expect(enchiridion).toMatch(/chromeUnitClassNames\(\s*\r?\n?\s*'inner-asset-swatch',/);
+    // The seat must not strip the frame the unit paints. `border: 0` here is the defect, not a
+    // reset: the frame is a border-image, so zeroing the border removes it outright.
+    const seat = style.match(/\.enchiridion-lipsanon-grouped-trigger \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(seat).toBeTruthy();
+    expect(seat).not.toMatch(/border|background|padding|appearance/);
   });
 
   /**

@@ -25167,13 +25167,21 @@ button.tileset-relationship-cell {
   inline-size: 64px;
 }
 
+/* The seat is a registered asset swatch, so its frame is a border-image the chrome family paints:
+   it takes NO border, background or padding reset here, because zeroing those is what strips the
+   frame off and leaves a bare plank. Only the art it holds is sized — the swatch's own contract is
+   that the feature owns its content dimensions. */
 .enchiridion-lipsanon-grouped-trigger {
-  appearance: none;
-  background: none;
-  border: 0;
-  border-radius: 0;
+  align-content: center;
+  display: grid;
+  justify-items: center;
   min-block-size: 64px;
-  padding: 0;
+}
+
+.enchiridion-lipsanon-grouped-trigger .run-lipsanon-icon,
+.enchiridion-lipsanon-grouped-trigger .run-lipsanon-icon img {
+  block-size: 46px;
+  inline-size: 46px;
 }
 
 .enchiridion-lipsanon-grouped-trigger:is(:hover, :focus-visible, .is-active) .run-lipsanon-icon {

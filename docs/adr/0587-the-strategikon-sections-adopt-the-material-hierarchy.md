@@ -70,9 +70,15 @@ Chosen: **the reference frame and the roster declare the hierarchy, so both tran
   for the dropdown option rows ADR-0433 keeps teal inside the popup field that hosts them. It is the
   same shape `SectionBox`'s `press` member already ships: the row is the button, pressable edge to
   edge, wearing the leaf oak.
-- The grouped lipsanon grid is a pegboard of oak seats holding relics inside the marble case, phased
-  per record. Judged from pixels, not argued: unpainted, seven relics lay on the stone with nothing
-  saying they could be pressed.
+- **A grouped lipsanon seat is the kit's registered asset swatch** — `inner-asset-swatch`, the unit
+  for a choice whose art the feature sizes — so it brings its own frame and takes the oak because the
+  registry calls it a leaf. It reached that through two wrong answers, both caught in pixels rather
+  than argued. Unpainted, the relics lay on the stone with nothing saying they could be pressed. Given
+  the oak by hand, they became **bare plank rectangles with no frame at all**, which is what zeroing a
+  control's `border` does when the frame is a border-image: the seat's CSS was stripping `appearance`,
+  `background`, `border`, `border-radius` and `padding` to make room for the icon, and stripped the
+  frame with them. The registered unit is the answer to both, and it is one already in the kit
+  (ADR-0059); only the art inside it is sized, which is that unit's own contract.
 - **This Combat moves INTO the filter field** as an optional typed `scope` seat, because it is a
   filter. That removes the third child that was taking the gallery's flexible track, so the stretch
   and the clipped gallery are one fix, and the field declares its extra track only when the seat is
