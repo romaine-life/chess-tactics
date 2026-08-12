@@ -18793,6 +18793,30 @@ button.tileset-relationship-cell {
   object-fit: contain;
 }
 
+/* Observers ride the avatar's own opening. .cluster-icon-button is the positioned ancestor, so
+   this takes no track in the cluster's divided grid — the seat count, the rails and the bar's
+   measured geometry are identical whether or not anyone is watching. */
+.account-watched-mark {
+  block-size: 14px;
+  image-rendering: pixelated;
+  inline-size: 14px;
+  inset-block-end: 0;
+  inset-inline-end: 0;
+  object-fit: contain;
+  position: absolute;
+}
+
+/* The count is the menu's business — the seat says THAT you are watched, the menu says by how
+   many. Reads as a status line above the door, not as another action. */
+.account-menu-watched {
+  align-items: center;
+  color: #8fb6d6;
+  display: flex;
+  font-size: var(--ds-text-xs);
+  gap: 6px;
+  margin: 0;
+}
+
 /* The door is the action — a bare icon button (no fabricated surface), labelled
    for screen readers + a hover tooltip, brightening on hover/focus. */
 .account-menu-exit {

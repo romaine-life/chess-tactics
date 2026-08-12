@@ -49,7 +49,8 @@ function settingsHref(): string {
 // Dev-only signed-in stub (import.meta.env.DEV, stripped from prod) so the account
 // chrome can be previewed/screenshotted on any screen without a backend: ?demo=1
 // stubs this user, ?menu=open renders the account menu open, ?edit=open opens the
-// rename field. In demo mode the rename is local-only (it never hits the backend).
+// rename field, ?watchers=N stubs N observers on the run. In demo mode the rename is
+// local-only (it never hits the backend).
 const DEMO_USER: AuthUser = {
   signed_in: true,
   name: 'Nelson',
@@ -73,6 +74,12 @@ export function HeaderAccountCluster({
   const demo = import.meta.env.DEV && params.get('demo') === '1';
   const menuOpen = import.meta.env.DEV && params.get('menu') === 'open';
   const editOpen = import.meta.env.DEV && params.get('edit') === 'open';
+  // Observers ride the ACCOUNT seat rather than a fourth compartment: the cluster's seats are
+  // permanent by design (the music seat stays dimmed with no soundtrack rather than vanishing),
+  // so a seat for "nobody is watching" would spend bar width on nothing almost always. Being
+  // watched is a property of the account, and the account already has a seat.
+  const demoWatchers = import.meta.env.DEV ? Number(params.get('watchers')) : Number.NaN;
+  const watchers = Number.isFinite(demoWatchers) && demoWatchers > 0 ? Math.floor(demoWatchers) : 0;
 
   const sharedAuth = useAuthSession((session) => session.status);
   const [demoUser, setDemoUser] = useState<AuthUser>(DEMO_USER);
@@ -131,6 +138,7 @@ export function HeaderAccountCluster({
         email={accountEmail}
         avatarUrl={me!.avatar_url ?? null}
         surfacePhase={TITLE_BAR_CLUSTER_LEAF_PHASE.account}
+        watcherCount={watchers}
         onRename={renameAccount}
         onSignOut={signOut}
         defaultOpen={menuOpen}
