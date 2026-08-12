@@ -73,6 +73,11 @@ export type LiveUnitCatalogAsset = {
   anchor: { x: number; y: number };
   rowRevision: number;
   sprites: Partial<Record<Faction, Partial<Record<Direction, LiveUnitSprite>>>>;
+  /** Authored widths present for EVERY palette and facing — safe for the board, which draws two armies. */
+  rungs?: number[];
+  /** Authored widths per palette, complete across facings. A ladder goes in one colour at a
+   * time, so a review surface showing one palette can read its rungs before the last upload. */
+  rungsByPalette?: Partial<Record<Faction, number[]>>;
   spriteCount: number;
   complete: boolean;
   /** Server-owned monotonic acceptance gate. Resampled calibration candidates cannot clear it. */

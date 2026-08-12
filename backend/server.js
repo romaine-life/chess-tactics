@@ -22514,8 +22514,12 @@ async function dbReadUnitCatalog({ includeArchived = false, queryable = null } =
       // wants can derive the address, so a 49-rung ladder adds one short array here
       // rather than 14,112 entries and 3MB of JSON before the game draws anything.
       if (!asset.rungCounts) asset.rungCounts = new Map();
+      if (!asset.paletteRungCounts) asset.paletteRungCounts = new Map();
       const rung = Number(row.rung ?? row.width);
       asset.rungCounts.set(rung, (asset.rungCounts.get(rung) || 0) + 1);
+      if (!asset.paletteRungCounts.has(row.palette)) asset.paletteRungCounts.set(row.palette, new Map());
+      const perPalette = asset.paletteRungCounts.get(row.palette);
+      perPalette.set(rung, (perPalette.get(rung) || 0) + 1);
       // `sprites` keeps carrying the BASE rung only, so every existing consumer reads
       // exactly what it read before and nothing has to learn about rungs to keep working.
       if (rung !== Number(asset.footprint?.sourceCanvasWidth ?? rung)) continue;
@@ -22540,7 +22544,18 @@ async function dbReadUnitCatalog({ includeArchived = false, queryable = null } =
         .filter(([, count]) => count >= fullLadder)
         .map(([rung]) => rung)
         .sort((a, b) => a - b);
+      // Per palette as well, because a rung is really a property of (asset, palette) and a
+      // review surface shows ONE colour at a time. Without this a ladder is invisible until
+      // the last palette lands, which is the whole time it is being judged. The board keeps
+      // reading `rungs` above: it draws two armies at once and needs the safe intersection.
+      asset.rungsByPalette = Object.fromEntries(
+        UNIT_PALETTE_IDS.map((palette) => [palette, [...(asset.paletteRungCounts?.get(palette) || new Map())]
+          .filter(([, count]) => count >= UNIT_DIRECTION_IDS.length)
+          .map(([rung]) => rung)
+          .sort((a, b) => a - b)]),
+      );
       delete asset.rungCounts;
+      delete asset.paletteRungCounts;
       asset.complete = UNIT_PALETTE_IDS.every((palette) =>
         UNIT_DIRECTION_IDS.every((direction) => Boolean(asset.sprites[palette]?.[direction])));
     }

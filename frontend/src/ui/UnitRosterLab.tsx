@@ -8,7 +8,7 @@ import {
 import { activeUnitFamilies, tileFrameSrc, type UnitFacing } from '@chess-tactics/board-render';
 import { tileAssets } from '../art/tileset';
 import { fetchAdminUnitCatalog } from '../net/unitAssets';
-import { zoomForTier } from '../game/zoomTiers';
+import { spriteRungForWidth, zoomForTier } from '../game/zoomTiers';
 import { UnitRungSprite } from './UnitRungSprite';
 import { replaceAppHistoryState } from './navigation';
 
@@ -45,7 +45,7 @@ const FILTER_MATRIX = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'kin
 
 const WHEEL_STRIDE = 1;
 const BUTTON_STRIDE = 1;
-const TIER_INDEX_RANGE = { min: -18, max: 30 };
+const TIER_INDEX_RANGE = { min: -18, max: 38 };
 
 /**
  * The whole shipped roster at once, at 1:1.
@@ -90,7 +90,7 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
 
   const [tierIndex, setTierIndex] = useState(() => {
     const raw = Number.parseInt(initial.get('tier') ?? '', 10);
-    return Number.isFinite(raw) ? Math.min(30, Math.max(-18, raw)) : 0;
+    return Number.isFinite(raw) ? Math.min(TIER_INDEX_RANGE.max, Math.max(TIER_INDEX_RANGE.min, raw)) : 0;
   });
   const tierZoom = zoomForTier(tierIndex);
   // Below 1:1 the board minifies through its mip chain rather than dropping columns,
@@ -275,6 +275,17 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
                 // The board's 1x draw rect: the single authored size in use today.
                 const baseW = Math.min(78, asset?.footprint.sourceCanvasWidth ?? 78);
                 const baseH = Math.min(92, asset?.footprint.sourceCanvasHeight ?? 92);
+                // The rung this tier actually wants, from the sizes this PALETTE has —
+                // rungs go in one colour at a time, and a ladder is judged while it is
+                // still landing, so the all-palette list would show nothing until the last
+                // upload. Undefined until one exists, and then the seat stops simulating.
+                const paletteRungs = asset?.rungsByPalette?.[paletteId];
+                const chosen = paletteRungs?.length
+                  ? spriteRungForWidth(baseW * tierZoom, paletteRungs)
+                  : null;
+                const authoredSrc = chosen && asset
+                  ? `/api/unit-sprites/${asset.id}/${asset.rowRevision}/${paletteId}/${facing}/${chosen.rung}.png`
+                  : undefined;
                 const previous = showBefore ? beforeFor(family) : undefined;
                 const beforeSrc = previous?.sprites?.[paletteId]?.[facing]?.url;
                 const seat = (label: string, sprite: string | undefined, mode?: 'rung' | 'magnified') => (
@@ -304,6 +315,7 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
                             >
                               <UnitRungSprite
                                 src={sprite}
+                                authoredSrc={mode === 'rung' ? authoredSrc : undefined}
                                 baseWidth={baseW}
                                 baseHeight={baseH}
                                 zoom={tierZoom}

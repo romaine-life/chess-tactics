@@ -17,6 +17,7 @@ import { useEffect, useRef, type ReactElement } from 'react';
  */
 export function UnitRungSprite({
   src,
+  authoredSrc,
   baseWidth,
   baseHeight,
   zoom,
@@ -24,6 +25,14 @@ export function UnitRungSprite({
   alt,
 }: {
   src: string;
+  /**
+   * The REAL authored rung for this tier, once one exists in the catalog. When present
+   * the `rung` column stops simulating and draws the sprite Blender actually rendered
+   * at this size — which is the whole point, and the only version that can be judged.
+   * Nearest sampling, because an authored rung lands one source pixel on one screen
+   * pixel and smoothing would throw that away.
+   */
+  authoredSrc?: string;
   /** The unit's 1x draw rect — the single authored size the board uses today. */
   baseWidth: number;
   baseHeight: number;
@@ -71,6 +80,13 @@ export function UnitRungSprite({
       };
 
       if (mode === 'rung') {
+        if (authoredSrc) {
+          // A real authored rung: draw it as-is. Its own size is within one integer
+          // magnification of the target by construction, so nothing is resampled.
+          context.imageSmoothingEnabled = false;
+          context.drawImage(image, 0, 0, width, height);
+          return;
+        }
         context.imageSmoothingEnabled = true;
         context.imageSmoothingQuality = 'high';
         context.drawImage(reduceTo(width, height), 0, 0, width, height);
@@ -91,9 +107,9 @@ export function UnitRungSprite({
       context.imageSmoothingQuality = 'high';
       context.drawImage(authored, 0, 0, width, height);
     };
-    image.src = src;
+    image.src = mode === 'rung' && authoredSrc ? authoredSrc : src;
     return () => { cancelled = true; };
-  }, [src, baseWidth, baseHeight, width, height, zoom, mode]);
+  }, [src, authoredSrc, baseWidth, baseHeight, width, height, zoom, mode]);
 
   return <canvas ref={canvasRef} className="unit-roster-unit" width={width} height={height} aria-label={alt} role="img" />;
 }
