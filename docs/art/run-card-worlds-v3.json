@@ -393,7 +393,7 @@
       },
       "act": {
         "line": "Two hostages ride out",
-        "detail": "Local men rode with the king as sureties. A king who refused them was saying he did not fear the province.",
+        "detail": "Local men rode with the party as sureties, and refusing them was read as saying you did not fear the province.",
         "moment": "Two riders shoulder to shoulder in a lane too narrow for it, both looking straight ahead.",
         "attested": true
       },
@@ -745,8 +745,8 @@
       },
       "act": {
         "line": "Homage given from the saddle",
-        "detail": "Homage is sworn kneeling and unarmed. This was neither, and was entered under the same heading.",
-        "moment": "The two pairs of hands meeting, one above the other, the horse’s head higher than the crown.",
+        "detail": "Homage is sworn kneeling and unarmed. This was neither, and the man with the roll had to enter it under the same heading anyway.",
+        "moment": "Both men are SEATED IN THE SADDLE — astride, feet in the stirrups, neither has dismounted and neither foot is on the ground. Their horses have been brought alongside each other nose-to-tail so the riders are within arm’s reach, and one leans across the gap to put his hands between the other’s while the assessor standing at their stirrups writes it down without looking up.",
         "attested": true
       },
       "king": {
@@ -1929,8 +1929,8 @@
       },
       "act": {
         "line": "The shoes held up",
-        "detail": "A pair of bast shoes and a satchel, said to be a ploughman's, shown to a man about to be crowned.",
-        "moment": "The shoes coming out at chest height, and the king looking at them rather than at the man holding them.",
+        "detail": "A pair of bast shoes and a satchel, said to have belonged to a ploughman, were produced from the treasury once a reign.",
+        "moment": "The chest lid still in one man’s hand and the bast shoes coming up out of it at chest height, the second assessor already reaching to take them.",
         "attested": true
       },
       "king": {
