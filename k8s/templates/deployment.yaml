@@ -41,8 +41,9 @@ spec:
           image: {{ $imageRef | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
-            # auth.romaine.life is the OIDC authorization server. Chess Tactics
-            # is a public BFF client: authorization-code + PKCE, no client secret.
+            # auth.romaine.life is the OIDC authorization server. Chess Tactics is a BFF and a
+            # CONFIDENTIAL client (ADR-0576): authorization-code + PKCE, and it authenticates
+            # itself with the secret below on every token request.
             - name: AUTH_BASE_URL
               value: {{ required "auth.issuer is required" .Values.auth.issuer | quote }}
             - name: OIDC_CLIENT_ID
@@ -100,6 +101,21 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.tokenEncryptionSecret.name | quote }}
                   key: {{ .Values.tokenEncryptionSecret.key | default "key" | quote }}
+            {{- end }}
+            {{- if .Values.oidcClientSecret }}
+            # A Backend-For-Frontend is a confidential OAuth client
+            # (draft-ietf-oauth-browser-based-apps-26 §6.1.3.1), so the backend authenticates
+            # itself on every token request rather than relying on PKCE alone.
+            #
+            # Optional, and the provider registers this client public until the same secret is
+            # installed on its side too — promoting it has no safe order otherwise, because the
+            # provider refuses a secret from a client with none registered AND refuses a
+            # confidential client that sends none. See enforceConfidential in the auth repo.
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.oidcClientSecret.name | quote }}
+                  key: {{ .Values.oidcClientSecret.key | default "secret" | quote }}
             {{- end }}
             {{- if and (ne (include "chess-tactics.isTestEnv" .) "true") .Values.serviceAccountClientId }}
             # Headless AI training Jobs (POST /api/train-runs) run THIS image with a

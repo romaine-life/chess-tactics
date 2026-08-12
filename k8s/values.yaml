@@ -179,6 +179,14 @@ adminEmails: "nelson@romaine.life"
 #
 #   kubectl create secret generic chess-tactics-token-key -n chess-tactics #     --from-literal=key="$(openssl rand -base64 32)"
 #
-# tokenEncryptionSecret:
-#   name: chess-tactics-token-key
-#   key: key
+tokenEncryptionSecret:
+  name: chess-tactics-token-key
+  key: key
+
+# Kubernetes Secret holding this app's OAuth client secret. The SAME value must exist in the auth
+# namespace under the same name, or the provider cannot verify what this backend sends.
+#
+#   kubectl create secret generic chess-tactics-oidc-client -n <ns> --from-literal=secret="..."
+oidcClientSecret:
+  name: chess-tactics-oidc-client
+  key: secret
