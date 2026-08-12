@@ -17,6 +17,10 @@ const portraitPreload = readFileSync(new URL('../art/preload.ts', import.meta.ur
 const runBattleUndoButton = readFileSync(new URL('./RunBattleUndoButton.tsx', import.meta.url), 'utf8');
 const runArmyWorkspace = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
 const chromeUnitRegistry = readFileSync(new URL('./chromeUnitRegistry.ts', import.meta.url), 'utf8');
+// The command card's key is one shared component, painted by the Controls tab and by the
+// Studio review that composes its marks (ADR-0584). Its registered-unit assertions follow
+// it there; the HUD keeps only the empty-slot cell it still renders itself.
+const commandCardKey = readFileSync(new URL('./shared/CommandCardKey.tsx', import.meta.url), 'utf8');
 
 const buttonBlocks = (source: string): string[] => source.match(/<(?:button|ChromeButton)\b[\s\S]*?<\/(?:button|ChromeButton)>/g) ?? [];
 const navButtonBlocks = (source: string): string[] => source.match(/<(?:NavButton|ChromeNavButton)\b[\s\S]*?<\/(?:NavButton|ChromeNavButton)>/g) ?? [];
@@ -231,7 +235,10 @@ describe('Skirmish chrome hierarchy', () => {
     expect(skirmishHud).toContain('HUD_TABS.map((t, index) =>');
     expect(skirmishHud).toContain('style={leafSurfacePhase(index)}');
     expect(skirmishHud).toContain('SHORTCUT_KEY_ROWS.flat().map((key, index) =>');
-    expect(skirmishHud).toContain('const surfacePhase = leafSurfacePhase(index);');
+    // The command card hands each key its place in the authored grid and the key phases its
+    // own wood from it, so both painters of the card get the same planks (ADR-0584).
+    expect(skirmishHud).toContain('index={index}');
+    expect(commandCardKey).toContain('const surfacePhase = leafSurfacePhase(index);');
     expect(stepper).toContain('style={leafSurfacePhase(0)}');
     expect(stepper).toContain('style={leafSurfacePhase(1)}');
     expect(styleCss).not.toMatch(/\.skirmish-(?:hud-tabs|view-row|grid)[^}]*:nth-child/);
@@ -315,7 +322,9 @@ describe('Skirmish chrome hierarchy', () => {
   it('maps tabs, promotion choices, and command-grid cells to existing units', () => {
     const promotion = buttonBlocks(pawnPromotionPicker).find((candidate) => candidate.includes('onChoose(type)'));
     const tab = buttonUsing('setTab(t.id)');
-    const commandKey = buttonUsing('runSkirmishShortcut(key, false, skirmishViewStore, skirmishStore)');
+    const commandKey = buttonBlocks(commandCardKey).find((candidate) => candidate.includes("'skirmish-grid-key'"));
+    expect(commandKey, 'expected the shared command-card key button').toBeDefined();
+    expect(skirmishHud).toContain('runSkirmishShortcut(key, false, skirmishViewStore, skirmishStore)');
 
     expect(promotion, 'expected anchored Pawn promotion choice').toBeDefined();
     expectChromeUnit(promotion!, 'inner-asset-swatch');
@@ -328,10 +337,16 @@ describe('Skirmish chrome hierarchy', () => {
     expect(skirmishHud).not.toContain('aria-label="Pawn promotion"');
     expectChromeUnit(tab, 'inner-text-button');
     expect(tab).toContain("tab === t.id && 'active'");
-    expectChromeUnit(commandKey, 'inner-text-button');
-    expect(commandKey).toContain("active && 'active is-active'");
+    expectChromeUnit(commandKey!, 'inner-text-button');
+    expect(commandKey!).toContain("active && 'active is-active'");
+    // A key is a cap and a mark. The command's name lives in the tip, not in a label on
+    // the face — ten of those were the wall of type the marks replaced.
+    expect(commandCardKey).not.toContain('skirmish-grid-label');
+    expect(commandCardKey).toContain('triggerIsInteractive');
 
-    expect(skirmishHud).toMatch(/<span key=\{key\} data-chrome-unit="inner-text-button" className=\{chromeUnitClassNames\('inner-text-button', 'app-header-button', 'skirmish-grid-key', 'is-empty'\)\}/);
+    expect(commandCardKey).toMatch(
+      /data-chrome-unit="inner-text-button"\s+className=\{chromeUnitClassNames\('inner-text-button', 'app-header-button', 'skirmish-grid-key', 'is-empty'\)\}/,
+    );
     expect(styleCss).not.toMatch(/\.skirmish-hud-tab\s*\{[^}]*border-image\s*:/);
     expect(styleCss).not.toMatch(/\.skirmish-hud \.app-header-button\s*\{/);
   });

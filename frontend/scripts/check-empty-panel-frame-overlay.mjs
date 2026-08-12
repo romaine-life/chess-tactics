@@ -25,6 +25,11 @@ const chromeDividedGrid = readFileSync(join(frontend, 'src/ui/shared/ChromeDivid
 const skirmish = readFileSync(join(frontend, 'src/ui/Skirmish.tsx'), 'utf8');
 const skirmishShell = readFileSync(join(frontend, 'src/ui/SkirmishShell.tsx'), 'utf8');
 const skirmishHud = readFileSync(join(frontend, 'src/ui/SkirmishHud.tsx'), 'utf8');
+// The command card is painted by the Controls tab AND by the Studio review that composes
+// its marks, so the key itself is one shared component. The registered-unit assertion
+// below follows it there rather than pinning it to the screen it used to live on — a
+// review that painted a lookalike key would prove nothing about the key.
+const commandCardKey = readFileSync(join(frontend, 'src/ui/shared/CommandCardKey.tsx'), 'utf8');
 const pawnPromotionPicker = readFileSync(join(frontend, 'src/ui/PawnPromotionPicker.tsx'), 'utf8');
 const strategikon = readFileSync(join(frontend, 'src/ui/Strategikon.tsx'), 'utf8');
 const runScreen = readFileSync(join(frontend, 'src/ui/RunScreen.tsx'), 'utf8');
@@ -1201,7 +1206,11 @@ if (!/<InnerChromeBox[\s\S]*?className=\{`skirmish-promotion-picker is-\$\{side\
   || !/<ChromeButton[\s\S]*?unit="inner-asset-swatch"[\s\S]*?chromeUnitClassNames\('inner-asset-swatch',\s*'app-header-button',\s*'skirmish-promotion-option'\)/.test(pawnPromotionPicker)
   || /aria-label="Pawn promotion"/.test(skirmishHud)
   || !/<ChromeButton unit="inner-text-button"[\s\S]*?chromeUnitClassNames\('inner-text-button',\s*'skirmish-hud-tab'/.test(skirmishHud)
-  || !/<ChromeButton unit="inner-text-button"[\s\S]*?chromeUnitClassNames\('inner-text-button',\s*'app-header-button',\s*'skirmish-grid-key'/.test(skirmishHud)) {
+  || !/<ChromeButton[\s\S]*?unit="inner-text-button"[\s\S]*?chromeUnitClassNames\('inner-text-button',\s*'app-header-button',\s*'skirmish-grid-key'/.test(commandCardKey)
+  // The card carries no per-key label any more; the tip does. A key that grew one back
+  // would restate the wall of type this replaced (ADR-0584).
+  || /skirmish-grid-label/.test(commandCardKey)
+  || !/<Tooltip[\s\S]*?triggerIsInteractive/.test(commandCardKey)) {
   failures.push('Skirmish promotion must use its registered anchored inner composition while tab and command-grid controls inherit existing registered inner units');
 }
 for (const selector of ['.skirmish-hud-tab', '.skirmish-hud .app-header-button']) {

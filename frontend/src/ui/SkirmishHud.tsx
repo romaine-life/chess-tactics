@@ -28,7 +28,8 @@ import { InnerChromeBox, ShellControlsPanel } from './shared/ChromeBox';
 import { useAuthSession } from '../net/authSession';
 import { AdminControls } from './AdminControls';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
-import { SkirmishShortcutIcon, type SkirmishShortcutIconVariant } from './shared/SkirmishShortcutIcon';
+import { type SkirmishShortcutIconVariant } from './shared/SkirmishShortcutIcon';
+import { CommandCardKey } from './shared/CommandCardKey';
 import { CHROME_LEAF_FILL_SURFACE, leafSurfacePhase } from './shared/chromeSurfacePolicy';
 import { StrategikonTitleNavigation } from './StrategikonTitleNavigation';
 import { RunBattleUndoButton } from './RunBattleUndoButton';
@@ -622,33 +623,23 @@ export function SkirmishHud({
               <div className="skirmish-grid" role="group" aria-label="Match shortcut grid">
                 {SHORTCUT_KEY_ROWS.flat().map((key, index) => {
                   const action = SHORTCUT_BINDINGS[key];
-                  // The command card is one repeated leaf collection, so its wood phases by
-                  // the key's own place in the authored grid (ADR-0433) rather than stamping
-                  // fifteen identical planks.
-                  const surfacePhase = leafSurfacePhase(index);
-                  if (!action) {
-                    return (
-                      <span key={key} data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-grid-key', 'is-empty')} style={surfacePhase} aria-hidden="true">
-                        <kbd className="skirmish-grid-cap">{key.toUpperCase()}</kbd>
-                      </span>
-                    );
-                  }
-                  const isToggle = action.kind === 'toggle';
+                  const isToggle = action?.kind === 'toggle';
                   const active = isToggle ? flagValue[action.flag] : false;
                   return (
-                    <ChromeButton unit="inner-text-button"
+                    <CommandCardKey
                       key={key}
-                      data-testid={`shortcut-${key}`}
-                      className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-grid-key', active && 'active is-active')}
-                      style={surfacePhase}
-                      aria-pressed={isToggle ? active : undefined}
-                      title={action.hint}
-                      onClick={() => { runSkirmishShortcut(key, false, skirmishViewStore, skirmishStore); }}
-                    >
-                      <kbd className="skirmish-grid-cap">{key.toUpperCase()}</kbd>
-                      <SkirmishShortcutIcon variant={action.icon} />
-                      <span className="skirmish-grid-label">{action.label}</span>
-                    </ChromeButton>
+                      cap={key}
+                      index={index}
+                      label={action?.label}
+                      hint={action?.hint}
+                      icon={action?.icon}
+                      active={active}
+                      pressed={isToggle ? active : undefined}
+                      testId={`shortcut-${key}`}
+                      onPress={action
+                        ? () => { runSkirmishShortcut(key, false, skirmishViewStore, skirmishStore); }
+                        : undefined}
+                    />
                   );
                 })}
               </div>

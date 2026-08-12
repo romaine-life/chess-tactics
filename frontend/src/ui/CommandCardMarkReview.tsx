@@ -11,7 +11,8 @@ import { defaultBackgroundSet } from '../art/backgroundSets';
 import { ChromeButton } from './shared/ChromeButton';
 import { OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
-import { leafSurfacePhase } from './shared/chromeSurfacePolicy';
+import { CommandCardKey } from './shared/CommandCardKey';
+import { SHORTCUT_BINDINGS } from './SkirmishHud';
 import {
   SKIRMISH_SHORTCUT_CARD,
   SKIRMISH_SHORTCUT_ICON_SLOT,
@@ -125,32 +126,17 @@ function CardPreview({ armed }: { armed: Map<SkirmishShortcutIconVariant, string
     <div className="skirmish-grid command-card-review-card" role="group" aria-label="Battle command card preview">
       {CARD_ROWS.flat().map((key, index) => {
         const entry = CARD_BY_KEY.get(key);
-        const surfacePhase = leafSurfacePhase(index);
-        if (!entry) {
-          return (
-            <span
-              key={key}
-              data-chrome-unit="inner-text-button"
-              className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-grid-key', 'is-empty')}
-              style={surfacePhase}
-              aria-hidden="true"
-            >
-              <kbd className="skirmish-grid-cap">{key.toUpperCase()}</kbd>
-            </span>
-          );
-        }
         return (
-          <span
+          <CommandCardKey
             key={key}
-            data-chrome-unit="inner-text-button"
-            data-testid={`command-card-preview-${key}`}
-            className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-grid-key')}
-            style={surfacePhase}
-          >
-            <kbd className="skirmish-grid-cap">{key.toUpperCase()}</kbd>
-            <SkirmishShortcutIcon variant={entry.variant} src={armed.get(entry.variant)} />
-            <span className="skirmish-grid-label">{entry.label}</span>
-          </span>
+            cap={key}
+            index={index}
+            label={entry?.label}
+            hint={entry ? SHORTCUT_BINDINGS[entry.key]?.hint : undefined}
+            icon={entry?.variant}
+            iconSrc={entry ? armed.get(entry.variant) : undefined}
+            testId={entry ? `command-card-preview-${key}` : undefined}
+          />
         );
       })}
     </div>

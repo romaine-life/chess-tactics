@@ -61,6 +61,22 @@ rail, where five marks stack in a column.
   are untouched and the pair is one sword in two liveries. A separate slot is not a second
   drawing — it is the only way a shared ink box can be a property of the card without
   refitting the board's own marks underneath it.
+- **The key carries the mark and the cap, and nothing else.** The labels went with the
+  marks, in the same turn: ten of them at `--ds-text-xs` were the wall of type the marks
+  replaced, and keeping both would have been the reading problem with a picture stapled to
+  it. What the label said is not lost — it is the tip's TITLE, above the sentence the tip
+  already carried. The key is 60.9px instead of 90.9px, and the card 199px instead of 289px.
+  A corner-seated cap was tried and is 13px shorter again; it is rejected because at 42px
+  wide this card has no free corner, so the letter landed on the grid lattice, on the
+  cursor's brackets and on both magnifier lenses — and a card whose premise is that its
+  letters are physical key positions cannot have letters that are hard to read.
+- **The tip is the shared `Tooltip`, not a native `title`.** With the label gone the tip is
+  the only text, so it has to be the one that appears immediately, survives a scrolling
+  panel and answers to keyboard focus (ADR-0059) rather than the native attribute that
+  truncates and vanishes. `Tooltip` gains `triggerIsInteractive` for it: a trigger that is
+  itself a control takes neither the wrapper's `tabIndex` (two stops on one control) nor
+  the `aria-hidden` an ornamental trigger gets (which would hide the control outright).
+  Focus still raises the tip, because React's focus events bubble from the control inside.
 - **The card is COMPOSED in review, not picked as a finished set.**
   `/studio?commandCardMarkReview=1` mounts the real card — the same button primitive, the
   same leaf surface, the same 26px seat — and arms a candidate into it on press. Each
@@ -71,11 +87,12 @@ rail, where five marks stack in a column.
 
 ## Consequences
 
-- The card grows by one seat's height per row. It is the only thing in the Controls tab
-  whose height is set by art, and the panel scrolls.
-- The label stays. A 26px mark carries recognition after the first read, not before it, and
-  a command card that has to be learned before it can be used is the problem this started
-  from. If the marks earn it, dropping the labels is a later and separate decision.
+- The card gets SHORTER, not taller: a 28px mark costs less height than the two lines of
+  type it replaced, so the Controls tab reclaims 90px.
+- A mark carries recognition after the first read, not before it, and the card is now
+  unreadable cold without hovering. That is the accepted cost: the labels were being read
+  every time precisely because ten of them cancel each other out, and the tip answers the
+  first read once. If a mark turns out not to earn its key, the answer is a better mark.
 - Adding a shortcut now requires a mark. That is deliberate: the empty F/G/C/V/B cells are
   advertised as open slots, and an eleventh command wearing nothing would restate the
   reading problem in one cell.

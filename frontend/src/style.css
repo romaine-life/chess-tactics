@@ -5695,14 +5695,22 @@ body.loading-bootstrap .app-startup-status {
   grid-template-columns: repeat(5, 1fr);
 }
 
+/* A key is a cap over a mark and nothing else — no label. The tip carries the command's
+   name, so the key is sized by what it draws rather than by two lines of type it no
+   longer holds. Its own grid item is the tip wrapper, which the key fills. */
+.skirmish-grid > .skirmish-grid-key-tip,
+.skirmish-grid > .skirmish-grid-key-tip > .tooltip-trigger {
+  display: grid;
+}
+
 .skirmish-grid-key.app-header-button {
   block-size: auto;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   justify-content: center;
-  min-block-size: 60px;
+  min-block-size: 0;
   min-width: 0;
-  padding: 6px 4px;
+  padding: 3px 4px 4px;
   text-align: center;
 }
 
@@ -5713,6 +5721,19 @@ body.loading-bootstrap .app-startup-status {
   line-height: 1;
 }
 
+/* The cap steps down once the mark is the thing being read: on a key with a label it was
+   the largest type in the cell, and against a mark alone at the same size it competes with
+   it for the eye.
+   It stays STACKED above the mark rather than seated in a corner, which was tried and is
+   13px shorter per key: at 42px wide there is no free corner on this card, so the letter
+   landed on the grid lattice, on the cursor's brackets and on both magnifier lenses. A key
+   whose letter cannot be read is not a saving on a card whose whole premise is that the
+   letters map to physical key positions. */
+.skirmish-grid-key .skirmish-grid-cap {
+  font-size: var(--ds-text-2xs);
+  opacity: .78;
+}
+
 /* One command's mark, between its key cap and its label. The seat is a fixed SQUARE
    rather than a share of the button, because the ten marks sit in a 3x5 card where every
    neighbour is a size reference — a seat that tracked each button's own height would
@@ -5721,10 +5742,10 @@ body.loading-bootstrap .app-startup-status {
    seat carries no per-icon nudge. */
 .skirmish-shortcut-icon {
   align-items: center;
-  block-size: var(--skirmish-shortcut-icon-size, 26px);
+  block-size: var(--skirmish-shortcut-icon-size, 28px);
   display: inline-flex;
   flex: none;
-  inline-size: var(--skirmish-shortcut-icon-size, 26px);
+  inline-size: var(--skirmish-shortcut-icon-size, 28px);
   justify-content: center;
 }
 
