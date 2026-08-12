@@ -5656,23 +5656,24 @@ body.loading-bootstrap .app-startup-status {
   text-align: center;
 }
 
-/* In-match shortcut grid (Controls tab). Cells reuse the kit mode-button frame
-   (.app-header-button / .app-header-button-active), so this block is layout + the
-   key-cap badge only — no raw-CSS chrome. */
-.skirmish-grid {
-  display: grid;
-  gap: var(--ds-inline);
-  grid-template-columns: repeat(5, 1fr);
+/* The in-match command card (Controls tab). It is ONE divided box of fifteen compartments —
+   ChromeSeatGrid — so this block is the card's measure and the compartment's own stacking,
+   and every edge between two commands is the box's rail. There is nothing here that draws a
+   frame, a gap or a border: the fifteen framed buttons in a gapped CSS grid that this used
+   to be are exactly what that primitive exists to replace (ADR-0242/ADR-0586). */
+.skirmish-grid.chrome-seat-grid {
+  /* Against the pad's own max-content default: this card is not a fixed set of squares, it
+     fills the rail it lives in, and its opening is derived from that width. */
+  inline-size: 100%;
+  /* Cap, mark and the compartment's own breathing room, stated once as the block opening the
+     seat axis is derived from. */
+  --command-card-row-opening: calc(var(--ds-text-2xs) + var(--skirmish-shortcut-icon-size, 28px) + 14px);
 }
 
-.skirmish-grid-key.app-header-button {
-  block-size: auto;
-  flex-direction: column;
-  gap: 3px;
-  justify-content: center;
-  min-block-size: 60px;
-  min-width: 0;
-  padding: 6px 4px;
+.skirmish-grid-key {
+  align-content: center;
+  gap: 2px;
+  grid-auto-flow: row;
   text-align: center;
 }
 
@@ -5681,6 +5682,40 @@ body.loading-bootstrap .app-startup-status {
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
   font-size: var(--ds-text-sm);
   line-height: 1;
+}
+
+/* The cap steps down once the mark is the thing being read: on a key with a label it was
+   the largest type in the cell, and against a mark alone at the same size it competes with
+   it for the eye.
+   It stays STACKED above the mark rather than seated in a corner, which was tried and is
+   13px shorter per key: at 42px wide there is no free corner on this card, so the letter
+   landed on the grid lattice, on the cursor's brackets and on both magnifier lenses. A key
+   whose letter cannot be read is not a saving on a card whose whole premise is that the
+   letters map to physical key positions. */
+.skirmish-grid-key .skirmish-grid-cap {
+  font-size: var(--ds-text-2xs);
+  opacity: .78;
+}
+
+/* One command's mark, under its key cap. The seat is a fixed SQUARE rather than a share of
+   the compartment, because the ten marks sit in a 3x5 card where every neighbour is a size
+   reference — a seat that tracked its own compartment would redraw the set at three sizes
+   down the card. The whole 64x64 canvas is drawn and the asset's own transparent margin
+   decides the mark's size inside it (ADR-0026), so the seat carries no per-icon nudge. */
+.skirmish-shortcut-icon {
+  align-items: center;
+  block-size: var(--skirmish-shortcut-icon-size, 28px);
+  display: inline-flex;
+  flex: none;
+  inline-size: var(--skirmish-shortcut-icon-size, 28px);
+  justify-content: center;
+}
+
+.skirmish-shortcut-icon img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: contain;
 }
 
 .skirmish-grid-label {
@@ -5692,14 +5727,23 @@ body.loading-bootstrap .app-startup-status {
   white-space: normal;
 }
 
+/* An open slot is a real compartment of the card with nothing bound to it yet — dimmed, not
+   removed: dropping it would close the gap and move every command after it one key left, and
+   the card's whole premise is that its cells ARE the keyboard. */
 .skirmish-grid-key.is-empty {
   cursor: default;
   opacity: .32;
-  pointer-events: none;
 }
 
-.skirmish-grid-key.is-empty .skirmish-grid-label {
-  display: none;
+/* The tip wrapper is the compartment when a seat carries a tip, so it takes the half-rail
+   inset and the seat fills what is left. Written against `.tooltip` on purpose: the tip
+   primitive states `inline-flex` for a trigger that sits IN a line of text, which is the
+   opposite of a trigger that is a compartment, and the two rules are otherwise a
+   source-order coin toss. */
+.tooltip.chrome-seat-tip,
+.tooltip.chrome-seat-tip > .tooltip-trigger {
+  display: grid;
+  min-inline-size: 0;
 }
 
 .skirmish-grid-hint {
@@ -22937,6 +22981,118 @@ button.tileset-relationship-cell {
 .menu-icon-review-missing {
   color: var(--skirmish-muted);
   margin: 0;
+}
+
+/* Studio > Battle Command Card Marks. Same rule as the mark review above: layout only,
+   because the thing being judged is the card the Controls tab paints and a review that
+   restyles it proves nothing about it. The card keeps the rail's own 245px measure so its
+   buttons are the size they will be in a match, not the size this wider panel allows. */
+.command-card-review-screen {
+  block-size: 100%;
+  box-sizing: border-box;
+  grid-template-columns: minmax(0, 1fr);
+  overflow: auto;
+  padding: var(--ds-inset);
+}
+
+.command-card-review-panel {
+  grid-column: 1;
+  grid-row: 2;
+  inline-size: 100%;
+  margin-inline: auto;
+  max-inline-size: 1180px;
+  overflow: auto;
+}
+
+.command-card-review-panel > .le-outer-panel-content {
+  display: grid;
+  gap: var(--ds-inline);
+}
+
+.command-card-review-body {
+  display: grid;
+  gap: var(--ds-block);
+}
+
+.command-card-review-cards {
+  align-items: start;
+  display: flex;
+  gap: var(--ds-inline);
+  /* One row, always: the installed card and the composed one exist to be read against
+     each other, and a wrapped pair cannot be. */
+  overflow-x: auto;
+}
+
+.command-card-review-column {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  justify-items: start;
+}
+
+.command-card-review-column > h2,
+.command-card-review-column > p {
+  margin: 0;
+}
+
+.command-card-review-column > p {
+  color: var(--skirmish-muted);
+}
+
+/* The card derives its compartments from the width it is given, so a review that let it
+   fill this wider panel would judge marks at a size no match ever draws. This is the inner
+   measure of the Battle rail at the default window — stated, because it is not derivable
+   here: the rail is a clamp on the viewport and the card is inside its panel's padding. */
+.command-card-review-card.chrome-seat-grid {
+  inline-size: 245px;
+}
+
+.command-card-review-install {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  justify-items: start;
+}
+
+.command-card-review-install p {
+  color: var(--skirmish-muted);
+  margin: 0;
+}
+
+.command-card-review-picks {
+  display: grid;
+  gap: var(--ds-inline);
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.command-card-review-pick {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.command-card-review-pick > h3 {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline-tight);
+  margin: 0;
+}
+
+.command-card-review-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-inline-tight);
+}
+
+/* A candidate CHIP is not a command-card key and does not pretend to be one: the key is a
+   compartment of the card above, and a loose framed button wearing its class would be the
+   lookalike this page exists to avoid. The chip is a press target with the candidate's name
+   under it; what is judged at match size is the card, where arming puts it. */
+.command-card-review-option.app-header-button {
+  block-size: auto;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  inline-size: 5.6em;
+  justify-content: center;
+  min-width: 0;
+  text-align: center;
 }
 
 /* Studio > Action Marks: each catalog card carries the candidate in the SAME button the
