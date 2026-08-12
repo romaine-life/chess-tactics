@@ -73,7 +73,19 @@ export function ThumbnailSurface({
     const root = rootRef.current;
     if (!root) return;
     const viewport = root.closest(viewportSelector) ?? root;
-    const bounds = viewport.getBoundingClientRect();
+    const viewportBounds = viewport.getBoundingClientRect();
+    // Clamp to the window. The critical set is what the player can SEE on arrival, and a
+    // viewport element is only a proxy for that while it is the thing doing the scrolling.
+    // In the narrow stacked layout the shell scrolls and this column is unbounded, so it
+    // reports its whole content height — which made every thumbnail critical and held the
+    // scene at `loading` until the last one far below the fold painted. On a phone that
+    // never settled and the Levels screen simply never finished loading. Where the column
+    // IS the scrollport (every desktop width) it already sits inside the window and this
+    // clamp changes nothing.
+    const bounds = {
+      top: Math.max(viewportBounds.top, 0),
+      bottom: Math.min(viewportBounds.bottom, window.innerHeight),
+    };
     const nodes = [...root.querySelectorAll<HTMLElement>('[data-level-thumbnail-id]')];
     const visible = nodes
       .filter((node) => {

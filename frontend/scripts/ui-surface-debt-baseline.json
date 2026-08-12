@@ -5780,14 +5780,6 @@
     },
     {
       "kind": "css",
-      "file": "src/style.css",
-      "context": "@media (orientation: portrait) and (pointer: coarse)",
-      "selector": ".rotate-gate",
-      "surfaceHash": "b90041ea5df76b8a172d9ec48617d3d91f97efd66a7372921e29c78c6d758e8c",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
       "file": "src/ui/PredrawnOcclusionEditor.css",
       "context": "",
       "selector": ".predrawn-occlusion-editor-point",

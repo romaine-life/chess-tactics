@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { replaceAppHistoryState, subscribeAppLocation } from './navigation';
 import { useSceneParticipant } from './shell/SceneBoundary';
 
 /**
@@ -18,10 +19,10 @@ import { useSceneParticipant } from './shell/SceneBoundary';
  *   /mobile-lab?device=phone-portrait&route=%2Fsettings
  *   /mobile-lab?device=all&route=%2Fplay%2Fselect%2Frun
  *
- * NOTE: an iframe on a desktop reports a FINE pointer, so the portrait rotate gate —
- * which is gated on `pointer: coarse` — does not appear here. That is deliberate: this
- * lab is for judging the layout underneath it. What a real phone does in portrait is
- * reported by `npm run verify:mobile`, which emulates touch properly.
+ * NOTE: these frames report a desktop pointer and take desktop input, so they show LAYOUT,
+ * not touch behaviour. Anything gated on `pointer: coarse`, and every gesture question
+ * (pinch, drag, tap targets), belongs to `npm run verify:mobile`, which drives a real
+ * touch-emulated device.
  */
 
 interface Device {
@@ -88,16 +89,12 @@ export default function MobileLab() {
       params.set('device', merged.device);
       params.set('route', merged.route);
       if (merged.zoom) params.set('zoom', String(merged.zoom));
-      window.history.replaceState(null, '', `/mobile-lab?${params}`);
+      replaceAppHistoryState(null, `/mobile-lab?${params}`);
       return merged;
     });
   }, []);
 
-  useEffect(() => {
-    const onPop = () => setState(readParams());
-    window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
-  }, []);
+  useEffect(() => subscribeAppLocation(() => setState(readParams())), []);
 
   const shown = useMemo(
     () => (device === 'all' ? DEVICES : DEVICES.filter((d) => d.id === device)),
@@ -116,9 +113,9 @@ export default function MobileLab() {
       <header className="mobile-lab-bar">
         <h1 className="mobile-lab-title">Mobile review</h1>
         <p className="mobile-lab-note">
-          Real routes at exact device viewports. A desktop pointer is reported as fine, so the
-          portrait rotate gate is not shown here — <code>npm run verify:mobile</code> is what
-          measures a real device.
+          Real routes at exact device viewports, portrait and landscape. These frames report a
+          desktop pointer and desktop input, so they show layout, not touch behaviour —{' '}
+          <code>npm run verify:mobile</code> is what drives a real touch device.
         </p>
       </header>
 

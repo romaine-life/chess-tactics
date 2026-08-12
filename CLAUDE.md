@@ -382,9 +382,13 @@ and don't tell the user screenshots are impossible. Use the helper below.
    edge, and nothing in the test suite could see it.
 
    The Level Editor is deliberately outside its route set (a desktop authoring surface).
-   Pass `--route` to audit anything not listed. Portrait on a real device still shows the
-   rotate gate, so the gate reports portrait routes as GATED rather than passing them;
-   `--ignore-rotate-gate` measures the layout underneath when working on portrait.
+   Pass `--route` to audit anything not listed.
+
+   **Mobile means BOTH orientations — ordinary responsive behaviour, on phones and
+   tablets.** No screen may demand the device be turned. The app shipped a portrait
+   "Rotate your device" gate from 2026-07-01 to 2026-08-11 that blanked every phone and
+   tablet held upright; it is gone, and the gate now FAILS any route where a blocker
+   covers the viewport. Make the screen work at the size it is given.
 
 This works on ANY live route by selector — no per-target fixture, so there's no "new
 screen ⇒ flail" cliff. `frontend/scripts/shot.mjs` is the implementation.

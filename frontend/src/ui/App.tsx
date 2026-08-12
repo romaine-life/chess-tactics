@@ -790,12 +790,6 @@ export function App(): ReactElement {
             ) : <span>Loading…</span>}
           </div>
         ) : null}
-        <div className="rotate-gate" role="alertdialog" aria-label="Rotate your device to landscape">
-          <div className="rotate-gate-inner">
-            <p className="rotate-gate-title">Rotate your device</p>
-            <p className="rotate-gate-copy">Chess Tactics plays in landscape.</p>
-          </div>
-        </div>
       </div>
     </>
   );

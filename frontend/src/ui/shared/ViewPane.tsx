@@ -601,6 +601,36 @@ export function ViewPane({
     if (Math.abs(next.zoom - zoom) >= 1e-9) onZoomChange(next.zoom);
   }, [onMinimumZoomChange, onZoomChange, resolvedMinZoom, zoom]);
 
+  // ── Touch gestures ──────────────────────────────────────────────────────────────────────
+  // A touch device has no wheel and no secondary button, so on a phone the camera could not be
+  // zoomed at all and an uncommitted premove chain could not be taken back. These supply both
+  // in the conventional touch idioms. Long press is offered ONLY where a viewport owner asked
+  // for `onSecondaryClick`, so a surface that does not claim the secondary press never grows a
+  // hidden gesture.
+  const pointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const pinchRef = useRef<{ distance: number } | null>(null);
+  const longPressRef = useRef<number | null>(null);
+  const longPressFiredRef = useRef(false);
+
+  const cancelLongPress = () => {
+    if (longPressRef.current !== null) {
+      window.clearTimeout(longPressRef.current);
+      longPressRef.current = null;
+    }
+  };
+
+  const livePointerDistance = (): number => {
+    const [a, b] = [...pointersRef.current.values()];
+    if (!a || !b) return 0;
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  };
+
+  // The pinch ratio steps a tier and then RE-BASELINES, so a long continuous pinch keeps
+  // stepping instead of stopping once it passes the threshold once.
+  const PINCH_IN = 1.25;
+  const PINCH_OUT = 0.8;
+  const LONG_PRESS_MS = 500;
+
   const startPan = (event: PointerEvent<HTMLElement>, claimPointer = true) => {
     event.preventDefault();
     if (claimPointer) event.currentTarget.setPointerCapture(event.pointerId);
@@ -642,7 +672,29 @@ export function ViewPane({
 
   const startNonSecondaryPan = (event: PointerEvent<HTMLElement>) => {
     if (event.button === 2) return;
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    // A second finger converts the gesture into a pinch: drop the pan the first finger began
+    // so the camera does not slide while the two fingers are still settling.
+    if (pointersRef.current.size === 2) {
+      cancelLongPress();
+      dragRef.current = null;
+      pinchRef.current = { distance: livePointerDistance() };
+      return;
+    }
+    if (pointersRef.current.size > 2) return;
     startPan(event);
+    longPressFiredRef.current = false;
+    if (event.pointerType !== 'mouse' && onSecondaryClick) {
+      cancelLongPress();
+      longPressRef.current = window.setTimeout(() => {
+        longPressRef.current = null;
+        // Only a press that never became a pan carries the secondary meaning — the same
+        // distinction the mouse path draws between a right drag and a right click.
+        if (didDragRef.current || !dragRef.current) return;
+        longPressFiredRef.current = true;
+        onSecondaryClick();
+      }, LONG_PRESS_MS);
+    }
   };
 
   const movePan = (event: PointerEvent<HTMLElement>) => {
@@ -692,13 +744,45 @@ export function ViewPane({
 
   const moveNonSecondaryPan = (event: PointerEvent<HTMLElement>) => {
     if (dragRef.current?.secondary) return;
+    if (pointersRef.current.has(event.pointerId)) {
+      pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    }
+    const pinch = pinchRef.current;
+    if (pinch) {
+      const distance = livePointerDistance();
+      if (!distance || !pinch.distance) return;
+      const ratio = distance / pinch.distance;
+      if (ratio > PINCH_IN) { stepZoom(1); pinchRef.current = { distance }; }
+      else if (ratio < PINCH_OUT) { stepZoom(-1); pinchRef.current = { distance }; }
+      return;
+    }
+    // Any real movement means this is a drag, not a press being held.
+    if (didDragRef.current) cancelLongPress();
     movePan(event);
   };
 
   const endPan = (event: PointerEvent<HTMLElement>) => {
+    // Release the gesture bookkeeping FIRST: during a pinch there is no drag to match on, so
+    // an early return below would strand the lifted finger in the map and the next touch would
+    // start life believing two fingers were already down.
+    pointersRef.current.delete(event.pointerId);
+    cancelLongPress();
+    if (pointersRef.current.size < 2) pinchRef.current = null;
+    const secondaryFired = longPressFiredRef.current;
+    longPressFiredRef.current = false;
+
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     dragRef.current = null;
+    // A long press already delivered the secondary meaning; the lift that ends it must not
+    // also read as a tap on whatever was underneath.
+    if (secondaryFired) {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      window.setTimeout(() => { didDragRef.current = false; }, 0);
+      return;
+    }
     // Only a gesture that became a pan ever took the pointer.
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -719,10 +803,12 @@ export function ViewPane({
     endPan(event);
   };
 
-  const zoomPane = (event: WheelEvent<HTMLElement>) => {
-    event.preventDefault();
+  // One place that changes zoom by a tier, so the wheel and a pinch land on exactly the same
+  // ladder rung and re-clamp the pan identically. Nothing here is continuous: the camera has
+  // authored tiers (closestTierFor), and a pinch that slid between them would put the board at
+  // a scale the board art was never cut for.
+  const stepZoom = (direction: 1 | -1) => {
     onViewInteraction?.();
-    const direction = event.deltaY < 0 ? 1 : -1;
     const nextZoom = stepTier(zoom, direction, { inner: resolvedMaxZoom, outer: resolvedMinZoom });
     if (coverViewport && coverPolygon) {
       onPanChange(constrainPanToCoverViewport({
@@ -734,6 +820,11 @@ export function ViewPane({
       }));
     }
     onZoomChange(nextZoom);
+  };
+
+  const zoomPane = (event: WheelEvent<HTMLElement>) => {
+    event.preventDefault();
+    stepZoom(event.deltaY < 0 ? 1 : -1);
   };
 
   const stage = (

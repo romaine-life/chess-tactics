@@ -15,23 +15,20 @@
 //   control-obscured  a control's own centre hit-tests to something else — it cannot be tapped
 //   control-cut-off   a control is clipped to under 60% of itself by an ancestor or the viewport
 //   control-offscreen a control's centre lies outside the viewport — unreachable at any scroll
-//   touch-target      a visible control's hit box is under 44x44 CSS px (WCAG 2.5.5)
+//   touch-target      an undersized hit box that also crowds another (WCAG 2.5.8: 24x24,
+//                     with the standard's spacing exception)
 //   stranded-overflow content overflows a container that cannot scroll, so it cannot be reached
 //
-// It reports the rotate gate as its own outcome rather than a pass: a portrait phone that is
-// shown "Rotate your device" is not a portrait phone that works, and a gate covering the
-// screen would otherwise make every portrait route trivially clean.
+// Mobile support is BOTH ORIENTATIONS. A screen-covering orientation prompt is therefore a
+// FAILURE, not a state to measure around: the app once shipped a portrait "Rotate your device"
+// gate that blanked every phone and tablet held upright, and a blocker covering the viewport
+// would otherwise make every portrait route look trivially clean. The gate detects one and
+// fails the route.
 //
 // Usage:
 //   npm run verify:mobile -- '<base-url>' [--profile <id>] [--route <path>] [--json]
-//     [--ignore-rotate-gate]
 //     e.g. npm run verify:mobile -- http://testingme.chess-tactics.localhost
 //          npm run verify:mobile -- <base> --profile phone-portrait --route /settings
-//
-// --ignore-rotate-gate hides the portrait gate and measures the layout underneath it. Portrait
-// is otherwise unmeasurable — the gate covers the screen, so every portrait route reports the
-// gate and nothing else. Use it to see what portrait WOULD be; a run with the flag is reported
-// as gate-suppressed and never as a portrait pass.
 //
 // The Level Editor is deliberately NOT in the route set: it is out of scope for mobile
 // (a desktop authoring surface). Pass --route to audit anything not listed.
@@ -95,7 +92,6 @@ const ROUTES = [
 
 const wantedProfiles = flagAll('profile');
 const wantedRoutes = flagAll('route');
-const ignoreGate = has('ignore-rotate-gate');
 const profiles = wantedProfiles.length ? PROFILES.filter((p) => wantedProfiles.includes(p.id)) : PROFILES;
 const routes = wantedRoutes.length ? wantedRoutes.map((path) => ({ path, label: path })) : ROUTES;
 if (!profiles.length) { console.error(`unknown --profile. known: ${PROFILES.map((p) => p.id).join(', ')}`); process.exit(2); }
@@ -117,6 +113,8 @@ function measure() {
     return true;
   };
 
+  // A viewport-covering blocker (historically the portrait rotate prompt). Reported on its
+  // own so its findings are never confused with a layout that merely has issues.
   const gateEl = document.querySelector('.rotate-gate');
   const gated = Boolean(gateEl && visible(gateEl) && gateEl.getBoundingClientRect().width > vw * 0.5);
 
@@ -193,7 +191,15 @@ function measure() {
     });
   }
 
+  // Contents of a camera pane are excluded from the REACHABILITY checks below. A board cell
+  // sitting off the left edge is not unreachable — the pane pans and zooms, and its cover
+  // constraint guarantees any cell can be brought into view — so measuring individual cells
+  // against the viewport reports a fitted board as ten broken controls. What matters for a
+  // camera is that it accepts touch at all, which is `touch-action` and the pinch/drag
+  // handlers in ViewPane, not where a given cell happens to sit right now.
+  const inCamera = (el) => Boolean(el.closest('.tileset-view-stage'));
   const controls = [...document.querySelectorAll(INTERACTIVE)].filter(visible);
+  const chromeControls = controls.filter((el) => !inCamera(el));
   const seenTiny = new Set();
   // A control below the fold is NORMAL — the page scrolls. What matters is whether the
   // player can bring it into view at all, so anything that fails where it currently sits is
@@ -201,25 +207,47 @@ function measure() {
   // STILL unreachable is a finding. (Without this the gate calls every long settings page
   // broken, and a genuinely off-edge control looks the same as one you just scroll to.)
   const unreachable = [];
-  for (const el of controls) {
+  for (const el of chromeControls) {
     const rect = el.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) continue;
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
     const offscreen = cx < 0 || cx > vw || cy < 0 || cy > vh;
     if (offscreen || visibleFraction(el) < 0.6) unreachable.push(el);
+  }
 
-    // Touch-target floor applies wherever the control sits. One finding per distinct
-    // control shape so a grid of 20 identical small buttons is one line, not twenty.
-    const w = Math.round(rect.width);
-    const h = Math.round(rect.height);
-    if (w < 44 || h < 44) {
-      const key = `${describe(el).split('"')[0]}|${w}x${h}`;
-      if (!seenTiny.has(key)) {
-        seenTiny.add(key);
-        push('touch-target', `hit box ${w}x${h} is under 44x44`, el);
-      }
-    }
+  // Touch-target floor, as WCAG 2.5.8 actually states it: 24x24 CSS px, with the SPACING
+  // exception — an undersized target passes when a 24px-diameter circle on its centre
+  // touches no other target's circle. That exception is why the standard is usable here: a
+  // breadcrumb like "Chess Tactics / Settings" is inline text that cannot be 44px tall
+  // without wrecking the title, but it is perfectly tappable when nothing else is crowding
+  // it. Demanding a flat 44x44 of every control reported ~370 findings that were mostly the
+  // same title-bar text on every route, which buries the targets that genuinely collide.
+  const circles = chromeControls
+    .map((el) => ({ el, rect: el.getBoundingClientRect() }))
+    .filter(({ rect }) => rect.width > 0 && rect.height > 0)
+    .map(({ el, rect }) => ({
+      el,
+      rect,
+      cx: rect.left + rect.width / 2,
+      cy: rect.top + rect.height / 2,
+    }));
+  for (const target of circles) {
+    const w = Math.round(target.rect.width);
+    const h = Math.round(target.rect.height);
+    if (w >= 24 && h >= 24) continue;
+    // Undersized: does its 24px circle clear every other target's?
+    const crowdedBy = circles.find((other) => other !== target
+      && Math.hypot(other.cx - target.cx, other.cy - target.cy) < 24);
+    if (!crowdedBy) continue;
+    const key = `${describe(target.el).split('"')[0]}|${w}x${h}`;
+    if (seenTiny.has(key)) continue;
+    seenTiny.add(key);
+    push(
+      'touch-target',
+      `hit box ${w}x${h} is under 24x24 and sits within 24px of ${describe(crowdedBy.el)}`,
+      target.el,
+    );
   }
   // A control that something else is sitting on top of. Reachability alone does not catch
   // this: when the narrow shell squeezed its tracks, Settings' "General" tab sat ON the
@@ -231,7 +259,7 @@ function measure() {
   // reports exactly the defect a player would hit and stays quiet about decoration that
   // merely shares the same pixels from below. Measured BEFORE anything is scrolled, so
   // every hit test shares one resting layout.
-  for (const el of controls) {
+  for (const el of chromeControls) {
     const rect = el.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
@@ -275,6 +303,7 @@ function measure() {
     // Only report when a control this pass already PROVED unreachable is inside — stranded
     // decoration is ordinary clipping, and a control that merely sits below the fold is
     // reachable by scrolling. This names the container responsible for a real failure.
+    if (el.querySelector('.tileset-view-stage') || inCamera(el)) continue; // camera overdraw is by design
     const stranded = [...el.querySelectorAll(INTERACTIVE)].some((c) => stillUnreachable.has(c));
     if (!stranded) continue;
     push(
@@ -325,12 +354,8 @@ try {
       const entry = { profile: profile.id, profileLabel: profile.label, route: route.label, path: route.path, url };
       try {
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
-        if (ignoreGate) {
-          await page.addStyleTag({ content: '.rotate-gate{display:none !important}' });
-          entry.gateSuppressed = true;
-        }
         await page.waitForFunction(
-          "Boolean(document.querySelector('[data-scene-phase=\"current\"]')) || Boolean(document.querySelector('.rotate-gate:not([hidden])') && getComputedStyle(document.querySelector('.rotate-gate')).display !== 'none')",
+          "Boolean(document.querySelector('[data-scene-phase=\"current\"]'))",
           { timeout: TIMEOUT },
         );
         // Let entrances and any craft redirect settle before measuring.
@@ -342,7 +367,7 @@ try {
       }
       results.push(entry);
       const count = entry.findings?.length ?? 0;
-      const mark = entry.error ? 'ERROR' : entry.gated ? 'GATED' : count ? `${count} issue${count === 1 ? '' : 's'}` : 'clean';
+      const mark = entry.error ? 'ERROR' : entry.gated ? 'BLOCKED' : count ? `${count} issue${count === 1 ? '' : 's'}` : 'clean';
       process.stderr.write(`  ${profile.id.padEnd(20)} ${route.label.padEnd(26)} ${mark}\n`);
     }
   }
@@ -368,7 +393,7 @@ for (const profile of profiles) {
   console.log(`\n── ${profile.label} ──`);
   for (const row of rows) {
     if (row.error) { console.log(`  ✗ ${row.route}: ERROR ${row.error}`); continue; }
-    if (row.gated) { console.log(`  ⊘ ${row.route}: rotate gate covers the screen (not usable, not measured)`); continue; }
+    if (row.gated) { console.log(`  ✗ ${row.route}: a blocker covers the viewport — mobile supports both orientations, so nothing may demand rotation`); continue; }
     const findings = row.findings ?? [];
     if (!findings.length) { console.log(`  ✓ ${row.route}: clean`); continue; }
     console.log(`  ✗ ${row.route}: ${findings.length} issue${findings.length === 1 ? '' : 's'}`);
@@ -390,13 +415,9 @@ const failing = results.filter((r) => !r.gated && !r.error && (r.findings?.lengt
 console.log('\n──── summary ────');
 for (const kind of KIND_ORDER) if (totals.get(kind)) console.log(`  ${kind}: ${totals.get(kind)}`);
 console.log(`  routes measured: ${results.length - gatedCount - errorCount}/${results.length}` +
-  `${gatedCount ? `, gated: ${gatedCount}` : ''}${errorCount ? `, errored: ${errorCount}` : ''}`);
+  `${gatedCount ? `, blocked: ${gatedCount}` : ''}${errorCount ? `, errored: ${errorCount}` : ''}`);
 console.log(`  routes with issues: ${failing.length}`);
 
 const ok = failing.length === 0 && gatedCount === 0 && errorCount === 0;
-if (ignoreGate) {
-  console.log('\n  NOTE: --ignore-rotate-gate was set. Portrait results describe the layout UNDER the');
-  console.log('        rotate gate; on a real device portrait still shows "Rotate your device".');
-}
 console.log(ok ? '\nPASS — every audited route is usable on every profile.' : '\nFAIL — see above.');
 process.exit(ok ? 0 : 1);

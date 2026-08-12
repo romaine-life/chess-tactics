@@ -12204,6 +12204,11 @@ body { font-size: 17px; }
 }
 
 .tileset-view-stage {
+  /* The pane IS the camera: it owns drag-to-pan and pinch-to-zoom (ViewPane). Without this
+     the browser claims a touch drag for page scrolling and fires pointercancel partway
+     through, so on a phone the board could not be panned at all and a pinch zoomed the whole
+     document instead of the camera. */
+  touch-action: none;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
   align-self: stretch;
@@ -26647,62 +26652,40 @@ button.tileset-relationship-cell {
 .mobile-lab-frame { display: block; }
 
 /* ============================================================================
-   MOBILE SUPPORT — landscape-only phones (added 2026-07-01)
+   MOBILE SUPPORT — both orientations, ordinary responsive behaviour
    ----------------------------------------------------------------------------
-   The app is built desktop-first; on a phone it is played in LANDSCAPE. Three
-   media contexts drive it:
+   The app is built desktop-first and adapts down. It supports PORTRAIT AND
+   LANDSCAPE on phones and tablets, like any responsive web app; there is no
+   orientation gate and no screen that demands the device be turned. Two media
+   contexts drive it:
 
-     • portrait + coarse         -> the rotate-to-landscape gate (touch phones only:
-                                     never nag a desktop user to rotate a window)
      • max-width <= 960px        -> fix the shared chrome family at ANY narrow width
-     • narrow AND short (<=540h) -> the landscape-phone tweaks (shorter app bar,
+     • narrow AND short (<=540h) -> the landscape-phone tweaks (tighter app bar,
                                      board + HUD side-by-side)
 
-   IMPORTANT: only the rotate GATE is gated on `pointer: coarse`. The layout fix is
-   width-based, NOT pointer-based — the baked desktop offsets break the chrome at any
-   narrow width (a narrow desktop window, or DevTools' plain "Responsive" mode, which
-   reports a fine pointer), so gating the fix on coarse-pointer left those broken. 960
-   is the ceiling because the largest landscape phone (iPhone Pro Max) is 932px wide,
-   while a real desktop layout wants >= ~1000px.
+   The layout fix is width-based, NOT pointer-based — the baked desktop offsets break
+   the chrome at any narrow width (a narrow desktop window, or DevTools' plain
+   "Responsive" mode, which reports a fine pointer), so gating it on coarse-pointer
+   would leave those broken. 960 is the ceiling because the largest landscape phone
+   (iPhone Pro Max) is 932px wide, while a real desktop layout wants >= ~1000px.
 
-   A true OS orientation lock is impossible in a mobile browser (screen.orientation
-   .lock is unsupported on iOS Safari), so portrait shows a prompt instead of forcing
-   rotation. The layout rules NEUTRALISE the desktop dressing-room offsets baked into
-   the shared menu/settings/Play chrome — a rail `translate(-230px)` and a 931px
-   content panel `translate(-270px)` that are never otherwise reset (they push both
-   mostly off a narrow screen). Layout only; no chrome art is hand-rolled (ADR-0032).
-   Placed last so these overrides win the cascade; the two-class panel reset below is
-   specificity-matched (0,2,0) so it beats the baked `.settings-art-route
-   .settings-main-frame` rule (a single-class override would silently lose — the
-   original bug). */
+   HISTORY: this band shipped 2026-07-01 as landscape-only, with a portrait
+   "Rotate your device" gate on `(orientation: portrait) and (pointer: coarse)`. That
+   gate covered the screen on every phone AND every tablet held upright, which is how
+   most people hold both, so the app did nothing at all for them. It was removed when
+   mobile support became both-orientations; portrait already had a working stacked
+   board layout underneath it (the max-width:860px block above). Do not reintroduce an
+   orientation prompt — make the screen work at the size it is given. `npm run
+   verify:mobile` fails any route whose controls cannot be reached, in either
+   orientation, and reports a screen-covering blocker as GATED rather than passing it.
 
-/* -- Rotate-to-landscape gate. Hidden everywhere except a touch device in portrait. */
-.rotate-gate { display: none; }
-
-@media (orientation: portrait) and (pointer: coarse) {
-  .rotate-gate {
-    position: fixed;
-    inset: 0;
-    z-index: 100000;               /* above the fixed title bar (10000) and route veil (9999) */
-    display: grid;
-    place-items: center;
-    padding: 32px;
-    text-align: center;
-    background: #05090d;
-    color: var(--ds-ink-2, #dbe7ea);
-  }
-}
-
-.rotate-gate-inner { display: grid; gap: 16px; justify-items: center; max-width: 300px; }
-.rotate-gate-icon { width: 76px; height: 76px; color: var(--ds-ink-2, #dbe7ea); opacity: .92; }
-.rotate-gate-title {
-  margin: 0;
-  font-family: var(--ds-font-display, ui-monospace, monospace);
-  font-size: 1.5rem;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-}
-.rotate-gate-copy { margin: 0; color: var(--ds-ink-3, #948C7E); font-size: 1rem; line-height: 1.4; }
+   These rules NEUTRALISE the desktop dressing-room offsets baked into the shared
+   menu/settings/Play chrome — a rail translate and a fixed-width content panel that
+   are never otherwise reset (they push both mostly off a narrow screen). Layout only;
+   no chrome art is hand-rolled (ADR-0032). Placed last so these overrides win the
+   cascade; the two-class panel reset below is specificity-matched (0,2,0) so it beats
+   the baked `.settings-art-route .settings-main-frame` rule (a single-class override
+   would silently lose — the original bug). */
 
 /* -- Narrow-viewport chrome fix (any narrow width — phones AND narrow windows). ---- */
 @media (max-width: 960px) {
@@ -26779,6 +26762,35 @@ button.tileset-relationship-cell {
   /* Touch-target floor for the small in-panel controls (WCAG ~44px). */
   .settings-chrome-button,
   .app-header-button { min-block-size: 44px; }
+
+  /* The ambience credit is a floating corner badge on the backdrop LAYER, painted under the
+     shell at z-index 1. On a desktop it sits in empty canvas bottom-right; at these widths the
+     shell fills the whole area, so it lands beneath a menu button and becomes untappable — the
+     gate reports its centre hit-testing to "Current Run" / "General" on every menu route.
+     There is no free corner to move it to (it is not in the shell's scroll flow, so it cannot
+     be docked after the content), and raising it above the shell would make a 64x24 patch of a
+     primary menu button open an external tab instead. So the decoration sheds, the way the
+     title bar already sheds its objective and identity chips when the bar gets tight. Deleting
+     this rule brings it back if the attribution is wanted at these sizes. */
+  .ambience-credit { display: none; }
+
+  /* Two formation marks 14px wide sitting 8px apart: under the 24px floor AND crowding each
+     other, so neither can be hit reliably. They are already 44 tall; widen to the floor. */
+  .run-arrangement-hand-mark { min-inline-size: 24px; }
+
+  /* The in-game bar is `minmax(0,1fr) auto minmax(0,1fr)` — brand · status · cluster — which
+     gives the CENTRE track its content width and splits the remainder between the outer two.
+     That inverts under pressure: on a 390px phone in a Battle the status wants 310px, both
+     outer tracks collapse to 0px, and the brand and the control lane overflow their empty
+     tracks straight across the status. Measured: the centre covered the brand lockup by 42px
+     and the lane by 142px, so the home shield and the Run breadcrumb could not be tapped at
+     all — every tap there landed on the status chip painted over them.
+     Invert the model instead: the two anchors take the width they need and the CENTRE is what
+     yields, which is the right answer for a bar whose middle is status and whose sides are
+     navigation. verify:titlebar now asserts the three regions do not overlap. */
+  .app-shell-titlebar.skirmish-topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
 
   /* --- Twin-screen destination row (the rot this band did not cover) ------------------
      The rules above were written when a destination was a single `.settings-main-frame`
