@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   SYNTHETIC_TEST_MEDIA_MAX_BYTES,
   chromeInstalledSourceAuthorityReason,
@@ -15,7 +15,57 @@ import {
   scrollbarStaticAuthorityReason,
 } from './check-no-committed-media.mjs';
 
-describe('no-committed-media guard', () => {
+// Every fixture repository below is built inside ONE directory created for this
+// whole file, rather than each one getting its own root under the system temp
+// directory. That directory is shared with the whole machine and accumulates
+// tens of thousands of entries; at 16-way concurrency a fixture tree built
+// directly under it measured p50 60ms / max 343ms against p50 53ms / max 120ms
+// inside a dedicated parent. Making the 32 roots below into one cut this file's
+// heaviest test from 1079ms to 17ms when run on its own.
+//
+// It does NOT flatten the tail during a full parallel `npm run check`, and the
+// timeout below is not load-bearing on it: under that load the same test
+// measured 37 / 276 / 371 / 805 / 888 / 1810 ms across six runs, which straddles
+// what it did before this change. Under load the cost is antivirus scan-on-write
+// and scheduling, charged roughly per file written, and nothing in this repo
+// removes it.
+const FIXTURE_ROOT_PREFIX = 'no-committed-media-guard-';
+let fixtureRoot = '';
+let fixtureSequence = 0;
+
+// Windows keeps transient handles on freshly written files (search indexer,
+// antivirus). An unretried recursive delete fails outright when it lands on one,
+// which turns cleanup into its own source of red runs.
+function removeFixture(directory) {
+  if (!directory) return;
+  fs.rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+}
+
+// A distinct named subdirectory per call, so fixtures stay as isolated from each
+// other as separate temp roots made them — without paying the shared directory
+// again for every test.
+function fixtureRepoRoot(name) {
+  fixtureSequence += 1;
+  return fs.mkdtempSync(path.join(fixtureRoot, `${String(fixtureSequence).padStart(2, '0')}-${name}-`));
+}
+
+beforeAll(() => {
+  fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), FIXTURE_ROOT_PREFIX));
+});
+
+afterAll(() => {
+  removeFixture(fixtureRoot);
+});
+
+// THIS is what stops the flake. These assertions are disk-bound: they write a
+// fixture tree, read it back through the guard, and compare what it reported.
+// Their elapsed time is set by the machine, not by the work, so vitest's
+// CPU-shaped 5s default was the wrong ceiling — at `--testTimeout=600` the last
+// test in this file is the FIRST of the suite's 3500 to fail, and the only
+// disk-bound one in that group. A budget sized to I/O is the fix; the assertions
+// are untouched and still fail on any behaviour change. Nothing here is retried
+// and nothing is skipped, so a guard regression is still a red run.
+describe('no-committed-media guard', { timeout: 30_000 }, () => {
   it('rejects scrollbar preferred state and committed browse rosters but permits stable preview geometry', () => {
     const oldRoster = [
       'export const SCROLLBAR_ASSETS = [',
@@ -385,7 +435,7 @@ describe('no-committed-media guard', () => {
   });
 
   it('strict mode rejects cutover switches and media copied into the production build', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'no-committed-media-final-test-'));
+    const repoRoot = fixtureRepoRoot('no-committed-media-final');
     const write = (relativePath, value) => {
       const target = path.join(repoRoot, relativePath);
       fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -408,12 +458,12 @@ describe('no-committed-media guard', () => {
         'temporary-cutover-scaffold:frontend/package.json',
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('rejects the retired cutover release ceremony under renamed live paths', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-cutover-release-test-'));
+    const repoRoot = fixtureRepoRoot('retired-cutover-release');
     const write = (relativePath, value) => {
       const target = path.join(repoRoot, relativePath);
       fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -428,12 +478,12 @@ describe('no-committed-media guard', () => {
         expect.objectContaining({ kind: 'temporary-cutover-scaffold', path: 'backend/package.json' }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('does not ban unrelated pull-request comments', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ordinary-pr-comment-test-'));
+    const repoRoot = fixtureRepoRoot('ordinary-pr-comment');
     const relativePath = '.github/workflows/notify.yml';
     const target = path.join(repoRoot, relativePath);
     try {
@@ -441,12 +491,12 @@ describe('no-committed-media guard', () => {
       fs.writeFileSync(target, 'run: gh pr comment 42 --body "preview is ready"', 'utf8');
       expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('rejects cutover switches and packaged readers moved out of server.js', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'moved-cutover-scaffold-test-'));
+    const repoRoot = fixtureRepoRoot('moved-cutover-scaffold');
     const write = (relativePath, value) => {
       const target = path.join(repoRoot, relativePath);
       fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -461,12 +511,12 @@ describe('no-committed-media guard', () => {
         expect.objectContaining({ kind: 'temporary-cutover-scaffold', path: 'backend/liveMediaToggle.js' }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('rejects a renamed backend mutation that can create another legacy bridge', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'renamed-bridge-mutation-test-'));
+    const repoRoot = fixtureRepoRoot('renamed-bridge-mutation');
     const target = path.join(repoRoot, 'backend', 'mediaImportAdmin.js');
     const toolTarget = path.join(repoRoot, 'scripts', 'reactivate-media.mjs');
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -499,12 +549,12 @@ describe('no-committed-media guard', () => {
         }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('rejects public-root catalogs, immutable hash pins, and bridge methods in the canonical client', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'renamed-live-authority-test-'));
+    const repoRoot = fixtureRepoRoot('renamed-live-authority');
     const write = (relativePath, value) => {
       const target = path.join(repoRoot, relativePath);
       fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -539,12 +589,12 @@ describe('no-committed-media guard', () => {
         }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('checks Docker build output explicitly without requiring Git metadata', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'built-output-only-media-test-'));
+    const repoRoot = fixtureRepoRoot('built-output-only-media');
     const cleanChunk = path.join(repoRoot, 'frontend', 'dist', 'app-code', 'index.js');
     const disguisedMedia = path.join(repoRoot, 'frontend', 'dist', 'app-code', 'payload.dat');
     fs.mkdirSync(path.dirname(cleanChunk), { recursive: true });
@@ -559,12 +609,12 @@ describe('no-committed-media guard', () => {
         expect.objectContaining({ kind: 'built-media', path: 'frontend/dist/app-code/payload.dat' }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('permanently rejects recreation of the retired Git-media importer', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-git-media-path-test-'));
+    const repoRoot = fixtureRepoRoot('retired-git-media-path');
     const relativePath = 'frontend/scripts/migrate-live-assets.mjs';
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -574,7 +624,7 @@ describe('no-committed-media guard', () => {
         expect.objectContaining({ kind: 'retired-git-media-path', path: relativePath }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
@@ -582,7 +632,7 @@ describe('no-committed-media guard', () => {
     'frontend/src/core/propSeats.json',
     'packages/board-render/src/core/propSeats.json',
   ])('permanently rejects recreation of the retired prop-seat baseline %s', (relativePath) => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-prop-seat-path-test-'));
+    const repoRoot = fixtureRepoRoot('retired-prop-seat-path');
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, '{}\n', 'utf8');
@@ -591,7 +641,7 @@ describe('no-committed-media guard', () => {
         expect.objectContaining({ kind: 'retired-git-media-path', path: relativePath }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
@@ -599,7 +649,7 @@ describe('no-committed-media guard', () => {
     'frontend/src/ui/design/wallDecorManifest.json',
     'packages/board-render/src/ui/design/wallDecorManifest.json',
   ])('permanently rejects recreation of the retired wall-decoration manifest %s', (relativePath) => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-wall-decor-path-test-'));
+    const repoRoot = fixtureRepoRoot('retired-wall-decor-path');
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, '{}\n', 'utf8');
@@ -608,12 +658,12 @@ describe('no-committed-media guard', () => {
         expect.objectContaining({ kind: 'retired-git-media-path', path: relativePath }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('rejects a renamed runtime import of the retired wall-decoration manifest', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-wall-decor-import-test-'));
+    const repoRoot = fixtureRepoRoot('retired-wall-decor-import');
     const relativePath = 'packages/board-render/src/core/legacyWallDecor.ts';
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -627,12 +677,12 @@ describe('no-committed-media guard', () => {
         }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('rejects a moved prop-seat overlay or last-good fallback implementation', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-prop-seat-fallback-test-'));
+    const repoRoot = fixtureRepoRoot('retired-prop-seat-fallback');
     const relativePath = 'packages/board-render/src/core/legacySeats.ts';
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -646,12 +696,12 @@ describe('no-committed-media guard', () => {
         }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('permanently rejects recreation or renamed imports of the retired portrait crop table', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-portrait-crops-test-'));
+    const repoRoot = fixtureRepoRoot('retired-portrait-crops');
     const tablePath = 'frontend/src/art/portraitCrops.json';
     const importPath = 'frontend/src/ui/LegacyPortraits.ts';
     for (const relativePath of [tablePath, importPath]) {
@@ -665,12 +715,12 @@ describe('no-committed-media guard', () => {
         expect.objectContaining({ kind: 'retired-portrait-crop-authority', path: importPath }),
       ]));
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('rejects recreation of a compiled terrain-family gameplay map', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-terrain-map-test-'));
+    const repoRoot = fixtureRepoRoot('retired-terrain-map');
     const relativePath = 'frontend/src/core/legacyTerrainMap.ts';
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -680,7 +730,7 @@ describe('no-committed-media guard', () => {
         expect.objectContaining({ kind: 'retired-terrain-gameplay-map', path: relativePath }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
@@ -693,7 +743,7 @@ describe('no-committed-media guard', () => {
     'frontend/scripts/vite-chrome-lab-defaults-plugin.mjs',
     'frontend/scripts/vite-nine-slice-geometry-plugin.mjs',
   ])('permanently rejects recreation of retired presentation authority %s', (relativePath) => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-presentation-path-test-'));
+    const repoRoot = fixtureRepoRoot('retired-presentation-path');
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, '{}\n', 'utf8');
@@ -702,7 +752,7 @@ describe('no-committed-media guard', () => {
         expect.objectContaining({ kind: 'retired-git-media-path' }),
       ]));
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
@@ -711,7 +761,7 @@ describe('no-committed-media guard', () => {
     "const PREVIEW_KIND_BY_STABLE_SLOT = { 'ui/scrollbars/oak.png': 'sprite' };",
     "import registry from '../../config/nine-slice-registry.json';",
   ])('rejects renamed compiled presentation authority: %s', (source) => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-presentation-source-test-'));
+    const repoRoot = fixtureRepoRoot('retired-presentation-source');
     const relativePath = 'frontend/src/ui/renamedPresentationAuthority.ts';
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -721,12 +771,12 @@ describe('no-committed-media guard', () => {
         expect.objectContaining({ detail: 'compiled installed presentation identity/default/configuration remains after drawable-catalog cutover' }),
       ]));
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('rejects recreation of a compiled Subterrain inventory', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-subterrain-catalog-test-'));
+    const repoRoot = fixtureRepoRoot('retired-subterrain-catalog');
     const relativePath = 'packages/board-render/src/core/subterrainLegacy.ts';
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -740,7 +790,7 @@ describe('no-committed-media guard', () => {
         }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
@@ -752,7 +802,7 @@ describe('no-committed-media guard', () => {
     "const exposedFaces = ['south', 'east'];",
     "const top = frameSrc.replace(/\\.png$/, '-top.png');",
   ])('rejects retired tile-side and filename-derived media paths: %s', (source) => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-tile-side-test-'));
+    const repoRoot = fixtureRepoRoot('retired-tile-side');
     const relativePath = 'frontend/src/render/renamedTerrainPath.ts';
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -765,7 +815,7 @@ describe('no-committed-media guard', () => {
         }),
       ]));
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
@@ -774,7 +824,7 @@ describe('no-committed-media guard', () => {
     "const joint = requiredUiMedia('ui-titlebar-joint-diamond-forged-png');",
     'paintTitleBar(uiMedia.diamond);',
   ])('rejects retired aggregate UI lookups after the drawable migration: %s', (source) => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-ui-lookup-test-'));
+    const repoRoot = fixtureRepoRoot('retired-ui-lookup');
     const relativePath = 'frontend/src/ui/renamedLegacyUiConsumer.ts';
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -787,12 +837,12 @@ describe('no-committed-media guard', () => {
         }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('rejects filename-derived review membership', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'filename-review-membership-test-'));
+    const repoRoot = fixtureRepoRoot('filename-review-membership');
     const relativePath = 'frontend/src/ui/renamedReviewCatalog.ts';
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -805,12 +855,12 @@ describe('no-committed-media guard', () => {
         }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('rejects filename-derived Studio catalog taxonomy', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'filename-studio-taxonomy-test-'));
+    const repoRoot = fixtureRepoRoot('filename-studio-taxonomy');
     const relativePath = 'frontend/src/ui/renamedStudioCatalog.ts';
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -823,12 +873,12 @@ describe('no-committed-media guard', () => {
         }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('rejects compiled installed Chrome tint configuration', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'compiled-chrome-tint-test-'));
+    const repoRoot = fixtureRepoRoot('compiled-chrome-tint');
     const relativePath = 'frontend/src/ui/renamedChrome.ts';
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -841,12 +891,12 @@ describe('no-committed-media guard', () => {
         }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('rejects restoration of the obsolete installed design-catalog tree', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'compiled-design-tree-test-'));
+    const repoRoot = fixtureRepoRoot('compiled-design-tree');
     const relativePath = 'frontend/src/ui/design/renamedCatalog.ts';
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -859,12 +909,12 @@ describe('no-committed-media guard', () => {
         }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('rejects board media identities constructed from level ids', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'constructed-board-media-test-'));
+    const repoRoot = fixtureRepoRoot('constructed-board-media');
     const relativePath = 'frontend/src/ui/renamedOnboarding.ts';
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -877,7 +927,7 @@ describe('no-committed-media guard', () => {
         }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
@@ -888,7 +938,7 @@ describe('no-committed-media guard', () => {
     'export const SFX_ASSETS = [];',
     "button.textContent = 'Copy for Claude'; // bake SFX into source",
   ])('rejects retired hardcoded/copy-to-source SFX authority: %s', (source) => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-sfx-profile-test-'));
+    const repoRoot = fixtureRepoRoot('retired-sfx-profile');
     const relativePath = 'frontend/src/sfxLegacy.ts';
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -902,12 +952,12 @@ describe('no-committed-media guard', () => {
         }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('rejects a compiled wall material inventory after the drawable cutover', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-wall-inventory-test-'));
+    const repoRoot = fixtureRepoRoot('retired-wall-inventory');
     const relativePath = 'packages/board-render/src/core/walls.ts';
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -917,12 +967,12 @@ describe('no-committed-media guard', () => {
         expect.objectContaining({ detail: 'compiled feature/barrier material inventory remains after drawable-catalog cutover' }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('rejects compiled ground-cover and wall-decoration inventories after the drawable cutover', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-drawable-inventory-test-'));
+    const repoRoot = fixtureRepoRoot('retired-drawable-inventory');
     const relativePath = 'packages/board-render/src/core/decorLegacy.ts';
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -932,7 +982,7 @@ describe('no-committed-media guard', () => {
         expect.objectContaining({ detail: 'compiled ground-cover/wall-decoration/prop inventory remains after drawable-catalog cutover' }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
@@ -946,7 +996,7 @@ describe('no-committed-media guard', () => {
     'const selected = COMPARE_TILES[0];',
     'const selected = wallMaterials()[0];',
   ])('rejects compiled installed defaults and first-row fallbacks: %s', (source) => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-installed-default-test-'));
+    const repoRoot = fixtureRepoRoot('retired-installed-default');
     const relativePath = 'frontend/src/ui/legacyInstalledDefault.ts';
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -956,12 +1006,12 @@ describe('no-committed-media guard', () => {
         expect.objectContaining({ detail: 'compiled installed-content default or first-row fallback remains after drawable-catalog cutover' }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('rejects filename-derived ground-cover rosters', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-ground-cover-path-roster-test-'));
+    const repoRoot = fixtureRepoRoot('retired-ground-cover-path-roster');
     const relativePath = 'backend/server.js';
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -971,12 +1021,12 @@ describe('no-committed-media guard', () => {
         expect.objectContaining({ detail: 'filename-derived ground-cover roster remains after drawable-catalog cutover' }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('rejects compiled editor terrain and animated-scene inventories after the drawable cutover', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-editor-scene-inventory-test-'));
+    const repoRoot = fixtureRepoRoot('retired-editor-scene-inventory');
     const relativePath = 'frontend/src/ui/legacyScene.ts';
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -986,12 +1036,12 @@ describe('no-committed-media guard', () => {
         expect.objectContaining({ detail: 'compiled terrain/editor/scene presentation inventory remains after drawable-catalog cutover' }),
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('rejects external source fetchers that bypass backend archival', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'no-committed-source-fetch-test-'));
+    const repoRoot = fixtureRepoRoot('no-committed-source-fetch');
     const relativePath = 'frontend/scripts/fetch-art-source.mjs';
     const target = path.join(repoRoot, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -1003,12 +1053,12 @@ describe('no-committed-media guard', () => {
       });
       expect(violations).toEqual([expect.objectContaining({ kind: 'external-source-fetcher-bypass', path: relativePath })]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 
   it('integrates tracked-media, public-root, writer, and synthetic-fixture rules', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'no-committed-media-test-'));
+    const repoRoot = fixtureRepoRoot('no-committed-media');
     const write = (relativePath, value) => {
       const target = path.join(repoRoot, relativePath);
       fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -1058,7 +1108,7 @@ describe('no-committed-media guard', () => {
         'tracked-public-asset-file:frontend/public/assets/manifest.json',
       ]);
     } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
+      removeFixture(repoRoot);
     }
   });
 });
