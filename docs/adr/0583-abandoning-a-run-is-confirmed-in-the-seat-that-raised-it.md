@@ -9,7 +9,7 @@ refines:
   - "[ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)"
 ---
 
-# ADR-0581: Abandoning a Run is confirmed in the seat that raised it, and the HUD is handed the control
+# ADR-0583: Abandoning a Run is confirmed in the seat that raised it, and the HUD is handed the control
 
 ## Context
 

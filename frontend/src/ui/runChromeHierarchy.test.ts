@@ -273,7 +273,7 @@ describe('Run chrome hierarchy', () => {
   });
 
   // Abandoning asks in the seat that raised the question — the verb SPLITS into its two answers,
-  // the same confirmation Start New Run uses for replacing an active Run (ADR-0571/0581). No
+  // the same confirmation Start New Run uses for replacing an active Run (ADR-0571/0583). No
   // dialog is opened over the Run being discussed.
   it('confirms Abandon Run in its own seat instead of a popup', () => {
     expect(runScreen).not.toContain('useConfirm');
@@ -302,7 +302,7 @@ describe('Run chrome hierarchy', () => {
   // The armed question is ONE box holding its two answers. Two framed buttons in a row with a gap
   // is what this kit puts between things that are NOT related; the line between Keep Run and
   // Abandon Run is the box's own column line, laid and capped from its topology where it meets the
-  // frame at either end (ADR-0242/0571/0581).
+  // frame at either end (ADR-0242/0571/0583).
   it('draws the armed answers as cells of one box rather than framed buttons in a row', () => {
     expect(runScreen).toMatch(
       /<DividedInnerChromeBox\b[\s\S]{0,400}?className="run-abandon-box"[\s\S]{0,400}?columns=\{verbColumns\(answers\)\}[\s\S]{0,200}?fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/,
@@ -329,7 +329,7 @@ describe('Run chrome hierarchy', () => {
 
   // Abandon Run already says what it does. A sentence spelling out that abandoning loses the Run
   // tells a player who pressed Abandon Run nothing they did not just decide — it was the dialog's
-  // body text surviving its dialog, and it goes with the dialog (ADR-0581). The QUESTION is still
+  // body text surviving its dialog, and it goes with the dialog (ADR-0583). The QUESTION is still
   // asked: it is the armed group's accessible name.
   it('states no stakes beside the two answers', () => {
     expect(runScreen).not.toContain('permanently removed');
