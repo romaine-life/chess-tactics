@@ -46,17 +46,22 @@ function settingsHref(): string {
   return `/settings?returnTo=${encodeURIComponent(pathname + search)}`;
 }
 
-// Dev-only signed-in stub (import.meta.env.DEV, stripped from prod) so the account
-// chrome can be previewed/screenshotted on any screen without a backend: ?demo=1
-// stubs this user, ?menu=open renders the account menu open, ?edit=open opens the
-// rename field, ?watchers=N stubs N observers on the run. In demo mode the rename is
-// local-only (it never hits the backend).
-const DEMO_USER: AuthUser = {
-  signed_in: true,
-  name: 'Nelson',
-  email: 'nelson@romaine.life',
-  avatar_url: 'https://www.gravatar.com/avatar/6b1b9282bc036370f9a6998fe9296233?d=retro&s=80&f=y',
-};
+// Dev-only signed-in stub so the account chrome can be previewed/screenshotted on any screen
+// without a backend: ?demo=1 stubs this user, ?menu=open renders the account menu open,
+// ?edit=open opens the rename field. In demo mode the rename is local-only.
+//
+// The TERNARY is what keeps this out of production, and it is not decoration. Gating only the
+// READS leaves the object itself referenced from useState, where nothing can eliminate it -- the
+// owner's real address and gravatar shipped inside the production bundle that way. Written as a
+// dead branch, the constant folds to null and the literal is dropped.
+const DEMO_USER: AuthUser | null = import.meta.env.DEV
+  ? {
+      signed_in: true,
+      name: 'Nelson',
+      email: 'nelson@romaine.life',
+      avatar_url: 'https://www.gravatar.com/avatar/6b1b9282bc036370f9a6998fe9296233?d=retro&s=80&f=y',
+    }
+  : null;
 
 interface HeaderAccountClusterProps {
   /** Where to return after sign-in (defaults to the current path+query). */
@@ -78,11 +83,14 @@ export function HeaderAccountCluster({
   // permanent by design (the music seat stays dimmed with no soundtrack rather than vanishing),
   // so a seat for "nobody is watching" would spend bar width on nothing almost always. Being
   // watched is a property of the account, and the account already has a seat.
-  const demoWatchers = import.meta.env.DEV ? Number(params.get('watchers')) : Number.NaN;
-  const watchers = Number.isFinite(demoWatchers) && demoWatchers > 0 ? Math.floor(demoWatchers) : 0;
+  //
+  // Fed by the observation feature when it lands. There is deliberately no query parameter for
+  // it: a hidden dev param on a player route is not a review surface, and chrome states are
+  // reviewed in the Studio.
+  const watchers = 0;
 
   const sharedAuth = useAuthSession((session) => session.status);
-  const [demoUser, setDemoUser] = useState<AuthUser>(DEMO_USER);
+  const [demoUser, setDemoUser] = useState<AuthUser | null>(DEMO_USER);
   const me = demo ? demoUser : sharedAuth?.user ?? null;
   const authResolved = demo || sharedAuth?.reachable === true;
 
@@ -92,7 +100,7 @@ export function HeaderAccountCluster({
 
   const renameAccount = async (next: string): Promise<void> => {
     if (demo) {
-      setDemoUser((prev) => ({ ...prev, name: next || prev.email || 'Player' }));
+      setDemoUser((prev) => (prev ? { ...prev, name: next || prev.email || 'Player' } : prev));
       return;
     }
     try {
