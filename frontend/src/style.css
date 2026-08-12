@@ -29439,51 +29439,6 @@ button.section-box-head {
 
 .kit-icon-candidate-seat {
   align-items: center;
-/* Unit Roster — the shipped roster at 1:1, for comparative judgement.
-   No zoom control by design: these sprites are authored at their delivery size,
-   so magnifying them would hide the thing being inspected. */
-.unit-roster-lab {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 0;
-  overflow: auto;
-  padding: 12px;
-}
-
- /* Pinned: auditing 49 tiers means scrolling deep into the grid and still needing
-    the zoom stepper and the palette picker, which otherwise scroll away above. */
-.unit-roster-controls {
-  align-items: center;
-  /* Frosted rather than painted: an opaque bar would be surface paint, which belongs
-     to registered chrome (ADR-0032/0059/0201). A backdrop blur keeps the controls
-     legible over the grid scrolling beneath them without inventing a surface. */
-  backdrop-filter: blur(8px);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  padding: 8px 4px;
-  position: sticky;
-  top: 0;
-  z-index: 2;
-}
-
-.unit-roster-controls label {
-  align-items: center;
-  display: flex;
-  font-size: var(--ds-text-xs);
-  gap: 6px;
-}
-
-.unit-roster-toggle { cursor: pointer; }
-
-.unit-roster-note {
-  color: var(--ds-text-muted, #9aa4b0);
-  font-size: var(--ds-text-xs);
-  margin: 0;
-}
-
-.unit-roster-grid {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -29540,6 +29495,58 @@ button.section-box-head {
   color: #5c7f9e;
   font-size: var(--ds-text-xs);
   margin-inline-start: auto;
+}
+
+/* Unit Roster — the shipped roster at 1:1, for comparative judgement.
+   No zoom control by design: these sprites are authored at their delivery size,
+   so magnifying them would hide the thing being inspected. */
+.unit-roster-lab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+ /* Pinned: auditing 49 tiers means scrolling deep into the grid and still needing
+    the zoom stepper and the palette picker, which otherwise scroll away above. */
+.unit-roster-controls {
+  align-items: center;
+  /* Frosted rather than painted: an opaque bar would be surface paint, which belongs
+     to registered chrome (ADR-0032/0059/0201). A backdrop blur keeps the controls
+     legible over the grid scrolling beneath them without inventing a surface. */
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 8px 4px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.unit-roster-controls label {
+  align-items: center;
+  display: flex;
+  font-size: var(--ds-text-xs);
+  gap: 6px;
+}
+
+.unit-roster-toggle { cursor: pointer; }
+
+.unit-roster-note {
+  color: var(--ds-text-muted, #9aa4b0);
+  font-size: var(--ds-text-xs);
+  margin: 0;
+}
+
+.unit-roster-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .unit-roster-row {
   align-items: center;
   display: flex;
