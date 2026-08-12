@@ -16,7 +16,7 @@ describe('BattleLogMarks', () => {
   it('names one slot and one app-ui role per forged mark, so two seats cannot drift', () => {
     // Outcomes first, then the causes they pair with — the order a row wears them.
     expect(BATTLE_LOG_FORGED_MARKS)
-      .toEqual(['victory', 'defeat', 'draw', 'checkmate', 'stalemate', 'resign', 'check']);
+      .toEqual(['victory', 'defeat', 'draw', 'checkmate', 'stalemate', 'resign', 'check', 'gold']);
     for (const mark of BATTLE_LOG_FORGED_MARKS) {
       expect(BATTLE_LOG_MARK_SLOT[mark]).toBe(`ui/kit/icons/game/${mark}.png`);
       expect(BATTLE_LOG_MARK_MEDIA_ROLE[mark]).toBe(`ui-kit-icons-game-${mark}-png`);
@@ -24,7 +24,9 @@ describe('BattleLogMarks', () => {
     // The borrowed marks have no slot here on purpose — a slot for the clock or the coin
     // would be a second drawing of a fact the game already draws (ADR-0059).
     expect(isBattleLogForgedMark('clock')).toBe(false);
-    expect(isBattleLogForgedMark('gold')).toBe(false);
+    // `gold` IS forged: the Run's coin is a RESOURCE mark stating no direction, and a payout
+    // needs one, so this is a different fact rather than the same fact drawn twice.
+    expect(isBattleLogForgedMark('gold')).toBe(true);
     expect(isBattleLogForgedMark('gold-loss')).toBe(false);
     expect(isBattleLogForgedMark('objective')).toBe(false);
   });
@@ -54,7 +56,7 @@ describe('BattleLogMarks', () => {
     expect(markup).toContain('aria-label="Defeat, Out of time"');
   });
 
-  it('reuses the marks the game already has for the clock, the flag and the coins', () => {
+  it('reuses the marks the game already has for the clock, the flag and the loss coin', () => {
     // Not a second forged hourglass, flag or coin (ADR-0059) — the title bar's own glyphs and
     // the Run's own coin components, so the log agrees with the screen beside it. Asserted
     // against the resolved role, which is what proves it is the SAME installed bytes rather
@@ -63,7 +65,6 @@ describe('BattleLogMarks', () => {
       .toContain(`src="${installedUiMedia('ui-kit-icons-game-wait-png')}"`);
     expect(renderToStaticMarkup(<BattleLogMarks marks={['objective']} />))
       .toContain(`src="${installedUiMedia('ui-kit-icons-game-objective-png')}"`);
-    expect(renderToStaticMarkup(<BattleLogMarks marks={['gold']} />)).toContain('run-gold-icon');
     // Gaining and losing gold are two different installed marks, and the sign is the thing a
     // reader most wants at a glance — so the row does not spell it out in words.
     expect(renderToStaticMarkup(<BattleLogMarks marks={['gold-loss']} />))

@@ -44,6 +44,7 @@ export const BATTLE_LOG_MARK_BATCH_IDS: readonly string[] = Object.freeze([
   'battle-log-defeat-mark-2026-08-12-v2',
   'battle-log-marks-2026-08-12-v1',
   'battle-log-cause-marks-2026-08-12-v1',
+  'battle-log-gold-mark-2026-08-12-v1',
 ]);
 
 const SEAT_LABEL: Readonly<Record<BattleLogForgedMark, string>> = Object.freeze({
@@ -54,6 +55,7 @@ const SEAT_LABEL: Readonly<Record<BattleLogForgedMark, string>> = Object.freeze(
   stalemate: 'Stalemate (cause)',
   resign: 'Resigned (cause)',
   check: 'Check',
+  gold: 'Gold claimed',
 });
 
 /**

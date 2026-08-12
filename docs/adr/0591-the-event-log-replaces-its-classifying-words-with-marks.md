@@ -128,14 +128,18 @@ should be judged by sight rather than described.
   unmarked and shows their full original sentences. No `PersistedMatch` version bump and no Run
   save migration follows — this is presentation plus seven additive live-media slots, each
   recoverable by retiring it.
-- **A gold row states its sign in the number** — `Knight’s fork — +5`, `Move undone — −10`.
-  The Run HAS a directional gain mark (coins rising behind a green arrow, accepted under
-  ADR-0486) but ADR-0511 retired it when no Run transaction paid gold in any more, so the gain
-  row draws the neutral resource coin while the loss row draws a real transaction mark. A bare
-  number under an undirected coin leaves the reader to guess whether five gold arrived or left.
-  The Manubium row is now a gain consumer and is the reason to bring that mark back; its slot is
-  retired in the database, so an upload is refused `media_slot_retired` and restoring it is a
-  migration rather than an edit. The sign stays honest either way.
+- **A payout needs a TRANSACTION mark, not a resource mark.** The Run’s `RunGoldIcon` means
+  “gold” and states no direction, so drawing it on a payout put a bare number under an
+  undirected glyph — beside a loss row whose mark says its direction outright. `gold` is
+  therefore FORGED rather than borrowed: the game’s own coin stack carrying a green plus,
+  installed at `ui/kit/icons/game/gold.png`. That is a different fact from the Run’s resource
+  coin, not the same fact drawn twice, which is what keeps it inside ADR-0059 rather than
+  against it. The number keeps its sign too — `Knight’s fork — +5`, `Move undone — −10` — so the
+  row reads right even at a glance that misses the glyph.
+- The Run’s retired gain mark (coins rising behind a green arrow, ADR-0486, retired by
+  ADR-0511) was considered first and rejected by the owner as too vague. Its slot is retired in
+  the database and refuses uploads with `media_slot_retired`, so restoring it would have been a
+  migration; the new mark is additive and needed none.
 - **Defeat is decided and installed:** option 115 of the plain family, content
   `ce39f7df…282deeab9`, native 49x49, accepted into `ui/kit/icons/game/defeat.png` and bound
   to `ui-kit-icons-game-defeat-png`. Every defeat line in the Event Log paints it. Six seats

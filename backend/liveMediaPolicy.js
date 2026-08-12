@@ -241,6 +241,10 @@ const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
   'ui/kit/icons/game/checkmate.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'checkmate' }),
   'ui/kit/icons/game/stalemate.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'stalemate' }),
   'ui/kit/icons/game/resign.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'resign' }),
+  // Gold ARRIVING. The Run's coin is a resource mark and states no direction, so a payout row
+  // drawing it left the number to carry the sign alone — beside a loss row whose own mark says
+  // its direction outright. This is the coin stack the game already uses, carrying a green plus.
+  'ui/kit/icons/game/gold.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'gold' }),
 });
 const CARD_TYPE_ROW_TEXTURE_COMPONENT = 'card-type-row-texture';
 const CARD_TYPE_ROW_TEXTURE_GROUP_ID = 'card-type-row-textures-pixen-v1';

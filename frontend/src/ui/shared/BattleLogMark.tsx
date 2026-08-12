@@ -12,21 +12,26 @@ import { RunGoldIcon, RunGoldTransactionIcon } from '../RunResources';
  * *Checkmate*, and "Check!" is the mark alone. What is left in the text is only what the mark
  * cannot say.
  *
- * Half the vocabulary is borrowed rather than forged, because the game already draws these
+ * Some of the vocabulary is borrowed rather than forged, because the game already draws those
  * facts elsewhere and two drawings of one fact is the defect (ADR-0059):
  *
  * - `clock` is the persistent title bar's hourglass, the same glyph the battle clock wears
  *   two inches above this row.
  * - `objective` is the title bar's objective flag.
- * - `gold` / `gold-loss` are the Run's own coins, through `RunGoldIcon` and
- *   `RunGoldTransactionIcon` — the same components the board's rising marker draws, so the
- *   number that floats off a square and the line that records it cannot disagree.
+ * - `gold-loss` is the Run's own loss mark through `RunGoldTransactionIcon` — coins scattering
+ *   behind a red arrow, the same bytes Expunctio draws.
  *
- * The four that had no existing home — `check`, `victory`, `defeat`, `draw` — get their own
- * slots in the kit's game-icon family. Each of those seats is RESERVED rather than fail-closed
- * (ADR-0318): it holds its geometry before any art decision exists, so installing one later
- * cannot shift the line beside it. The borrowed marks resolve required roles and fail closed,
- * because a Battle log quietly missing the clock is worse than one that says so.
+ * `gold` is NOT borrowed, and the reason is the distinction that caused a real bug. The Run's
+ * `RunGoldIcon` is a RESOURCE mark: it means "gold", with no direction. What a log row needs is
+ * a TRANSACTION mark: gold arriving. Drawing the neutral coin on a payout put a bare number
+ * under an undirected glyph and left the reader to work out whether five gold was won or spent
+ * — beside a loss row whose mark says its direction outright. So `gold` is forged: the coin
+ * stack the game already uses, carrying a green plus.
+ *
+ * Every forged seat is RESERVED rather than fail-closed (ADR-0318): it holds its geometry
+ * before any art decision exists, so installing one later cannot shift the line beside it. The
+ * borrowed marks resolve required roles and fail closed, because a Battle log quietly missing
+ * the clock is worse than one that says so.
  */
 
 /** The marks that need art of their own, and the `app-ui` role each resolves through. ONE
@@ -39,6 +44,7 @@ export const BATTLE_LOG_MARK_MEDIA_ROLE = Object.freeze({
   checkmate: 'ui-kit-icons-game-checkmate-png',
   stalemate: 'ui-kit-icons-game-stalemate-png',
   resign: 'ui-kit-icons-game-resign-png',
+  gold: 'ui-kit-icons-game-gold-png',
 } as const);
 
 /** The live-media slot behind each, named for review and installation. */
@@ -50,6 +56,7 @@ export const BATTLE_LOG_MARK_SLOT = Object.freeze({
   checkmate: 'ui/kit/icons/game/checkmate.png',
   stalemate: 'ui/kit/icons/game/stalemate.png',
   resign: 'ui/kit/icons/game/resign.png',
+  gold: 'ui/kit/icons/game/gold.png',
 } as const);
 
 /** A mark whose art this seat owns, as opposed to one it borrows from elsewhere. */
@@ -58,7 +65,7 @@ export type BattleLogForgedMark = keyof typeof BATTLE_LOG_MARK_SLOT;
 /** Outcome marks first, then the causes they pair with — the order a row wears them, and the
  *  order the review page offers the decisions in. */
 export const BATTLE_LOG_FORGED_MARKS: readonly BattleLogForgedMark[] =
-  Object.freeze(['victory', 'defeat', 'draw', 'checkmate', 'stalemate', 'resign', 'check'] as const);
+  Object.freeze(['victory', 'defeat', 'draw', 'checkmate', 'stalemate', 'resign', 'check', 'gold'] as const);
 
 export function isBattleLogForgedMark(mark: LogMark): mark is BattleLogForgedMark {
   return (BATTLE_LOG_FORGED_MARKS as readonly string[]).includes(mark);
@@ -96,7 +103,6 @@ const MARK_LABEL: Readonly<Record<LogMark, string>> = Object.freeze({
 });
 
 function markMedia(mark: LogMark, forgedSrc: Partial<Record<BattleLogForgedMark, string>>): ReactElement | null {
-  if (mark === 'gold') return <RunGoldIcon />;
   if (mark === 'gold-loss') return <RunGoldTransactionIcon direction="loss" />;
   if (mark === 'clock') return <img src={installedUiMedia(CLOCK_MEDIA_ROLE)} alt="" draggable={false} />;
   if (mark === 'objective') return <img src={installedUiMedia(OBJECTIVE_MEDIA_ROLE)} alt="" draggable={false} />;
