@@ -92,6 +92,25 @@ describe('Skirmish chrome hierarchy', () => {
     expect(titleContent.match(/<TitleBarStatusTip\b/g)).toHaveLength(2);
     expect(titleContent).toContain('<BattleClockChip />');
     expect(battleClockChip).toContain('<TitleBarStatusTip');
+    // Material is ONE box holding both forces, seated AHEAD of the clock (ADR-0580). The two
+    // numbers are a comparison, so nothing may stand between them — and the clock did, while
+    // they were two boxes. It is its own component rather than markup here, so the Run's bar
+    // shows the same box from the same place the clock comes from.
+    expect(titleContent).toMatch(/<BattleMaterialChip \/>\s*<BattleClockChip \/>/);
+    expect(titleContent).not.toMatch(/BattleMaterialChip relation=/);
+    expect(titleContent).not.toMatch(/skirmish-material/);
+    // The two labelled flank chips share ONE width; that is the whole mechanism, so it cannot
+    // quietly become a per-chip size.
+    expect(styleCss).toMatch(
+      /\.skirmish-topbar-status \.skirmish-turn-plate,\s*\.skirmish-topbar-status \.skirmish-objective\s*\{[\s\S]*?min-inline-size:\s*150px;/,
+    );
+    // Each readout holds a stable width so the box does not breathe as pieces come off and shove
+    // the clock beside it.
+    expect(styleCss).toMatch(/\.skirmish-material-points\s*\{[\s\S]*?min-inline-size:\s*2ch;/);
+    // The gap BETWEEN the forces must stay wider than the gap inside each, or the box reads as
+    // four loose marks instead of two pairs — that grouping is what says which number is whose.
+    expect(styleCss).toMatch(/\.skirmish-material\s*\{\s*gap:\s*var\(--ds-inline\);/);
+    expect(styleCss).toMatch(/\.skirmish-material-force\s*\{[\s\S]*?gap:\s*var\(--ds-inline-tight\);/);
     expect(titleContent).not.toMatch(/<TitleBarStatus\b[^T]/);
     expect(skirmish).not.toContain("from '../core/clock'");
     expect(titleContent).not.toMatch(/<div\b[^>]*skirmish-status-chip/);
