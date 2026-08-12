@@ -986,7 +986,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 77 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 78 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -1001,7 +1001,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 41 }, (_, index) => index + 37),
+    ...Array.from({ length: 42 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1115,7 +1115,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 77: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 78: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -5014,11 +5014,12 @@ async function main() {
     const spriteValues = [];
     for (const palette of palettes) for (const direction of directions) {
       const base = spriteParams.length;
-      spriteParams.push(assetId, palette, direction, storedSprite.sha256, storedSprite.blob_key, storedSprite.width, storedSprite.height, storedSprite.byte_length);
-      spriteValues.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8})`);
+      // `rung` is part of the key since migration 78; a base sprite's rung is its width.
+      spriteParams.push(assetId, palette, direction, storedSprite.width, storedSprite.sha256, storedSprite.blob_key, storedSprite.width, storedSprite.height, storedSprite.byte_length);
+      spriteValues.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9})`);
     }
     await queryDb(
-      `INSERT INTO unit_sprites (asset_id, palette, direction, sha256, blob_key, width, height, byte_length) VALUES ${spriteValues.join(',')}`,
+      `INSERT INTO unit_sprites (asset_id, palette, direction, rung, sha256, blob_key, width, height, byte_length) VALUES ${spriteValues.join(',')}`,
       spriteParams,
     );
   };
@@ -5082,8 +5083,8 @@ async function main() {
       [assetId, family, secondUnitId],
     );
     await queryDb(
-      `INSERT INTO unit_sprites (asset_id, palette, direction, sha256, blob_key, width, height, byte_length)
-       SELECT $1, palette, direction, sha256, blob_key, width, height, byte_length
+      `INSERT INTO unit_sprites (asset_id, palette, direction, rung, sha256, blob_key, width, height, byte_length)
+       SELECT $1, palette, direction, rung, sha256, blob_key, width, height, byte_length
          FROM unit_sprites WHERE asset_id = $2`,
       [assetId, secondUnitId],
     );

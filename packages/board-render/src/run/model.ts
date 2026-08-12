@@ -620,18 +620,29 @@ interface StandingForceUnit {
 }
 
 /**
- * What the enemy still had on the board, in points.
+ * What one side still has on the board, in points -- Pawns, since a Pawn is the 1 on the scale.
  *
- * Priced through `manubiaeUnitWorth`, so this agrees with every other place the Run values a
+ * Priced through `manubiaeUnitWorth`, so this agrees with every other place the game values a
  * unit: a promoted pawn counts as the Pawn it started as, and anything with no purchase price
  * -- the King, an obstacle -- counts for nothing. The King costing zero is what makes a
  * ground-down force score zero rather than one, which is exactly the reading intended.
+ *
+ * Deditio asked this about the enemy first and the material readout in the title bar asks it
+ * about both sides, so the side is the argument rather than a second reduce written beside this
+ * one (ADR-0059). One reader means the number a player watches during the Battle is the same
+ * number the mate is priced on afterwards -- material the player is looking at IS the Deditio
+ * forecast, and a parallel implementation could drift out of that agreement without failing.
  */
-export function standingEnemyForceValue(pieces: readonly StandingForceUnit[]): number {
+export function standingForceValue(pieces: readonly StandingForceUnit[], side: string): number {
   return pieces.reduce(
-    (total, piece) => total + (piece.alive && piece.side === 'enemy' ? manubiaeUnitWorth(piece) ?? 0 : 0),
+    (total, piece) => total + (piece.alive && piece.side === side ? manubiaeUnitWorth(piece) ?? 0 : 0),
     0,
   );
+}
+
+/** What the enemy still had on the board, in points -- what Deditio pays on. */
+export function standingEnemyForceValue(pieces: readonly StandingForceUnit[]): number {
+  return standingForceValue(pieces, 'enemy');
 }
 
 /** The whole enemy force a level fields, in points -- what a Battle nobody has fought yet

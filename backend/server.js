@@ -336,6 +336,11 @@ const oidcSessions = createOIDCSessionManager({
   // local runs, where the dev-auth lanes do not reach the token endpoint at all.
   clientSecret: process.env.OIDC_CLIENT_SECRET || '',
   publicOrigin,
+  // The session row holds live OAuth tokens: the refresh token cannot be hashed, because the
+  // backend must present it to renew. Encrypted at rest so a database read is not by itself a
+  // working credential — which matters here because localhost development connects to the
+  // production database, so DB read access is far wider than pod-environment access.
+  tokenEncryptionKey: process.env.AUTH_TOKEN_ENCRYPTION_KEY || '',
   store: useTestAuthSessionStore ? createInMemoryAuthSessionStore() : authSessionStore,
 });
 // Multiplayer lobbies + netplay relay live entirely in process: this Map is the
@@ -6217,6 +6222,47 @@ const MIGRATIONS = [
 
       CREATE INDEX IF NOT EXISTS auth_login_attempts_expires_idx
         ON auth_login_attempts (expires_at);
+    `,
+  },
+  {
+    version: 78,
+    name: 'unit sprites carry authored size rungs',
+    // A unit had exactly one authored size per palette and facing, because the primary key said
+    // so: (asset_id, palette, direction). Every other size the board needed was produced by
+    // scaling that one, and scaling DOWN is what the mip chain handles well while scaling UP is
+    // what it cannot -- an authored 26px pawn differs from the 51px sprite scaled to 26 in 53% of
+    // its pixels. Half the sprite is wrong at the sizes a wide board actually uses.
+    //
+    // `rung` is the authored WIDTH in pixels, not an index, so the row states what it is and two
+    // pieces with different frames can share the vocabulary. Existing rows take their own width,
+    // which is exactly the size they were authored at, so nothing is guessed and no art moves.
+    //
+    // The catalog keeps serving one sprite per palette and facing until a consumer asks for a
+    // rung: the smallest authored width that is at least the size wanted, so the board minifies
+    // and never magnifies.
+    sql: `
+      ALTER TABLE unit_sprites
+        ADD COLUMN IF NOT EXISTS rung integer;
+
+      UPDATE unit_sprites
+         SET rung = width
+       WHERE rung IS NULL;
+
+      ALTER TABLE unit_sprites
+        ALTER COLUMN rung SET NOT NULL;
+
+      ALTER TABLE unit_sprites
+        DROP CONSTRAINT IF EXISTS unit_sprites_rung_positive;
+      ALTER TABLE unit_sprites
+        ADD CONSTRAINT unit_sprites_rung_positive CHECK (rung > 0 AND rung <= 4096);
+
+      ALTER TABLE unit_sprites
+        DROP CONSTRAINT IF EXISTS unit_sprites_pkey;
+      ALTER TABLE unit_sprites
+        ADD PRIMARY KEY (asset_id, palette, direction, rung);
+
+      CREATE INDEX IF NOT EXISTS unit_sprites_asset_rung_idx
+        ON unit_sprites (asset_id, rung);
     `,
   },
 ];
@@ -22243,13 +22289,15 @@ async function seedUnitCatalogFromLiveSource() {
       for (const palette of UNIT_PALETTE_IDS) for (const direction of UNIT_DIRECTION_IDS) {
         const sprite = asset.sprites[palette][direction];
         await client.query(
-          `INSERT INTO unit_sprites (asset_id, palette, direction, sha256, blob_key, width, height, byte_length)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-           ON CONFLICT (asset_id, palette, direction) DO UPDATE SET
+          // The key carries `rung` since migration 78, and a base sprite's rung IS its
+          // authored width -- the same rule the migration backfilled existing rows with.
+          `INSERT INTO unit_sprites (asset_id, palette, direction, rung, sha256, blob_key, width, height, byte_length)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           ON CONFLICT (asset_id, palette, direction, rung) DO UPDATE SET
              sha256 = EXCLUDED.sha256, blob_key = EXCLUDED.blob_key,
              width = EXCLUDED.width, height = EXCLUDED.height,
              byte_length = EXCLUDED.byte_length, updated_at = now()`,
-          [asset.id, palette, direction, sprite.sha256, unitBlobKey(sprite.sha256),
+          [asset.id, palette, direction, sprite.width, sprite.sha256, unitBlobKey(sprite.sha256),
             sprite.width, sprite.height, sprite.byteLength],
         );
       }
@@ -22357,7 +22405,7 @@ async function dbReadUnitCatalog({ includeArchived = false, queryable = null } =
       [includeArchived],
     );
     const spriteResult = await db.query(
-      `SELECT s.asset_id, s.palette, s.direction, s.sha256, s.width, s.height, s.byte_length
+      `SELECT s.asset_id, s.palette, s.direction, s.sha256, s.width, s.height, s.byte_length, s.rung
          FROM unit_sprites s
          JOIN unit_assets a ON a.id = s.asset_id
         WHERE $1::boolean OR a.status <> 'archived'
@@ -22395,6 +22443,16 @@ async function dbReadUnitCatalog({ includeArchived = false, queryable = null } =
     for (const row of spriteResult.rows) {
       const asset = byId.get(String(row.asset_id));
       if (!asset) continue;
+      // Rungs are stated ONCE per asset, as the widths that exist. The catalog does not
+      // enumerate them: a client that knows the asset, its revision and the width it
+      // wants can derive the address, so a 49-rung ladder adds one short array here
+      // rather than 14,112 entries and 3MB of JSON before the game draws anything.
+      if (!asset.rungs) asset.rungs = [];
+      const rung = Number(row.rung ?? row.width);
+      if (!asset.rungs.includes(rung)) asset.rungs.push(rung);
+      // `sprites` keeps carrying the BASE rung only, so every existing consumer reads
+      // exactly what it read before and nothing has to learn about rungs to keep working.
+      if (rung !== Number(asset.footprint?.sourceCanvasWidth ?? rung)) continue;
       if (!asset.sprites[row.palette]) asset.sprites[row.palette] = {};
       asset.sprites[row.palette][row.direction] = {
       url: `/api/unit-sprites/${row.sha256}.png`,
@@ -22406,6 +22464,7 @@ async function dbReadUnitCatalog({ includeArchived = false, queryable = null } =
       asset.spriteCount += 1;
     }
     for (const asset of assets) {
+      asset.rungs = (asset.rungs || []).sort((a, b) => a - b);
       asset.complete = UNIT_PALETTE_IDS.every((palette) =>
         UNIT_DIRECTION_IDS.every((direction) => Boolean(asset.sprites[palette]?.[direction])));
     }
@@ -22554,6 +22613,55 @@ app.get(/^\/api\/unit-sprites\/([0-9a-f]{64})\.png$/, async (req, res) => {
   }
 });
 
+// A DERIVABLE sprite address, so a rung ladder costs the catalog nothing.
+//
+// The sha route below it is content-addressed: the filename IS the bytes, which is why
+// nothing can go stale and why the catalog has to state every URL — a hash cannot be
+// computed from a name. That is fine at one sprite per palette and facing, and it is
+// 14,112 rows the moment a piece carries a sprite for every zoom rung, which is 3MB of
+// JSON before the game draws anything.
+//
+// This address is derivable instead: a client that knows the asset, its revision, and
+// the width it wants can build the URL without being told. The revision keeps it
+// immutable — change the asset and every address changes with it — so it caches exactly
+// as hard as the hash does, without an index entry per file.
+app.get(/^\/api\/unit-sprites\/([0-9a-f-]{36})\/(\d+)\/([a-z-]+)\/([a-z-]+)\/(\d+)\.png$/, async (req, res) => {
+  const [assetId, revision, palette, direction, width] = [
+    String(req.params[0]), Number(req.params[1]),
+    String(req.params[2]), String(req.params[3]), Number(req.params[4]),
+  ];
+  if (!UNIT_PALETTE_IDS.includes(palette) || !UNIT_DIRECTION_IDS.includes(direction)) {
+    res.status(404).send('not found'); return;
+  }
+  if (!Number.isInteger(width) || width < 1 || width > 4096) { res.status(404).send('not found'); return; }
+  try {
+    const found = await pool.query(
+      `SELECT s.sha256
+         FROM unit_sprites s
+         JOIN unit_assets a ON a.id = s.asset_id
+        WHERE s.asset_id = $1 AND s.palette = $2 AND s.direction = $3 AND s.rung = $4
+          AND a.row_revision = $5
+        LIMIT 1`,
+      [assetId, palette, direction, width, revision],
+    );
+    const sha256 = found.rows[0] && String(found.rows[0].sha256);
+    if (!sha256) { res.status(404).send('not found'); return; }
+    const record = await unitSpriteRecord(sha256);
+    const png = record && await unitSpriteBytes(sha256, record);
+    if (!png) { res.status(404).send('not found'); return; }
+    // The revision is in the path, so this address can never point at different bytes.
+    res.setHeader('ETag', `"${sha256}"`);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Length', String(png.length));
+    res.status(200).end(png);
+  } catch (error) {
+    console.error('unit sprite rung read failed:', error && error.message);
+    res.status(503).json({ error: 'unit_sprite_unavailable' });
+  }
+});
+
 app.get('/api/admin/unit-assets', async (req, res) => {
   const user = await requireAdmin(req, res);
   if (!user) return;
@@ -22672,13 +22780,16 @@ app.put('/api/admin/unit-assets/:id/sprites/:palette/:direction', async (req, re
         throw unitMutationError('accepted_unit_asset_locked', 409, 'Create a candidate before replacing accepted sprite frames.');
       }
       await client.query(
-        `INSERT INTO unit_sprites (asset_id, palette, direction, sha256, blob_key, width, height, byte_length)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         ON CONFLICT (asset_id, palette, direction) DO UPDATE SET
+        // As above: `rung` joined the key in migration 78 and a base sprite's rung is
+        // the width it was authored at.
+        `INSERT INTO unit_sprites (asset_id, palette, direction, rung, sha256, blob_key, width, height, byte_length)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         ON CONFLICT (asset_id, palette, direction, rung) DO UPDATE SET
            sha256 = EXCLUDED.sha256, blob_key = EXCLUDED.blob_key,
            width = EXCLUDED.width, height = EXCLUDED.height,
            byte_length = EXCLUDED.byte_length, updated_at = now()`,
-        [id, palette, direction, sha256, blobKey, inspected.width, inspected.height, req.body.length],
+        [id, palette, direction, inspected.width, sha256, blobKey,
+          inspected.width, inspected.height, req.body.length],
       );
       const updated = await client.query(
         `UPDATE unit_assets SET row_revision = row_revision + 1, updated_at = now(), updated_by = $2

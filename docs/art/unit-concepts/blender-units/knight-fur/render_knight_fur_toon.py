@@ -1,0 +1,161 @@
+"""Render the 8-direction fur knight (accepted look) from the carved Staunton OBJ.
+
+Run with:  blender --background --python render_knight_fur.py
+
+The canonical pipeline fetches the private OBJ/MTL/texture bundle into a
+temporary directory and renders at the true-isometric contract angle (45 yaw / 35.264 elevation / orthographic, fixed camera,
+piece rotated per direction). The wood-grain diffuse is dropped and replaced with a
+procedural navy "hint of fur" coat (smooth muzzle, fur only on the coat — not the
+pedestal base or the sculpted mane). See docs/blender-projection-contract.md.
+
+The canonical pipeline supplies UNIT_ART_OUTPUT_DIR plus
+UNIT_ART_FRAME_WIDTH/HEIGHT. Blender writes that exact raster; no resize follows.
+
+Orientation gotchas this script handles (each cost an iteration to find):
+  - obj_import bakes an axis-conversion rotation -> transform_apply immediately.
+  - stand: longest bbox axis -> Z; flip 180 if the wider (base) end is on top.
+  - facing: the farthest head protrusion is the CREST (back), not the muzzle -> point
+    it to +Y so the muzzle faces -Y (game-south, numpad-1). Verify with a render.
+  - bake the centering translation so the turntable pivots on the vertical axis.
+"""
+import bpy, math, mathutils, os, numpy as np
+
+OBJ = os.environ.get("UNIT_ART_KNIGHT_OBJ")
+OUT = os.environ.get("UNIT_ART_OUTPUT_DIR")
+if not OBJ or not OUT:
+    raise RuntimeError("run through generate-unit-art.py; private knight bundle and output are required")
+FRAME_WIDTH = int(os.environ["UNIT_ART_FRAME_WIDTH"])
+FRAME_HEIGHT = int(os.environ["UNIT_ART_FRAME_HEIGHT"])
+if not (1 <= FRAME_WIDTH <= 4096 and 1 <= FRAME_HEIGHT <= 4096):
+    raise RuntimeError("UNIT_ART_FRAME_WIDTH/HEIGHT must be between 1 and 4096")
+os.makedirs(OUT, exist_ok=True)
+
+bpy.ops.object.select_all(action="SELECT"); bpy.ops.object.delete()
+for c in (bpy.data.meshes, bpy.data.materials, bpy.data.lights, bpy.data.cameras):
+    for b in list(c):
+        if b.users == 0: c.remove(b)
+bpy.ops.wm.obj_import(filepath=OBJ)
+ms = [o for o in bpy.context.scene.objects if o.type == "MESH"]
+for o in ms: o.select_set(True)
+bpy.context.view_layer.objects.active = ms[0]
+if len(ms) > 1: bpy.ops.object.join()
+kn = bpy.context.view_layer.objects.active; kn.name = "knight"
+bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+
+def coords():
+    n = len(kn.data.vertices); a = np.empty(n * 3); kn.data.vertices.foreach_get("co", a); return a.reshape(-1, 3)
+
+co = coords(); up = int(np.argmax(co.max(0) - co.min(0)))
+if up == 0: kn.rotation_euler = (0, math.radians(-90), 0)
+elif up == 1: kn.rotation_euler = (math.radians(90), 0, 0)
+bpy.ops.object.transform_apply(rotation=True)
+co = coords(); zr = co[:, 2].max() - co[:, 2].min()
+top = co[co[:, 2] > co[:, 2].max() - 0.2 * zr]; bot = co[co[:, 2] < co[:, 2].min() + 0.2 * zr]
+spread = lambda p: np.sqrt(((p[:, :2] - p[:, :2].mean(0)) ** 2).sum(1)).mean()
+if spread(top) > spread(bot):
+    kn.rotation_euler = (math.radians(180), 0, 0); bpy.ops.object.transform_apply(rotation=True)
+co = coords(); zmin, zmax = co[:, 2].min(), co[:, 2].max(); cen = co[:, :2].mean(0)
+head = co[co[:, 2] > zmin + 0.58 * (zmax - zmin)]; hr = np.linalg.norm(head[:, :2] - cen, axis=1)
+muz = head[hr > np.percentile(hr, 88)]; mdir = (muz[:, :2] - cen).mean(0)
+ang = math.atan2(mdir[1], mdir[0])
+kn.rotation_euler = (0, 0, (math.pi / 2) - ang); bpy.ops.object.transform_apply(rotation=True)
+co = coords(); mn = co.min(0); mx = co.max(0); s = 2.0 / (mx[2] - mn[2])
+kn.scale = (s, s, s); bpy.ops.object.transform_apply(scale=True)
+co = coords(); mn = co.min(0); mx = co.max(0)
+kn.location = (-(mn[0] + mx[0]) / 2, -(mn[1] + mx[1]) / 2, -mn[2])
+bpy.ops.object.transform_apply(location=True)
+
+# --- cel-shaded surface ------------------------------------------------------
+# The fur here is procedural noise driving a Principled base colour, which is the
+# right answer for a path-traced render and the wrong one at 78px: the noise
+# becomes speckle. Banded diffuse keeps the mane and muzzle as SHAPES instead.
+PALETTE = os.environ.get("UNIT_ART_TOON_PALETTE", "navy-blue")
+OUTLINE_PX = float(os.environ.get("UNIT_ART_TOON_OUTLINE_PX", "1"))
+STONE_PALETTES = {
+    "navy-blue": ("#102030", "#204060", "#406090"),
+    "crimson":   ("#300f14", "#6a1f2a", "#9e4552"),
+    "golden":    ("#33280c", "#7a6118", "#c2a24a"),
+    "emerald":   ("#0f2a1c", "#1f5a3c", "#46916a"),
+    "black":     ("#101214", "#262a30", "#4a525c"),
+    "white":     ("#4a505a", "#8e97a3", "#d8dee6"),
+}
+if PALETTE not in STONE_PALETTES:
+    raise RuntimeError("unknown palette " + PALETTE)
+
+
+def srgb(hex_string):
+    value = hex_string.lstrip("#")
+    out = []
+    for index in (0, 2, 4):
+        channel = int(value[index:index + 2], 16) / 255
+        out.append(channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4)
+    return tuple(out)
+
+
+m = bpy.data.materials.new("knight toon"); m.use_nodes = True
+kn.data.materials.clear(); kn.data.materials.append(m)
+nt = m.node_tree; nt.nodes.clear(); L = nt.links.new
+out = nt.nodes.new("ShaderNodeOutputMaterial")
+diffuse = nt.nodes.new("ShaderNodeBsdfDiffuse"); diffuse.inputs["Color"].default_value = (1, 1, 1, 1)
+to_rgb = nt.nodes.new("ShaderNodeShaderToRGB")
+ramp = nt.nodes.new("ShaderNodeValToRGB")
+emission = nt.nodes.new("ShaderNodeEmission")
+colors = [srgb(v) for v in STONE_PALETTES[PALETTE]]
+els = ramp.color_ramp.elements
+while len(els) > 1:
+    els.remove(els[-1])
+ramp.color_ramp.interpolation = "CONSTANT"
+els[0].position = 0.0; els[0].color = (*colors[0], 1)
+els.new(0.30).color = (*colors[1], 1)
+els.new(0.62).color = (*colors[2], 1)
+L(diffuse.outputs["BSDF"], to_rgb.inputs["Shader"])
+L(to_rgb.outputs["Color"], ramp.inputs["Fac"])
+L(ramp.outputs["Color"], emission.inputs["Color"])
+L(emission.outputs["Emission"], out.inputs["Surface"])
+
+ink = bpy.data.materials.new("toon_ink"); ink.use_nodes = True
+it = ink.node_tree; it.nodes.clear()
+io = it.nodes.new("ShaderNodeOutputMaterial"); ie = it.nodes.new("ShaderNodeEmission")
+ie.inputs["Color"].default_value = (*srgb("#0a0d14"), 1)
+it.links.new(ie.outputs["Emission"], io.inputs["Surface"])
+ink.use_backface_culling = True
+kn.data.materials.append(ink)
+shell = kn.modifiers.new("toon_ink_hull", "SOLIDIFY")
+shell.thickness = OUTLINE_PX * (2.7 * max(1.0, FRAME_HEIGHT / FRAME_WIDTH)) / FRAME_HEIGHT
+shell.offset = 1.0; shell.use_rim = False; shell.use_flip_normals = True
+shell.material_offset = 1; shell.material_offset_rim = 1
+
+w = bpy.data.worlds.new("W"); bpy.context.scene.world = w; w.use_nodes = True
+bg = w.node_tree.nodes.get("Background"); bg.inputs["Color"].default_value = (0.02, 0.03, 0.05, 1); bg.inputs["Strength"].default_value = 0.35
+bpy.ops.object.light_add(type="SUN", location=(-3, -4, 8)); k = bpy.context.object
+k.rotation_euler = (math.radians(50), 0, math.radians(-38)); k.data.energy = 4.0; k.data.color = (0.85, 0.92, 1.0)
+bpy.ops.object.light_add(type="AREA", location=(3.5, -3, 3)); bpy.context.object.data.energy = 130 * 0.12; bpy.context.object.data.size = 6; bpy.context.object.data.color = (0.7, 0.78, 1.0)
+bpy.ops.object.light_add(type="AREA", location=(-2, 4, 4.5)); bpy.context.object.data.energy = 80 * 0.12; bpy.context.object.data.size = 4; bpy.context.object.data.color = (0.55, 0.7, 1.0)
+
+E = math.radians(35.264389682754654); D = 5.0; comp = math.cos(E) * D / math.sqrt(2)
+bpy.ops.object.camera_add(); cam = bpy.context.object; bpy.context.scene.camera = cam
+cam.location = (comp, -comp, 1.0 + math.sin(E) * D)
+cam.rotation_euler = (mathutils.Vector((0, 0, 1.0)) - cam.location).to_track_quat("-Z", "Y").to_euler()
+cam.data.type = "ORTHO"; cam.data.ortho_scale = 2.7
+s = bpy.context.scene
+s.render.engine = "BLENDER_EEVEE"; s.eevee.taa_render_samples = 64; s.render.filter_size = 0.5
+s.view_settings.view_transform = "Standard"
+s.render.resolution_x = FRAME_WIDTH; s.render.resolution_y = FRAME_HEIGHT; s.render.resolution_percentage = 100
+s.render.film_transparent = True
+s.render.image_settings.file_format = "PNG"; s.render.image_settings.color_mode = "RGBA"
+DIRECTIONS = {"south": 0, "south-west": -45, "west": -90, "north-west": -135,
+              "north": 180, "north-east": 135, "east": 90, "south-east": 45}
+for name, angle in DIRECTIONS.items():
+    kn.rotation_euler = (0, 0, math.radians(angle))
+    s.render.filepath = os.path.join(OUT, name); bpy.ops.render.render(write_still=True)
+    print("rendered", name)
+
+# Exact seating calibration: project the ground-contact point (base bottom-center =
+# world origin) through the render camera. This IS the unitAnchor — deterministic, not
+# eyeballed. Do NOT use the alpha base row (in iso the widest row is the back rim).
+from bpy_extras.object_utils import world_to_camera_view
+kn.rotation_euler = (0, 0, 0)
+bpy.context.view_layer.update()
+v = world_to_camera_view(s, cam, mathutils.Vector((0, 0, 0)))
+print("ANCHOR  unitAnchorX=%.3f%%  unitAnchorY=%.3f%%" % (v.x * 100.0, (1.0 - v.y) * 100.0))
+print("UNIT_TOON_DONE", OUT, "palette=%s" % PALETTE)
