@@ -814,8 +814,8 @@ function renderScene(scene: ScenePath, search: string): ReactElement {
   // rather than a mode of /run because it shows a DIFFERENT Run to a different person: /run is
   // "mine, continue it", and nothing about that sentence is true here.
   if (path.startsWith('/run/watch/')) {
-    const owner = decodeURIComponent(path.slice('/run/watch/'.length));
-    return owner ? <RunWatch owner={owner} /> : <PredrawnReference />;
+    const handle = decodeURIComponent(path.slice('/run/watch/'.length));
+    return handle ? <RunWatch handle={handle} /> : <PredrawnReference />;
   }
   if (path === '/predrawn-reference') return <PredrawnReference />;
   if (path === '/studio' && new URLSearchParams(search).get('runSectioReview') === '1') return <RunSectioArtReview />;

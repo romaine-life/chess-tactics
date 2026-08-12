@@ -39,8 +39,8 @@ export function LiveRunsCatalog(): ReactElement {
             <span className="live-run-seen">{relativeTimeLabel(run.updated_at)}</span>
             <a
               className="tileset-view-action"
-              href={`/run/watch/${encodeURIComponent(run.owner_email)}`}
-              data-nav={`/run/watch/${encodeURIComponent(run.owner_email)}`}
+              href={`/run/watch/${encodeURIComponent(run.handle)}`}
+              data-nav={`/run/watch/${encodeURIComponent(run.handle)}`}
             >
               Watch
             </a>

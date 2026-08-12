@@ -31,10 +31,10 @@ const PHASE_LABELS: Record<string, string> = {
   victory: 'Victory',
 };
 
-export function RunWatch({ owner }: { owner: string }): ReactElement {
+export function RunWatch({ handle }: { handle: string }): ReactElement {
   const [frame, setFrame] = useState<RunObservationFrame | null>(null);
 
-  useEffect(() => observeRun(owner, setFrame), [owner]);
+  useEffect(() => observeRun(handle, setFrame), [handle]);
 
   // The scene is painted once the first frame lands: until then there is nothing to show, and a
   // scene that never reports leaves the shell on its startup ladder forever.
@@ -45,7 +45,7 @@ export function RunWatch({ owner }: { owner: string }): ReactElement {
   );
 
   if (!frame) return <p className="run-watch-note">Opening the observation…</p>;
-  if (frame.type === 'gone') return <p className="run-watch-note">{owner} has no Run in progress.</p>;
+  if (frame.type === 'gone') return <p className="run-watch-note">That player has no Run in progress.</p>;
   if (frame.type !== 'run') return <p className="run-watch-note" role="alert">That Run could not be read.</p>;
 
   const run = (frame.run ?? {}) as WatchedRun;
@@ -57,7 +57,7 @@ export function RunWatch({ owner }: { owner: string }): ReactElement {
   return (
     <div className="run-watch">
       <p className="run-watch-caption">
-        <span className="run-watch-player">{owner}</span>
+        <span className="run-watch-player">{frame.owner ?? 'Watching'}</span>
         <span className="run-watch-where">
           {[
             run.phase ? PHASE_LABELS[run.phase] ?? run.phase : null,

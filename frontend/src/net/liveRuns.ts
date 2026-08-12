@@ -6,6 +6,8 @@ import { HttpError } from './http';
 
 export interface LiveRunPresence {
   owner_email: string;
+  /** Opaque, derived from the owner. The watch ADDRESS is built from this, never the email. */
+  handle: string;
   run_id: string | null;
   phase: string | null;
   /** 1-based, the way the Run screen counts. Null when the document has no battle index. */

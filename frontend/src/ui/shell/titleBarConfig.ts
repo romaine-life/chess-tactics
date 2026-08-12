@@ -105,11 +105,9 @@ export function titleBarConfig(path: string, search = ''): TitleBarConfig | null
     // Names the person being watched, not the screen: "Run" would read as the viewer's own Run,
     // which is the one thing this page is not. Back lands on the Live Runs list it came from.
     return {
+      // The handle is opaque, so it is not shown: the page itself names the player, from the
+      // authorized stream rather than from the address.
       screenName: 'Watching',
-      routeSegments: [{
-        label: decodeURIComponent(path.slice('/run/watch/'.length)),
-        to: path,
-      }],
     };
   }
   if (path === '/settings' || path.startsWith('/settings/')) {

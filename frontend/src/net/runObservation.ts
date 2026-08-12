@@ -5,14 +5,17 @@ export interface RunObservationFrame {
   type: 'run' | 'gone' | 'unavailable';
   run?: unknown;
   revision?: number;
+  /** Who is being watched. Carried in the FRAME, not the address: the stream is already
+   * authorized, while a URL travels into history, referrers and screenshots. */
+  owner?: string;
 }
 
 /** Watch one player's Run. Admin-only server side; the returned function ends the observation. */
 export function observeRun(
-  ownerEmail: string,
+  handle: string,
   onFrame: (frame: RunObservationFrame) => void,
 ): () => void {
-  const source = new EventSource(`/api/admin/runs/${encodeURIComponent(ownerEmail)}/observe`);
+  const source = new EventSource(`/api/admin/runs/${encodeURIComponent(handle)}/observe`);
   source.onmessage = (event) => {
     // One bad frame must not tear down the stream — EventSource keeps the socket, so the next
     // acknowledged mutation recovers the view on its own.

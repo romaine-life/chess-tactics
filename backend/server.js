@@ -23790,14 +23790,47 @@ function publishRunToObservers(ownerEmail, body, revision) {
   sseBroadcast(runObservers, ownerEmail, { type: 'run', run: body, revision });
 }
 
+// A Run's watch HANDLE. The observation address must not carry the player's email: a route ends
+// up in browser history, in referrers, in screenshots and in pasted links, and an address is the
+// one part of this feature that travels. The handle is derived rather than stored, so it needs no
+// table -- and because it is derived it is also NOT a capability: it identifies, it does not
+// authorize. Admin authorization still gates the stream. The revocable share token the friends
+// tier needs is a different object, and it will resolve through this same lookup.
+const RUN_WATCH_HANDLE_SECRET = process.env.RUN_WATCH_HANDLE_SECRET
+  || process.env.SESSION_SECRET
+  || 'chess-tactics-run-watch-handle';
+
+function runWatchHandle(ownerEmail) {
+  return crypto.createHmac('sha256', RUN_WATCH_HANDLE_SECRET)
+    .update(String(ownerEmail || '').toLowerCase())
+    .digest('base64url')
+    .slice(0, 22);
+}
+
+/** The owner a handle names, or null. Compared against the accounts that actually hold a Run, so
+ * an unknown handle is indistinguishable from an account with nothing to watch. */
+async function ownerForRunWatchHandle(handle) {
+  const { rows } = await pool.query('SELECT owner_email FROM active_runs');
+  for (const row of rows) {
+    if (runWatchHandle(row.owner_email) === handle) return row.owner_email;
+  }
+  return null;
+}
+
 // GET /api/admin/runs/:owner/observe — ADMIN: watch one player's Run, live.
 // Opening this IS the act that starts observation, so the player's indicator lights up here and
 // goes out when the connection closes.
 app.get('/api/admin/runs/:owner/observe', async (req, res) => {
   const user = await requireAdmin(req, res);
   if (!user) return;
-  const owner = String(req.params.owner || '').toLowerCase();
-  if (!owner) { res.status(400).json({ error: 'invalid_owner' }); return; }
+  const handle = String(req.params.owner || '');
+  if (!handle) { res.status(400).json({ error: 'invalid_run_handle' }); return; }
+  let owner = null;
+  try {
+    await ensureDbReady();
+    owner = await ownerForRunWatchHandle(handle);
+  } catch { /* fall through to the unavailable frame below */ }
+  if (!owner) { res.status(404).json({ error: 'run_not_found' }); return; }
   const heartbeat = startSse(res);
   sseSetAdd(runObservers, owner, res);
   publishObserverCount(owner);
@@ -23810,7 +23843,7 @@ app.get('/api/admin/runs/:owner/observe', async (req, res) => {
     // Observation begins from NOW, so the opening frame is the Run as it currently stands
     // rather than a history the watcher missed.
     sseWrite(res, `data: ${JSON.stringify(rows[0]
-      ? { type: 'run', run: rows[0].body, revision: Number(rows[0].revision) }
+      ? { type: 'run', run: rows[0].body, revision: Number(rows[0].revision), owner }
       : { type: 'gone' })}\n\n`);
   } catch {
     sseWrite(res, 'data: {"type":"unavailable"}\n\n');
@@ -23863,6 +23896,8 @@ app.get('/api/admin/live-runs', async (req, res) => {
       const battleIndex = Number.isInteger(run.battleIndex) ? run.battleIndex : null;
       return {
         owner_email: row.owner_email,
+        // The link is built from this; the email above is for the admin's eyes, not the address.
+        handle: runWatchHandle(row.owner_email),
         run_id: typeof run.id === 'string' ? run.id : null,
         phase: typeof run.phase === 'string' ? run.phase : null,
         // battleIndex is 0-based on the document; players and the Run screen count from one.
