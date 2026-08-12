@@ -19651,16 +19651,7 @@ button.tileset-relationship-cell {
 /* A row that declared itself one thing across every column IS one cell: its content spans the
    whole width. Stated on the grid's own class, not on the section box, because it is the other
    half of what `spans="all"` means — the rail breaks there AND the content fills the row.
-
-   The row carries ONE track as well as spanning each child across it. `> *` reaches elements
-   only, so a row handed a bare sentence — an anonymous grid item, which no selector can name —
-   took the first of the box's tracks and wrapped at that width, against the remaining tracks of
-   empty surface reading as lopsided padding. A single-track row cannot express that state at
-   all, and the child rule stays because a row may still hold several children. */
-.chrome-divided-grid__row--spanning {
-  grid-template-columns: minmax(0, 1fr);
-}
-
+ */
 .chrome-divided-grid__row--spanning > * {
   grid-column: 1 / -1;
 }
@@ -24171,9 +24162,9 @@ button.tileset-relationship-cell {
 }
 
 /* Abandon Run asks its question in its own seat rather than over the screen: at rest one control,
-   armed the stakes above a Keep Run / Abandon Run pair. The control owns its own layout and its
-   own button measure, because the three seats it stands in (the Sectio rail, the Deployment panel
-   and the Battle HUD) each wrapped it in a different row and sized it differently. */
+   armed a Keep Run / Abandon Run pair. The control owns its own layout and its own button measure,
+   because the three seats it stands in (the Sectio rail, the Deployment panel and the Battle HUD)
+   each wrapped it in a different row and sized it differently. */
 .run-abandon-control {
   display: grid;
   gap: var(--ds-inline-tight);
@@ -24185,47 +24176,25 @@ button.tileset-relationship-cell {
   min-block-size: 40px;
 }
 
-/* Armed, the question is ONE box: the stakes and the two answers are cells of it, so the line
-   between Keep Run and Abandon Run is the box's own column line and the line above them is its row
-   boundary — both laid and capped from its topology (ADR-0242). Two framed buttons in a row with a
-   gap is what this kit puts between things that are NOT related; this is one question and its two
-   answers, and the same treatment Start New Run's armed replacement wears. */
+/* Armed, the question is ONE box holding its two answers, so the line between Keep Run and Abandon
+   Run is the box's own column line — laid and capped from its topology where it meets the frame at
+   either end (ADR-0242). Two framed buttons in a row with a gap is what this kit puts between
+   things that are NOT related; this is one question and its two answers, and the same treatment
+   Start New Run's armed replacement wears. It carries no sentence: Abandon Run already says what
+   it does, and a warning restating that is the dialog's body text outliving its dialog. */
 .run-abandon-box {
   /* The plate a CELL paints when it IS the control. A framed rail button is a 40px box whose
      9-slice eats a rail's width a side, so about 26px of it is oak; a cell has no frame — the
      box's rails are its edges — so painting the neighbour's whole box would read heavier than
      every framed control beside it. Same trade `.run-prep-box` records. */
   --run-abandon-plate-h: 30px;
-  /* NO padding: a rail has to reach the frame on both sides, and box padding would hold every one
-     of them short of it. The cell that carries a sentence takes the inset instead. */
+  /* NO padding: a rail has to reach the frame on both sides, and box padding would hold it short
+     of them. */
   padding: 0;
 }
 
-/* A cell that CARRIES something takes the inset and wears the box's marble — bare marble is what
-   says it cannot be pressed, between a frame and a row of solid wood. The dimmed ink is Start New
-   Run's replacement warning's: the two confirmations state their stakes in one voice. */
-.run-abandon-stakes {
-  padding: var(--ds-inset);
-}
-
-/* The sentence runs the full measure between the insets and stays LEFT aligned. Centring a
-   wrapped warning is the wrong instinct: prose is read from a fixed left edge, and a block ragged
-   on both sides is harder to read at exactly the moment the reader is deciding whether to destroy
-   something. A short last line is simply what left-aligned prose looks like.
-   What IS worth fixing is the rag itself — the break fell after "This", orphaning one word onto
-   the closing line. `balance` evens the lines instead, which is the browser doing the job a hard
-   break would do worse: this control stands in three seats at three widths, and any break authored
-   for one of them is wrong in the other two. */
-.run-abandon-stakes p {
-  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
-  font-size: var(--ds-text-xs);
-  margin: 0;
-  text-align: start;
-  text-wrap: balance;
-}
-
-/* A cell that IS something takes no inset at all: the verb fills the whole area between the rails
-   and the wood reaches them. */
+/* A cell that IS the control takes no inset at all: the verb fills the whole area between the box's
+   frame and its rail, and the wood reaches them. */
 .run-abandon-verbs {
   min-block-size: var(--run-abandon-plate-h);
   padding: 0;

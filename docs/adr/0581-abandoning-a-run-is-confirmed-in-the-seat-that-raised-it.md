@@ -31,7 +31,9 @@ forbids — and the popup was the worse of the two:
   confirmation did not look like it belonged to the panel that raised it.
 - **It spent a heading restating the button just pressed.** "Abandon this Run?" over a button
   labelled Abandon Run is a row of the dialog carrying no information.
-- Nothing about the stakes needed a layer of its own. They are one sentence.
+- **And its body text existed to justify the layer it opened.** A modal that has darkened the
+  screen owes the reader an explanation for doing so; a sentence naming what abandoning costs is
+  that explanation. Answering in the seat opens nothing, so it owes nothing.
 
 The control also existed three times. `RunMetaControls` and `ArrangedDeploymentControls` each built
 their own `ChromeButton` and called the shared hook, and the Battle HUD built a THIRD one from an
@@ -43,40 +45,33 @@ action assembled separately in three places drifts by definition, and it had.
 **Abandoning a Run is confirmed in its own seat, by ONE control mounted in three places.**
 
 - `RunAbandonControl` owns both states. At rest it is the single danger verb wearing the sign-out
-  mark, `data-testid="abandon-run"`, exactly where it stood. Pressing it ARMS the question: the
-  seat states what is lost, and the verb SPLITS into `run-abandon-keep` / `run-abandon-confirm`,
-  which is [ADR-0571](0571-start-new-run-is-one-box-of-cells.md)'s shape for the same question.
-- **The armed question is ONE BOX, and the stakes and both answers are cells of it.** A
-  `DividedInnerChromeBox` wearing the structural marble, `verbColumns(answers)` declaring its two
-  tracks, and `ChromeVerbRow` seating the answers. **Every line in it is a rail the box lays and
-  caps from its own grid lines** ([ADR-0242](0242-divided-inner-grids-own-one-rail-topology.md)):
-  the line between Keep Run and Abandon Run is the box's column line, tee'd where it meets the
-  boundary above and capped where it meets the frame below; the line above them is that boundary.
-  Shipped first as two framed buttons in a flex row with a gap between them, which is wrong twice
-  over — a gap is what this kit puts between things that are NOT related, and each button drew a
-  second frame a few pixels inside the one the question needed. The box takes no padding, or every
-  rail would stop short of the frame it has to reach; the sentence's cell takes the inset instead,
-  and the cells that ARE controls take none at all, so the wood reaches the rails.
+  mark, `data-testid="abandon-run"`, exactly where it stood. Pressing it ARMS the question, and the
+  verb SPLITS into `run-abandon-keep` / `run-abandon-confirm`, which is
+  [ADR-0571](0571-start-new-run-is-one-box-of-cells.md)'s shape for the same question.
+- **The armed question is ONE BOX holding its two answers.** A `DividedInnerChromeBox` wearing the
+  structural marble, `verbColumns(answers)` declaring its two tracks, and `ChromeVerbRow` seating
+  them. **The line between Keep Run and Abandon Run is a rail the box lays and caps from its own
+  grid lines** ([ADR-0242](0242-divided-inner-grids-own-one-rail-topology.md)), capped where it
+  meets the frame at either end. Shipped first as two framed buttons in a flex row with a gap
+  between them, which is wrong twice over — a gap is what this kit puts between things that are NOT
+  related, and each button drew a second frame a few pixels inside the one the question needed. The
+  box takes no padding, or the rail would stop short of the frame it has to reach, and the cells
+  that ARE the controls take none either, so the wood reaches it.
+- **It states NO stakes.** Abandon Run already says what it does; a sentence adding that abandoning
+  loses the army, the gold and the Battle progress tells a player who just pressed Abandon Run
+  nothing they have not already decided. It was carried over from the dialog without being
+  re-examined, and it read like it: a warning cell whose only job was to be the modal's body. The
+  question is still ASKED — it is the armed group's accessible name — it simply is not restated on
+  screen above two answers that are unambiguous. This also settles the alignment argument the
+  sentence started, by removing the sentence: nothing in the box is prose, and the two verb cells
+  centre their labels the way every verb cell in the app does.
 - **`useConfirm` is gone from the Run.** It keeps its other consumers — Resign, the Level Editor,
   the Campaign editor — and this ADR does not retire the primitive. It says a Run's own destructive
-  verb is not one of them, because that question has an inline answer already.
+  verb is not one of them, because that question has an inline answer already. Where a dialog IS
+  right, its body text is still right: what does not survive is copying that body into a control
+  that opens nothing.
 - **The dialog's safeties are kept rather than dropped.** Arming moves focus to Keep Run, and
   Escape keeps the Run. Those were the two things the modal did that the label alone does not.
-- **The stakes appear only when armed.** A standing sentence about losing everything under every
-  Run screen is noise on the screens nobody is abandoning from. It reads in the same dimmed ink as
-  Start New Run's replacement warning — the two confirmations in this game state their stakes in
-  one voice.
-- **The sentence is a PARAGRAPH at the full measure, left aligned, with its rag balanced.** A
-  spanning row spans by giving each of its ELEMENT children the whole track list; an anonymous text
-  item is not one and no selector can name it, so a bare sentence took the first of the box's two
-  tracks, wrapped at half its width, and left the second track of empty marble reading as lopsided
-  padding. `.chrome-divided-grid__row--spanning` now carries one track as well as spanning its
-  children, so that state cannot be expressed by any consumer. Centring the warning was the wrong
-  instinct and is not what was wrong: prose is read from a fixed left edge, and a block ragged on
-  both sides is hardest to read at exactly the moment the reader is deciding whether to destroy
-  something. The RAG is what deserved fixing — the break orphaned "This" onto the closing line — and
-  `text-wrap: balance` is what fixes it, because this control stands in three seats at three widths
-  and a break authored for one of them is wrong in the other two.
 - **The answers share one ROW**, each its own compartment of it. They are two answers to one
   question; stacked, they read as two separate things to do. Neither wears a mark: the mark belongs
   to the control that ASKED, and at half a rail's width there is no room for one beside the word.
@@ -115,11 +110,9 @@ action assembled separately in three places drifts by definition, and it had.
 - The destructive path was driven end to end: a real click on the armed Abandon Run lands on
   `/play/select/run` reporting **No active Run**. A real click on Keep Run, and a real Escape,
   each return the seat to its resting control with the Run intact.
-- The armed state is TALLER than the resting one, and the seat grows when the question is asked.
-  In two of the three seats nothing is below it, and in the HUD only the admin section moves. This
-  is not [ADR-0571](0571-start-new-run-is-one-box-of-cells.md)'s reserved-space case: that reserves
-  room for a disclosure almost nobody opens, so the column must not shift under a player who never
-  touches it. This growth is the direct answer to a press, on the frame that answers it.
+- The seat barely moves when the question is asked: the resting verb is a 40px framed button and the
+  armed box is one 30px plate inside its own frame, 44px. Carrying the stakes made it three times
+  that; without them, arming reads as the control changing rather than the rail re-laying itself.
 - `data-testid="abandon-run"` stays on the ARMING control, so anything that presses it presses the
   same thing it always did and then meets the question. The two answers are new ids.
 - No gameplay, RunSaveVersion, save-shape or database change. `abandon()` is untouched, including

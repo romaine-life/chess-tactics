@@ -313,18 +313,21 @@ function RunTitleBarStatus({ run, path, search, view, battlefieldMounted }: {
 /**
  * Abandon Run — the control and its confirmation in ONE seat, with nothing opened over the screen.
  *
- * Pressing it ARMS the question, and the armed question is ONE BOX: the stakes and the two answers
- * are cells of it, the line between Keep Run and Abandon Run is the box's own column line, and the
- * line above them is its row boundary — laid and capped from the box's topology, so nothing here
- * draws a rule and no page shows through between the parts (ADR-0242/ADR-0571). Two framed buttons
- * in a row with a gap is what this kit puts between things that are NOT related; these are one
- * question and its two answers.
+ * Pressing it ARMS the question, and the armed question is ONE BOX holding the two answers: the
+ * line between Keep Run and Abandon Run is the box's own column line, capped where it meets the
+ * frame at either end — laid from the box's topology, so nothing here draws a rule and no page
+ * shows through between them (ADR-0242/ADR-0571). Two framed buttons in a row with a gap is what
+ * this kit puts between things that are NOT related; these are one question and its two answers.
  *
  * That is the same shape Start New Run uses to confirm replacing an active Run. A dialog asked the
  * question somewhere other than where it was raised — it dimmed the Run under discussion, drew its
  * two answers in a chrome no other control on the screen wears, and spent a heading restating the
- * button that had just been pressed. Nothing about the stakes needed a layer of its own; they are
- * one sentence, and the seat has room for it.
+ * button that had just been pressed.
+ *
+ * It states NO stakes, because Abandon Run already says what it does. A sentence spelling out that
+ * abandoning loses the Run tells a player who pressed Abandon Run nothing they did not just decide,
+ * and it was the dialog's shape surviving its dialog — the body text a modal needs to justify the
+ * layer it opened. Answering in the seat needs no such justification.
  *
  * The dialog's safety is kept rather than dropped: arming moves focus to the safe answer and
  * Escape keeps the Run.
@@ -435,19 +438,8 @@ export function RunAbandonControl({
       role="group"
       aria-label="Abandon this Run?"
     >
-      {/* Bare marble — nothing in this cell can be pressed, and the oak is what tells you a surface
-          takes a click (ADR-0433). It is what the dialog's body said, in the seat that raised the
-          question; the Run names itself all over this screen already, so the sentence spends its
-          words on what is lost.
-
-          The sentence is a PARAGRAPH, not a bare text node in the row. A row spans by giving each
-          of its ELEMENT children the whole track list; an anonymous text item is not one, so the
-          sentence took the first of the box's two tracks and wrapped at half its width, against a
-          second track of empty marble that read as lopsided padding. Every other cell in the app
-          passes an element for the same reason. */}
-      <ChromeDividedGridRow spans="all" className="run-abandon-stakes" role="note">
-        <p>Your army, gold, lipsana and Battle progress are permanently removed. This cannot be undone.</p>
-      </ChromeDividedGridRow>
+      {/* The box's one row. The question it asks is the group's accessible name, not a sentence
+          taking a cell above these — Abandon Run already said what it does. */}
       <ChromeVerbRow verbs={answers} className="run-abandon-verbs" cellClassName="run-abandon-verb" />
     </DividedInnerChromeBox>
   );
