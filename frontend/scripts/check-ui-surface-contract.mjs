@@ -25,6 +25,14 @@ const APPROVED_FRAMELESS_SURFACE_RESETS = new Map([
     'border-color:transparent',
     'box-shadow:none',
   ])],
+  // ADR-0576 adds one row to the account menu, shown only to an admin whose eight-hour
+  // publishing window has closed. The menu's kit panel is already the surface; this row is a
+  // sentence inside it, so it paints nothing and only removes the browser's own button chrome —
+  // the same shape as the name control and the door it sits under.
+  ['src/style.css|.account-menu-reauth', new Set([
+    'background:none',
+    'border:0',
+  ])],
   // ADR-0254 retains one shared inner frame around the grouped reliquary. These
   // resets keep its icon triggers visually unframed inside that owned surface.
   ['src/style.css|.enchiridion-lipsanon-grouped-trigger', new Set([

@@ -191,10 +191,152 @@ const frontendDir = process.env.FRONTEND_DIR || path.join(__dirname, '..', 'fron
 const staticFrontendDir = process.env.STATIC_FRONTEND_DIR || '';
 const authBaseUrl = (process.env.AUTH_BASE_URL || 'https://auth.romaine.life').replace(/\/+$/, '');
 const publicOrigin = (process.env.PUBLIC_ORIGIN || 'https://chess-tactics.com').replace(/\/+$/, '');
+// The session store is Postgres, so a session is a row rather than a pair of cookies: it survives
+// a restart, it can be revoked, and its lifetime is ours to set. Every statement is defined next
+// to the manager that uses it, and the manager takes the store as a parameter so the whole of the
+// authentication logic is testable without a database.
+const authSessionStore = {
+  async createLoginAttempt({ stateHash, codeVerifier, nonce, returnTo, expiresAt }) {
+    await pool.query(
+      `INSERT INTO auth_login_attempts (state_hash, code_verifier, nonce, return_to, expires_at)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [stateHash, codeVerifier, nonce, returnTo, expiresAt],
+    );
+  },
+  // Spent on read: an authorization code may be presented once, and so may the state that
+  // authorises redeeming it.
+  async consumeLoginAttempt(stateHash) {
+    const { rows } = await pool.query(
+      `DELETE FROM auth_login_attempts WHERE state_hash = $1
+       RETURNING code_verifier, nonce, return_to, expires_at`,
+      [stateHash],
+    );
+    if (!rows.length) return null;
+    return {
+      codeVerifier: rows[0].code_verifier,
+      nonce: rows[0].nonce,
+      returnTo: rows[0].return_to,
+      expiresAt: rows[0].expires_at,
+    };
+  },
+  async deleteExpiredLoginAttempts(before) {
+    await pool.query('DELETE FROM auth_login_attempts WHERE expires_at <= $1', [before]);
+  },
+  async createSession(record) {
+    await pool.query(
+      `INSERT INTO auth_sessions (
+         id, token_hash, user_email, claims, access_token, access_expires_at, refresh_token,
+         authenticated_at, created_at, last_seen_at, idle_expires_at, absolute_expires_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      [
+        record.id, record.tokenHash, record.userEmail, JSON.stringify(record.claims),
+        record.accessToken, record.accessExpiresAt, record.refreshToken,
+        record.authenticatedAt, record.createdAt, record.lastSeenAt,
+        record.idleExpiresAt, record.absoluteExpiresAt,
+      ],
+    );
+  },
+  async readSessionByTokenHash(tokenHash) {
+    const { rows } = await pool.query(
+      `SELECT id, user_email, claims, access_token, access_expires_at, refresh_token,
+              authenticated_at, created_at, last_seen_at, idle_expires_at, absolute_expires_at
+         FROM auth_sessions WHERE token_hash = $1`,
+      [tokenHash],
+    );
+    if (!rows.length) return null;
+    const row = rows[0];
+    return {
+      id: row.id,
+      userEmail: row.user_email,
+      claims: row.claims,
+      accessToken: row.access_token,
+      accessExpiresAt: row.access_expires_at,
+      refreshToken: row.refresh_token,
+      authenticatedAt: row.authenticated_at,
+      createdAt: row.created_at,
+      lastSeenAt: row.last_seen_at,
+      idleExpiresAt: row.idle_expires_at,
+      absoluteExpiresAt: row.absolute_expires_at,
+    };
+  },
+  async touchSession(id, { lastSeenAt, idleExpiresAt }) {
+    await pool.query(
+      'UPDATE auth_sessions SET last_seen_at = $2, idle_expires_at = $3 WHERE id = $1',
+      [id, lastSeenAt, idleExpiresAt],
+    );
+  },
+  async updateSessionTokens(id, { accessToken, accessExpiresAt, refreshToken, claims }) {
+    await pool.query(
+      `UPDATE auth_sessions
+          SET access_token = $2, access_expires_at = $3, refresh_token = $4, claims = $5
+        WHERE id = $1`,
+      [id, accessToken, accessExpiresAt, refreshToken, JSON.stringify(claims)],
+    );
+  },
+  async markAuthenticated(id, authenticatedAt) {
+    await pool.query(
+      'UPDATE auth_sessions SET authenticated_at = $2 WHERE id = $1',
+      [id, authenticatedAt],
+    );
+  },
+  async deleteSession(id) {
+    await pool.query('DELETE FROM auth_sessions WHERE id = $1', [id]);
+  },
+};
+
+// The multiplayer protocol smoke test boots this server with no database at all, deliberately, so
+// lobby and netplay stay testable without Postgres. Sessions are rows, so that lane needs
+// somewhere to put them. This is the same shape as the DB-free lobby content seam above: an
+// explicit `NODE_ENV=test` process AND an explicit opt-in, so setting one alone does nothing.
+// Merely reaching this code in any other environment is impossible, which is the point — an
+// in-memory session store that could activate in production would be a defect worse than the ones
+// this file is fixing.
+function createInMemoryAuthSessionStore() {
+  const sessions = new Map();
+  const attempts = new Map();
+  return {
+    async createLoginAttempt(attempt) { attempts.set(attempt.stateHash, attempt); },
+    async consumeLoginAttempt(stateHash) {
+      const attempt = attempts.get(stateHash) || null;
+      attempts.delete(stateHash);
+      return attempt;
+    },
+    async deleteExpiredLoginAttempts(before) {
+      for (const [key, value] of attempts) if (value.expiresAt <= before) attempts.delete(key);
+    },
+    async createSession(record) { sessions.set(record.tokenHash, { ...record }); },
+    async readSessionByTokenHash(tokenHash) {
+      const record = sessions.get(tokenHash);
+      return record ? { ...record } : null;
+    },
+    async touchSession(id, patch) {
+      for (const record of sessions.values()) if (record.id === id) Object.assign(record, patch);
+    },
+    async updateSessionTokens(id, patch) {
+      for (const record of sessions.values()) if (record.id === id) Object.assign(record, patch);
+    },
+    async markAuthenticated(id, authenticatedAt) {
+      for (const record of sessions.values()) if (record.id === id) record.authenticatedAt = authenticatedAt;
+    },
+    async deleteSession(id) {
+      for (const [key, record] of sessions) if (record.id === id) sessions.delete(key);
+    },
+  };
+}
+const useTestAuthSessionStore = process.env.NODE_ENV === 'test'
+  && process.env.AUTH_SESSION_TEST_STORE === 'memory';
+if (useTestAuthSessionStore) {
+  console.warn('auth sessions: in-memory test store active (NODE_ENV=test + AUTH_SESSION_TEST_STORE=memory)');
+}
+
 const oidcSessions = createOIDCSessionManager({
   issuer: authBaseUrl,
   clientId: process.env.OIDC_CLIENT_ID || 'chess-tactics',
+  // A BFF is a confidential client (draft-ietf-oauth-browser-based-apps-26 §6.1.3.1). Absent in
+  // local runs, where the dev-auth lanes do not reach the token endpoint at all.
+  clientSecret: process.env.OIDC_CLIENT_SECRET || '',
   publicOrigin,
+  store: useTestAuthSessionStore ? createInMemoryAuthSessionStore() : authSessionStore,
 });
 // Multiplayer lobbies + netplay relay live entirely in process: this Map is the
 // authoritative store and the SSE subscriber sets below hold live connections.
@@ -6023,6 +6165,62 @@ const MIGRATIONS = [
   },
   {
     version: 77,
+    name: 'the browser holds a session identifier, the server holds the tokens',
+    // ADR-0576. Chess Tactics is a Backend-For-Frontend, and a BFF keeps its OAuth tokens and
+    // hands the browser a session cookie (draft-ietf-oauth-browser-based-apps-26 §6.1.1). It had
+    // been doing the opposite: the access and refresh tokens WERE the browser's cookies, so there
+    // was no session to revoke, no identity to cache, and no record whose lifetime we controlled.
+    //
+    // `auth_sessions` is that record. The cookie carries a random token; only its SHA-256 is
+    // stored, so a database leak yields no usable session. Claims are cached here so an ordinary
+    // request costs a local read instead of a round trip to the identity provider on every call.
+    //
+    // Three deadlines, because they answer different questions. `idle_expires_at` slides while the
+    // session is used and is what a returning player is measured against. `absolute_expires_at` is
+    // fixed at sign-in and cannot be extended by activity. `authenticated_at` is when credentials
+    // were last actually presented, which is what the admin window reads — a session may be
+    // legitimately alive for months and still not be fresh enough to publish game content.
+    //
+    // `auth_login_attempts` holds the PKCE verifier and nonce between /api/auth/sign-in and the
+    // callback. That state lived in a process Map, so a restart inside the window failed the
+    // sign-in outright and a second replica would never have worked at all.
+    sql: `
+      CREATE TABLE IF NOT EXISTS auth_sessions (
+        id                  text        PRIMARY KEY,
+        token_hash          text        NOT NULL UNIQUE,
+        user_email          text        NOT NULL,
+        claims              jsonb       NOT NULL,
+        access_token        text,
+        access_expires_at   timestamptz,
+        refresh_token       text,
+        authenticated_at    timestamptz NOT NULL DEFAULT now(),
+        created_at          timestamptz NOT NULL DEFAULT now(),
+        last_seen_at        timestamptz NOT NULL DEFAULT now(),
+        idle_expires_at     timestamptz NOT NULL,
+        absolute_expires_at timestamptz NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS auth_sessions_user_email_idx
+        ON auth_sessions (user_email);
+      -- Expiry sweeps read this; both deadlines matter, so the earlier one governs.
+      CREATE INDEX IF NOT EXISTS auth_sessions_expiry_idx
+        ON auth_sessions (LEAST(idle_expires_at, absolute_expires_at));
+
+      CREATE TABLE IF NOT EXISTS auth_login_attempts (
+        state_hash    text        PRIMARY KEY,
+        code_verifier text        NOT NULL,
+        nonce         text        NOT NULL,
+        return_to     text        NOT NULL,
+        created_at    timestamptz NOT NULL DEFAULT now(),
+        expires_at    timestamptz NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS auth_login_attempts_expires_idx
+        ON auth_login_attempts (expires_at);
+    `,
+  },
+  {
+    version: 78,
     name: 'unit sprites carry authored size rungs',
     // A unit had exactly one authored size per palette and facing, because the primary key said
     // so: (asset_id, palette, direction). Every other size the board needed was produced by
@@ -7370,6 +7568,12 @@ function publicUser(session) {
     // campaigns); the real gate is server-side requireAdmin. The allowlist itself is
     // never sent to the client.
     is_admin: isAdminEmail(user.email),
+    // Whether admin writes would be accepted right now (decision 3 / ADR-0576). The session is
+    // valid either way; this says whether credentials were presented recently enough to publish
+    // game content. Sent so an admin can re-authenticate BEFORE losing a piece of work to a
+    // rejected save, rather than discovering it from a failed request. Dev-auth lanes carry no
+    // session row and report true — there is no identity provider behind them to re-ask.
+    admin_fresh: session && session.adminFresh === false ? false : true,
   };
 }
 
@@ -7879,21 +8083,27 @@ function applyLevelPatch(level, raw) {
   Object.assign(level, next);
 }
 
-// Dev sign-in bypass — skips the Microsoft round-trip so sign-in is testable
-// off-network. Two triggers, BOTH dev-only:
-//   - a *.tank.dev.romaine.life host — the deployed dev-slot domain (unchanged), and
-//   - a loopback host when DEV_AUTH=1 — a local `node server.js` for exercising the
-//     real sign-in flow / lobbies without Postgres or Microsoft (see CLAUDE.md).
-// Prod pods never set DEV_AUTH and their ingress Host is chess-tactics.com, so a
-// spoofed `Host: localhost` header cannot switch this on in production.
+// Dev sign-in bypass — skips the Microsoft round-trip so sign-in is testable off-network on a
+// local `node server.js`, without Postgres or Microsoft (see CLAUDE.md).
+//
+// It is gated on `DEV_AUTH=1` ALONE, which no deployed lane sets. There used to be a second
+// trigger — any Host containing `.tank.dev.romaine.life` — and it was not gated on DEV_AUTH at
+// all, so a request carrying that host and a fixed cookie value was granted a session with no
+// credential whatsoever. Production never received such a request, because the Gateway pins
+// `hostnames: [chess-tactics.com]` and `trust proxy` is off. That is the entire reason it was
+// safe: a routing rule in a different layer, one Helm edit away from not being true, guarding an
+// unauthenticated session grant compiled into the production binary. It also matched by
+// SUBSTRING.
+//
+// The same file already knew better — PUBLIC_ORIGIN is pinned from `.Values.hostname` in
+// `k8s/templates/deployment.yaml:51` precisely so the redirect URI "never reflects the
+// client-controllable Host / X-Forwarded-Host headers". That principle applies here and now does.
+// Deployed dev slots sign in through the real identity provider like every other lane (ADR-0577).
 function isDevAuthHost(req) {
+  if (process.env.DEV_AUTH !== '1') return false;
   const host = (req.get('host') || '').toLowerCase();
-  if (host.includes('.tank.dev.romaine.life')) return true;
-  if (process.env.DEV_AUTH === '1') {
-    const bare = host.replace(/:\d+$/, ''); // strip :port (IPv6 stays bracketed)
-    if (bare === 'localhost' || bare === '127.0.0.1' || bare === '[::1]') return true;
-  }
-  return false;
+  const bare = host.replace(/:\d+$/, ''); // strip :port (IPv6 stays bracketed)
+  return bare === 'localhost' || bare === '127.0.0.1' || bare === '[::1]';
 }
 
 function isLoopbackRequest(req) {
@@ -7926,7 +8136,12 @@ async function readSession(req, res) {
     const granted = isLoopbackRequest(req) ? await verifiedDevGrantSession() : null;
     if (granted) return granted;
   }
-  return oidcSessions.readSession(req.get('cookie') || '', res);
+  const session = await oidcSessions.readSession(req.get('cookie') || '', res);
+  // Held for `requireAdmin`, which needs the session's own authentication time rather than just
+  // who it belongs to. Dev-auth lanes return above and leave this unset, which is how they stay
+  // exempt from a re-authentication that has no identity provider behind it.
+  req.authSession = session;
+  return session;
 }
 
 async function requireUser(req, res) {
@@ -7957,17 +8172,39 @@ async function requireAdmin(req, res) {
     res.status(403).json({ error: 'admin_required' });
     return null;
   }
+  // Decision 3 of docs/auth-security-audit.md. Admin capability is not the session: these
+  // endpoints publish game content every player sees, and the session carrying them now lasts 90
+  // days. Credentials must have been presented within the last 8 hours, which bounds what a stolen
+  // session can do to live content without asking the owner to re-authenticate mid-task.
+  //
+  // Read from our own session row rather than the provider's `auth_time` claim, which it reports
+  // in milliseconds where OIDC Core requires seconds (F11) — a freshness check against that value
+  // would pass unconditionally, which is worse than not checking.
+  //
+  // The dev-auth lanes carry no session row and answer `undefined`, which is not `false`: a local
+  // developer is not put through a re-authentication that has no identity provider behind it.
+  if (req.authSession && req.authSession.adminFresh === false) {
+    // `insufficient_user_authentication` is RFC 9470's name for exactly this answer: the session
+    // is valid, the authentication behind it is not recent enough. Using the standard name keeps
+    // it distinguishable from a real sign-out, which matters because the browser treats any other
+    // 401 as the session ending.
+    res.status(401).json({
+      error: 'insufficient_user_authentication',
+      // The client sends the owner through prompt=login and returns them here.
+      reauthenticate: '/api/auth/sign-in?prompt=login',
+    });
+    return null;
+  }
   return user;
 }
 
+// Writing a design portfolio requires a signed-in user, and nothing else grants it.
+//
+// This used to hand out a synthetic `test-slot@chess-tactics.local` writer to any request whose
+// Host satisfied `isDevAuthHost` — the second instance of F7's defect, on a path that writes real
+// rows to `design_portfolios`. Deleted for the same reason as the first: an identity conferred by
+// a request header is not an identity (ADR-0577). Deployed slots sign in.
 async function requireDesignPortfolioWriter(req, res) {
-  if (isDevAuthHost(req)) {
-    return {
-      email: 'test-slot@chess-tactics.local',
-      name: 'Test Slot',
-      role: 'designer',
-    };
-  }
   return requireUser(req, res);
 }
 
@@ -9317,7 +9554,12 @@ app.get('/api/auth/sign-in', async (req, res) => {
     return;
   }
   try {
-    const authorizeURL = await oidcSessions.startLogin(safeReturnPath(req.query.returnTo), res);
+    // `prompt=login` re-arms the admin window (decision 3) by asking the provider for credentials
+    // again. The callback recognises the session already in hand and re-arms it in place, so the
+    // player session — and its absolute deadline — survives the re-authentication.
+    const authorizeURL = await oidcSessions.startLogin(safeReturnPath(req.query.returnTo), res, {
+      forceLogin: req.query.prompt === 'login',
+    });
     res.redirect(302, authorizeURL);
   } catch (error) {
     console.error('OIDC sign-in start failed:', error);
@@ -9339,10 +9581,19 @@ app.get('/api/auth/callback', async (req, res) => {
   }
 });
 
-app.post('/api/auth/sign-out', (req, res) => {
-  oidcSessions.clearSession(res);
-  // Local DEV_AUTH uses the legacy-shaped mock cookie only inside loopback and
-  // test-slot lanes; clear it alongside the production OIDC cookies.
+// Signing out deletes the session row, which is what makes it dead everywhere at once, and then
+// revokes the tokens it held so they cannot be replayed on their own. An unreachable identity
+// provider does not keep the session alive: the row is already gone by then.
+app.post('/api/auth/sign-out', async (req, res) => {
+  try {
+    await oidcSessions.signOut(req.get('cookie') || '', res);
+  } catch (error) {
+    // The session is ended locally regardless; upstream revocation is best-effort and its failure
+    // must not answer an error to someone who asked to be signed out.
+    console.warn('sign-out revocation failed:', error.message);
+  }
+  // The local dev lane signs in with a mock cookie rather than a real session, so signing out has
+  // to clear that too or a developer can never reach the signed-out state on their own machine.
   res.append('Set-Cookie', 'better-auth.session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
   res.status(204).end();
 });
