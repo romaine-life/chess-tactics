@@ -103,11 +103,21 @@ export function unitAssetProductionEligibility(
   } catch {
     // Human notes are valid for native candidates; only structured resampling evidence blocks.
   }
+  // A recapture resizes finished delivery art: the input is already authored pixels,
+  // so the resampler destroys decisions and the provenance chain is circular. Still
+  // blocked, and the stored monotonic block above still means never.
   if (
     asset.method === 'Accepted sprite smooth recapture'
     || provenance?.pipeline === 'accepted-sprite-recapture'
-    || provenance?.spatialResampling === true
   ) {
+    return { eligible: false, reason: 'spatial-resampling', adr: 'ADR-0076' };
+  }
+  // A supersampled render reconstructs the SOURCE MODEL down to delivery size, which
+  // is how a small image is rendered well -- the same averaging Blender's own pixel
+  // filter performs, at a ratio where it does more good. ADR-0549 admits it as native
+  // generation, so `spatialResampling` alone no longer condemns a candidate; only
+  // resampling without a supersampled-render provenance does.
+  if (provenance?.spatialResampling === true && provenance?.pipeline !== 'supersampled-render') {
     return { eligible: false, reason: 'spatial-resampling', adr: 'ADR-0076' };
   }
   return { eligible: true };
