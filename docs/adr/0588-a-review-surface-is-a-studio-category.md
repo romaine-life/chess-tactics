@@ -72,6 +72,27 @@ The guard keys on the **path pairing**, not on a list of flag names. Keying on n
 have caught the six that already existed, which is the mistake that let the sixth — and, mid-flight,
 the seventh — be written.
 
+## A fitted mark's ink height belongs to its SEAT, not to the main menu
+
+Installing the chosen terrain mark surfaced a second thing frozen where it should have been
+parameterised. A mark packed to a rail's box is *resampled*, so it cannot claim native 1×; the
+honest schema is [ADR-0560](0560-main-menu-marks-share-one-ink-box-and-one-centre.md)'s
+`main-menu-mark-fitted-production-exception-v1`, which records the fit instead of denying it. But
+that validator pinned the ink height at **52** globally, and the comment beside its slot list
+already said the opposite of what the code did — that the list is *"every mark drawn into a FITTED
+RAIL SEAT … not confined to the main menu's own five"*, and that a shared ink height is a property
+of **the seat**.
+
+The Enchiridion's section rail measures **40**. So a terrain mark could state 52 and be a lie, or
+state 40 and be refused. `FITTED_MARK_INK_HEIGHT_BY_SLOT` now carries the height per slot, 52
+stays the default, and the transform string is derived from it so the two cannot drift. Every
+already-accepted row keeps validating against exactly what it stored, and the completeness
+validator's `metadata.inkHeight` check moved the same way.
+
+Without this, all 64 terrain candidates were **uninstallable** — acceptance would have failed at
+the last click with `media_native_evidence_required`, which is the failure `runRailMarkOptions`
+already filters candidates to avoid showing.
+
 ## Consequences
 
 - A new review surface starts as a category and is reachable the day it lands. `main` and `controls`
