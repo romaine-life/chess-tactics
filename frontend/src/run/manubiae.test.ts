@@ -364,6 +364,87 @@ describe("a Knight's fork, by how many prongs the enemy cannot answer", () => {
   });
 });
 
+describe('a capture and a check in the same move', () => {
+  it('pays a capture that gives check, seated on the square the capture landed on', () => {
+    // A Rook takes a Bishop and runs along the rank into the King from the square it took on.
+    // The capture wins nothing — a Rook for a Bishop is a losing trade — so the tempo is the
+    // whole of what is paid for here.
+    const rook = P('player', 'rook', 3, 6);
+    const bishop = P('enemy', 'bishop', 3, 4);
+    const king = P('enemy', 'king', 0, 4);
+    const got = earned([rook, bishop, king], rook, { x: 3, y: 4, capture: bishop.id });
+
+    expect(ids(got)).toEqual(['capture-with-check']);
+    expect(got[0].at).toEqual({ x: 3, y: 4 });
+  });
+
+  it('pays nothing for a capture that leaves the King alone', () => {
+    // The same take, with the King off the rank it lands on.
+    const rook = P('player', 'rook', 3, 6);
+    const bishop = P('enemy', 'bishop', 3, 4);
+    const king = P('enemy', 'king', 0, 0);
+    expect(earned([rook, bishop, king], rook, { x: 3, y: 4, capture: bishop.id })).toEqual([]);
+  });
+
+  it('pays nothing for a check that takes nothing', () => {
+    // Both halves are required. An ordinary check is not a Manubium and never was.
+    const rook = P('player', 'rook', 3, 6);
+    const king = P('enemy', 'king', 0, 4);
+    expect(earned([rook, king], rook, { x: 0, y: 6 })).toEqual([]);
+  });
+
+  it('stacks with what the capture won, because material and tempo are different deeds', () => {
+    // A Knight takes their Queen and checks from the square it lands on: six points of material
+    // AND a move they must spend answering the check instead of taking it back.
+    const knight = P('player', 'knight', 4, 6);
+    const queen = P('enemy', 'queen', 3, 4);
+    const king = P('enemy', 'king', 5, 3);
+    const got = ids(earned([knight, queen, king], knight, { x: 3, y: 4, capture: queen.id }));
+
+    expect(got).toContain('advantageous-capture');
+    expect(got).toContain('capture-with-check');
+  });
+
+  it('counts a check the capture UNCOVERS, not only one the capturing unit gives', () => {
+    // The Bishop steps off the file to take a Knight, and the Rook behind it now runs to the
+    // King. The player took a piece and gave check in the same move, which is the deed, however
+    // the check is delivered — so this earns the discovery as well.
+    const rook = P('player', 'rook', 2, 8);
+    const bishop = P('player', 'bishop', 2, 4);
+    const victim = P('enemy', 'knight', 3, 3);
+    const king = P('enemy', 'king', 2, 1);
+    const got = ids(earned([rook, bishop, victim, king], bishop, { x: 3, y: 3, capture: victim.id }));
+
+    expect(got).toContain('discovered-check');
+    expect(got).toContain('capture-with-check');
+  });
+
+  it('stacks with the mate, the way the other check deeds already do', () => {
+    // A Rook takes their Rook on the back rank and that is the Battle. The mate ladder pays once
+    // for the mate; this is paid for the capture, which is a different thing that happened.
+    const rook = P('player', 'rook', 7, 4);
+    const victim = P('enemy', 'rook', 7, 0);
+    const pieces = [
+      rook,
+      victim,
+      P('enemy', 'king', 0, 0),
+      P('enemy', 'pawn', 0, 1, { pawnForward: 'south' }),
+      P('enemy', 'pawn', 1, 1, { pawnForward: 'south' }),
+    ];
+    const got = ids(earned(pieces, rook, { x: 7, y: 0, capture: victim.id }));
+
+    expect(got).toContain('capture-with-check');
+    expect(got).toContain('humble-mate');
+  });
+
+  it('pays the enemy nothing for taking with check', () => {
+    const rook = P('enemy', 'rook', 3, 4);
+    const bishop = P('player', 'bishop', 3, 6);
+    const king = P('player', 'king', 0, 6);
+    expect(earned([rook, bishop, king], rook, { x: 3, y: 6, capture: bishop.id })).toEqual([]);
+  });
+});
+
 describe('a deed that reaches eight squares', () => {
   it('pays a long capture, seated where the unit landed', () => {
     // Eight up the file, the width of a whole chessboard, to take a Bishop.
