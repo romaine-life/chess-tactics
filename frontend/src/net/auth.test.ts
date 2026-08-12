@@ -1,6 +1,12 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { HttpError } from './http';
-import { fetchMeStatus, isUnauthorized, signInHref, updateDisplayName } from './auth';
+import {
+  fetchMeStatus,
+  isReauthenticationRequired,
+  isUnauthorized,
+  signInHref,
+  updateDisplayName,
+} from './auth';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -83,5 +89,21 @@ describe('updateDisplayName', () => {
     )));
 
     await expect(updateDisplayName('Renamed')).rejects.toMatchObject({ status: 401 });
+  });
+});
+
+describe('step-up challenges are not sign-outs', () => {
+  it('keeps a step-up 401 out of the sign-out classifier', () => {
+    const stepUp = new HttpError('publish officials', 401, 'insufficient_user_authentication');
+    // The session is alive; only the admin window lapsed (ADR-0576, decision 3). Reporting this
+    // to the session owner would sign the whole shell out over a session that never ended.
+    expect(isReauthenticationRequired(stepUp)).toBe(true);
+    expect(isUnauthorized(stepUp)).toBe(false);
+  });
+
+  it('still treats an ordinary 401 as an authoritative sign-out', () => {
+    const signedOut = new HttpError('save level', 401, 'sign_in_required');
+    expect(isReauthenticationRequired(signedOut)).toBe(false);
+    expect(isUnauthorized(signedOut)).toBe(true);
   });
 });

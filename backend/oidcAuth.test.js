@@ -451,6 +451,40 @@ test('the callback state must be bound to the browser that initiated login', asy
   );
 });
 
+test('re-authenticating re-arms the session in hand instead of minting a new one', async () => {
+  const h = harness();
+  const { cookies } = await signIn(h);
+  const cookie = sessionCookie(cookies);
+  const before = await h.manager.readSession(cookie, responseRecorder());
+
+  h.clock.at += ADMIN_FRESHNESS_MS + 1;
+  const stale = await h.manager.readSession(cookie, responseRecorder());
+  assert.equal(stale.adminFresh, false);
+
+  // The owner is sent through prompt=login and comes back. Their session must survive it — and
+  // so must its absolute deadline, or an admin re-authenticating every eight hours would reset
+  // the 90-day clock forever and the cap would never fire.
+  const startResponse = responseRecorder();
+  const authorize = new URL(await h.manager.startLogin('/editor', startResponse, { forceLogin: true }));
+  h.provider.state.grantedScopes = (authorize.searchParams.get('scope') || '').split(' ');
+  h.provider.state.nonce = authorize.searchParams.get('nonce');
+  const callbackResponse = responseRecorder();
+  await h.manager.completeLogin({
+    code: 'authorization-code',
+    state: authorize.searchParams.get('state'),
+    cookieHeader: `${cookie}; ${cookieHeader(startResponse.cookies)}`,
+  }, callbackResponse);
+
+  assert.ok(
+    !callbackResponse.cookies.some((value) => value.startsWith(`${SESSION_COOKIE}=`)),
+    're-arming must not replace the session cookie',
+  );
+  const after = await h.manager.readSession(cookie, responseRecorder());
+  assert.equal(after.adminFresh, true);
+  assert.equal(after.sessionId, before.sessionId, 'the same session row');
+  assert.equal(h.store.sessions.size, 1, 'no second session was created');
+});
+
 test('the login state cookie stays Lax so the cross-site callback carries it', async () => {
   const h = harness();
   const startResponse = responseRecorder();

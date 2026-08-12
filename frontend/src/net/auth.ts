@@ -13,6 +13,14 @@ export interface AuthUser {
   // affordance only (gates inline editing + "Publish to all players" for official
   // campaigns); the real gate is server-side requireAdmin. See ADR-0038.
   is_admin?: boolean;
+  /**
+   * False when admin writes would be rejected right now because credentials were last presented
+   * more than eight hours ago (ADR-0576, decision 3). The session itself is unaffected — this is
+   * not a sign-out, and treating it as one is the mistake `isUnauthorized` exists to avoid.
+   *
+   * Carried so an admin can re-authenticate before losing work to a rejected save.
+   */
+  admin_fresh?: boolean;
 }
 
 export interface AuthStatus {
@@ -86,7 +94,29 @@ export function goSignIn(returnTo?: string): void {
   window.location.href = signInHref(returnTo);
 }
 
-// True when an error thrown by a net client is a 401 (HttpError carries status).
+/**
+ * True when a 401 means the authentication behind a still-valid session is not recent enough
+ * (RFC 9470's `insufficient_user_authentication`).
+ *
+ * Admin capability expires eight hours after credentials were presented, while the session itself
+ * lasts far longer (ADR-0576). The person is signed in; they are being asked to prove it again
+ * before publishing game content.
+ */
+export function isReauthenticationRequired(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const { status, details } = error as { status?: number; details?: string };
+  return status === 401 && String(details || '').includes('insufficient_user_authentication');
+}
+
+/**
+ * True when an error thrown by a net client is an authoritative sign-out (HttpError carries
+ * status).
+ *
+ * A step-up challenge is deliberately excluded. It arrives as a 401 and is not a sign-out, and
+ * reporting it as one would knock the whole shell to anonymous over a session that is perfectly
+ * alive — the same class of lie ADR-0575 removed from the other direction.
+ */
 export function isUnauthorized(error: unknown): boolean {
+  if (isReauthenticationRequired(error)) return false;
   return Boolean(error) && typeof error === 'object' && (error as { status?: number }).status === 401;
 }

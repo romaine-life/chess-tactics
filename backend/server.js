@@ -7527,6 +7527,12 @@ function publicUser(session) {
     // campaigns); the real gate is server-side requireAdmin. The allowlist itself is
     // never sent to the client.
     is_admin: isAdminEmail(user.email),
+    // Whether admin writes would be accepted right now (decision 3 / ADR-0576). The session is
+    // valid either way; this says whether credentials were presented recently enough to publish
+    // game content. Sent so an admin can re-authenticate BEFORE losing a piece of work to a
+    // rejected save, rather than discovering it from a failed request. Dev-auth lanes carry no
+    // session row and report true — there is no identity provider behind them to re-ask.
+    admin_fresh: session && session.adminFresh === false ? false : true,
   };
 }
 
@@ -8036,21 +8042,27 @@ function applyLevelPatch(level, raw) {
   Object.assign(level, next);
 }
 
-// Dev sign-in bypass — skips the Microsoft round-trip so sign-in is testable
-// off-network. Two triggers, BOTH dev-only:
-//   - a *.tank.dev.romaine.life host — the deployed dev-slot domain (unchanged), and
-//   - a loopback host when DEV_AUTH=1 — a local `node server.js` for exercising the
-//     real sign-in flow / lobbies without Postgres or Microsoft (see CLAUDE.md).
-// Prod pods never set DEV_AUTH and their ingress Host is chess-tactics.com, so a
-// spoofed `Host: localhost` header cannot switch this on in production.
+// Dev sign-in bypass — skips the Microsoft round-trip so sign-in is testable off-network on a
+// local `node server.js`, without Postgres or Microsoft (see CLAUDE.md).
+//
+// It is gated on `DEV_AUTH=1` ALONE, which no deployed lane sets. There used to be a second
+// trigger — any Host containing `.tank.dev.romaine.life` — and it was not gated on DEV_AUTH at
+// all, so a request carrying that host and a fixed cookie value was granted a session with no
+// credential whatsoever. Production never received such a request, because the Gateway pins
+// `hostnames: [chess-tactics.com]` and `trust proxy` is off. That is the entire reason it was
+// safe: a routing rule in a different layer, one Helm edit away from not being true, guarding an
+// unauthenticated session grant compiled into the production binary. It also matched by
+// SUBSTRING.
+//
+// The same file already knew better — PUBLIC_ORIGIN is pinned from `.Values.hostname` in
+// `k8s/templates/deployment.yaml:51` precisely so the redirect URI "never reflects the
+// client-controllable Host / X-Forwarded-Host headers". That principle applies here and now does.
+// Deployed dev slots sign in through the real identity provider like every other lane (ADR-0577).
 function isDevAuthHost(req) {
+  if (process.env.DEV_AUTH !== '1') return false;
   const host = (req.get('host') || '').toLowerCase();
-  if (host.includes('.tank.dev.romaine.life')) return true;
-  if (process.env.DEV_AUTH === '1') {
-    const bare = host.replace(/:\d+$/, ''); // strip :port (IPv6 stays bracketed)
-    if (bare === 'localhost' || bare === '127.0.0.1' || bare === '[::1]') return true;
-  }
-  return false;
+  const bare = host.replace(/:\d+$/, ''); // strip :port (IPv6 stays bracketed)
+  return bare === 'localhost' || bare === '127.0.0.1' || bare === '[::1]';
 }
 
 function isLoopbackRequest(req) {
@@ -8083,7 +8095,12 @@ async function readSession(req, res) {
     const granted = isLoopbackRequest(req) ? await verifiedDevGrantSession() : null;
     if (granted) return granted;
   }
-  return oidcSessions.readSession(req.get('cookie') || '', res);
+  const session = await oidcSessions.readSession(req.get('cookie') || '', res);
+  // Held for `requireAdmin`, which needs the session's own authentication time rather than just
+  // who it belongs to. Dev-auth lanes return above and leave this unset, which is how they stay
+  // exempt from a re-authentication that has no identity provider behind it.
+  req.authSession = session;
+  return session;
 }
 
 async function requireUser(req, res) {
@@ -8112,6 +8129,29 @@ async function requireAdmin(req, res) {
   if (!user) return null;
   if (!isAdminEmail(user.email)) {
     res.status(403).json({ error: 'admin_required' });
+    return null;
+  }
+  // Decision 3 of docs/auth-security-audit.md. Admin capability is not the session: these
+  // endpoints publish game content every player sees, and the session carrying them now lasts 90
+  // days. Credentials must have been presented within the last 8 hours, which bounds what a stolen
+  // session can do to live content without asking the owner to re-authenticate mid-task.
+  //
+  // Read from our own session row rather than the provider's `auth_time` claim, which it reports
+  // in milliseconds where OIDC Core requires seconds (F11) — a freshness check against that value
+  // would pass unconditionally, which is worse than not checking.
+  //
+  // The dev-auth lanes carry no session row and answer `undefined`, which is not `false`: a local
+  // developer is not put through a re-authentication that has no identity provider behind it.
+  if (req.authSession && req.authSession.adminFresh === false) {
+    // `insufficient_user_authentication` is RFC 9470's name for exactly this answer: the session
+    // is valid, the authentication behind it is not recent enough. Using the standard name keeps
+    // it distinguishable from a real sign-out, which matters because the browser treats any other
+    // 401 as the session ending.
+    res.status(401).json({
+      error: 'insufficient_user_authentication',
+      // The client sends the owner through prompt=login and returns them here.
+      reauthenticate: '/api/auth/sign-in?prompt=login',
+    });
     return null;
   }
   return user;
@@ -9474,7 +9514,12 @@ app.get('/api/auth/sign-in', async (req, res) => {
     return;
   }
   try {
-    const authorizeURL = await oidcSessions.startLogin(safeReturnPath(req.query.returnTo), res);
+    // `prompt=login` re-arms the admin window (decision 3) by asking the provider for credentials
+    // again. The callback recognises the session already in hand and re-arms it in place, so the
+    // player session — and its absolute deadline — survives the re-authentication.
+    const authorizeURL = await oidcSessions.startLogin(safeReturnPath(req.query.returnTo), res, {
+      forceLogin: req.query.prompt === 'login',
+    });
     res.redirect(302, authorizeURL);
   } catch (error) {
     console.error('OIDC sign-in start failed:', error);

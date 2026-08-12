@@ -458,6 +458,29 @@ function createOIDCSessionManager({
     if (!claims) throw new OIDCAuthError('oidc_userinfo_rejected_fresh_token', 401);
 
     const at = now();
+
+    // Re-authenticating on a session already in hand re-arms it rather than replacing it. Two
+    // reasons, and the second is the important one: the tab keeps the session it had, and the
+    // 90-day absolute deadline is preserved. Minting a new row would restart that clock, so an
+    // admin re-authenticating every eight hours would never reach an absolute expiry at all —
+    // the cap would exist and never fire.
+    const existingToken = parseCookieHeader(cookieHeader).get(SESSION_COOKIE) || '';
+    if (existingToken) {
+      const existing = await store.readSessionByTokenHash(hashToken(existingToken));
+      const live = existing
+        && Math.min(existing.idleExpiresAt.getTime(), existing.absoluteExpiresAt.getTime()) > at;
+      if (live && existing.claims.email === claims.email) {
+        await store.markAuthenticated(existing.id, new Date(at));
+        await store.updateSessionTokens(existing.id, {
+          accessToken,
+          accessExpiresAt: accessExpiryFrom(result.body),
+          refreshToken: String(result.body.refresh_token || existing.refreshToken || ''),
+          claims,
+        });
+        return attempt.returnTo;
+      }
+    }
+
     const token = randomToken(32);
     const absoluteExpiresAt = new Date(at + SESSION_ABSOLUTE_MS);
     await store.createSession({
