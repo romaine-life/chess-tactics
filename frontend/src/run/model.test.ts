@@ -835,9 +835,9 @@ describe('Manubiae — what the board pays for', () => {
     // The catalog is the source. A named constant that disagreed with it would be a second
     // price for the same deed, which is exactly what naming the category was meant to end.
     expect(RUN_MANUBIAE.map((entry) => entry.id)).toEqual([
-      'advantageous-capture', 'knight-fork', 'royal-fork', 'long-capture', 'humble-mate',
-      'discovered-check', 'long-check', 'double-check', 'en-passant', 'smothered-mate',
-      'promotion-mate', 'underpromotion-mate',
+      'advantageous-capture', 'knight-fork', 'capture-with-check', 'royal-fork', 'long-capture',
+      'humble-mate', 'discovered-check', 'long-check', 'double-check', 'en-passant',
+      'smothered-mate', 'promotion-mate', 'underpromotion-mate',
     ]);
     expect(new Set(RUN_MANUBIAE.map((entry) => entry.id)).size).toBe(RUN_MANUBIAE.length);
     expect(RUN_EN_PASSANT_BOUNTY_TENTHS).toBe(50);
@@ -864,6 +864,13 @@ describe('Manubiae — what the board pays for', () => {
     // Eight squares, because that is the width of a standard chessboard — the one reach every
     // player already has a feel for, even though no board in this game is that shape.
     expect(RUN_LONG_REACH_SQUARES).toBe(8);
+    // A capture with check sits at the same noticing pole and for the same reason: the capture is
+    // one the player wanted anyway and the check is the flourish on it. Its safety clause is what
+    // keeps it from teaching a donation rather than what makes it dear, so it is priced beside the
+    // royal fork and under the checks that have to be engineered.
+    expect(manubiumGoldTenths({ id: 'capture-with-check' })).toBe(10);
+    expect(manubiumGoldTenths({ id: 'capture-with-check' }))
+      .toBeLessThan(manubiumGoldTenths({ id: 'discovered-check' }));
   });
 
   it('prices a mating underpromotion by the piece the Pawn chose instead of a Queen', () => {
