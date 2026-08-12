@@ -117,20 +117,41 @@ function batchId(version: AdminLiveMediaVersion): string | null {
     : null;
 }
 
-/** One seat's candidates plus, when one is already installed, the accepted version so the two
- *  can be compared in the same row. */
+/**
+ * One seat's candidates plus, when one is already installed, the accepted version so the two
+ * can be compared in the same row.
+ *
+ * ONE card per candidate index. The same bytes can be uploaded more than once — this batch was,
+ * to attach the `nativeEvidence` that acceptance requires and the first pass omitted — and each
+ * upload is its own version row. Showing both puts every option on the page twice, half of them
+ * un-installable, which turns a decision into a guess about which duplicate is the live one. So
+ * a repeated index collapses to the version carrying native evidence, and to the newest
+ * otherwise: that is the one Install can actually accept.
+ */
 export function battleLogMarkOptions(
   catalog: AdminLiveMediaCatalog,
   seat: BattleLogForgedMark,
 ): AdminLiveMediaVersion[] {
   const slot = BATTLE_LOG_MARK_SLOT[seat];
   const activeVersionId = catalog.slots.find((entry) => entry.slot === slot)?.activeVersionId ?? null;
-  return catalog.versions
+  const matching = catalog.versions
     .filter((version) => version.slot === slot
       && Boolean(version.media)
       && (version.id === activeVersionId
-        || (version.status === 'candidate' && BATTLE_LOG_MARK_BATCH_IDS.includes(batchId(version) ?? ''))))
-    .sort((left, right) => candidateIndex(left) - candidateIndex(right));
+        || (version.status === 'candidate' && BATTLE_LOG_MARK_BATCH_IDS.includes(batchId(version) ?? ''))));
+  const installable = (version: AdminLiveMediaVersion): boolean =>
+    version.id === activeVersionId || Object.keys(version.nativeEvidence).length > 0;
+  const byIndex = new Map<number, AdminLiveMediaVersion>();
+  for (const version of matching) {
+    const index = candidateIndex(version);
+    const held = byIndex.get(index);
+    if (!held) { byIndex.set(index, version); continue; }
+    if (installable(version) && !installable(held)) { byIndex.set(index, version); continue; }
+    if (installable(version) === installable(held) && version.createdAt > held.createdAt) {
+      byIndex.set(index, version);
+    }
+  }
+  return [...byIndex.values()].sort((left, right) => candidateIndex(left) - candidateIndex(right));
 }
 
 export function battleLogMarkLabel(version: AdminLiveMediaVersion): string {
@@ -173,11 +194,41 @@ export interface BattleLogMarkState {
   refresh: () => void;
 }
 
+/**
+ * The seat a fresh visit opens on: the one an address names, or failing that the first seat
+ * with nothing installed.
+ *
+ * Landing on a decided seat makes the owner find the undecided ones himself, which is exactly
+ * the click a link is supposed to save. `?seat=` makes each decision its own address, so six
+ * open seats can be handed over as six links rather than one link and instructions.
+ */
+export function battleLogSeatFromRoute(search: string): BattleLogForgedMark | null {
+  const value = new URLSearchParams(search).get('seat');
+  return BATTLE_LOG_FORGED_MARKS.find((seat) => seat === value) ?? null;
+}
+
+export function firstUndecidedSeat(
+  catalog: AdminLiveMediaCatalog | null,
+): BattleLogForgedMark | null {
+  if (!catalog) return null;
+  return BATTLE_LOG_FORGED_MARKS.find((seat) => {
+    const slot = catalog.slots.find((entry) => entry.slot === BATTLE_LOG_MARK_SLOT[seat]);
+    return !slot?.activeVersionId;
+  }) ?? null;
+}
+
 /** One fetch, one seat and one selection, shared by the grid and the controls rail. */
 export function useBattleLogMark(): BattleLogMarkState {
   const [catalog, setCatalog] = useState<AdminLiveMediaCatalog | null>(null);
   const [error, setError] = useState('');
-  const [seat, setSeatValue] = useState<BattleLogForgedMark>('defeat');
+  const routeSeat = useMemo(
+    () => (typeof window === 'undefined' ? null : battleLogSeatFromRoute(window.location.search)),
+    [],
+  );
+  const [seat, setSeatValue] = useState<BattleLogForgedMark>(routeSeat ?? 'victory');
+  // Without an address naming one, open on the first seat still needing a decision — but only
+  // once, and never over a seat the owner has since chosen himself.
+  const [seatSettled, setSeatSettled] = useState(routeSeat !== null);
   const [selectedId, setSelectedId] = useState('');
   const [nonce, setNonce] = useState(0);
   const refresh = useCallback(() => setNonce((value) => value + 1), []);
@@ -193,7 +244,14 @@ export function useBattleLogMark(): BattleLogMarkState {
   const setSeat = useCallback((next: BattleLogForgedMark) => {
     setSeatValue(next);
     setSelectedId('');
+    setSeatSettled(true);
   }, []);
+  useEffect(() => {
+    if (seatSettled || !catalog) return;
+    const undecided = firstUndecidedSeat(catalog);
+    setSeatSettled(true);
+    if (undecided) setSeatValue(undecided);
+  }, [catalog, seatSettled]);
   const options = useMemo(() => catalog ? battleLogMarkOptions(catalog, seat) : [], [catalog, seat]);
   const art = useMemo(() => seatArt(catalog), [catalog]);
   const selected = options.find((version) => version.id === selectedId) ?? options[0] ?? null;
