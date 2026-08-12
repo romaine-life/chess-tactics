@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   CLOSEST_TIER_CELLS,
   ZOOM_TIER_RATIO,
+  ZOOM_TIERS_PER_OCTAVE,
   clampToRange,
   openingTier,
   snapToTier,
+  spriteRungForWidth,
   stepTier,
   tierForZoom,
   zoomForTier,
@@ -105,5 +107,60 @@ describe('a level slice of the ladder', () => {
     for (const value of [small.inner, small.outer, range.inner, range.outer]) {
       expect(value).toBe(snapToTier(value));
     }
+  });
+});
+
+/**
+ * The authored ladder exactly as the renderer builds it: the bottom octave rounded,
+ * every tier above it double the one fourteen below. Tier 24 is the authoring cap.
+ */
+function authoredRungs(base: number, cap = 24): number[] {
+  const widths = new Map<number, number>();
+  for (let tier = -18; tier < -18 + ZOOM_TIERS_PER_OCTAVE; tier += 1) {
+    widths.set(tier, Math.round(base * ZOOM_TIER_RATIO ** tier));
+  }
+  for (let tier = -18 + ZOOM_TIERS_PER_OCTAVE; tier <= cap; tier += 1) {
+    widths.set(tier, 2 * (widths.get(tier - ZOOM_TIERS_PER_OCTAVE) as number));
+  }
+  return [...widths.values()];
+}
+
+describe('choosing a sprite for a drawn size', () => {
+  const PAWN = authoredRungs(51);
+
+  it('makes an octave an exact doubling, so an upscale is an integer', () => {
+    expect(ZOOM_TIER_RATIO ** ZOOM_TIERS_PER_OCTAVE).toBeCloseTo(2, 12);
+    for (let index = 0; index + ZOOM_TIERS_PER_OCTAVE < PAWN.length; index += 1) {
+      expect(PAWN[index + ZOOM_TIERS_PER_OCTAVE]).toBe(2 * PAWN[index]);
+    }
+  });
+
+  it('draws an authored size from its own sprite', () => {
+    for (const width of PAWN) {
+      expect(spriteRungForWidth(width, PAWN)).toEqual({ rung: width, magnify: 1 });
+    }
+  });
+
+  it('draws past the cap from one octave down, at a whole magnification', () => {
+    // Every tier the camera can still reach above the authoring cap. The drawn size is
+    // an authored rung times a POWER OF TWO -- never a fractional scale, which is the
+    // smeared block grid the whole ladder exists to avoid -- and it lands within a
+    // ladder step of the size the zoom implies, which is all the eye asks of it.
+    const cap = PAWN[PAWN.length - 1];
+    for (let tier = 25; tier <= 38; tier += 1) {
+      const ideal = 51 * ZOOM_TIER_RATIO ** tier;
+      const chosen = spriteRungForWidth(ideal, PAWN);
+      expect(chosen).not.toBeNull();
+      expect(ideal).toBeGreaterThan(cap);
+      const { rung, magnify } = chosen as { rung: number; magnify: number };
+      expect(PAWN).toContain(rung);
+      expect(Math.log2(magnify) % 1).toBe(0);
+      expect(rung * magnify).toBeGreaterThan(ideal / ZOOM_TIER_RATIO);
+      expect(rung * magnify).toBeLessThan(ideal * ZOOM_TIER_RATIO);
+    }
+  });
+
+  it('has nothing to draw for an asset with no authored sizes', () => {
+    expect(spriteRungForWidth(64, [])).toBeNull();
   });
 });

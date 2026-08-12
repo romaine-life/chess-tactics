@@ -1,0 +1,1954 @@
+{
+  "schemaVersion": 3,
+  "cardType": "Units",
+  "status": "proposed",
+  "governedBy": "docs/adr/0579-card-art-is-briefed-from-a-king-rooted-event.md",
+  "contract": "docs/art/card-art-brief-contract.md",
+  "supersedes": "docs/art/run-card-family-prompts-v2.json (left intact as the record of what shipped)",
+  "note": "The 69 cards dealable under DEFAULT_RUN_RULES (cardSpan 2), each authored across the three layers of the contract. One illustration per CARD, retiring the (footprint, roster) family collapse of ADR-0520 for this deck.",
+  "layerStatus": {
+    "voice": "proposed — the register the fifteen Kings already print. Unaffected by slate sign-off.",
+    "cast": "proposed — the Cessolis reading. Unaffected by slate sign-off.",
+    "act": "SUPERSEDED IN PART. These act lines were authored during the single-war pass (Orléans, 12 Oct 1428 – 8 May 1429) which the owner replaced with the king-rooted structure. The MOMENTS remain valid and reusable; the days are reassigned to King worlds once the slate is signed off. See rollup in run-king-slate-v3.json for target counts per world."
+  },
+  "rules": {
+    "priceIsNotAnInput": "A card’s gold contributes nothing to its picture.",
+    "noArrangementField": "The footprint may be echoed by a composition that can do it without posing anybody, and is dropped the instant it costs the scene. It is never the subject.",
+    "seatingSelectsTheMoment": "Cards sharing a footprint and roster differ by which instant of the shared act they hold, not by geometry.",
+    "attestedFlag": "act.attested marks a documented event. Unmarked days are authored moments inside a documented world — true in kind, not claims about a date. The act never reaches the card face either way."
+  },
+  "cards": [
+    {
+      "cardId": "b",
+      "slot": "ui/run/card-art/b/illustration.png",
+      "seats": "b...",
+      "gold": "10–40",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "Wandering Preacher",
+        "flavor": "The sanctuary was gone. The lesson continued beside the road."
+      },
+      "voice": {
+        "name": "One chaplain, retained, 6d",
+        "flavor": "Allowed by the indenture to say mass and keep the roll. He does both badly.",
+        "moment": "The indenture signed at a plank table, the wax still soft, his other hand already on the muster book."
+      },
+      "cast": {
+        "name": "The Judge Without a Bench",
+        "reading": "He was appointed to hear the assize at Michaelmas. The hall had been let to a wool merchant.",
+        "moment": "He sets his roll on a milestone and begins reading the charge aloud to nobody, because the reading is required."
+      },
+      "act": {
+        "line": "Saint-Aignan, 12 October",
+        "detail": "The suburbs came down so the English would have nothing to stand in. The canons carried out what they could.",
+        "moment": "A canon walking away from his own church with the reliquary, as behind him the townsmen swing the first beam out of the roof.",
+        "attested": true
+      },
+      "king": null
+    },
+    {
+      "cardId": "k",
+      "slot": "ui/run/card-art/k/illustration.png",
+      "seats": "k...",
+      "gold": "10–40",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "Errant Rider",
+        "flavor": "Every road was marked urgent. None said where it led."
+      },
+      "voice": {
+        "name": "Retained: one man-at-arms, 12d",
+        "flavor": "Attested at the array. Horse valued at forty livres, so the crown owes for it if it dies.",
+        "moment": "The clerk chalking the horse's value onto its own flank while the rider holds its head."
+      },
+      "cast": {
+        "name": "The Chevalier Sworn",
+        "reading": "He swore to defend the church, the widow and the orphan. The oath does not say in which order.",
+        "moment": "The instant after the oath: his hand still on the relic, the priest already turning away, the horse brought up behind him."
+      },
+      "act": {
+        "line": "The Road to Blois, 15 October",
+        "detail": "One rider went out before the ring closed. Everything the town later hoped for went out with him.",
+        "moment": "Looking back at the walls from the last rise where they are still visible, and deciding not to stop.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "p",
+      "slot": "ui/run/card-art/p/illustration.png",
+      "seats": "p...",
+      "gold": "10–40",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "The Volunteer",
+        "flavor": "The frost came in June. By August, the road had found him."
+      },
+      "voice": {
+        "name": "Retained: one foot archer, 3d",
+        "flavor": "Made his mark. Cannot be paid until the second muster, which is forty days off.",
+        "moment": "His mark going onto the roll — a cross, drawn slowly, the clerk's pen turned round for him."
+      },
+      "cast": {
+        "name": "The Labourer Called Up",
+        "reading": "Cessolis gives the first pawn a spade in one hand and a rod in the other. The array took the rod.",
+        "moment": "Handing the spade over a low wall to his wife, keeping the rod, which from this morning is a weapon."
+      },
+      "act": {
+        "line": "Saint-Jean-le-Blanc, 17 October",
+        "detail": "The first of the burned suburbs. The men who pulled them down had lived in them.",
+        "moment": "Putting a torch to his own thatch at arm's length, not looking at it.",
+        "attested": true
+      },
+      "king": null
+    },
+    {
+      "cardId": "q",
+      "slot": "ui/run/card-art/q/illustration.png",
+      "seats": "q...",
+      "gold": "90",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "Regal Serenity",
+        "flavor": "She watched the empty court until ceremony became weather."
+      },
+      "voice": {
+        "name": "Under the banner of a banneret, 4s",
+        "flavor": "The whole roll is written beneath one name. She is the reason the rest of it can be paid.",
+        "moment": "The banner going up over the muster field: the instant the cloth takes the wind and men start walking toward it."
+      },
+      "cast": {
+        "name": "The Intercession",
+        "reading": "Cessolis gives the queen mercy, and mercy is a thing done in public or not at all.",
+        "moment": "She has stepped between the sentence and the man, and the court has not yet decided what to do about it."
+      },
+      "act": {
+        "line": "The Burgundy Gate, 29 April",
+        "detail": "She entered at eight in the evening carrying her standard, and the town did not sleep.",
+        "moment": "Torchlight catching the standard the moment it clears the gate arch — the crowd's faces turn before she does.",
+        "attested": true
+      },
+      "king": null
+    },
+    {
+      "cardId": "r",
+      "slot": "ui/run/card-art/r/illustration.png",
+      "seats": "r...",
+      "gold": "50",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "The Watchtower",
+        "flavor": "From the tower, every road led away."
+      },
+      "voice": {
+        "name": "One master mason, 8d, and his tools",
+        "flavor": "Entered as a man-at-arms because the roll has no line for him. He is worth three.",
+        "moment": "Chalking the line of the new boulevard onto trampled ground while the labourers wait with their baskets."
+      },
+      "cast": {
+        "name": "The King's Legate",
+        "reading": "The rook is not a tower. Cessolis makes him the king's vicar, sent out with the king's authority in a satchel.",
+        "moment": "Holding the sealed commission up to a closed gate, while the men on the gate read it slowly."
+      },
+      "act": {
+        "line": "Les Tourelles, 24 October",
+        "detail": "They took the bridge fort two days after the wound that killed Salisbury. It was worth more than he was.",
+        "moment": "English soldiers on the captured tower roof, turned back down the bridge toward the town, which is now the only thing left.",
+        "attested": true
+      },
+      "king": null
+    },
+    {
+      "cardId": "bb-vertical",
+      "slot": "ui/run/card-art/bb-vertical/illustration.png",
+      "seats": "b.b.",
+      "gold": "60",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "Matins and Vespers",
+        "flavor": "Matins stood before Vespers because the roof admitted only one."
+      },
+      "voice": {
+        "name": "Two chaplains, 6d each, forty days",
+        "flavor": "One for the retinue, one for the sick. Both entered on the same line to save parchment.",
+        "moment": "Two men signing the same page in turn, the second waiting with his hand already out for the pen."
+      },
+      "cast": {
+        "name": "Two Judges, One Bench",
+        "reading": "The assize was to be heard by two. The bench seats two, in order, and they had not agreed the order.",
+        "moment": "Both men reaching the bench at the same moment, and neither sitting."
+      },
+      "act": {
+        "line": "The Christmas Truce, 25 December",
+        "detail": "Both sides kept the day. The English asked for music and the town sent its minstrels across.",
+        "moment": "The minstrels walking out onto open ground between the bastille and the wall, instruments up, nobody armed.",
+        "attested": true
+      },
+      "king": null
+    },
+    {
+      "cardId": "pb-front",
+      "slot": "ui/run/card-art/pb-front/illustration.png",
+      "seats": "p.b.",
+      "gold": "10–40",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "Pilgrim's Shelter",
+        "flavor": "The lamp went first. The sermon followed where it could."
+      },
+      "voice": {
+        "name": "One archer, one chaplain",
+        "flavor": "The archer is paid 6d and the chaplain 6d, which the archer has noticed.",
+        "moment": "The pay table: two hands out, one coin counted into each, the same count."
+      },
+      "cast": {
+        "name": "The Clerk and His Judge",
+        "reading": "The third pawn is the notary: shears in one hand, pen in the other. He walks in front because he carries the writ.",
+        "moment": "The writ held out ahead at arm's length, the judge a pace behind, both walking into a yard that has gone quiet."
+      },
+      "act": {
+        "line": "Procession to Sainte-Croix, 20 October",
+        "detail": "The town walked its relics round the inside of the walls. It had nothing else to put on them.",
+        "moment": "The head of the procession reaching the corner where the wall is thinnest, and the boy with the cross looking up at it.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "pk-front",
+      "slot": "ui/run/card-art/pk-front/illustration.png",
+      "seats": "p.k.",
+      "gold": "10–40",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "Squire's Shelter",
+        "flavor": "The rider waited behind the only order that had arrived."
+      },
+      "voice": {
+        "name": "A lance: one man-at-arms, one page",
+        "flavor": "The lance is three men. This one is two, and the clerk has written 'wanting one'.",
+        "moment": "The pen pausing over the gap in the line where the third man should be standing."
+      },
+      "cast": {
+        "name": "The Ribald Sent Ahead",
+        "reading": "The eighth pawn is the messenger and the dice-player. He goes first because he is the fastest and the most expendable.",
+        "moment": "Already twenty paces up the lane and turning to signal, while the rider is still holding the horse."
+      },
+      "act": {
+        "line": "First Contact at Olivet, 18 October",
+        "detail": "A scout and a rider went to see whether the English were where they were said to be. They were.",
+        "moment": "The scout dropping flat behind a hedge; the rider, still mounted and still visible, understanding a heartbeat later.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "pq-front",
+      "slot": "ui/run/card-art/pq-front/illustration.png",
+      "seats": "p.q.",
+      "gold": "100",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "The Last Attendant",
+        "flavor": "One attendant remained after the court learned to empty itself."
+      },
+      "voice": {
+        "name": "The banneret and her page, final tally",
+        "flavor": "The roll closes here. Four shillings and threepence, and the campaign is over.",
+        "moment": "The last two lines of the roll being ruled off, coin still loose on the table."
+      },
+      "cast": {
+        "name": "The Last Attendant",
+        "reading": "Mercy needs somebody to carry it. By the end she had one man, and he was the taverner's son.",
+        "moment": "He holds the door of an emptied hall open for her, and there is nobody behind her."
+      },
+      "act": {
+        "line": "Les Tourelles, evening of 7 May",
+        "detail": "Hit in the shoulder at noon, back at dusk. The fort fell within the hour.",
+        "moment": "Her standard going up against the boulevard wall with one soldier beside her, the ladders behind them still empty.",
+        "attested": true
+      },
+      "king": null
+    },
+    {
+      "cardId": "pr-front",
+      "slot": "ui/run/card-art/pr-front/illustration.png",
+      "seats": "p.r.",
+      "gold": "60",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "Gatekeeper's Charge",
+        "flavor": "The gatekeeper put one name between the wall and morning."
+      },
+      "voice": {
+        "name": "One archer, to the master mason",
+        "flavor": "Assigned to carry, not to shoot. Paid as an archer, worked as a labourer, complained in writing.",
+        "moment": "Setting his bow down against the scaffold to pick up a hod."
+      },
+      "cast": {
+        "name": "The Guard and the Legate",
+        "reading": "The seventh pawn keeps the gate and takes the toll. The legate has a commission, which is not a toll.",
+        "moment": "The guard's arm across the gate and the legate's seal held up beside it, each waiting for the other to move first."
+      },
+      "act": {
+        "line": "The Bastille Saint-Laurent, 8 December",
+        "detail": "The English finished it in the rain. From then the river road was theirs.",
+        "moment": "A sentry stepping up onto the new wall-walk for the first time, boots in wet mortar.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "rr-vertical",
+      "slot": "ui/run/card-art/rr-vertical/illustration.png",
+      "seats": "r.r.",
+      "gold": "100",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "The Twin Keeps",
+        "flavor": "One keep watched the road. The other watched the first."
+      },
+      "voice": {
+        "name": "Two lieutenants, garrison, 12d each",
+        "flavor": "One holds the gate, one holds the bridge. Both are paid to be elsewhere if it goes wrong.",
+        "moment": "Two men handed the same written order at the same table, reading it in opposite directions."
+      },
+      "cast": {
+        "name": "Two Commissions, One Road",
+        "reading": "Both men carried the king's authority. The road was wide enough for one of them at a time.",
+        "moment": "Two sealed commissions held up side by side at the same barrier, and the barrier-keeper reading both."
+      },
+      "act": {
+        "line": "The Bastilles Abandoned, 8 May",
+        "detail": "They formed up in the field, waited to be attacked, were not, and marched away.",
+        "moment": "The English lines standing empty at first light with the fires still smoking, seen from the town wall.",
+        "attested": true
+      },
+      "king": null
+    },
+    {
+      "cardId": "kk-horizontal",
+      "slot": "ui/run/card-art/kk-horizontal/illustration.png",
+      "seats": "kk..",
+      "gold": "60",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "Thundering Lances",
+        "flavor": "Neither rider yielded the width of the road."
+      },
+      "voice": {
+        "name": "Two men-at-arms, 12d, one horse valued",
+        "flavor": "The second horse was never appraised, so the crown owes nothing for it. He rode it anyway.",
+        "moment": "Two riders at the appraisal: one horse chalked, the other's flank clean."
+      },
+      "cast": {
+        "name": "Two Chevaliers Abreast",
+        "reading": "Cessolis says the knight must be tested before he is trusted. Neither had been, and each said so of the other.",
+        "moment": "Two horses shoulder to shoulder in a lane too narrow for it, both riders looking straight ahead."
+      },
+      "act": {
+        "line": "Out of the Renart Gate, 5 December",
+        "detail": "Two captains rode out at dawn to see what could be taken. They came back with cattle.",
+        "moment": "Coming back through the gate at a walk, driving stolen cattle, and nobody cheering yet.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "pp",
+      "slot": "ui/run/card-art/pp/illustration.png",
+      "seats": "pp..",
+      "gold": "10–40",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "Two Good Boots",
+        "flavor": "The road kept both pairs of boots, and returned neither name."
+      },
+      "voice": {
+        "name": "Two foot archers, 3d, forty days",
+        "flavor": "Brothers. Entered together, and the second is a head shorter than the roll allows.",
+        "moment": "Both measured against the same marked post, the shorter one on his toes."
+      },
+      "cast": {
+        "name": "The Smith and the Labourer",
+        "reading": "Second pawn and first: the hammer and the spade. Between them they can make everything the war needs and none of what it takes.",
+        "moment": "The smith handing a mended billhook back across the anvil; the labourer already turning to go."
+      },
+      "act": {
+        "line": "The Levy of the Quarters, 14 October",
+        "detail": "Each quarter of the town found its men. The rolls were read out in the street.",
+        "moment": "Two men stepping out of a crowd at the reading of their names, at the moment the crowd closes behind them.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-0111-rb",
+      "slot": "ui/run/card-art/f-0111-rb/illustration.png",
+      "seats": "..rb",
+      "gold": "80",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "Cloister and Keep",
+        "flavor": "The cloister was sold. The keep remained employed."
+      },
+      "voice": {
+        "name": "One lieutenant, one clerk of the muster",
+        "flavor": "The clerk counts what the lieutenant commands. Neither trusts the other's arithmetic.",
+        "moment": "The tally-stick being split between them, each taking half."
+      },
+      "cast": {
+        "name": "The Legate and the Judge",
+        "reading": "One carried the king's authority, the other the law's. They agreed the case was urgent and agreed on nothing else.",
+        "moment": "Two men reading one document at one table from opposite sides, neither letting go of it."
+      },
+      "act": {
+        "line": "Rouvray, 12 February",
+        "detail": "The convoy was salted fish for Lent. They laagered the carts, and the French rode at them anyway.",
+        "moment": "The instant the first French horse reaches the barricade of herring barrels and finds that it does not give.",
+        "attested": true
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-0111-bk",
+      "slot": "ui/run/card-art/f-0111-bk/illustration.png",
+      "seats": "..bk",
+      "gold": "60",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "Sword and Censer",
+        "flavor": "The blade guarded the road; the censer remembered the room."
+      },
+      "voice": {
+        "name": "One chaplain, one man-at-arms",
+        "flavor": "The chaplain attests the man-at-arms is who he says. The clerk has no way to check either.",
+        "moment": "The chaplain's hand on the man's shoulder at the attestation, the clerk not looking up."
+      },
+      "cast": {
+        "name": "The Judge and the Chevalier",
+        "reading": "The alphin decides who is guilty and the knight decides what happens next. Cessolis is careful to keep them apart.",
+        "moment": "The judge finishing a sentence aloud while behind him the knight is already loosening a strap."
+      },
+      "act": {
+        "line": "The Ave Maria Bell, 3 December",
+        "detail": "The bell was rung each evening and both armies stopped for it. Then it stopped being rung.",
+        "moment": "A rider halted in the open at the sound, hat off, the bell tower lit behind him and the bastilles dark.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-0111-rk",
+      "slot": "ui/run/card-art/f-0111-rk/illustration.png",
+      "seats": "..rk",
+      "gold": "80",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "Castellan's Sally",
+        "flavor": "At dawn the castellan rode through an abbey with no brothers."
+      },
+      "voice": {
+        "name": "Lieutenant and escort, to Blois",
+        "flavor": "Ordered out and back. Paid for eight days, took eleven, argued for three.",
+        "moment": "Two riders handed a sealed bag at a gate, one signing for it."
+      },
+      "cast": {
+        "name": "The Legate Escorted",
+        "reading": "The commission travels no faster than the man guarding it, and the man guarding it is not paid to hurry.",
+        "moment": "The legate reining in because the escort has stopped, and the escort pointing at something out of frame."
+      },
+      "act": {
+        "line": "The Sortie to Rouvray, 12 February",
+        "detail": "They rode out to meet the convoy and met it too late, in the open, in the wrong order.",
+        "moment": "The Orléans horse arriving on the field at the moment the Scots are already committed on foot ahead of them.",
+        "attested": true
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-bbb",
+      "slot": "ui/run/card-art/f-011011-bbb/illustration.png",
+      "seats": ".bbb",
+      "gold": "90",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "Council in the Corner",
+        "flavor": "Three doctrines in one corner, and the corner not large enough for one."
+      },
+      "voice": {
+        "name": "Three chaplains, one retinue",
+        "flavor": "Two too many for a company this size. The third is somebody's brother.",
+        "moment": "Three men in a line at the pay table and one purse being opened."
+      },
+      "cast": {
+        "name": "The Bench of Three",
+        "reading": "Three judges make a quorum. A quorum makes a decision, which is what nobody in the room wanted.",
+        "moment": "The instant the third judge sits down — because until he sat, there was no court."
+      },
+      "act": {
+        "line": "The Examination at Poitiers, March",
+        "detail": "Before she was allowed near the town, three weeks of churchmen asked questions and wrote the answers down.",
+        "moment": "Three clerics at a table, one writing; she is standing, and the writer has stopped.",
+        "attested": true
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-bbk",
+      "slot": "ui/run/card-art/f-011011-bbk/illustration.png",
+      "seats": ".bbk",
+      "gold": "90",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "Charger at the Bend",
+        "flavor": "The charger took the bend and the two offices arrived by the inside."
+      },
+      "voice": {
+        "name": "Two chaplains and their escort",
+        "flavor": "Carried the retinue's accounts to Rouen. The escort is charged at 12d and worth it.",
+        "moment": "The saddlebag of accounts being roped shut while the two clerics watch."
+      },
+      "cast": {
+        "name": "The Escort of the Assize",
+        "reading": "Two judges to hear it, one knight to get them there. The knight was told the road was safe.",
+        "moment": "The horse shying at the bend; both judges' hands go out to the cart rail at the same instant."
+      },
+      "act": {
+        "line": "The Churchmen Go to Chinon, 6 March",
+        "detail": "Two clerics and one rider went to ask whether the king would receive her. The rider did the deciding.",
+        "moment": "The rider halting the party at a crossroads and pointing down the road they were not told to take.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-bkb",
+      "slot": "ui/run/card-art/f-011011-bkb/illustration.png",
+      "seats": ".kbb",
+      "gold": "90",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "Rider Above the Chapter",
+        "flavor": "The rider held the high side while the chapter argued the low one."
+      },
+      "voice": {
+        "name": "Escort refused leave",
+        "flavor": "The chaplains asked to ride on ahead. The escort's orders say together, and he can read.",
+        "moment": "The escort holding the lead mule's bridle while a chaplain gestures up the road."
+      },
+      "cast": {
+        "name": "The Chapter Overruled",
+        "reading": "The bench had reached its finding. The knight had reached the door first.",
+        "moment": "The knight in the doorway with the light behind him; the two judges have stopped mid-sentence."
+      },
+      "act": {
+        "line": "Turned Back on the Chinon Road, 8 March",
+        "detail": "They were sent to negotiate and came back having been told there was nothing to negotiate.",
+        "moment": "The rider putting his horse across the road, and the two clerics reining up short of it.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-kbb",
+      "slot": "ui/run/card-art/f-011011-kbb/illustration.png",
+      "seats": ".bkb",
+      "gold": "90",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "Two Offices, One Charger",
+        "flavor": "Two offices, one horse, and a road that would take only one of them."
+      },
+      "voice": {
+        "name": "One horse, two claims",
+        "flavor": "Both chaplains have written to the captain about the same animal. Neither mentions the other.",
+        "moment": "Two written claims on one table, the horse visible through the door behind them."
+      },
+      "cast": {
+        "name": "One Horse Between Two Courts",
+        "reading": "The court that gets the horse hears its case first. Both courts knew it.",
+        "moment": "One horse led out of a stable, and two judges arriving at the door from opposite sides."
+      },
+      "act": {
+        "line": "The Road Is Only Wide Enough, 10 March",
+        "detail": "Two clerics, one escort, one road, and news arriving from both ends of it at once.",
+        "moment": "Two clerics facing opposite ways on the same road while the rider between them reads a letter.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-bkk",
+      "slot": "ui/run/card-art/f-011011-bkk/illustration.png",
+      "seats": ".kbk",
+      "gold": "90",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "Chaplain at the Bend",
+        "flavor": "He blessed them at the turning, which was as far as he was going."
+      },
+      "voice": {
+        "name": "Two men-at-arms and a chaplain",
+        "flavor": "The chaplain is entered at 6d and the horses at forty livres each. The roll knows what it values.",
+        "moment": "Two horses being appraised while the chaplain waits with nothing to be appraised."
+      },
+      "cast": {
+        "name": "The Judge Between Two Lances",
+        "reading": "The alphin was sent to keep peace between them. He rode in the middle, which is where he was safest.",
+        "moment": "Both riders have turned in the saddle to look at each other past him, and he is looking straight ahead."
+      },
+      "act": {
+        "line": "Blois, 25 April",
+        "detail": "The relief column formed up with the priests at the front and the captains behind, which the captains disliked.",
+        "moment": "The column stepping off with the clergy leading, two captains sitting their horses at the roadside, not moving yet.",
+        "attested": true
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-kbk",
+      "slot": "ui/run/card-art/f-011011-kbk/illustration.png",
+      "seats": ".bkk",
+      "gold": "90",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "Office Above Two Lances",
+        "flavor": "The office watched from above while both horses took the corner badly."
+      },
+      "voice": {
+        "name": "Confession before the array",
+        "flavor": "Ordered by the captain. Attendance recorded, which is the point of it.",
+        "moment": "The chaplain marking names in a book while two riders wait, dismounted, holding their own reins."
+      },
+      "cast": {
+        "name": "The Assize Above the Yard",
+        "reading": "He read the finding from the gallery, because the yard below had already made up its mind.",
+        "moment": "The judge at the rail with the roll open; below him two riders have stopped their horses to listen."
+      },
+      "act": {
+        "line": "The Sermon Before the Column, 27 April",
+        "detail": "He preached against swearing and looting to men recruited on the promise of both.",
+        "moment": "The moment he names the penalty, and one of the two riders in front of him looks at the other.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-kkb",
+      "slot": "ui/run/card-art/f-011011-kkb/illustration.png",
+      "seats": ".kkb",
+      "gold": "90",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "Two Lances, One Chaplain",
+        "flavor": "Two horses and one chaplain, and the chaplain kept the count."
+      },
+      "voice": {
+        "name": "Second muster, two absent",
+        "flavor": "Both entered, both attested, both gone. The chaplain has written 'not found'.",
+        "moment": "Two blank spaces in a line of standing men, and the pen resting on the gap."
+      },
+      "cast": {
+        "name": "The Count Kept by the Chaplain",
+        "reading": "Two knights went out. The chaplain's task was to write down how many came back.",
+        "moment": "The chaplain at the gate with the book open, watching the road, one rider visible on it."
+      },
+      "act": {
+        "line": "The Return from Saint-Loup, 4 May",
+        "detail": "They came back with fewer than they took, and the count was made at the gate before anyone was let through.",
+        "moment": "The book open on the gate ledge, a wet thumb holding the page, the first horses arriving.",
+        "attested": true
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-kkk",
+      "slot": "ui/run/card-art/f-011011-kkk/illustration.png",
+      "seats": ".kkk",
+      "gold": "90",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "Gallop at the Turning",
+        "flavor": "They took the turning at speed. Two of the three came out of it."
+      },
+      "voice": {
+        "name": "Three men-at-arms, one lance short",
+        "flavor": "A full lance is three. Three men-at-arms is not a lance, it is an expense.",
+        "moment": "Three appraised horses together and one clerk totalling a column he does not like."
+      },
+      "cast": {
+        "name": "Three Sworn, One Road",
+        "reading": "Cessolis says a knight is made by the test and not by the oath. This was the test.",
+        "moment": "Three horses entering a bend abreast where there is room for two."
+      },
+      "act": {
+        "line": "Saint-Loup, 4 May",
+        "detail": "The first fort taken. It went in an hour, and it decided that the rest could go too.",
+        "moment": "The ladder topping the palisade at Saint-Loup with the men behind it still on the ground.",
+        "attested": true
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-bbp",
+      "slot": "ui/run/card-art/f-011011-bbp/illustration.png",
+      "seats": ".bbp",
+      "gold": "70",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "Two Offices at the Bend",
+        "flavor": "Both offices took the bend. Neither conceded the inside."
+      },
+      "voice": {
+        "name": "One archer to two chaplains",
+        "flavor": "Detailed to carry their gear. Paid 6d, carries sixty pounds, mentioned in no account.",
+        "moment": "Taking a second bundle onto an already-loaded back."
+      },
+      "cast": {
+        "name": "The Notary Between Two Judges",
+        "reading": "The third pawn carries the pen. Both benches wanted the pen to write their version.",
+        "moment": "The clerk with the pen still wet, looking from one judge to the other, having written nothing."
+      },
+      "act": {
+        "line": "The Rationing Order, 6 January",
+        "detail": "The bread was weighed by the church and issued by the church, and the weight went down in January.",
+        "moment": "The scale pan settling at the new weight, the two churchmen watching it, the townsman's hands already out.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-bpb",
+      "slot": "ui/run/card-art/f-011011-bpb/illustration.png",
+      "seats": ".pbb",
+      "gold": "70",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "Chapter in the Corner",
+        "flavor": "The chapter met in a corner because the hall had been requisitioned."
+      },
+      "voice": {
+        "name": "Muster held in a granary",
+        "flavor": "No hall available. The roll was called between the sacks and the tally is grain-dusted.",
+        "moment": "The roll being called in a granary, the clerk's page grey with dust."
+      },
+      "cast": {
+        "name": "The Chapter in a Borrowed Room",
+        "reading": "The hall had been requisitioned for grain. The court met in the corner it was given.",
+        "moment": "Two judges and a clerk at a small table with sacks stacked to the ceiling behind them."
+      },
+      "act": {
+        "line": "The Chapter House Requisitioned, 12 January",
+        "detail": "They stored grain where they had met for two hundred years, and held the meeting anyway.",
+        "moment": "The meeting held standing between grain sacks, one man holding the roll up to a high window for light.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-pbb",
+      "slot": "ui/run/card-art/f-011011-pbb/illustration.png",
+      "seats": ".bpb",
+      "gold": "70",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "The Cornered Diocese",
+        "flavor": "The diocese fit in a corner by then, and still argued about the seating."
+      },
+      "voice": {
+        "name": "Two chaplains, one servant",
+        "flavor": "The servant is not on the roll. He is fed from the chaplains' allowance, which they resent.",
+        "moment": "Two men eating at a table and a third standing with the plate he carried in."
+      },
+      "cast": {
+        "name": "The Diocese in One Corner",
+        "reading": "Everything the office still governed fit in the corner of a room, and they argued about the seating.",
+        "moment": "Two judges taking chairs at a table set for eight; the clerk is still deciding where to stand."
+      },
+      "act": {
+        "line": "What Was Left of the See, 20 January",
+        "detail": "The bishop was at Rome. What remained of his court was two canons and a boy with the keys.",
+        "moment": "A boy handing a ring of keys to two canons in an empty vestry.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-bpr",
+      "slot": "ui/run/card-art/f-011011-bpr/illustration.png",
+      "seats": ".pbr",
+      "gold": "90",
+      "sharedArtToday": 6,
+      "current": {
+        "name": "Cloister Beside the Keep",
+        "flavor": "The cloister stood beside the keep and paid for the privilege in stone."
+      },
+      "voice": {
+        "name": "One archer, one chaplain, one lieutenant",
+        "flavor": "The smallest complete sub-retinue on the roll, and the cheapest, which is why it exists.",
+        "moment": "A bracket being drawn round three names to make them one unit."
+      },
+      "cast": {
+        "name": "The Court Beside the Commission",
+        "reading": "The judge had jurisdiction and the legate had the seal, and the man between them had the keys.",
+        "moment": "The gatekeeper holding the keys up between two men who are both reaching for them."
+      },
+      "act": {
+        "line": "The Town Council Meets the Bastard, 25 April",
+        "detail": "The town paid for the defence and wanted to be told how. It was told some of it.",
+        "moment": "A council table with the captain standing rather than sitting, and one councillor's hand flat on the accounts.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-brp",
+      "slot": "ui/run/card-art/f-011011-brp/illustration.png",
+      "seats": ".brp",
+      "gold": "90",
+      "sharedArtToday": 6,
+      "current": {
+        "name": "Keep Above the Cloister",
+        "flavor": "The keep took the height. The cloister was told the height was shared."
+      },
+      "voice": {
+        "name": "Lieutenant's report, countersigned",
+        "flavor": "The chaplain countersigns, because the lieutenant's word alone is not worth the money it claims.",
+        "moment": "The chaplain's signature going under the lieutenant's on the same line, in a smaller hand."
+      },
+      "cast": {
+        "name": "The Commission Above the Court",
+        "reading": "The legate stood on the step, so that the seal was higher than the finding.",
+        "moment": "The legate one step up holding the seal at eye level; the judge below him has not looked up yet."
+      },
+      "act": {
+        "line": "The Watch on the Belfry, 26 April",
+        "detail": "Everything the town knew that week it knew from men standing on the belfry counting fires.",
+        "moment": "Two watchers counting enemy fires at dusk while a third writes the number down.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-pbr",
+      "slot": "ui/run/card-art/f-011011-pbr/illustration.png",
+      "seats": ".bpr",
+      "gold": "90",
+      "sharedArtToday": 6,
+      "current": {
+        "name": "Office Above, Keep Beside",
+        "flavor": "The office had the rise and the keep had the road, and both called it defence."
+      },
+      "voice": {
+        "name": "Guard detail, three men, night watch",
+        "flavor": "One in three awake. The roll does not record which.",
+        "moment": "Three men at a brazier at night: one standing, and two who are not."
+      },
+      "cast": {
+        "name": "The Judge Above the Gate",
+        "reading": "He read the writ from the gatehouse, because the yard was not safe and the writ still had to be read.",
+        "moment": "Reading aloud from a gate window into a courtyard where only two men are listening."
+      },
+      "act": {
+        "line": "The Gate Kept Shut, 27 April",
+        "detail": "The relief was expected and the gate stayed shut, because a gate opened for the wrong reason loses a town.",
+        "moment": "The gatekeeper's hand on the bar and the captain beside him, both looking through the wicket at the road.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-prb",
+      "slot": "ui/run/card-art/f-011011-prb/illustration.png",
+      "seats": ".prb",
+      "gold": "90",
+      "sharedArtToday": 6,
+      "current": {
+        "name": "Keep Above, Office Beside",
+        "flavor": "Stone above and office beside, in the order the bishop had agreed to."
+      },
+      "voice": {
+        "name": "Materials, entered against the wrong account",
+        "flavor": "Sixty cartloads of stone charged to victuals. Corrected in a later hand, in a different ink.",
+        "moment": "Two entries on a page, the second written over the first in darker ink."
+      },
+      "cast": {
+        "name": "The Seal Above, the Law Beside",
+        "reading": "They agreed the order of precedence in writing, which took longer than the case did.",
+        "moment": "Two men signing a short document while a third holds the inkhorn and says nothing."
+      },
+      "act": {
+        "line": "The Boulevard Repaired, 28 April",
+        "detail": "The wall was mended with stone from the houses of men standing there watching it.",
+        "moment": "A mason setting a carved doorframe into a rampart while its owner watches from the crowd.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-rbp",
+      "slot": "ui/run/card-art/f-011011-rbp/illustration.png",
+      "seats": ".brp",
+      "gold": "90",
+      "sharedArtToday": 6,
+      "current": {
+        "name": "Office Above the Rampart",
+        "flavor": "The office stood on the rampart and read to the men repairing it."
+      },
+      "voice": {
+        "name": "Wages, short by four days",
+        "flavor": "The Exchequer allowed forty days and the campaign took forty-four. The four are still owed.",
+        "moment": "A man at the pay table counting the coins a second time while the clerk looks elsewhere."
+      },
+      "cast": {
+        "name": "The Reading on the Rampart",
+        "reading": "He read the ordinance to the men repairing the wall, because they were the men it bound.",
+        "moment": "The judge on the wall-walk with the roll; below him a labourer has stopped with a stone in his hands."
+      },
+      "act": {
+        "line": "The Ordinance Against Looting, 29 April",
+        "detail": "Published on the day the relief arrived, for reasons everyone understood.",
+        "moment": "The proclamation being nailed to a post as the first relief carts come through behind it.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-rpb",
+      "slot": "ui/run/card-art/f-011011-rpb/illustration.png",
+      "seats": ".prb",
+      "gold": "90",
+      "sharedArtToday": 6,
+      "current": {
+        "name": "Rampart at the Bend",
+        "flavor": "They walled the bend, which is where the road could be lost."
+      },
+      "voice": {
+        "name": "Pioneers, hired by the day",
+        "flavor": "Not soldiers. Paid 4d, fed twice, and named individually because the town insisted.",
+        "moment": "A day-labourer's name written out in full, slowly, in a roll of abbreviations."
+      },
+      "cast": {
+        "name": "The Barrier at the Turn",
+        "reading": "They walled the bend, because a bend is where a road stops being visible.",
+        "moment": "The last basket of earth going onto a new barricade at a corner, the road beyond it still empty."
+      },
+      "act": {
+        "line": "The Belle-Croix Boulevard, 30 April",
+        "detail": "Built at the turn of the bridge, where neither side could see along the other's approach.",
+        "moment": "A man straightening up from the work to look at what he still cannot see.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-bkp",
+      "slot": "ui/run/card-art/f-011011-bkp/illustration.png",
+      "seats": ".kbp",
+      "gold": "70",
+      "sharedArtToday": 6,
+      "current": {
+        "name": "Corner Crusade",
+        "flavor": "They set out from a corner and never rounded the second one."
+      },
+      "voice": {
+        "name": "One lance, understrength, attested",
+        "flavor": "Man-at-arms, chaplain, archer — entered as a lance because the pay clerk allows it.",
+        "moment": "Three men standing close together while one bracket is drawn round three names."
+      },
+      "cast": {
+        "name": "The Small Crusade",
+        "reading": "A knight, a judge and a labourer set out to do something about it. Cessolis would call that a complete society.",
+        "moment": "Three men leaving a yard at first light: one mounted, one on foot, one still fastening a bundle."
+      },
+      "act": {
+        "line": "The Sortie of 2 January",
+        "detail": "Fifty went out at the Renart gate to burn a shed. It was the whole of the war news that week.",
+        "moment": "The shed catching at one corner while the party is already turning back, none of them watching it burn.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-bpk",
+      "slot": "ui/run/card-art/f-011011-bpk/illustration.png",
+      "seats": ".pbk",
+      "gold": "70",
+      "sharedArtToday": 6,
+      "current": {
+        "name": "Censer at the Turn",
+        "flavor": "The censer swung at the turning and the smoke went the other way."
+      },
+      "voice": {
+        "name": "Chaplain's fee, per sortie",
+        "flavor": "Sixpence a blessing, entered as 'divers necessaries'. Nine sorties that month.",
+        "moment": "A short column of identical sixpence entries running down a page."
+      },
+      "cast": {
+        "name": "The Blessing at the Corner",
+        "reading": "The blessing was given at the turning, because after the turning nobody could see them from the town.",
+        "moment": "The censer at the top of its swing, and the rider beyond it already moving."
+      },
+      "act": {
+        "line": "The Blessing at the Renart Gate, 4 January",
+        "detail": "Every sortie was blessed at the gate. The blessing took less time than opening the gate.",
+        "moment": "The gate half-open, the priest's hand still raised, the first horse's head already through.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-kbp",
+      "slot": "ui/run/card-art/f-011011-kbp/illustration.png",
+      "seats": ".bkp",
+      "gold": "70",
+      "sharedArtToday": 6,
+      "current": {
+        "name": "Rider Above the Office",
+        "flavor": "The rider took the high side. The office was told it was for safety."
+      },
+      "voice": {
+        "name": "Escort, one day, disputed",
+        "flavor": "The chaplain says he was left. The man-at-arms says he rode ahead to look. Both are paid.",
+        "moment": "Two accounts of the same day written in the same book, half a page apart."
+      },
+      "cast": {
+        "name": "The Horse on the High Side",
+        "reading": "The rider took the high ground, and the judge was told it was for his protection.",
+        "moment": "The rider on the bank above and the judge below on the track, both stopped, neither speaking."
+      },
+      "act": {
+        "line": "The Escort to the Water Gate, 8 January",
+        "detail": "The clergy went to bless the river gate. The escort chose the route and did not explain it.",
+        "moment": "The escort turning his horse across the head of the path to stop the party going further.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-kpb",
+      "slot": "ui/run/card-art/f-011011-kpb/illustration.png",
+      "seats": ".pkb",
+      "gold": "70",
+      "sharedArtToday": 6,
+      "current": {
+        "name": "The Guarded Homily",
+        "flavor": "The homily was guarded. Nobody could say from what."
+      },
+      "voice": {
+        "name": "One archer, detached, church duty",
+        "flavor": "Detached from the company for eight days. Complained. Detached for eight more.",
+        "moment": "One archer alone at a church door, bow unstrung, in the rain."
+      },
+      "cast": {
+        "name": "The Guarded Reading",
+        "reading": "The reading was guarded. Nobody could say from what, only that it had been ordered.",
+        "moment": "A knight with his back to the lectern, facing an empty yard, while the reading goes on behind him."
+      },
+      "act": {
+        "line": "The Sermon at Saint-Paterne, 11 January",
+        "detail": "Preached under guard, in a church half outside the walls, to a congregation of forty.",
+        "moment": "The doors held open by two soldiers looking outward while the congregation faces the other way.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-pbk",
+      "slot": "ui/run/card-art/f-011011-pbk/illustration.png",
+      "seats": ".bpk",
+      "gold": "70",
+      "sharedArtToday": 6,
+      "current": {
+        "name": "Office and Outrider",
+        "flavor": "The office kept the record; the outrider kept the pace."
+      },
+      "voice": {
+        "name": "Reconnaissance, two men, one day",
+        "flavor": "Charged at 18d. The resulting sketch is bound into the account and is the best thing in it.",
+        "moment": "A rough map being pinned into a ledger with a knife."
+      },
+      "cast": {
+        "name": "The Record and the Pace",
+        "reading": "The judge kept the record and the knight kept the pace, and the record fell behind.",
+        "moment": "The clerk half-running to keep up, writing on a board as he goes, the rider ahead not slowing."
+      },
+      "act": {
+        "line": "The Count of the Bastilles, 15 January",
+        "detail": "A rider and a clerk went round the outside of the town at a distance and counted.",
+        "moment": "The clerk sketching the ring of forts onto a board while the rider watches the treeline behind him.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-pkb",
+      "slot": "ui/run/card-art/f-011011-pkb/illustration.png",
+      "seats": ".kpb",
+      "gold": "70",
+      "sharedArtToday": 6,
+      "current": {
+        "name": "Lance Over Lectern",
+        "flavor": "The lance stood over the lectern, and the reading continued."
+      },
+      "voice": {
+        "name": "Divine service, attendance enforced",
+        "flavor": "The captain ordered it, the chaplain recorded it, and the archers stood at the back with their bows.",
+        "moment": "Armed men along the back wall of a church during a service, facing the congregation."
+      },
+      "cast": {
+        "name": "The Lance Over the Lectern",
+        "reading": "The reading continued, because stopping it would have meant agreeing that it could be stopped.",
+        "moment": "The rider's lance across the corner of the frame, and below it a man reading on without looking up."
+      },
+      "act": {
+        "line": "The Reading Interrupted, 18 January",
+        "detail": "Armed men came in during the office, and the office was finished anyway.",
+        "moment": "Armed men entering at the back of a church, and the reader at the front not lifting his eyes from the page.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-kkp",
+      "slot": "ui/run/card-art/f-011011-kkp/illustration.png",
+      "seats": ".kkp",
+      "gold": "70",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "Two Lances at the Bend",
+        "flavor": "Two lances at the bend, and the bend still went where it went."
+      },
+      "voice": {
+        "name": "Two men-at-arms, one page: a lance",
+        "flavor": "Complete. The only complete lance on this page of the roll.",
+        "moment": "Three men and two horses standing in the one arrangement the clerk has a word for."
+      },
+      "cast": {
+        "name": "Two Lances and a Boy",
+        "reading": "Two chevaliers and one pawn. Cessolis would say the pawn is the reason for the other two.",
+        "moment": "Two riders halted at a corner with a boy between the horses, holding both bridles."
+      },
+      "act": {
+        "line": "The Cattle Raid, 20 January",
+        "detail": "Two captains and a herdsman went out for beef. Only the beef was the point.",
+        "moment": "Two riders driving a handful of cattle through a gap while a boy runs to keep them together.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-kpk",
+      "slot": "ui/run/card-art/f-011011-kpk/illustration.png",
+      "seats": ".pkk",
+      "gold": "70",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "The Cornered Pair",
+        "flavor": "Cornered by the road, not by anyone following."
+      },
+      "voice": {
+        "name": "Horse lost, not in action",
+        "flavor": "Drowned at a ford. The crown owes forty livres and will dispute it for two years.",
+        "moment": "A clerk writing a valuation while a wet saddle is carried past behind him."
+      },
+      "cast": {
+        "name": "Cornered by the Road",
+        "reading": "They were not being followed. The road simply ran out, which is a different kind of trap.",
+        "moment": "Two riders and a boy stopped where a track ends at a flooded field, all three looking at the water."
+      },
+      "act": {
+        "line": "The Ford at Saint-Loup, 22 January",
+        "detail": "The winter river took the crossing, and the patrol found out at the crossing.",
+        "moment": "A horse's forelegs in the water and the rider leaning back, the second rider already turning.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-pkk",
+      "slot": "ui/run/card-art/f-011011-pkk/illustration.png",
+      "seats": ".kpk",
+      "gold": "70",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "Riders on Two Sides",
+        "flavor": "A rider on each side of the turning, and one boy between them."
+      },
+      "voice": {
+        "name": "Escort of victuals, per journey",
+        "flavor": "Twelve journeys in January. The eleventh is marked 'lost' with no further note.",
+        "moment": "A line of twelve entries with the eleventh scored through."
+      },
+      "cast": {
+        "name": "A Rider on Each Side",
+        "reading": "One knight each side of the turning and one boy between them, which is the whole arrangement of the world.",
+        "moment": "A boy walking up the middle of a lane with a mounted man either side, none of the three talking."
+      },
+      "act": {
+        "line": "The Escort of the Miller, 25 January",
+        "detail": "The mill outside the wall still worked, and the flour needed two horsemen to reach the gate.",
+        "moment": "A sack of flour on a boy's shoulder between two riders, the gate still a hundred paces off.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-kpr",
+      "slot": "ui/run/card-art/f-011011-kpr/illustration.png",
+      "seats": ".pkr",
+      "gold": "90",
+      "sharedArtToday": 6,
+      "current": {
+        "name": "Lance Beside the Keep",
+        "flavor": "The horse waited beside the keep for a gate that opened late."
+      },
+      "voice": {
+        "name": "Waiting time, claimed",
+        "flavor": "Four hours at a gate, claimed as service. Allowed, grudgingly, in a later hand.",
+        "moment": "A claim written in one hand and allowed in another underneath it."
+      },
+      "cast": {
+        "name": "Waiting on the Gate",
+        "reading": "The legate's authority opened the gate. It did not say when.",
+        "moment": "A mounted man waiting at a closed gate with the seal already handed in, and nothing happening."
+      },
+      "act": {
+        "line": "The Gate That Opened Late, 28 April",
+        "detail": "The relief was outside from four o'clock. The gate opened at eight, when it was dark enough.",
+        "moment": "Riders waiting in the dark under the wall, the first crack of light appearing at the gate's edge.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-krp",
+      "slot": "ui/run/card-art/f-011011-krp/illustration.png",
+      "seats": ".rkp",
+      "gold": "90",
+      "sharedArtToday": 6,
+      "current": {
+        "name": "Keep Above the Lance",
+        "flavor": "The keep held the height and the horse held the road beneath it."
+      },
+      "voice": {
+        "name": "Signals, one man, standing duty",
+        "flavor": "Paid as an archer to stand still, which he says is harder.",
+        "moment": "One man alone on a high wall with a furled flag under his arm, looking at nothing yet."
+      },
+      "cast": {
+        "name": "The Seal Above the Sworn",
+        "reading": "The commission held the height and the knight held the road, and both were following one order.",
+        "moment": "A man on a rampart holding up a sealed paper, and below him a rider reading it from the saddle."
+      },
+      "act": {
+        "line": "The Signal from the Tower, 29 April",
+        "detail": "The tower could see the convoy before the gate could. That was the whole value of the tower.",
+        "moment": "A watcher with both arms up, and a rider below already wheeling his horse.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-pkr",
+      "slot": "ui/run/card-art/f-011011-pkr/illustration.png",
+      "seats": ".kpr",
+      "gold": "90",
+      "sharedArtToday": 6,
+      "current": {
+        "name": "Lance Above, Keep Beside",
+        "flavor": "The rider took the rise and the keep took the corner."
+      },
+      "voice": {
+        "name": "Livestock, received into the town",
+        "flavor": "Counted twice, once at the gate and once in the market. The counts differ by nine.",
+        "moment": "Two tally sticks laid side by side on a table and not matching."
+      },
+      "cast": {
+        "name": "The Rise and the Road",
+        "reading": "The rider took the rise, the legate took the corner, and the labourer was told to stand in the middle.",
+        "moment": "Three men on three levels of the same broken ground, none of them looking at each other."
+      },
+      "act": {
+        "line": "The Cattle Brought In, 30 April",
+        "detail": "Six hundred head came in from the south while the English watched from Saint-Privé and did nothing.",
+        "moment": "Cattle streaming through a gate under the eyes of a distant fort, a rider counting them as they pass.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-prk",
+      "slot": "ui/run/card-art/f-011011-prk/illustration.png",
+      "seats": ".rpk",
+      "gold": "90",
+      "sharedArtToday": 6,
+      "current": {
+        "name": "Keep Above, Lance Beside",
+        "flavor": "Stone on the height, horse at its foot, and the road watched twice."
+      },
+      "voice": {
+        "name": "Boats, hired, with their men",
+        "flavor": "Eleven boats and their crews, paid by the boat and not the man. The men noticed.",
+        "moment": "A boatman paid one coin for four men, all four watching his hand."
+      },
+      "cast": {
+        "name": "Watched Twice",
+        "reading": "Stone on the height, horse at its foot: one road watched by two men who did not speak.",
+        "moment": "A rider at the base of a tower and a watcher at the top, both facing the same empty road."
+      },
+      "act": {
+        "line": "The Road to Chécy, 1 May",
+        "detail": "The convoy came round by the east bank, because the west bank was watched.",
+        "moment": "Loaded boats poled upriver at dusk with a rider keeping pace along the bank.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-rkp",
+      "slot": "ui/run/card-art/f-011011-rkp/illustration.png",
+      "seats": ".krp",
+      "gold": "90",
+      "sharedArtToday": 6,
+      "current": {
+        "name": "Lance Above the Rampart",
+        "flavor": "The rider crossed above the rampart while it was still being built."
+      },
+      "voice": {
+        "name": "Work under fire, extra allowance",
+        "flavor": "Twopence a day above the rate, claimed by everyone within a mile of it.",
+        "moment": "A long list of claimants for a twopenny allowance, in several hands."
+      },
+      "cast": {
+        "name": "Crossing the Unfinished Wall",
+        "reading": "He rode over the rampart while it was still being built, which is how you learn it is not a wall yet.",
+        "moment": "A horse picking its way across a half-built rampart while the men building it stand back."
+      },
+      "act": {
+        "line": "The Boulevard at Saint-Loup, 2 May",
+        "detail": "They fortified the ruin of the fort they had taken, working under fire from the next one along.",
+        "moment": "Men working with their heads down while a rider crosses the gap behind them at speed.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-rpk",
+      "slot": "ui/run/card-art/f-011011-rpk/illustration.png",
+      "seats": ".prk",
+      "gold": "90",
+      "sharedArtToday": 6,
+      "current": {
+        "name": "Sally from the Bend",
+        "flavor": "They came out at the bend, where the road could not be seen along."
+      },
+      "voice": {
+        "name": "Sortie pay, one day, double",
+        "flavor": "Double rate for the day of a sortie. The roll for 3 May is the longest in the book.",
+        "moment": "A single day's page carrying three times the names of the pages either side of it."
+      },
+      "cast": {
+        "name": "The Sally at the Blind Corner",
+        "reading": "They came out at the bend, because a bend is the only place a wall can surprise anybody.",
+        "moment": "The gate at the bend swinging in and the first horse coming out, the road beyond still empty."
+      },
+      "act": {
+        "line": "The Sortie from the Burgundy Gate, 3 May",
+        "detail": "They went out where the wall turns, so that the bastille could not see the gate open.",
+        "moment": "The postern at the angle of the wall standing open with men already fifty paces beyond it.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-bpp",
+      "slot": "ui/run/card-art/f-011011-bpp/illustration.png",
+      "seats": ".pbp",
+      "gold": "50",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "Corner Chapel",
+        "flavor": "They built the corner first. The rest of the chapel never came."
+      },
+      "voice": {
+        "name": "Two labourers and a chaplain",
+        "flavor": "The chaplain certifies the stone came from consecrated ground and may be reused.",
+        "moment": "A chalk mark going onto a stone before it is loaded, the chaplain's hand steadying it."
+      },
+      "cast": {
+        "name": "The Corner Built First",
+        "reading": "They built the corner first, because a corner is two walls. The rest never came.",
+        "moment": "Two labourers setting the last stone of a corner that stands alone in a field, the judge watching."
+      },
+      "act": {
+        "line": "Saint-Pierre-Empont Pulled Down, 2 November",
+        "detail": "Another suburb church came down. The stone went into the wall, which the canons had agreed to.",
+        "moment": "A church corner dismantled stone by stone, a cleric marking each one with chalk.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-pbp",
+      "slot": "ui/run/card-art/f-011011-pbp/illustration.png",
+      "seats": ".bpp",
+      "gold": "50",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "The Curate's Corner",
+        "flavor": "The curate took the inside of the bend, where the wind was smaller."
+      },
+      "voice": {
+        "name": "Travel allowance, three men, winter rate",
+        "flavor": "A penny a day extra from Martinmas. The clerk has written the date of the change in the margin.",
+        "moment": "A margin note giving a date, with the rate above it changing on that line."
+      },
+      "cast": {
+        "name": "The Inside of the Bend",
+        "reading": "The curate took the inside of the bend, where the wind was smaller, and nobody begrudged him it.",
+        "moment": "Three figures walking a bend, the cleric on the sheltered side, the two labourers taking the weather."
+      },
+      "act": {
+        "line": "The Winter Road to Blois, 6 November",
+        "detail": "The last road still open, and the wind on it came straight off the river.",
+        "moment": "Three figures leaning into wind on an embankment, the middle one shielded by the other two.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-ppb",
+      "slot": "ui/run/card-art/f-011011-ppb/illustration.png",
+      "seats": ".ppb",
+      "gold": "50",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "Vespers at the Bend",
+        "flavor": "Vespers was said at the turning. Nobody agreed on the hour."
+      },
+      "voice": {
+        "name": "Locked out, one night, no allowance",
+        "flavor": "Arrived after the gate closed. Not the town's problem, and not the crown's.",
+        "moment": "Three men sleeping against the outside of a town wall, gear stacked between them."
+      },
+      "cast": {
+        "name": "Vespers on the Road",
+        "reading": "The hour was said on the road, because they would not reach the town before it.",
+        "moment": "Three men stopped on a road at dusk: one reading, two standing with their loads still on."
+      },
+      "act": {
+        "line": "Vespers Outside the Wall, 9 November",
+        "detail": "Said in the open by men who could not get in before the gate closed. The gate did not open for it.",
+        "moment": "Three figures kneeling on open ground with a shut gate behind them and one light in it.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-kpp",
+      "slot": "ui/run/card-art/f-011011-kpp/illustration.png",
+      "seats": ".pkp",
+      "gold": "50",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "The Bend Patrol",
+        "flavor": "They patrolled the bend because the straight road no longer mattered."
+      },
+      "voice": {
+        "name": "Standing patrol, three men, nightly",
+        "flavor": "Entered once with 'and so on nightly', which the Exchequer disallowed.",
+        "moment": "A single roll entry with a long horizontal stroke drawn after it."
+      },
+      "cast": {
+        "name": "The Patrol of the Turning",
+        "reading": "They patrolled the bend, because the straight road no longer mattered to anybody.",
+        "moment": "A rider and two men on foot at a corner, all three looking down a road nobody uses."
+      },
+      "act": {
+        "line": "The Watch on the Portereau, 12 November",
+        "detail": "The English were building. The town's task that month was to watch them do it and write it down.",
+        "moment": "Two men and a rider on a bank watching earthworks go up half a mile away.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-pkp",
+      "slot": "ui/run/card-art/f-011011-pkp/illustration.png",
+      "seats": ".kpp",
+      "gold": "50",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "Rider at the Elbow",
+        "flavor": "The horse held the elbow of the road, and the road held nothing else."
+      },
+      "voice": {
+        "name": "Post, three men, held eleven days",
+        "flavor": "Relieved on the twelfth. Two of the three were the same two throughout.",
+        "moment": "Two men handing a post over to two others, one of the four already walking away."
+      },
+      "cast": {
+        "name": "The Elbow of the Road",
+        "reading": "The horse held the elbow of the road, and the road held nothing else.",
+        "moment": "A mounted man in the crook of a bend with a man on foot either side, all three still."
+      },
+      "act": {
+        "line": "The Chécy Road, 16 November",
+        "detail": "The last open track east, held by three men because there were not four to spare.",
+        "moment": "Three men at a junction in the rain with a hurdle half across it.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-ppk",
+      "slot": "ui/run/card-art/f-011011-ppk/illustration.png",
+      "seats": ".ppk",
+      "gold": "50",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "Last Horse in the Lane",
+        "flavor": "One horse remained in the lane. The lane remembered more."
+      },
+      "voice": {
+        "name": "One horse remaining, appraised",
+        "flavor": "Of eleven horses entered in October, one is still standing in November's roll.",
+        "moment": "A page with ten valuations struck through and one left."
+      },
+      "cast": {
+        "name": "The Last Horse",
+        "reading": "One horse remained in the lane. The lane remembered more of them than that.",
+        "moment": "One rider and two men on foot in a lane wide enough for a column, with nothing else in it."
+      },
+      "act": {
+        "line": "The Horses Eaten, 20 November",
+        "detail": "The town began to count its horses as food in November, and the counting was done in public.",
+        "moment": "A horse led past a queue of people who are all looking at it and not at each other.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-ppp",
+      "slot": "ui/run/card-art/f-011011-ppp/illustration.png",
+      "seats": ".ppp",
+      "gold": "10–40",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "Three at the Turning",
+        "flavor": "The road bent. Three of them bent with it, and did not straighten."
+      },
+      "voice": {
+        "name": "Three foot archers, one street",
+        "flavor": "Entered in the order the street runs, which is how the whole roll is arranged.",
+        "moment": "Three names one under another with a street name bracketing all three."
+      },
+      "cast": {
+        "name": "The Labourer, the Smith and the Taverner",
+        "reading": "First, second and sixth pawn: the spade, the hammer and the cup. The array took all three in a morning.",
+        "moment": "Three men handing their tools over a fence to somebody out of frame, one after another."
+      },
+      "act": {
+        "line": "The Levy at the Turning, 13 October",
+        "detail": "Three off one street. The names were read at the corner where the street bends.",
+        "moment": "Three men stepping out of a doorway into a lane while a clerk reads from a list at the corner.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-ppr",
+      "slot": "ui/run/card-art/f-011011-ppr/illustration.png",
+      "seats": ".ppr",
+      "gold": "70",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "The Corner Tower",
+        "flavor": "The corner tower saw two roads and reported neither."
+      },
+      "voice": {
+        "name": "Watch, two men, one tower, alternating",
+        "flavor": "Six hours each. The relief is recorded; the sleep is not.",
+        "moment": "Two men passing on a narrow stair, one going up, one coming down."
+      },
+      "cast": {
+        "name": "The Tower on the Corner",
+        "reading": "The corner tower saw two roads and reported neither, because reporting was not in the commission.",
+        "moment": "A man at a tower window with two roads visible below him and no paper in his hands."
+      },
+      "act": {
+        "line": "The Belfry Watch, 5 January",
+        "detail": "Two roads visible from the belfry and one watcher, who could only be looking at one of them.",
+        "moment": "A watcher turning from one window to another in a bell chamber, the bell rope hanging still.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-prp",
+      "slot": "ui/run/card-art/f-011011-prp/illustration.png",
+      "seats": ".rpp",
+      "gold": "70",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "Tower Above the Lane",
+        "flavor": "The tower stood above the lane after the lane stopped being used."
+      },
+      "voice": {
+        "name": "Rubble, carted, sixty loads",
+        "flavor": "Charged by the load. The loads got smaller as the month went on.",
+        "moment": "Two tally marks of different sizes cut on the same stick."
+      },
+      "cast": {
+        "name": "Above the Disused Lane",
+        "reading": "The tower stood above the lane after the lane stopped being used, and went on standing above it.",
+        "moment": "Two men below a tower clearing a lane that plainly nobody has walked down in months."
+      },
+      "act": {
+        "line": "The Lane Blocked, 9 January",
+        "detail": "They filled the lane with rubble, because it ran to a gate they no longer meant to open.",
+        "moment": "Two men tipping a barrow of rubble into a lane while a third watches from above.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-011011-rpp",
+      "slot": "ui/run/card-art/f-011011-rpp/illustration.png",
+      "seats": ".prp",
+      "gold": "70",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "Keep at the Turning",
+        "flavor": "The keep held the turning. The turning was all it held."
+      },
+      "voice": {
+        "name": "Garrison, three men, thirty-one days",
+        "flavor": "Nothing occurred. The roll still runs to a page, because the pay does.",
+        "moment": "A full page of identical daily entries."
+      },
+      "cast": {
+        "name": "The Turning Was All It Held",
+        "reading": "The keep held the turning. Held is a generous word for what a building does.",
+        "moment": "Two men and an officer at a gatehouse on a bend, none of them doing anything."
+      },
+      "act": {
+        "line": "The Post at the Bend, 14 January",
+        "detail": "A gatehouse at a turn in the wall, three men, and a month with nothing in it.",
+        "moment": "Three men in a gatehouse arch, one asleep sitting up, the road empty in both directions.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-00011011-bbpp",
+      "slot": "ui/run/card-art/f-00011011-bbpp/illustration.png",
+      "seats": "bpbp",
+      "gold": "80",
+      "sharedArtToday": 2,
+      "current": {
+        "name": "Traveling Chapel",
+        "flavor": "The chapel traveled because the wounded could not."
+      },
+      "voice": {
+        "name": "Two chaplains, two servants, one cart",
+        "flavor": "The cart is charged to the retinue. Everything in it is charged to the town.",
+        "moment": "A loaded cart with two men roping it and two clerics counting what is on it."
+      },
+      "cast": {
+        "name": "The Portable Court",
+        "reading": "Two judges, two clerks, and everything the office needs in one cart, because the office has lost its room.",
+        "moment": "A cart being packed with a table, a chest and a folded cloth; one judge is already sitting in it."
+      },
+      "act": {
+        "line": "The Hospital of Saint-Côme, 14 February",
+        "detail": "The wounded from Rouvray came back over two days and were put wherever there was floor.",
+        "moment": "Two clerics laying a man on straw in a room already full, two townsmen carrying in the next one.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-00011011-bppb",
+      "slot": "ui/run/card-art/f-00011011-bppb/illustration.png",
+      "seats": "bppb",
+      "gold": "80",
+      "sharedArtToday": 2,
+      "current": {
+        "name": "Chapel Corner to Corner",
+        "flavor": "Two offices, opposite corners, and the same short liturgy between them."
+      },
+      "voice": {
+        "name": "Divided company, two stations",
+        "flavor": "Half at the bridge, half at the north gate. One roll, two pay tables, endless argument.",
+        "moment": "Two pay tables in one room with a queue at each and a clerk shouting across."
+      },
+      "cast": {
+        "name": "Two Courts, One Square",
+        "reading": "Two judges at opposite corners of one yard, each hearing his own case, each audible to the other.",
+        "moment": "A small yard with a table in each of two corners and one man crossing between them."
+      },
+      "act": {
+        "line": "The Two Watches, 16 February",
+        "detail": "Two chapels at opposite ends of the town kept the vigil for the dead of Rouvray, an hour apart.",
+        "moment": "A lit doorway at each end of a dark street with one figure walking from one to the other.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-00011011-bkpp",
+      "slot": "ui/run/card-art/f-00011011-bkpp/illustration.png",
+      "seats": "bpkp",
+      "gold": "80",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "Wayfarers' Compact",
+        "flavor": "They agreed upon the road, having nowhere left to meet."
+      },
+      "voice": {
+        "name": "Composite lance, four men, four rates",
+        "flavor": "Man-at-arms 12d, chaplain 6d, two archers 6d. Four men, three arguments.",
+        "moment": "Four different coin counts made onto the same table in front of four men."
+      },
+      "cast": {
+        "name": "The Compact on the Road",
+        "reading": "Four men who would not have met agreed how to travel together, because none of them could travel alone.",
+        "moment": "Four men shaking on it at a crossroads, the horse already turned toward one of the four roads."
+      },
+      "act": {
+        "line": "The Agreement at Rouvray, 12 February",
+        "detail": "Scots on foot, French on horse, and an argument about who went first that lost the battle.",
+        "moment": "Four men arguing over a line scratched in the dirt while the English carts are visible behind them.",
+        "attested": true
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-00011011-bpkp",
+      "slot": "ui/run/card-art/f-00011011-bpkp/illustration.png",
+      "seats": "bkpp",
+      "gold": "80",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "Office Above, Horse Beside",
+        "flavor": "The office kept the height; the horse kept the exit."
+      },
+      "voice": {
+        "name": "Position, disputed in the account",
+        "flavor": "The chaplain's account and the man-at-arms' account of the same field do not agree.",
+        "moment": "Two written accounts pinned side by side, one annotated in a third hand."
+      },
+      "cast": {
+        "name": "The Office Above, the Horse Beside",
+        "reading": "The judge took the height and the knight took the exit, and the two labourers took what was left.",
+        "moment": "Four men on broken ground — one high, one at the gap, two in the low middle — each watching something different."
+      },
+      "act": {
+        "line": "The Field at Rouvray, Midday",
+        "detail": "The French had the height and the horse and lost anyway, which took a long time to explain.",
+        "moment": "Four men on a rise looking down at the wagon-fort, one of them pointing at the wrong part of it.",
+        "attested": true
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-00011011-bppk",
+      "slot": "ui/run/card-art/f-00011011-bppk/illustration.png",
+      "seats": "bppk",
+      "gold": "80",
+      "sharedArtToday": 3,
+      "current": {
+        "name": "Compact of the Square",
+        "flavor": "Four corners, one agreement, and nothing to enforce it."
+      },
+      "voice": {
+        "name": "Four names, one indenture, no seal",
+        "flavor": "Agreed and never sealed. Paid anyway, which is how most of it worked.",
+        "moment": "An unsealed document with four signatures and a blank wax disc beside it."
+      },
+      "cast": {
+        "name": "Four Corners, One Agreement",
+        "reading": "They agreed it in a square yard with a man at each corner, so that nobody could be overheard.",
+        "moment": "Four men at four corners of a yard, all facing inward, none close enough to touch."
+      },
+      "act": {
+        "line": "The Council of 18 February",
+        "detail": "The town, the church, the garrison and the crown met about the grain. Nothing was enforceable.",
+        "moment": "Four men round a table with the grain accounts in the middle and nobody's hand on them.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-00011011-kkpp",
+      "slot": "ui/run/card-art/f-00011011-kkpp/illustration.png",
+      "seats": "kpkp",
+      "gold": "80",
+      "sharedArtToday": 2,
+      "current": {
+        "name": "Escort of Lances",
+        "flavor": "Four riders escorted linen farther than any standard."
+      },
+      "voice": {
+        "name": "Two lances, forty days, victual escort",
+        "flavor": "Retained to bring the carts in. Paid whether the carts arrive or not, which was foreseen.",
+        "moment": "Two mounted men counted past a clerk at a road barrier, carts stacked behind them."
+      },
+      "cast": {
+        "name": "The Escort of the Merchant",
+        "reading": "Fourth pawn is the merchant, who carries the scales. Two knights were hired to walk beside them.",
+        "moment": "Two riders halted while the merchant reweighs a sack at the roadside, the fourth man holding the horses."
+      },
+      "act": {
+        "line": "The Herring Convoy, 12 February",
+        "detail": "Three hundred carts of salt fish for Lent, and an escort under orders not to fight for them.",
+        "moment": "Two riders alongside a cart of barrels at the instant the commander's hand goes up to halt the column.",
+        "attested": true
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-00011011-kppk",
+      "slot": "ui/run/card-art/f-00011011-kppk/illustration.png",
+      "seats": "kppk",
+      "gold": "80",
+      "sharedArtToday": 2,
+      "current": {
+        "name": "Lances at Opposite Corners",
+        "flavor": "Two lances at opposite corners, watching the same empty middle."
+      },
+      "voice": {
+        "name": "Front and rear guard, same rate",
+        "flavor": "Two men-at-arms, one at each end, entered on the first and the last line of the page.",
+        "moment": "A page of the roll with a man-at-arms' name at the very top and another at the very bottom."
+      },
+      "cast": {
+        "name": "A Lance at Each End",
+        "reading": "One knight at the head and one at the tail, and the two men between them could not see either.",
+        "moment": "A sunken lane: a rider visible at the front, a rider visible at the back, and nothing else."
+      },
+      "act": {
+        "line": "The Column Cut, 12 February",
+        "detail": "The escort was strung along a mile of road when the attack came at the middle of it.",
+        "moment": "The middle of a column — two carters looking forward and back in the same instant, both riders too far away.",
+        "attested": true
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-00011011-bppp",
+      "slot": "ui/run/card-art/f-00011011-bppp/illustration.png",
+      "seats": "bppp",
+      "gold": "60",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "Blessing of the Square",
+        "flavor": "He blessed all four corners. Three had already been abandoned."
+      },
+      "voice": {
+        "name": "One chaplain, three archers, parish duty",
+        "flavor": "Detailed to the parish for the octave. Returned two men short, both accounted for.",
+        "moment": "Four men leaving and two coming back, past the same clerk at the same gate."
+      },
+      "cast": {
+        "name": "The Blessing of the Four Corners",
+        "reading": "He blessed all four corners of the yard. Three of the four houses on it were already empty.",
+        "moment": "A cleric at the fourth corner with three labourers behind him, looking at three shuttered doors."
+      },
+      "act": {
+        "line": "The Blessing of the Quarters, 21 December",
+        "detail": "Each quarter was blessed before Christmas. Two of them had nobody left in them to hear it.",
+        "moment": "A small procession turning into an empty street, the leading cleric's hand raised at nothing.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-00011011-kppp",
+      "slot": "ui/run/card-art/f-00011011-kppp/illustration.png",
+      "seats": "kppp",
+      "gold": "60",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "Rider in the Square",
+        "flavor": "The seal was unbroken. The stable boy had already understood."
+      },
+      "voice": {
+        "name": "Messenger, mounted, three attendants",
+        "flavor": "Three men to see one letter safely twelve miles. It arrived.",
+        "moment": "One sealed letter on an open palm, three sets of hands near it and none of them touching it."
+      },
+      "cast": {
+        "name": "The Sealed Letter",
+        "reading": "The seal was unbroken when it reached him. The boy who carried it had already understood what was in it.",
+        "moment": "A rider taking a sealed letter from a boy who does not let go of it immediately."
+      },
+      "act": {
+        "line": "The News of Salisbury's Death, 5 November",
+        "detail": "It took three days to be believed, and the believing changed nothing about the walls.",
+        "moment": "A letter handed over in a courtyard where three men have stopped work to watch.",
+        "attested": true
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-00011011-pppp",
+      "slot": "ui/run/card-art/f-00011011-pppp/illustration.png",
+      "seats": "pppp",
+      "gold": "10–40",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "The Fourfold Yoke",
+        "flavor": "Four to a yoke meant for oxen. The oxen had been eaten in spring."
+      },
+      "voice": {
+        "name": "Four foot archers, employed as haulage",
+        "flavor": "Paid 3d, worked as beasts, and the clerk has written 'as oxen' with no evident irony.",
+        "moment": "Four names bracketed under a heading in the clerk's hand reading 'as oxen'."
+      },
+      "cast": {
+        "name": "Four to the Yoke",
+        "reading": "Labourer, smith, taverner, guard: four estates, one yoke, and the oxen eaten in spring.",
+        "moment": "Four men taking the weight of a cart-yoke meant for animals, at the instant it comes off the ground."
+      },
+      "act": {
+        "line": "The Carts Hauled In, 11 October",
+        "detail": "Everything outside the walls that could be moved was moved in one day, by hand, because there were no beasts.",
+        "moment": "Four men dragging a loaded cart through a gate too narrow for it, one of them turned sideways.",
+        "attested": false
+      },
+      "king": null
+    },
+    {
+      "cardId": "f-00011011-rppp",
+      "slot": "ui/run/card-art/f-00011011-rppp/illustration.png",
+      "seats": "rppp",
+      "gold": "80",
+      "sharedArtToday": 1,
+      "current": {
+        "name": "Rampart Detail",
+        "flavor": "They repaired the wall with stones from the abandoned quarter."
+      },
+      "voice": {
+        "name": "Masonry, three men and an overseer",
+        "flavor": "Materials 'found on site', which is the clerk's phrase for taken.",
+        "moment": "A ledger line reading 'found on site', with a loaded barrow visible through a doorway."
+      },
+      "cast": {
+        "name": "The Repair Detail",
+        "reading": "The legate's commission covered the wall. It did not cover where the stone came from.",
+        "moment": "Three men lifting a dressed stone with a carved face on it into a rough wall, while an officer looks away."
+      },
+      "act": {
+        "line": "The Wall Repaired with the Quarter, 20 February",
+        "detail": "They mended the rampart with the stone of the abandoned quarter, and the owners helped.",
+        "moment": "A carved lintel going into a rampart, held level by three men, its carving still facing out.",
+        "attested": false
+      },
+      "king": null
+    }
+  ]
+}

@@ -29415,3 +29415,195 @@ button.section-box-head {
   gap: var(--ds-inline-tight);
   padding: 0 var(--ds-inset) var(--ds-inset);
 }
+/* Unit Roster — the shipped roster at 1:1, for comparative judgement.
+   No zoom control by design: these sprites are authored at their delivery size,
+   so magnifying them would hide the thing being inspected. */
+.unit-roster-lab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+ /* Pinned: auditing 49 tiers means scrolling deep into the grid and still needing
+    the zoom stepper and the palette picker, which otherwise scroll away above. */
+.unit-roster-controls {
+  align-items: center;
+  /* Frosted rather than painted: an opaque bar would be surface paint, which belongs
+     to registered chrome (ADR-0032/0059/0201). A backdrop blur keeps the controls
+     legible over the grid scrolling beneath them without inventing a surface. */
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 8px 4px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.unit-roster-controls label {
+  align-items: center;
+  display: flex;
+  font-size: var(--ds-text-xs);
+  gap: 6px;
+}
+
+.unit-roster-toggle { cursor: pointer; }
+
+.unit-roster-note {
+  color: var(--ds-text-muted, #9aa4b0);
+  font-size: var(--ds-text-xs);
+  margin: 0;
+}
+
+.unit-roster-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.unit-roster-row {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.unit-roster-row-label {
+  color: #f2f6ea;
+  flex: 0 0 84px;
+  font-size: var(--ds-text-xs);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
+}
+
+.unit-roster-cells {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.unit-roster-cell {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+}
+
+/* Intrinsic size only — never width/height, which would scale the sprite. */
+.unit-roster-cell img { image-rendering: pixelated; }
+
+.unit-roster-cell figcaption {
+  color: #e7eedd;
+  font-size: 10px;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
+}
+
+.unit-roster-missing {
+  color: #ffb4b4;
+  font-size: 10px;
+}
+
+/* A unit is drawn standing on a tile, so inspect it standing on one. The seat is
+   sized by the tile art itself; the unit is bottom-anchored so its contact point
+   sits where the board would put it. */
+.unit-roster-seat {
+  display: inline-block;
+  position: relative;
+}
+
+.unit-roster-ground {
+  display: block;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+/* Every unit image is capped to the board's 1x draw rect, scaled by the tier. Four
+   families still ship 512x512 sprites, and without this they render at natural size
+   and blow the grid apart -- rows overflow into each other and the labels stop
+   matching the pieces beside them. The board caps them the same way. */
+.unit-roster-unit,
+.unit-roster-unit-slot canvas {
+  max-height: calc(92px * var(--roster-tier, 1));
+  max-width: calc(78px * var(--roster-tier, 1));
+}
+
+/* Seated exactly where the board seats it. The tile frame is 96x180 with its top
+   face near the TOP -- the equator is 68px down -- so anchoring to the frame's
+   bottom edge drops the unit clean off the tile. The unit's own contact point is
+   80.241% down its sprite (the anchor the render pipeline validates), and a
+   percentage in `translate` resolves against the element, so this puts that point
+   on the equator whatever size the sprite is. */
+.unit-roster-unit {
+  image-rendering: pixelated;
+  left: 50%;
+  position: absolute;
+  top: var(--iso-tile-equator, 68px);
+  transform: translate(-50%, -80.241%);
+}
+
+.unit-roster-pair {
+  display: flex;
+  gap: 6px;
+}
+
+/* The superseded sprites are mostly the old 512px renders, which at 1:1 would be
+   six times the tile. They are capped to the board's 1x draw rect -- precisely what
+   the board did to them -- and then scaled BY THE TIER like everything else in the
+   seat. A fixed cap left the before stuck at 78px while the tier-sized canvas beside
+   it grew past 200, so the pair stopped being a comparison at all. */
+.unit-roster-unit.is-before {
+  max-height: calc(92px * var(--roster-tier, 1));
+  max-width: calc(78px * var(--roster-tier, 1));
+}
+
+/* A stepper, not a slider: the magnifications are a fixed ladder, so the control
+   that walks them should have one press per rung. */
+.unit-roster-magnify {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.unit-roster-magnify button {
+  cursor: pointer;
+  font-size: var(--ds-text-sm);
+  line-height: 1;
+  min-width: 26px;
+  padding: 2px 6px;
+}
+
+.unit-roster-magnify button:disabled { cursor: default; opacity: 0.4; }
+
+.unit-roster-magnify-value {
+  font-size: var(--ds-text-xs);
+  min-width: 26px;
+  text-align: center;
+}
+
+/* Zoomed OUT, the board minifies through its mip chain rather than dropping
+   columns, so let the browser resample here too — forcing nearest would show an
+   artifact the game no longer has. */
+.unit-roster-grid[data-nearest='0'] .unit-roster-unit,
+.unit-roster-grid[data-nearest='0'] .unit-roster-ground {
+  image-rendering: auto;
+}
+
+/* The seat scales with the tier so the tile grows with the piece, but the unit
+   canvas is already sized in real pixels for that tier — so it is un-zoomed back
+   out, leaving the canvas to speak for itself. */
+ /* `top` is supplied inline, scaled to the tier, because the tile's equator moves
+    with it. Only the contact-point offset lives here. */
+.unit-roster-unit-slot {
+  left: 50%;
+  position: absolute;
+  transform: translate(-50%, -80.241%);
+}
+
+.unit-roster-unit-slot canvas {
+  display: block;
+  position: static;
+  transform: none;
+}

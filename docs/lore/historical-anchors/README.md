@@ -15,6 +15,24 @@ Use these anchors to create hidden scenarios for
 still withhold details. The historical event is for us, not for the viewer to be
 able to identify from a caption.
 
+## Scope: this governs BACKGROUNDS, not cards
+
+The guiding rule above is written for **places** — world and battle backdrops,
+where the subject is ground and weather and the event is deliberately off-stage.
+
+It was once applied to Run **card** art, where the subject is a named thing the
+player buys and puts on a board, and the result was 94 briefs carrying 36 scenes
+between them: 46 of them containing the word "covered", 30 beside water, 21 with
+flowers, and no event in any of them. The residue vocabulary listed under each
+anchor below — covered scrolls, covered baskets, ruined wall with flowers, muddy
+roads, no battle scene — came across verbatim and became the whole subject.
+
+Residue is a subject; absence is not. Card art has its own contract:
+[`../../art/card-art-brief-contract.md`](../../art/card-art-brief-contract.md),
+decided in
+[ADR-0579](../../adr/0579-card-art-is-briefed-from-a-king-rooted-event.md). Do
+not brief a card from this folder.
+
 ## Candidate Anchors
 
 ### Black Death, Europe, 1347-1351
