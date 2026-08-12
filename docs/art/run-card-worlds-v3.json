@@ -1,21 +1,22 @@
 {
   "schemaVersion": 3,
   "cardType": "Units",
-  "status": "proposed",
+  "status": "accepted",
   "governedBy": "docs/adr/0579-card-art-is-briefed-from-a-king-rooted-event.md",
   "contract": "docs/art/card-art-brief-contract.md",
   "supersedes": "docs/art/run-card-family-prompts-v2.json (left intact as the record of what shipped)",
   "note": "The 69 cards dealable under DEFAULT_RUN_RULES (cardSpan 2), each authored across the three layers of the contract. One illustration per CARD, retiring the (footprint, roster) family collapse of ADR-0520 for this deck.",
   "layerStatus": {
-    "voice": "proposed — the register the fifteen Kings already print. Unaffected by slate sign-off.",
-    "cast": "proposed — the Cessolis reading. Unaffected by slate sign-off.",
-    "act": "SUPERSEDED IN PART. These act lines were authored during the single-war pass (Orléans, 12 Oct 1428 – 8 May 1429) which the owner replaced with the king-rooted structure. The MOMENTS remain valid and reusable; the days are reassigned to King worlds once the slate is signed off. See rollup in run-king-slate-v3.json for target counts per world."
+    "voice": "accepted — the register the fifteen Kings already print. Unaffected by slate sign-off.",
+    "cast": "accepted — the Cessolis reading. Unaffected by slate sign-off.",
+    "act": "accepted — every card carries one act inside exactly one King’s world. The twelve cards under Sole Surviving Issue keep the Orléans days authored in the first pass; the other 57 were rewritten into their worlds when the slate was signed off."
   },
   "rules": {
     "priceIsNotAnInput": "A card’s gold contributes nothing to its picture.",
     "noArrangementField": "The footprint may be echoed by a composition that can do it without posing anybody, and is dropped the instant it costs the scene. It is never the subject.",
     "seatingSelectsTheMoment": "Cards sharing a footprint and roster differ by which instant of the shared act they hold, not by geometry.",
-    "attestedFlag": "act.attested marks a documented event. Unmarked days are authored moments inside a documented world — true in kind, not claims about a date. The act never reaches the card face either way."
+    "attestedFlag": "act.attested marks a documented event. Unmarked days are authored moments inside a documented world — true in kind, not claims about a date. The act never reaches the card face either way.",
+    "familiesStayWhole": "Cards sharing a footprint and roster sit in the SAME world, so the six that differ only by seating read as six moments of one situation rather than six unrelated scenes."
   },
   "cards": [
     {
@@ -39,12 +40,16 @@
         "moment": "He sets his roll on a milestone and begins reading the charge aloud to nobody, because the reading is required."
       },
       "act": {
-        "line": "Saint-Aignan, 12 October",
-        "detail": "The suburbs came down so the English would have nothing to stand in. The canons carried out what they could.",
-        "moment": "A canon walking away from his own church with the reliquary, as behind him the townsmen swing the first beam out of the roof.",
-        "attested": true
+        "line": "The commissioner without a hall",
+        "detail": "He was to hold the inquest at Michaelmas. The hall had been let to a wool merchant.",
+        "moment": "Setting his roll on a milestone and beginning to read the charge aloud to nobody, because the reading is required.",
+        "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "one-left-at-the-marker",
+        "name": "One Left at the Marker",
+        "world": "England · the hundreds, 1274–75"
+      }
     },
     {
       "cardId": "k",
@@ -67,12 +72,16 @@
         "moment": "The instant after the oath: his hand still on the relic, the priest already turning away, the horse brought up behind him."
       },
       "act": {
-        "line": "The Road to Blois, 15 October",
-        "detail": "One rider went out before the ring closed. Everything the town later hoped for went out with him.",
-        "moment": "Looking back at the walls from the last rise where they are still visible, and deciding not to stop.",
+        "line": "Sent ahead to the assembly",
+        "detail": "Word had to reach the next province before he did, or there was nobody there to confirm him.",
+        "moment": "Looking back from the last rise where the last province is still visible, and deciding not to stop.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "within-the-old-bounds",
+        "name": "Confirmed on the Road",
+        "world": "Sweden · the Eriksgata"
+      }
     },
     {
       "cardId": "p",
@@ -95,12 +104,16 @@
         "moment": "Handing the spade over a low wall to his wife, keeping the rod, which from this morning is a weapon."
       },
       "act": {
-        "line": "Saint-Jean-le-Blanc, 17 October",
-        "detail": "The first of the burned suburbs. The men who pulled them down had lived in them.",
-        "moment": "Putting a torch to his own thatch at arm's length, not looking at it.",
-        "attested": true
+        "line": "The man the district owes",
+        "detail": "The smaller district owes one man to the crew, and this year it is him.",
+        "moment": "Handing his spade over a low wall to his wife and keeping nothing but a sea-bag.",
+        "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "staggered-muster",
+        "name": "A Ship From Every District",
+        "world": "Denmark · the leidang"
+      }
     },
     {
       "cardId": "q",
@@ -123,12 +136,16 @@
         "moment": "She has stepped between the sentence and the man, and the court has not yet decided what to do about it."
       },
       "act": {
-        "line": "The Burgundy Gate, 29 April",
-        "detail": "She entered at eight in the evening carrying her standard, and the town did not sleep.",
-        "moment": "Torchlight catching the standard the moment it clears the gate arch — the crowd's faces turn before she does.",
-        "attested": true
+        "line": "The queen in the hall",
+        "detail": "She had no part in it and was in the room for the whole of it.",
+        "moment": "Standing while the roll is read, in a hall where everybody else is seated.",
+        "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "entered-without-objection",
+        "name": "Entered Without Objection",
+        "world": "England · Westminster, 30 September 1399"
+      }
     },
     {
       "cardId": "r",
@@ -151,12 +168,16 @@
         "moment": "Holding the sealed commission up to a closed gate, while the men on the gate read it slowly."
       },
       "act": {
-        "line": "Les Tourelles, 24 October",
-        "detail": "They took the bridge fort two days after the wound that killed Salisbury. It was worth more than he was.",
-        "moment": "English soldiers on the captured tower roof, turned back down the bridge toward the town, which is now the only thing left.",
-        "attested": true
+        "line": "The king's man with the book",
+        "detail": "The distribution was made in person and written down as it was made.",
+        "moment": "Holding the book open against a wall with one hand and writing with the other, because there is no table in the street yet.",
+        "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "muster-incomplete",
+        "name": "Measured and Entered",
+        "world": "Castile · Seville, from 1248"
+      }
     },
     {
       "cardId": "bb-vertical",
@@ -179,12 +200,16 @@
         "moment": "Both men reaching the bench at the same moment, and neither sitting."
       },
       "act": {
-        "line": "The Christmas Truce, 25 December",
-        "detail": "Both sides kept the day. The English asked for music and the town sent its minstrels across.",
-        "moment": "The minstrels walking out onto open ground between the bastille and the wall, instruments up, nobody armed.",
-        "attested": true
+        "line": "Two of the same order",
+        "detail": "Two men of one order who could not agree which of them was speaking for it.",
+        "moment": "Both reaching the bench at the same moment, and neither sitting.",
+        "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "witness-to-the-oath",
+        "name": "Witness to the Oath",
+        "world": "England · Clarendon, January 1164"
+      }
     },
     {
       "cardId": "pb-front",
@@ -207,12 +232,16 @@
         "moment": "The writ held out ahead at arm's length, the judge a pace behind, both walking into a yard that has gone quiet."
       },
       "act": {
-        "line": "Procession to Sainte-Croix, 20 October",
-        "detail": "The town walked its relics round the inside of the walls. It had nothing else to put on them.",
-        "moment": "The head of the procession reaching the corner where the wall is thinnest, and the boy with the cross looking up at it.",
+        "line": "The writ goes in front",
+        "detail": "The writ walks ahead because the man carrying it is the reason the door opens.",
+        "moment": "The writ held out at arm's length, the commissioner a pace behind, both walking into a yard that has gone quiet.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "one-left-at-the-marker",
+        "name": "One Left at the Marker",
+        "world": "England · the hundreds, 1274–75"
+      }
     },
     {
       "cardId": "pk-front",
@@ -235,12 +264,16 @@
         "moment": "Already twenty paces up the lane and turning to signal, while the rider is still holding the horse."
       },
       "act": {
-        "line": "First Contact at Olivet, 18 October",
-        "detail": "A scout and a rider went to see whether the English were where they were said to be. They were.",
-        "moment": "The scout dropping flat behind a hedge; the rider, still mounted and still visible, understanding a heartbeat later.",
+        "line": "The summons to the rock",
+        "detail": "He went to Vyšehrad on the eve because the coronation order said he did.",
+        "moment": "A messenger already twenty paces up the lane and turning to signal, while the rider is still holding the horse.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "anointed-late",
+        "name": "The Ploughman's Shoes, Produced",
+        "world": "Bohemia · Vyšehrad, eve of the coronation"
+      }
     },
     {
       "cardId": "pq-front",
@@ -263,12 +296,16 @@
         "moment": "He holds the door of an emptied hall open for her, and there is nobody behind her."
       },
       "act": {
-        "line": "Les Tourelles, evening of 7 May",
-        "detail": "Hit in the shoulder at noon, back at dusk. The fort fell within the hour.",
-        "moment": "Her standard going up against the boulevard wall with one soldier beside her, the ladders behind them still empty.",
-        "attested": true
+        "line": "The last attendant",
+        "detail": "By the end of it she had one man left, and he was not a great one.",
+        "moment": "He holds the door of an emptied hall open for her, and there is nobody behind her.",
+        "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "entered-without-objection",
+        "name": "Entered Without Objection",
+        "world": "England · Westminster, 30 September 1399"
+      }
     },
     {
       "cardId": "pr-front",
@@ -291,12 +328,16 @@
         "moment": "The guard's arm across the gate and the legate's seal held up beside it, each waiting for the other to move first."
       },
       "act": {
-        "line": "The Bastille Saint-Laurent, 8 December",
-        "detail": "The English finished it in the rain. From then the river road was theirs.",
-        "moment": "A sentry stepping up onto the new wall-walk for the first time, boots in wet mortar.",
+        "line": "Carried to the binder",
+        "detail": "The record was made the same day and bound before anyone could add to it.",
+        "moment": "A needle going through an unfilled column, the doorkeeper's arm still across the door.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "entered-without-objection",
+        "name": "Entered Without Objection",
+        "world": "England · Westminster, 30 September 1399"
+      }
     },
     {
       "cardId": "rr-vertical",
@@ -319,12 +360,16 @@
         "moment": "Two sealed commissions held up side by side at the same barrier, and the barrier-keeper reading both."
       },
       "act": {
-        "line": "The Bastilles Abandoned, 8 May",
-        "detail": "They formed up in the field, waited to be attacked, were not, and marched away.",
-        "moment": "The English lines standing empty at first light with the fires still smoking, seen from the town wall.",
+        "line": "Two charters, one prince",
+        "detail": "Every prince served under a written charter, and the charter of the last one was still in the chest.",
+        "moment": "Two sealed charters held up side by side at the same table, and the man reading both.",
         "attested": true
       },
-      "king": null
+      "king": {
+        "cardId": "homage-withheld",
+        "name": "Shown the Way Out",
+        "world": "Novgorod · 1136, and after"
+      }
     },
     {
       "cardId": "kk-horizontal",
@@ -347,12 +392,16 @@
         "moment": "Two horses shoulder to shoulder in a lane too narrow for it, both riders looking straight ahead."
       },
       "act": {
-        "line": "Out of the Renart Gate, 5 December",
-        "detail": "Two captains rode out at dawn to see what could be taken. They came back with cattle.",
-        "moment": "Coming back through the gate at a walk, driving stolen cattle, and nobody cheering yet.",
-        "attested": false
+        "line": "Two hostages ride out",
+        "detail": "Local men rode with the king as sureties. A king who refused them was saying he did not fear the province.",
+        "moment": "Two riders shoulder to shoulder in a lane too narrow for it, both looking straight ahead.",
+        "attested": true
       },
-      "king": null
+      "king": {
+        "cardId": "within-the-old-bounds",
+        "name": "Confirmed on the Road",
+        "world": "Sweden · the Eriksgata"
+      }
     },
     {
       "cardId": "pp",
@@ -375,12 +424,16 @@
         "moment": "The smith handing a mended billhook back across the anvil; the labourer already turning to go."
       },
       "act": {
-        "line": "The Levy of the Quarters, 14 October",
-        "detail": "Each quarter of the town found its men. The rolls were read out in the street.",
-        "moment": "Two men stepping out of a crowd at the reading of their names, at the moment the crowd closes behind them.",
+        "line": "Two hearths, one oar",
+        "detail": "Two households too poor to send a man each sent one between them, and argued about which.",
+        "moment": "Two men at a beach with one sea-bag between them, at the moment one of them picks it up.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "staggered-muster",
+        "name": "A Ship From Every District",
+        "world": "Denmark · the leidang"
+      }
     },
     {
       "cardId": "f-0111-rb",
@@ -403,12 +456,16 @@
         "moment": "Two men reading one document at one table from opposite sides, neither letting go of it."
       },
       "act": {
-        "line": "Rouvray, 12 February",
-        "detail": "The convoy was salted fish for Lent. They laagered the carts, and the French rode at them anyway.",
-        "moment": "The instant the first French horse reaches the barricade of herring barrels and finds that it does not give.",
-        "attested": true
+        "line": "The legate and the assessor",
+        "detail": "One carried the pope's authority and one the law's, and they agreed only that it was urgent.",
+        "moment": "Two men reading one document at one table from opposite sides, neither letting go of it.",
+        "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "the-anointing",
+        "name": "The Anointing",
+        "world": "Francia · Soissons, 751"
+      }
     },
     {
       "cardId": "f-0111-bk",
@@ -431,12 +488,16 @@
         "moment": "The judge finishing a sentence aloud while behind him the knight is already loosening a strap."
       },
       "act": {
-        "line": "The Ave Maria Bell, 3 December",
-        "detail": "The bell was rung each evening and both armies stopped for it. Then it stopped being rung.",
-        "moment": "A rider halted in the open at the sound, hat off, the bell tower lit behind him and the bastilles dark.",
-        "attested": false
+        "line": "The order of going in",
+        "detail": "The churchman went first and the sworn man came behind, which is the whole thing the rite turns on.",
+        "moment": "One man’s foot on the top step and the other’s on the one below, both mid-stride.",
+        "attested": true
       },
-      "king": null
+      "king": {
+        "cardId": "the-anointing",
+        "name": "The Anointing",
+        "world": "Francia · Soissons, 751"
+      }
     },
     {
       "cardId": "f-0111-rk",
@@ -459,12 +520,16 @@
         "moment": "The legate reining in because the escort has stopped, and the escort pointing at something out of frame."
       },
       "act": {
-        "line": "The Sortie to Rouvray, 12 February",
-        "detail": "They rode out to meet the convoy and met it too late, in the open, in the wrong order.",
-        "moment": "The Orléans horse arriving on the field at the moment the Scots are already committed on foot ahead of them.",
+        "line": "The earth brought in",
+        "detail": "Every county sent soil, so the mound was made of the realm before anybody stood on it.",
+        "moment": "A cart tipping its load onto a mound already man-high, the king’s man marking which county it came from.",
         "attested": true
       },
-      "king": null
+      "king": {
+        "cardId": "turning-stone",
+        "name": "Earth of Every County",
+        "world": "Hungary · Székesfehérvár, the coronation mound"
+      }
     },
     {
       "cardId": "f-011011-bbb",
@@ -487,12 +552,16 @@
         "moment": "The instant the third judge sits down — because until he sat, there was no court."
       },
       "act": {
-        "line": "The Examination at Poitiers, March",
-        "detail": "Before she was allowed near the town, three weeks of churchmen asked questions and wrote the answers down.",
-        "moment": "Three clerics at a table, one writing; she is standing, and the writer has stopped.",
+        "line": "The articles assented to",
+        "detail": "Sixteen articles read out and agreed to in one sitting, then written down and disputed for the rest of the reign.",
+        "moment": "The instant the third assent is given and the clerk starts writing, which is when it becomes a document.",
         "attested": true
       },
-      "king": null
+      "king": {
+        "cardId": "witness-to-the-oath",
+        "name": "Witness to the Oath",
+        "world": "England · Clarendon, January 1164"
+      }
     },
     {
       "cardId": "f-011011-bbk",
@@ -515,12 +584,16 @@
         "moment": "The horse shying at the bend; both judges' hands go out to the cart rail at the same instant."
       },
       "act": {
-        "line": "The Churchmen Go to Chinon, 6 March",
-        "detail": "Two clerics and one rider went to ask whether the king would receive her. The rider did the deciding.",
-        "moment": "The rider halting the party at a crossroads and pointing down the road they were not told to take.",
+        "line": "The escort to the council",
+        "detail": "Two churchmen summoned to answer, and a king's man to see that they arrived.",
+        "moment": "The horse shying at a bend, and both churchmen's hands going to the cart rail together.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "witness-to-the-oath",
+        "name": "Witness to the Oath",
+        "world": "England · Clarendon, January 1164"
+      }
     },
     {
       "cardId": "f-011011-bkb",
@@ -543,12 +616,16 @@
         "moment": "The knight in the doorway with the light behind him; the two judges have stopped mid-sentence."
       },
       "act": {
-        "line": "Turned Back on the Chinon Road, 8 March",
-        "detail": "They were sent to negotiate and came back having been told there was nothing to negotiate.",
-        "moment": "The rider putting his horse across the road, and the two clerics reining up short of it.",
+        "line": "Turned back at the coast",
+        "detail": "They were sent to Rome and stopped before the crossing, which was easier than arguing with them.",
+        "moment": "The rider putting his horse across the road, and the two churchmen reining up short of it.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "witness-to-the-oath",
+        "name": "Witness to the Oath",
+        "world": "England · Clarendon, January 1164"
+      }
     },
     {
       "cardId": "f-011011-kbb",
@@ -571,12 +648,16 @@
         "moment": "One horse led out of a stable, and two judges arriving at the door from opposite sides."
       },
       "act": {
-        "line": "The Road Is Only Wide Enough, 10 March",
-        "detail": "Two clerics, one escort, one road, and news arriving from both ends of it at once.",
-        "moment": "Two clerics facing opposite ways on the same road while the rider between them reads a letter.",
+        "line": "One horse between two courts",
+        "detail": "The court that got the horse heard its case first, and both courts knew it.",
+        "moment": "One horse led out of a stable and two churchmen arriving at the door from opposite sides.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "witness-to-the-oath",
+        "name": "Witness to the Oath",
+        "world": "England · Clarendon, January 1164"
+      }
     },
     {
       "cardId": "f-011011-bkk",
@@ -599,12 +680,16 @@
         "moment": "Both riders have turned in the saddle to look at each other past him, and he is looking straight ahead."
       },
       "act": {
-        "line": "Blois, 25 April",
-        "detail": "The relief column formed up with the priests at the front and the captains behind, which the captains disliked.",
-        "moment": "The column stepping off with the clergy leading, two captains sitting their horses at the roadside, not moving yet.",
-        "attested": true
+        "line": "The meeting at the ford",
+        "detail": "Both parties came mounted and armed to a riverbank, which is not how homage is done.",
+        "moment": "Both riders turned in the saddle to look at each other past the man between them, and he is looking straight ahead.",
+        "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "homage-done-mounted",
+        "name": "Homage Done Mounted",
+        "world": "France · Saint-Clair-sur-Epte, 911"
+      }
     },
     {
       "cardId": "f-011011-kbk",
@@ -627,12 +712,16 @@
         "moment": "The judge at the rail with the roll open; below him two riders have stopped their horses to listen."
       },
       "act": {
-        "line": "The Sermon Before the Column, 27 April",
-        "detail": "He preached against swearing and looting to men recruited on the promise of both.",
-        "moment": "The moment he names the penalty, and one of the two riders in front of him looks at the other.",
+        "line": "The terms read from the bank",
+        "detail": "The grant was read aloud where both sides could hear it and neither could reach the other.",
+        "moment": "A man reading from a bank with two riders below him, their horses standing in the shallows.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "homage-done-mounted",
+        "name": "Homage Done Mounted",
+        "world": "France · Saint-Clair-sur-Epte, 911"
+      }
     },
     {
       "cardId": "f-011011-kkb",
@@ -655,12 +744,16 @@
         "moment": "The chaplain at the gate with the book open, watching the road, one rider visible on it."
       },
       "act": {
-        "line": "The Return from Saint-Loup, 4 May",
-        "detail": "They came back with fewer than they took, and the count was made at the gate before anyone was let through.",
-        "moment": "The book open on the gate ledge, a wet thumb holding the page, the first horses arriving.",
+        "line": "Homage given from the saddle",
+        "detail": "Homage is sworn kneeling and unarmed. This was neither, and was entered under the same heading.",
+        "moment": "The two pairs of hands meeting, one above the other, the horse’s head higher than the crown.",
         "attested": true
       },
-      "king": null
+      "king": {
+        "cardId": "homage-done-mounted",
+        "name": "Homage Done Mounted",
+        "world": "France · Saint-Clair-sur-Epte, 911"
+      }
     },
     {
       "cardId": "f-011011-kkk",
@@ -683,12 +776,16 @@
         "moment": "Three horses entering a bend abreast where there is room for two."
       },
       "act": {
-        "line": "Saint-Loup, 4 May",
-        "detail": "The first fort taken. It went in an hour, and it decided that the rest could go too.",
-        "moment": "The ladder topping the palisade at Saint-Loup with the men behind it still on the ground.",
+        "line": "The four cuts",
+        "detail": "Crowned, he rode up the mound and cut his sword to the four points, undertaking all of it.",
+        "moment": "The horse’s forefeet reaching the top of the mound, the sword not yet up.",
         "attested": true
       },
-      "king": null
+      "king": {
+        "cardId": "turning-stone",
+        "name": "Earth of Every County",
+        "world": "Hungary · Székesfehérvár, the coronation mound"
+      }
     },
     {
       "cardId": "f-011011-bbp",
@@ -711,12 +808,16 @@
         "moment": "The clerk with the pen still wet, looking from one judge to the other, having written nothing."
       },
       "act": {
-        "line": "The Rationing Order, 6 January",
-        "detail": "The bread was weighed by the church and issued by the church, and the weight went down in January.",
-        "moment": "The scale pan settling at the new weight, the two churchmen watching it, the townsman's hands already out.",
-        "attested": false
+        "line": "The jury sworn",
+        "detail": "Twelve men of the hundred swore to what they remembered, and what they remembered was the evidence.",
+        "moment": "A hand coming off the book and the clerk’s pen going down before the man has finished speaking.",
+        "attested": true
       },
-      "king": null
+      "king": {
+        "cardId": "one-left-at-the-marker",
+        "name": "One Left at the Marker",
+        "world": "England · the hundreds, 1274–75"
+      }
     },
     {
       "cardId": "f-011011-bpb",
@@ -739,12 +840,16 @@
         "moment": "Two judges and a clerk at a small table with sacks stacked to the ceiling behind them."
       },
       "act": {
-        "line": "The Chapter House Requisitioned, 12 January",
-        "detail": "They stored grain where they had met for two hundred years, and held the meeting anyway.",
-        "moment": "The meeting held standing between grain sacks, one man holding the roll up to a high window for light.",
+        "line": "The inquest in a borrowed room",
+        "detail": "The hall was full of grain, so the inquest sat in the corner it was given.",
+        "moment": "Two commissioners and a clerk at a small table with sacks stacked to the roof behind them.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "one-left-at-the-marker",
+        "name": "One Left at the Marker",
+        "world": "England · the hundreds, 1274–75"
+      }
     },
     {
       "cardId": "f-011011-pbb",
@@ -767,12 +872,16 @@
         "moment": "Two judges taking chairs at a table set for eight; the clerk is still deciding where to stand."
       },
       "act": {
-        "line": "What Was Left of the See, 20 January",
-        "detail": "The bishop was at Rome. What remained of his court was two canons and a boy with the keys.",
-        "moment": "A boy handing a ring of keys to two canons in an empty vestry.",
+        "line": "By what warrant",
+        "detail": "Asked by what warrant they held it, most men answered that it had always been so.",
+        "moment": "An old man's empty hands turned up on the table, and neither commissioner writing.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "one-left-at-the-marker",
+        "name": "One Left at the Marker",
+        "world": "England · the hundreds, 1274–75"
+      }
     },
     {
       "cardId": "f-011011-bpr",
@@ -800,7 +909,11 @@
         "moment": "A council table with the captain standing rather than sitting, and one councillor's hand flat on the accounts.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "sole-surviving-issue",
+        "name": "Sole Surviving Issue",
+        "world": "France · Troyes 1420, and after"
+      }
     },
     {
       "cardId": "f-011011-brp",
@@ -828,7 +941,11 @@
         "moment": "Two watchers counting enemy fires at dusk while a third writes the number down.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "sole-surviving-issue",
+        "name": "Sole Surviving Issue",
+        "world": "France · Troyes 1420, and after"
+      }
     },
     {
       "cardId": "f-011011-pbr",
@@ -856,7 +973,11 @@
         "moment": "The gatekeeper's hand on the bar and the captain beside him, both looking through the wicket at the road.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "sole-surviving-issue",
+        "name": "Sole Surviving Issue",
+        "world": "France · Troyes 1420, and after"
+      }
     },
     {
       "cardId": "f-011011-prb",
@@ -884,7 +1005,11 @@
         "moment": "A mason setting a carved doorframe into a rampart while its owner watches from the crowd.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "sole-surviving-issue",
+        "name": "Sole Surviving Issue",
+        "world": "France · Troyes 1420, and after"
+      }
     },
     {
       "cardId": "f-011011-rbp",
@@ -912,7 +1037,11 @@
         "moment": "The proclamation being nailed to a post as the first relief carts come through behind it.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "sole-surviving-issue",
+        "name": "Sole Surviving Issue",
+        "world": "France · Troyes 1420, and after"
+      }
     },
     {
       "cardId": "f-011011-rpb",
@@ -940,7 +1069,11 @@
         "moment": "A man straightening up from the work to look at what he still cannot see.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "sole-surviving-issue",
+        "name": "Sole Surviving Issue",
+        "world": "France · Troyes 1420, and after"
+      }
     },
     {
       "cardId": "f-011011-bkp",
@@ -963,12 +1096,16 @@
         "moment": "Three men leaving a yard at first light: one mounted, one on foot, one still fastening a bundle."
       },
       "act": {
-        "line": "The Sortie of 2 January",
-        "detail": "Fifty went out at the Renart gate to burn a shed. It was the whole of the war news that week.",
-        "moment": "The shed catching at one corner while the party is already turning back, none of them watching it burn.",
+        "line": "Arriving at the gatehouse",
+        "detail": "The commissioners came unannounced, which was the instruction.",
+        "moment": "The escort's hand on the gate rope and the commissioner already dismounting, with nobody yet come out to meet them.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "household-roll",
+        "name": "The Household Roll",
+        "world": "England · Valor Ecclesiasticus, 1535"
+      }
     },
     {
       "cardId": "f-011011-bpk",
@@ -991,12 +1128,16 @@
         "moment": "The censer at the top of its swing, and the rider beyond it already moving."
       },
       "act": {
-        "line": "The Blessing at the Renart Gate, 4 January",
-        "detail": "Every sortie was blessed at the gate. The blessing took less time than opening the gate.",
-        "moment": "The gate half-open, the priest's hand still raised, the first horse's head already through.",
+        "line": "The house opened to the survey",
+        "detail": "The prior handed over the keys, refusing not being among the options.",
+        "moment": "Keys changing hands in a doorway, the commissioner's other hand already holding his book open.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "household-roll",
+        "name": "The Household Roll",
+        "world": "England · Valor Ecclesiasticus, 1535"
+      }
     },
     {
       "cardId": "f-011011-kbp",
@@ -1019,12 +1160,16 @@
         "moment": "The rider on the bank above and the judge below on the track, both stopped, neither speaking."
       },
       "act": {
-        "line": "The Escort to the Water Gate, 8 January",
-        "detail": "The clergy went to bless the river gate. The escort chose the route and did not explain it.",
-        "moment": "The escort turning his horse across the head of the path to stop the party going further.",
-        "attested": false
+        "line": "The plate weighed",
+        "detail": "Everything of value was weighed before it was written down, and written down before it left.",
+        "moment": "A chalice going onto a balance, the labourer steadying the pan, the commissioner reading the beam.",
+        "attested": true
       },
-      "king": null
+      "king": {
+        "cardId": "household-roll",
+        "name": "The Household Roll",
+        "world": "England · Valor Ecclesiasticus, 1535"
+      }
     },
     {
       "cardId": "f-011011-kpb",
@@ -1047,12 +1192,16 @@
         "moment": "A knight with his back to the lectern, facing an empty yard, while the reading goes on behind him."
       },
       "act": {
-        "line": "The Sermon at Saint-Paterne, 11 January",
-        "detail": "Preached under guard, in a church half outside the walls, to a congregation of forty.",
-        "moment": "The doors held open by two soldiers looking outward while the congregation faces the other way.",
+        "line": "The library sorted",
+        "detail": "Books were kept, sold, or used to wrap things, and the sorting was done in an afternoon.",
+        "moment": "A book dropped onto the second of three piles, the escort at the door not watching.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "household-roll",
+        "name": "The Household Roll",
+        "world": "England · Valor Ecclesiasticus, 1535"
+      }
     },
     {
       "cardId": "f-011011-pbk",
@@ -1075,12 +1224,16 @@
         "moment": "The clerk half-running to keep up, writing on a board as he goes, the rider ahead not slowing."
       },
       "act": {
-        "line": "The Count of the Bastilles, 15 January",
-        "detail": "A rider and a clerk went round the outside of the town at a distance and counted.",
-        "moment": "The clerk sketching the ring of forts onto a board while the rider watches the treeline behind him.",
-        "attested": false
+        "line": "The lead off the roof",
+        "detail": "The lead was the most valuable thing in the building and it was on top of it.",
+        "moment": "A sheet of roof lead peeling back off the battens, two men on the ridge, the commissioner below writing the weight.",
+        "attested": true
       },
-      "king": null
+      "king": {
+        "cardId": "household-roll",
+        "name": "The Household Roll",
+        "world": "England · Valor Ecclesiasticus, 1535"
+      }
     },
     {
       "cardId": "f-011011-pkb",
@@ -1103,12 +1256,16 @@
         "moment": "The rider's lance across the corner of the frame, and below it a man reading on without looking up."
       },
       "act": {
-        "line": "The Reading Interrupted, 18 January",
-        "detail": "Armed men came in during the office, and the office was finished anyway.",
-        "moment": "Armed men entering at the back of a church, and the reader at the front not lifting his eyes from the page.",
+        "line": "The household paid off",
+        "detail": "Pensions were assessed by office and paid where the roll allowed, and most of the roll did not.",
+        "moment": "A man taking a coin at a trestle in an emptied cloister, the escort mounted behind, the commissioner ruling the next line.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "household-roll",
+        "name": "The Household Roll",
+        "world": "England · Valor Ecclesiasticus, 1535"
+      }
     },
     {
       "cardId": "f-011011-kkp",
@@ -1131,12 +1288,16 @@
         "moment": "Two riders halted at a corner with a boy between the horses, holding both bridles."
       },
       "act": {
-        "line": "The Cattle Raid, 20 January",
-        "detail": "Two captains and a herdsman went out for beef. Only the beef was the point.",
-        "moment": "Two riders driving a handful of cattle through a gap while a boy runs to keep them together.",
+        "line": "Halted at the province boundary",
+        "detail": "The circuit stopped at every border to be met, and being met was the whole point of it.",
+        "moment": "Two riders halted at a corner with a boy between the horses holding both bridles.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "within-the-old-bounds",
+        "name": "Confirmed on the Road",
+        "world": "Sweden · the Eriksgata"
+      }
     },
     {
       "cardId": "f-011011-kpk",
@@ -1159,12 +1320,16 @@
         "moment": "Two riders and a boy stopped where a track ends at a flooded field, all three looking at the water."
       },
       "act": {
-        "line": "The Ford at Saint-Loup, 22 January",
-        "detail": "The winter river took the crossing, and the patrol found out at the crossing.",
+        "line": "The road ran out at the water",
+        "detail": "The circuit followed the law's route, and the law's route was older than the crossing.",
         "moment": "A horse's forelegs in the water and the rider leaning back, the second rider already turning.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "within-the-old-bounds",
+        "name": "Confirmed on the Road",
+        "world": "Sweden · the Eriksgata"
+      }
     },
     {
       "cardId": "f-011011-pkk",
@@ -1187,12 +1352,16 @@
         "moment": "A boy walking up the middle of a lane with a mounted man either side, none of the three talking."
       },
       "act": {
-        "line": "The Escort of the Miller, 25 January",
-        "detail": "The mill outside the wall still worked, and the flour needed two horsemen to reach the gate.",
-        "moment": "A sack of flour on a boy's shoulder between two riders, the gate still a hundred paces off.",
+        "line": "Confirmed at the thing",
+        "detail": "Each assembly confirmed him in turn, and each one of them could have declined.",
+        "moment": "A boy walking up the middle of a lane between two mounted men, none of the three talking.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "within-the-old-bounds",
+        "name": "Confirmed on the Road",
+        "world": "Sweden · the Eriksgata"
+      }
     },
     {
       "cardId": "f-011011-kpr",
@@ -1220,7 +1389,11 @@
         "moment": "Riders waiting in the dark under the wall, the first crack of light appearing at the gate's edge.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "sole-surviving-issue",
+        "name": "Sole Surviving Issue",
+        "world": "France · Troyes 1420, and after"
+      }
     },
     {
       "cardId": "f-011011-krp",
@@ -1248,7 +1421,11 @@
         "moment": "A watcher with both arms up, and a rider below already wheeling his horse.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "sole-surviving-issue",
+        "name": "Sole Surviving Issue",
+        "world": "France · Troyes 1420, and after"
+      }
     },
     {
       "cardId": "f-011011-pkr",
@@ -1276,7 +1453,11 @@
         "moment": "Cattle streaming through a gate under the eyes of a distant fort, a rider counting them as they pass.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "sole-surviving-issue",
+        "name": "Sole Surviving Issue",
+        "world": "France · Troyes 1420, and after"
+      }
     },
     {
       "cardId": "f-011011-prk",
@@ -1304,7 +1485,11 @@
         "moment": "Loaded boats poled upriver at dusk with a rider keeping pace along the bank.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "sole-surviving-issue",
+        "name": "Sole Surviving Issue",
+        "world": "France · Troyes 1420, and after"
+      }
     },
     {
       "cardId": "f-011011-rkp",
@@ -1332,7 +1517,11 @@
         "moment": "Men working with their heads down while a rider crosses the gap behind them at speed.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "sole-surviving-issue",
+        "name": "Sole Surviving Issue",
+        "world": "France · Troyes 1420, and after"
+      }
     },
     {
       "cardId": "f-011011-rpk",
@@ -1360,7 +1549,11 @@
         "moment": "The postern at the angle of the wall standing open with men already fifty paces beyond it.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "sole-surviving-issue",
+        "name": "Sole Surviving Issue",
+        "world": "France · Troyes 1420, and after"
+      }
     },
     {
       "cardId": "f-011011-bpp",
@@ -1383,12 +1576,16 @@
         "moment": "Two labourers setting the last stone of a corner that stands alone in a field, the judge watching."
       },
       "act": {
-        "line": "Saint-Pierre-Empont Pulled Down, 2 November",
-        "detail": "Another suburb church came down. The stone went into the wall, which the canons had agreed to.",
-        "moment": "A church corner dismantled stone by stone, a cleric marking each one with chalk.",
+        "line": "The corner post found",
+        "detail": "Half the line was remembered and half of it was argued about, every year, at the same corner.",
+        "moment": "Two men clearing bramble off a post while the assessor waits with nothing yet to write.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "called-to-the-bounds",
+        "name": "Called to the Bounds",
+        "world": "England · Rogationtide, after 1547"
+      }
     },
     {
       "cardId": "f-011011-pbp",
@@ -1411,12 +1608,16 @@
         "moment": "Three figures walking a bend, the cleric on the sheltered side, the two labourers taking the weather."
       },
       "act": {
-        "line": "The Winter Road to Blois, 6 November",
-        "detail": "The last road still open, and the wind on it came straight off the river.",
-        "moment": "Three figures leaning into wind on an embankment, the middle one shielded by the other two.",
+        "line": "The inside of the bend",
+        "detail": "The curate walked the sheltered side of the turn and nobody begrudged him it.",
+        "moment": "Three figures walking a bend, the churchman on the lee side, the two labourers taking the weather.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "called-to-the-bounds",
+        "name": "Called to the Bounds",
+        "world": "England · Rogationtide, after 1547"
+      }
     },
     {
       "cardId": "f-011011-ppb",
@@ -1439,12 +1640,16 @@
         "moment": "Three men stopped on a road at dusk: one reading, two standing with their loads still on."
       },
       "act": {
-        "line": "Vespers Outside the Wall, 9 November",
-        "detail": "Said in the open by men who could not get in before the gate closed. The gate did not open for it.",
-        "moment": "Three figures kneeling on open ground with a shut gate behind them and one light in it.",
+        "line": "The reading at the stone",
+        "detail": "The gospel was read at fixed points along the line, which is how the points stayed fixed.",
+        "moment": "Three men stopped at a boundary stone at dusk: one reading, two standing with their loads still on.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "called-to-the-bounds",
+        "name": "Called to the Bounds",
+        "world": "England · Rogationtide, after 1547"
+      }
     },
     {
       "cardId": "f-011011-kpp",
@@ -1467,12 +1672,16 @@
         "moment": "A rider and two men on foot at a corner, all three looking down a road nobody uses."
       },
       "act": {
-        "line": "The Watch on the Portereau, 12 November",
-        "detail": "The English were building. The town's task that month was to watch them do it and write it down.",
-        "moment": "Two men and a rider on a bank watching earthworks go up half a mile away.",
+        "line": "The watch on the prince's court",
+        "detail": "The prince was housed outside the walls, which is where the town preferred him.",
+        "moment": "A rider and two men on foot at a corner, all three looking down a road nobody uses.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "homage-withheld",
+        "name": "Shown the Way Out",
+        "world": "Novgorod · 1136, and after"
+      }
     },
     {
       "cardId": "f-011011-pkp",
@@ -1495,12 +1704,16 @@
         "moment": "A mounted man in the crook of a bend with a man on foot either side, all three still."
       },
       "act": {
-        "line": "The Chécy Road, 16 November",
-        "detail": "The last open track east, held by three men because there were not four to spare.",
-        "moment": "Three men at a junction in the rain with a hurdle half across it.",
+        "line": "The bell rung for the assembly",
+        "detail": "The assembly was called by bell, and whoever reached the bell first called it.",
+        "moment": "Two men with their hands on a bell rope and a mounted man arriving too late to stop them.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "homage-withheld",
+        "name": "Shown the Way Out",
+        "world": "Novgorod · 1136, and after"
+      }
     },
     {
       "cardId": "f-011011-ppk",
@@ -1523,12 +1736,16 @@
         "moment": "One rider and two men on foot in a lane wide enough for a column, with nothing else in it."
       },
       "act": {
-        "line": "The Horses Eaten, 20 November",
-        "detail": "The town began to count its horses as food in November, and the counting was done in public.",
-        "moment": "A horse led past a queue of people who are all looking at it and not at each other.",
-        "attested": false
+        "line": "Fifty men and no more",
+        "detail": "A prince leaving took fifty men, because fifty was the number written in the contract.",
+        "moment": "One rider and two men on foot in a lane wide enough for a column, with nothing else in it.",
+        "attested": true
       },
-      "king": null
+      "king": {
+        "cardId": "homage-withheld",
+        "name": "Shown the Way Out",
+        "world": "Novgorod · 1136, and after"
+      }
     },
     {
       "cardId": "f-011011-ppp",
@@ -1551,12 +1768,16 @@
         "moment": "Three men handing their tools over a fence to somebody out of frame, one after another."
       },
       "act": {
-        "line": "The Levy at the Turning, 13 October",
-        "detail": "Three off one street. The names were read at the corner where the street bends.",
-        "moment": "Three men stepping out of a doorway into a lane while a clerk reads from a list at the corner.",
+        "line": "Three off one street",
+        "detail": "The parish walked as itself, in the order the street ran.",
+        "moment": "Three men stepping out of a doorway into a lane as their names are read at the corner.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "called-to-the-bounds",
+        "name": "Called to the Bounds",
+        "world": "England · Rogationtide, after 1547"
+      }
     },
     {
       "cardId": "f-011011-ppr",
@@ -1579,12 +1800,16 @@
         "moment": "A man at a tower window with two roads visible below him and no paper in his hands."
       },
       "act": {
-        "line": "The Belfry Watch, 5 January",
-        "detail": "Two roads visible from the belfry and one watcher, who could only be looking at one of them.",
-        "moment": "A watcher turning from one window to another in a bell chamber, the bell rope hanging still.",
+        "line": "The keel short of its crew",
+        "detail": "A district owed a ship and the ship was built. The men were the part that did not arrive.",
+        "moment": "A finished hull on the strand with three men beside it, and the tide already going.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "staggered-muster",
+        "name": "A Ship From Every District",
+        "world": "Denmark · the leidang"
+      }
     },
     {
       "cardId": "f-011011-prp",
@@ -1607,12 +1832,16 @@
         "moment": "Two men below a tower clearing a lane that plainly nobody has walked down in months."
       },
       "act": {
-        "line": "The Lane Blocked, 9 January",
-        "detail": "They filled the lane with rubble, because it ran to a gate they no longer meant to open.",
-        "moment": "Two men tipping a barrow of rubble into a lane while a third watches from above.",
+        "line": "The beacon not lit",
+        "detail": "The chain only warns if every beacon on it is watched, and one of them was not.",
+        "moment": "Two men reaching a cold beacon and looking along the coast to the next headland, which is also dark.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "staggered-muster",
+        "name": "A Ship From Every District",
+        "world": "Denmark · the leidang"
+      }
     },
     {
       "cardId": "f-011011-rpp",
@@ -1635,12 +1864,16 @@
         "moment": "Two men and an officer at a gatehouse on a bend, none of them doing anything."
       },
       "act": {
-        "line": "The Post at the Bend, 14 January",
-        "detail": "A gatehouse at a turn in the wall, three men, and a month with nothing in it.",
-        "moment": "Three men in a gatehouse arch, one asleep sitting up, the road empty in both directions.",
-        "attested": false
+        "line": "The fine for neglect",
+        "detail": "A charter of 1085 fines the men of certain lands for failing the levy. The fine was easier to collect than the ship.",
+        "moment": "A coin going into a bag at a shoreline table, and the man who paid it not moving away.",
+        "attested": true
       },
-      "king": null
+      "king": {
+        "cardId": "staggered-muster",
+        "name": "A Ship From Every District",
+        "world": "Denmark · the leidang"
+      }
     },
     {
       "cardId": "f-00011011-bbpp",
@@ -1663,12 +1896,16 @@
         "moment": "A cart being packed with a table, a chest and a folded cloth; one judge is already sitting in it."
       },
       "act": {
-        "line": "The Hospital of Saint-Côme, 14 February",
-        "detail": "The wounded from Rouvray came back over two days and were put wherever there was floor.",
-        "moment": "Two clerics laying a man on straw in a room already full, two townsmen carrying in the next one.",
+        "line": "The chest brought out",
+        "detail": "The relics were kept in a treasury and produced once a reign.",
+        "moment": "A chest lifted onto a table by two men while two churchmen wait with their hands empty.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "anointed-late",
+        "name": "The Ploughman's Shoes, Produced",
+        "world": "Bohemia · Vyšehrad, eve of the coronation"
+      }
     },
     {
       "cardId": "f-00011011-bppb",
@@ -1691,12 +1928,16 @@
         "moment": "A small yard with a table in each of two corners and one man crossing between them."
       },
       "act": {
-        "line": "The Two Watches, 16 February",
-        "detail": "Two chapels at opposite ends of the town kept the vigil for the dead of Rouvray, an hour apart.",
-        "moment": "A lit doorway at each end of a dark street with one figure walking from one to the other.",
-        "attested": false
+        "line": "The shoes held up",
+        "detail": "A pair of bast shoes and a satchel, said to be a ploughman's, shown to a man about to be crowned.",
+        "moment": "The shoes coming out at chest height, and the king looking at them rather than at the man holding them.",
+        "attested": true
       },
-      "king": null
+      "king": {
+        "cardId": "anointed-late",
+        "name": "The Ploughman's Shoes, Produced",
+        "world": "Bohemia · Vyšehrad, eve of the coronation"
+      }
     },
     {
       "cardId": "f-00011011-bkpp",
@@ -1719,12 +1960,16 @@
         "moment": "Four men shaking on it at a crossroads, the horse already turned toward one of the four roads."
       },
       "act": {
-        "line": "The Agreement at Rouvray, 12 February",
-        "detail": "Scots on foot, French on horse, and an argument about who went first that lost the battle.",
-        "moment": "Four men arguing over a line scratched in the dirt while the English carts are visible behind them.",
-        "attested": true
+        "line": "The lot agreed at the corner",
+        "detail": "Four men settled which house was whose in a street where nobody yet knew any of the names.",
+        "moment": "Four men shaking on it at a corner, the assessor's cord still stretched across the doorway.",
+        "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "muster-incomplete",
+        "name": "Measured and Entered",
+        "world": "Castile · Seville, from 1248"
+      }
     },
     {
       "cardId": "f-00011011-bpkp",
@@ -1747,12 +1992,16 @@
         "moment": "Four men on broken ground — one high, one at the gap, two in the low middle — each watching something different."
       },
       "act": {
-        "line": "The Field at Rouvray, Midday",
-        "detail": "The French had the height and the horse and lost anyway, which took a long time to explain.",
-        "moment": "Four men on a rise looking down at the wagon-fort, one of them pointing at the wrong part of it.",
-        "attested": true
+        "line": "Measured from the doorway",
+        "detail": "Measurements ran from fixed points, and the fixed points were the buildings that had just changed hands.",
+        "moment": "A cord drawn taut from a doorway, the knot reaching the mark, and the pen not yet down.",
+        "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "muster-incomplete",
+        "name": "Measured and Entered",
+        "world": "Castile · Seville, from 1248"
+      }
     },
     {
       "cardId": "f-00011011-bppk",
@@ -1775,12 +2024,16 @@
         "moment": "Four men at four corners of a yard, all facing inward, none close enough to touch."
       },
       "act": {
-        "line": "The Council of 18 February",
-        "detail": "The town, the church, the garrison and the crown met about the grain. Nothing was enforceable.",
-        "moment": "Four men round a table with the grain accounts in the middle and nobody's hand on them.",
-        "attested": false
+        "line": "The soldiers' share",
+        "detail": "Foot soldiers who helped take the city were given lots in it, which was the promise that raised them.",
+        "moment": "Four men reading their own names off a list nailed to a door, one of them tracing the line with a finger.",
+        "attested": true
       },
-      "king": null
+      "king": {
+        "cardId": "muster-incomplete",
+        "name": "Measured and Entered",
+        "world": "Castile · Seville, from 1248"
+      }
     },
     {
       "cardId": "f-00011011-kkpp",
@@ -1803,12 +2056,16 @@
         "moment": "Two riders halted while the merchant reweighs a sack at the roadside, the fourth man holding the horses."
       },
       "act": {
-        "line": "The Herring Convoy, 12 February",
-        "detail": "Three hundred carts of salt fish for Lent, and an escort under orders not to fight for them.",
-        "moment": "Two riders alongside a cart of barrels at the instant the commander's hand goes up to halt the column.",
-        "attested": true
+        "line": "The guarded walk",
+        "detail": "Two riders and two men on foot, for a journey of half a mile inside the walls.",
+        "moment": "Two riders halted while a man reweighs a bundle at the roadside, the fourth holding the horses.",
+        "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "his-grace",
+        "name": "His Grace",
+        "world": "England · London, summer 1483"
+      }
     },
     {
       "cardId": "f-00011011-kppk",
@@ -1831,12 +2088,16 @@
         "moment": "A sunken lane: a rider visible at the front, a rider visible at the back, and nothing else."
       },
       "act": {
-        "line": "The Column Cut, 12 February",
-        "detail": "The escort was strung along a mile of road when the attack came at the middle of it.",
-        "moment": "The middle of a column — two carters looking forward and back in the same instant, both riders too far away.",
-        "attested": true
+        "line": "One at each end of the lane",
+        "detail": "A rider at the head and one at the tail, and the men between them could see neither.",
+        "moment": "A sunken lane: a rider visible at the front, a rider visible at the back, and nothing else.",
+        "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "his-grace",
+        "name": "His Grace",
+        "world": "England · London, summer 1483"
+      }
     },
     {
       "cardId": "f-00011011-bppp",
@@ -1859,12 +2120,16 @@
         "moment": "A cleric at the fourth corner with three labourers behind him, looking at three shuttered doors."
       },
       "act": {
-        "line": "The Blessing of the Quarters, 21 December",
-        "detail": "Each quarter was blessed before Christmas. Two of them had nobody left in them to hear it.",
-        "moment": "A small procession turning into an empty street, the leading cleric's hand raised at nothing.",
+        "line": "The oil carried the last mile",
+        "detail": "The rite could not begin until the matter arrived, and the matter came by road like everything else.",
+        "moment": "A covered vessel lifted down off a horse at the end of the road, three men steadying it and one uncovering it.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "the-anointing",
+        "name": "The Anointing",
+        "world": "Francia · Soissons, 751"
+      }
     },
     {
       "cardId": "f-00011011-kppp",
@@ -1887,12 +2152,16 @@
         "moment": "A rider taking a sealed letter from a boy who does not let go of it immediately."
       },
       "act": {
-        "line": "The News of Salisbury's Death, 5 November",
-        "detail": "It took three days to be believed, and the believing changed nothing about the walls.",
-        "moment": "A letter handed over in a courtyard where three men have stopped work to watch.",
-        "attested": true
+        "line": "The regalia carried up",
+        "detail": "The crown came out of a chest that three men carried and one man was allowed to open.",
+        "moment": "A chest set down on grass and the lid coming up, the rider still mounted beside it.",
+        "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "turning-stone",
+        "name": "Earth of Every County",
+        "world": "Hungary · Székesfehérvár, the coronation mound"
+      }
     },
     {
       "cardId": "f-00011011-pppp",
@@ -1915,12 +2184,16 @@
         "moment": "Four men taking the weight of a cart-yoke meant for animals, at the instant it comes off the ground."
       },
       "act": {
-        "line": "The Carts Hauled In, 11 October",
-        "detail": "Everything outside the walls that could be moved was moved in one day, by hand, because there were no beasts.",
+        "line": "The carts brought in",
+        "detail": "New settlers arrived with everything they owned and nothing to pull it.",
         "moment": "Four men dragging a loaded cart through a gate too narrow for it, one of them turned sideways.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "muster-incomplete",
+        "name": "Measured and Entered",
+        "world": "Castile · Seville, from 1248"
+      }
     },
     {
       "cardId": "f-00011011-rppp",
@@ -1943,12 +2216,16 @@
         "moment": "Three men lifting a dressed stone with a carved face on it into a rough wall, while an officer looks away."
       },
       "act": {
-        "line": "The Wall Repaired with the Quarter, 20 February",
-        "detail": "They mended the rampart with the stone of the abandoned quarter, and the owners helped.",
-        "moment": "A carved lintel going into a rampart, held level by three men, its carving still facing out.",
+        "line": "The masonry detail",
+        "detail": "The works went on through all of it, because the works always go on.",
+        "moment": "Three men lifting a dressed stone with a carved face into a rough wall, while an officer looks away.",
         "attested": false
       },
-      "king": null
+      "king": {
+        "cardId": "his-grace",
+        "name": "His Grace",
+        "world": "England · London, summer 1483"
+      }
     }
   ]
 }

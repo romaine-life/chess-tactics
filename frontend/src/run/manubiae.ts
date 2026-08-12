@@ -234,7 +234,7 @@ export function manubiaeEarnedBy(game: GameState, events: readonly GameEvent[]):
   const checkers = kingCheckers('enemy', game.pieces, game.size, env);
   const checked = checkers.some((checker) => checker.side === 'player');
 
-  // Material, tempo, and nothing left hanging for it (ADR-0581). The player took something, the
+  // Material, tempo, and nothing left hanging for it (ADR-0583). The player took something, the
   // enemy must now answer a check rather than whatever they meant to do about the capture, AND
   // the unit that took is not standing where anything of theirs can reach it. All three, or the
   // move is not the one this is teaching.
