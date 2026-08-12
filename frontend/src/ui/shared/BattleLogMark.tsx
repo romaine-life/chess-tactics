@@ -40,7 +40,6 @@ export const BATTLE_LOG_MARK_MEDIA_ROLE = Object.freeze({
   defeat: 'ui-kit-icons-game-defeat-png',
   draw: 'ui-kit-icons-game-draw-png',
   checkmate: 'ui-kit-icons-game-checkmate-png',
-  stalemate: 'ui-kit-icons-game-stalemate-png',
   resign: 'ui-kit-icons-game-resign-png',
   gold: 'ui-kit-icons-game-gold-png',
   'gold-loss': 'ui-kit-icons-game-gold-loss-png',
@@ -53,7 +52,6 @@ export const BATTLE_LOG_MARK_SLOT = Object.freeze({
   defeat: 'ui/kit/icons/game/defeat.png',
   draw: 'ui/kit/icons/game/draw.png',
   checkmate: 'ui/kit/icons/game/checkmate.png',
-  stalemate: 'ui/kit/icons/game/stalemate.png',
   resign: 'ui/kit/icons/game/resign.png',
   gold: 'ui/kit/icons/game/gold.png',
   'gold-loss': 'ui/kit/icons/game/gold-loss.png',
@@ -65,7 +63,7 @@ export type BattleLogForgedMark = keyof typeof BATTLE_LOG_MARK_SLOT;
 /** Outcome marks first, then the causes they pair with — the order a row wears them, and the
  *  order the review page offers the decisions in. */
 export const BATTLE_LOG_FORGED_MARKS: readonly BattleLogForgedMark[] =
-  Object.freeze(['victory', 'defeat', 'draw', 'checkmate', 'stalemate', 'resign', 'check', 'gold', 'gold-loss'] as const);
+  Object.freeze(['victory', 'defeat', 'draw', 'checkmate', 'resign', 'check', 'gold', 'gold-loss'] as const);
 
 export function isBattleLogForgedMark(mark: LogMark): mark is BattleLogForgedMark {
   return (BATTLE_LOG_FORGED_MARKS as readonly string[]).includes(mark);
@@ -95,7 +93,6 @@ const MARK_LABEL: Readonly<Record<LogMark, string>> = Object.freeze({
   defeat: 'Defeat',
   draw: 'Draw',
   checkmate: 'Checkmate',
-  stalemate: 'Stalemate',
   resign: 'Resigned',
   clock: 'Out of time',
   gold: 'Gold claimed',

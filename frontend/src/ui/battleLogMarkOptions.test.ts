@@ -98,9 +98,11 @@ describe('battleLogMarkOptions', () => {
 
 describe('battleLogSeatFromRoute', () => {
   it('reads a seat an address names, and only a real one', () => {
-    expect(battleLogSeatFromRoute('?cat=logmarks&seat=stalemate')).toBe('stalemate');
+    expect(battleLogSeatFromRoute('?cat=logmarks&seat=checkmate')).toBe('checkmate');
     expect(battleLogSeatFromRoute('?cat=logmarks&seat=gold-loss')).toBe('gold-loss');
     expect(battleLogSeatFromRoute('?cat=logmarks&seat=clock')).toBeNull();
+    // Stalemate is not a seat — the row wears the draw scales and says the word (ADR-0637).
+    expect(battleLogSeatFromRoute('?cat=logmarks&seat=stalemate')).toBeNull();
     expect(battleLogSeatFromRoute('?cat=logmarks')).toBeNull();
   });
 });
