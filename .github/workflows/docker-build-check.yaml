@@ -56,7 +56,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || inputs.git_ref || github.sha }}
 
       - name: Set up Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -84,7 +84,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || inputs.git_ref || github.sha }}
 
       - name: Set up Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
