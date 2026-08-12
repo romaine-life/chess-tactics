@@ -35,3 +35,8 @@ test('leaves the Studio path aliases alone — they are entry points, not screen
   ].join('\n');
   assert.deepEqual(check(source), []);
 });
+
+test('the seventh arrived while the six were being converted, which is the point', () => {
+  // `?commandCardMarkReview=1` landed on main mid-conversion, written by copying the last one.
+  assert.equal(check("if (path === '/studio' && new URLSearchParams(search).get('commandCardMarkReview') === '1') return <X />;").length, 1);
+});

@@ -61,6 +61,7 @@ describe('professional loading architecture guards', () => {
       './ui/RunSectioWrapCatalog.tsx',
       './ui/LipsanonArtCatalog.tsx',
       './ui/TerrainMarkCatalog.tsx',
+      './ui/CommandCardMarkCatalog.tsx',
     ]) {
       expect(read(file), file).not.toContain('useSceneParticipant');
     }

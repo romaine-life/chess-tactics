@@ -331,7 +331,10 @@ describe('Level Editor chrome hierarchy', () => {
     expect(styleCss).not.toMatch(/\.unit-facing-cell \{[^}]*\b(?:background|border|box-shadow):/);
     expect(styleCss).not.toMatch(/\.unit-facing-compass \{/);
     // Both pads are the SAME object, so neither may declare its own opening — the default is the
-    // opening a framed tool square gives its glyph, derived once on the grid.
+    // opening a framed tool square gives its glyph, derived once on the grid. A pad that is NOT
+    // a set of tool squares states its own (the Battle command card fills a fixed-width rail, so
+    // its opening is a share of that width), which is why the default exists rather than being
+    // the only allowed value.
     expect(chromeSeatGrid).toContain("opening = 'var(--chrome-seat-opening)'");
     expect(styleCss).toMatch(/--chrome-seat-opening:\s*\r?\n?\s*calc\(var\(--le-inner-square, 38px\) - 2 \* var\(--le-chrome-inner-rail-w, 7px\)\)/);
     expect(levelEditor).not.toContain('opening=');
@@ -345,7 +348,9 @@ describe('Level Editor chrome hierarchy', () => {
     expect(chromeDividedGrid).toContain('export function chromeDividedSeatAxis(');
     expect(chromeDividedGrid).toContain('const internal = Number(start) + Number(end);');
     expect(chromeSeatGrid).toContain('const columns = chromeDividedSeatAxis(columnCount, opening);');
-    expect(chromeSeatGrid).toContain('const bands = chromeDividedSeatAxis(rows.length, opening);');
+    // The block axis may be given its own opening — a pad filling a fixed-width rail cannot ask
+    // a percentage of that width of its height — but it goes through the SAME derivation.
+    expect(chromeSeatGrid).toContain('const bands = chromeDividedSeatAxis(rows.length, rowOpening ?? opening);');
     expect(headerAccountCluster).toMatch(/const columns = chromeDividedSeatAxis\(\s*seats\.length,/);
     expect(headerAccountCluster).not.toMatch(/const railSides =/);
   });

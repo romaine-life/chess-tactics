@@ -36,18 +36,22 @@ The repo already had the right shape and had had it for a while: `actionmarks`, 
 in one table. The bolt-on pattern survived anyway because it was *available* — every one of the six
 was written by copying the last one.
 
+A **seventh** — `/studio?commandCardMarkReview=1` — landed on `main` while these six were being
+converted, written the same way. That is the argument for a gate rather than a cleanup: the pattern
+reproduces itself faster than it can be removed by hand.
+
 The owner's framing is the decision: **the system should not have allowed it.**
 
 ## Decision
 
 **`/studio` routes the Studio, and nothing else. A review surface is a Studio category.**
 
-- Each of the six is now a category: `brushmark`, `menumarks`, `runprogressmarks`, `sectiowrap`,
-  `lipsanonart`, `terrainmark`. Each supplies `main` and `controls` and appears in the category
+- Each of the seven is now a category: `brushmark`, `menumarks`, `runprogressmarks`, `sectiowrap`,
+  `lipsanonart`, `terrainmark`, `commandcardmarks`. Each supplies `main` and `controls` and appears in the category
   rail like any other, so it is reachable by clicking.
 - Each dropped its screen shell, its `OuterChromeBox` header and its own `useSceneParticipant`. The
   Studio is the `'studio'` participant; a category inside its catalog body must not enrol a second
-  time. `loadingArchitecture.test.ts` asserts this for all six.
+  time. `loadingArchitecture.test.ts` asserts this for all seven.
 - The mounted proof does **not** change. A review is only worth the seat it mounts: the menu marks
   are still whole rails through `ApparatusRailColumn`/`ApparatusRailTab`, the brush is still in the
   registered editor toolbar, the Run marks are still in the real title-bar measure row, the Sectio
@@ -65,7 +69,8 @@ build when `App.tsx` pairs `path === '/studio'` with a query condition at all. I
 the Studio's address, because the route branch that would do it cannot be written.
 
 The guard keys on the **path pairing**, not on a list of flag names. Keying on names would only
-have caught the six that already existed, which is the mistake that let the sixth be written.
+have caught the six that already existed, which is the mistake that let the sixth — and, mid-flight,
+the seventh — be written.
 
 ## Consequences
 
