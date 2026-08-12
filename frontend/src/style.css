@@ -70,13 +70,30 @@ body {
   min-height: 100%;
   color: var(--ink);
   font-family: "Advance Wars 2 GBA", "VT323", ui-monospace, "Cascadia Mono", monospace;
-  font-size: 19px;
+  /* 16px, not 19px: the house font's brick is em/16, so 19px drew every inherited
+     string with a 1.1875px brick and no whole pixel to land on. See the type scale. */
+  font-size: 16px;
   background:
     radial-gradient(980px 680px at 52% -18%, rgba(58, 95, 112, .38) 0%, rgba(11, 25, 34, .92) 42%, rgba(5, 10, 15, 1) 100%),
     linear-gradient(180deg, #0a151d 0%, #05090d 100%);
 }
 
+/* The space-glyph snap, declared on EVERY element so each one resolves the em against
+   its own font-size. That is the whole point of the universal selector here: word-spacing
+   inherits as a computed absolute length, so declaring it once high up would freeze one
+   tier's correction and hand it to every other tier. With this rule a space measures
+   3 bricks at any size the grid allows — 3px at 16px, 6px at 32px, 9px at 48px. */
+* { word-spacing: var(--ds-word-space-snap); }
+
 h1, h2, p { margin: 0; }
+
+/* Headings with no author font-size fall through to the UA stylesheet, whose sizes are
+   em multiples of the parent: h2 is 1.5em = 24px, h3 1.17em = 18.72px, h5 .83em. None of
+   those are multiples of 16, so an unstyled heading lands off the grid however carefully
+   the scale is set — the "No active Run" heading on /run was exactly this. Anchor them to
+   the two tiers; every heading that already declares a size still overrides this. */
+h1, h2 { font-size: var(--ds-text-lg); }
+h3, h4, h5, h6 { font-size: var(--ds-text-md); }
 
 h1,
 button {
@@ -171,7 +188,7 @@ button:disabled {
 
 h1 {
   color: var(--ink-strong);
-  font-size: clamp(.88rem, 1.8vw, 1.34rem);
+  font-size: 16px;
   line-height: 1.15;
   text-shadow: 0 2px 0 #020507, 0 0 18px rgba(101, 184, 255, .18);
 }
@@ -650,7 +667,7 @@ h1 {
   font-family: var(--ds-font-serif);
   font-weight: var(--ds-weight-medium);
   font-size: var(--ds-text-lg);
-  letter-spacing: .03em;
+  letter-spacing: 0;
   color: #f4ead6;
   text-shadow: 0 1px 3px rgba(0, 0, 0, .65);
   white-space: nowrap;
@@ -665,7 +682,7 @@ h1 {
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-xl);
   font-weight: 400;
-  letter-spacing: .035em;
+  letter-spacing: 1px;
   line-height: 1;
   text-transform: uppercase;
   text-shadow:
@@ -836,7 +853,7 @@ h1 {
   color: var(--cobalt-bright);
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-sm);
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -859,7 +876,7 @@ h1 {
   color: var(--ink);
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-sm);
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
   cursor: pointer;
   line-height: 1.2;
@@ -871,7 +888,7 @@ h1 {
   color: var(--cobalt-bright);
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-sm);
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -1900,26 +1917,46 @@ h1 {
      the --ds-* tokens so the dead path resolves; do NOT add new uses. */
   --font-sans: var(--ds-font-sans);
   --font-serif: var(--ds-font-serif);
-  /* Type scale — one modular ramp (~1.2 ratio), responsive via clamp so every
-     surface scales together instead of each role inventing its own clamp triplet.
-     Map text ROLES onto these steps; don't hand-pick font-sizes per element.
-       2xs eyebrow/status · xs caption/button · sm control label · md body/row title
-       lg section/brand heading · xl page/panel display */
-  --ds-text-2xs: clamp(.62rem, .72vw, .72rem);
-  --ds-text-xs:  clamp(.72rem, .82vw, .82rem);
-  --ds-text-sm:  clamp(.82rem, .95vw, .95rem);
-  --ds-text-md:  clamp(.95rem, 1.1vw, 1.1rem);
-  --ds-text-lg:  clamp(1.18rem, 1.55vw, 1.6rem);
-  --ds-text-xl:  clamp(1.5rem, 2.1vw, 2.3rem);
-  --ds-text-display: clamp(2.2rem, 3.72vw, 3.9rem); /* menu title — folds in --menu-type-title (ADR-0016) */
+  /* Type scale — PINNED TO THE HOUSE FONT'S PIXEL GRID.
+     "Advance Wars 2 GBA" is a FontStruct pixel face: unitsPerEm 2000, design brick
+     125 units = em/16. One brick equals one device pixel only when font-size is a
+     whole multiple of 16px. The scale used to be a six-step clamp(rem, vw, rem) ramp,
+     which slid continuously with viewport width and therefore landed on 16 essentially
+     never — every step drew off-grid, and the four steps below 16px had a SUB-PIXEL
+     brick, so their strokes were all partial-coverage grey. A live sweep of six routes
+     found exactly one on-grid node in the whole app.
+     The font has two usable sizes in UI range, so the scale has two. Hierarchy comes
+     from colour, casing, tracking and the kit chrome instead of from size — the same
+     way the GBA games this face is taken from do it.
+     Keep every value here a whole multiple of 16px. A `vw` term anywhere in this block
+     reintroduces the original bug. */
+  --ds-text-2xs: 16px;
+  --ds-text-xs:  16px;
+  --ds-text-sm:  16px;
+  --ds-text-md:  16px;
+  --ds-text-lg:  32px;
+  --ds-text-xl:  32px;
+  --ds-text-display: 48px; /* menu title — folds in --menu-type-title (ADR-0016) */
+  /* The space glyph is the one character that is NOT on the 125-unit brick: its advance
+     is 312.5 units = 2.5 bricks, so a space is always half a brick short of whole. This
+     is the amount that snaps it up to 3 bricks — half a brick, i.e. em/32.
+     It MUST stay in em and be declared per element (see the universal rule below). An
+     absolute px value on a shared ancestor computes once and inherits, so a 32px heading
+     and the 16px text inside it cannot both be right; that is exactly the bug the first
+     attempt shipped. Fixing the glyph in the font retires this token — ADR pending. */
+  --ds-word-space-snap: .03125em;
   /* Weights (ADR-0016): pixel faces are 400-only; serif uses these three, strong (600)
      is reserved for the brand lockup (ADR-0008). */
   --ds-weight-regular: 400;
   --ds-weight-medium: 500;
   --ds-weight-strong: 600;
   /* Tracking (ADR-0016): two roles — labels vs eyebrows/brand descriptor. */
-  --ds-tracking-tight: .01em;
-  --ds-tracking-wide: .14em;
+  /* Tracking is a whole number of device pixels or it walks every glyph after the first
+     off the grid. These were .01em/.14em, which at the 16px tier are .16px and 2.24px —
+     both fractional. Whole px also means one value stays correct at 16px and 32px, which
+     an em value cannot do. */
+  --ds-tracking-tight: 0;
+  --ds-tracking-wide: 2px;
   /* space — the 8px base + 4px half-step scale (ADR-0031). Map spatial ROLES onto
      these steps; don't hand-pick px per element. */
   --ds-space-1: 4px;
@@ -2008,7 +2045,7 @@ h1 {
   font-family: var(--font-sans);
   font-size: .8rem;
   font-weight: 600;
-  letter-spacing: .14em;
+  letter-spacing: 2px;
   line-height: 1.4;
   text-transform: uppercase;
 }
@@ -2026,7 +2063,7 @@ h1 {
   display: inline-flex;
   font-size: .92rem;
   gap: .45em;
-  letter-spacing: .01em;
+  letter-spacing: 0;
 }
 
 .main-assets-summary b {
@@ -2048,7 +2085,7 @@ h1 {
   font-family: var(--font-sans);
   font-size: .72rem;
   font-weight: 600;
-  letter-spacing: .07em;
+  letter-spacing: 1px;
   line-height: 1;
   padding: 5px 11px;
   text-transform: uppercase;
@@ -2086,7 +2123,7 @@ h1 {
   font-family: var(--font-sans);
   font-size: .82rem;
   font-weight: 600;
-  letter-spacing: .01em;
+  letter-spacing: 0;
   min-height: 40px;
   min-width: 0;
   padding: 9px 8px;
@@ -2194,9 +2231,9 @@ h1 {
 .portfolio-asset-title {
   color: var(--c-ink);
   font-family: var(--font-serif);
-  font-size: clamp(1.18rem, 1.7vw, 1.45rem);
+  font-size: 16px;
   font-weight: 500;
-  letter-spacing: -.01em;
+  letter-spacing: 0;
   line-height: 1.25;
   min-width: 0;
 }
@@ -2208,7 +2245,7 @@ h1 {
   font-family: var(--font-sans);
   font-size: .7rem;
   font-weight: 600;
-  letter-spacing: .07em;
+  letter-spacing: 1px;
   padding: 5px 11px;
   text-transform: uppercase;
   white-space: nowrap;
@@ -2270,7 +2307,7 @@ h1 {
   font-family: var(--font-sans);
   font-size: .7rem;
   font-weight: 700;
-  letter-spacing: .1em;
+  letter-spacing: 2px;
   text-transform: uppercase;
 }
 
@@ -2292,7 +2329,7 @@ h1 {
   font-family: var(--font-sans);
   font-size: .82rem;
   font-weight: 500;
-  letter-spacing: .01em;
+  letter-spacing: 0;
   padding: 7px 15px;
   text-decoration: none;
   transition: border-color .15s, color .15s, background .15s;
@@ -2320,7 +2357,7 @@ h1 {
   font-family: var(--font-sans);
   font-size: .7rem;
   font-weight: 700;
-  letter-spacing: .1em;
+  letter-spacing: 2px;
   text-transform: uppercase;
 }
 
@@ -2365,7 +2402,7 @@ h1 {
   font-family: var(--font-sans);
   font-size: .7rem;
   font-weight: 700;
-  letter-spacing: .1em;
+  letter-spacing: 2px;
   text-transform: uppercase;
 }
 
@@ -2746,7 +2783,7 @@ h1 {
   color: #edf7ff;
   display: flex;
   font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: clamp(.55rem, 1.35vw, 1.06rem);
+  font-size: 16px;
   letter-spacing: 0;
   line-height: 1;
   min-height: 0;
@@ -3001,7 +3038,7 @@ h1 {
   color: var(--c-accent);
   font-size: .68rem;
   font-weight: 700;
-  letter-spacing: .1em;
+  letter-spacing: 2px;
   text-transform: uppercase;
 }
 
@@ -3041,7 +3078,7 @@ h1 {
   color: var(--c-accent);
   font-size: .72rem;
   font-weight: 700;
-  letter-spacing: .1em;
+  letter-spacing: 2px;
   margin: 0 0 7px;
   text-transform: uppercase;
 }
@@ -3247,7 +3284,7 @@ h1 {
 .utility-title-copy h1 {
   color: #f8ecd3;
   font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", ui-monospace, monospace;
-  font-size: clamp(.86rem, 2vw, 1.22rem);
+  font-size: 16px;
   line-height: 1.4;
   overflow-wrap: anywhere;
   text-shadow:
@@ -3428,7 +3465,7 @@ h1 {
   color: var(--power);
   font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", ui-monospace, monospace;
   font-size: .46rem;
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   line-height: 1.45;
   text-transform: uppercase;
 }
@@ -4534,7 +4571,7 @@ h1 {
   color: #eaf6ff;
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
   font-size: var(--ds-text-sm);
-  letter-spacing: .06em;
+  letter-spacing: 1px;
   line-height: 1.1;
   text-transform: uppercase;
 }
@@ -4543,7 +4580,7 @@ h1 {
   color: var(--skirmish-muted);
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
   font-size: var(--ds-text-xs);
-  letter-spacing: .02em;
+  letter-spacing: 0;
   line-height: 1.15;
 }
 
@@ -4617,7 +4654,7 @@ h1 {
 
 .skirmish-brand strong {
   display: block;
-  font-size: clamp(1.15rem, 1.55vw, 1.55rem);
+  font-size: 16px;
   line-height: 1;
   text-shadow: 0 3px 0 #02070b;
   white-space: nowrap;
@@ -4742,7 +4779,7 @@ h1 {
   color: #eaf6ff;
   font: var(--ds-weight-strong) var(--ds-text-md)/1 var(--ds-font-display);
   font-variant-numeric: tabular-nums;
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   /* The READOUT owns a stable width, exactly as the clock's does: the box holds two numbers
      that change independently as pieces come off, and a box that breathed with them would
      shove the clock beside it on every capture. Two tabular digits is the width every real
@@ -5418,7 +5455,7 @@ body.loading-bootstrap .app-startup-status {
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
   font-size: var(--ds-text-sm);
   image-rendering: pixelated;
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   line-height: 1;
   min-block-size: 0;
   padding: 2px;
@@ -5636,7 +5673,7 @@ body.loading-bootstrap .app-startup-status {
 .skirmish-clock-row > span {
   color: #d6ecf5;
   font-size: var(--ds-text-sm);
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -5750,7 +5787,7 @@ body.loading-bootstrap .app-startup-status {
 
 .skirmish-grid-label {
   font-size: var(--ds-text-xs);
-  letter-spacing: .01em;
+  letter-spacing: 0;
   line-height: 1.05;
   max-width: 100%;
   opacity: .92;
@@ -6221,7 +6258,7 @@ body.loading-bootstrap .app-startup-status {
   border-image-source: var(--skirmish-chrome-inner-control-danger-image);
 }
 
-.level-editor-screen .skirmish-card h2 { color: #f1cf86; letter-spacing: .03em; }
+.level-editor-screen .skirmish-card h2 { color: #f1cf86; letter-spacing: 0; }
 .level-editor-screen .skirmish-card h2.le-card-subhead { margin-top: var(--ds-gutter); }
 
 /* First non-app-bar use of the title-bar visual language: a compact panel title
@@ -6702,7 +6739,7 @@ body.loading-bootstrap .app-startup-status {
   background: rgba(4, 15, 24, .78);
   color: #8fbdeb;
   font: 800 var(--ds-text-2xs)/1 var(--ds-font-sans, system-ui, sans-serif);
-  letter-spacing: .06em;
+  letter-spacing: 1px;
   padding: 7px 9px 6px;
   text-shadow: 0 2px 0 #010407;
   text-transform: uppercase;
@@ -7635,7 +7672,7 @@ body.loading-bootstrap .app-startup-status {
 }
 
 .le-pal-group { margin: 0 0 4px; }
-.le-pal-grouplabel { color: #8fb6c6; display: block; font-size: var(--ds-text-xs); letter-spacing: .06em; margin: 8px 0 5px; text-transform: uppercase; }
+.le-pal-grouplabel { color: #8fb6c6; display: block; font-size: var(--ds-text-xs); letter-spacing: 1px; margin: 8px 0 5px; text-transform: uppercase; }
 .le-pal-grouplabel:first-child { margin-top: 0; }
 .le-swatches { display: grid; gap: 6px; grid-template-columns: repeat(4, 1fr); }
 .le-swatch {
@@ -8098,7 +8135,7 @@ body.loading-bootstrap .app-startup-status {
 .le-status-level { align-items: end; display: grid; gap: var(--ds-inline-tight); grid-template-columns: minmax(0, 1fr) auto; min-width: 0; }
 .le-status-name-field { display: grid; gap: 6px; min-width: 0; }
 .le-status-campaign-field .le-board-note { margin: 0; }
-.le-official-tag { align-self: end; color: #f1cf86; flex: none; font-size: var(--ds-text-2xs); letter-spacing: .08em; padding-bottom: 8px; }
+.le-official-tag { align-self: end; color: #f1cf86; flex: none; font-size: var(--ds-text-2xs); letter-spacing: 1px; padding-bottom: 8px; }
 /* Drawn text boxes wear a kit line frame (ADR-0032/0034): the transparent-interior panel-line
    9-slice over the box's own navy surface (a border-box background layer, reaching the frame
    edge). Ready/blocked swap the SOURCE to the success/warning tone twin — one frame, tone at the
@@ -8274,7 +8311,7 @@ body.loading-bootstrap .app-startup-status {
 .le-predrawn-attempt-tab small {
   color: var(--skirmish-cyan, #7fd7ff);
   font-size: var(--ds-text-2xs);
-  letter-spacing: .05em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 .le-predrawn-attempt-tab strong {
@@ -8311,7 +8348,7 @@ body.loading-bootstrap .app-startup-status {
 }
 .le-predrawn-artifact-card img { aspect-ratio: 16 / 9; background: #02070c; display: block; object-fit: cover; width: 100%; }
 .le-predrawn-artifact-card-copy { display: grid; gap: 3px; min-width: 0; padding: 7px 5px 4px; }
-.le-predrawn-artifact-card-copy small { color: var(--skirmish-cyan, #7fd7ff); font-size: var(--ds-text-2xs); letter-spacing: .06em; text-transform: uppercase; }
+.le-predrawn-artifact-card-copy small { color: var(--skirmish-cyan, #7fd7ff); font-size: var(--ds-text-2xs); letter-spacing: 1px; text-transform: uppercase; }
 .le-predrawn-artifact-card-copy strong { color: #eafaff; font-size: var(--ds-text-sm); overflow: hidden; text-overflow: ellipsis; }
 .le-predrawn-artifact-card-copy > span { color: #a9c1cd; font-size: var(--ds-text-2xs); min-height: 1em; }
 .le-predrawn-artifact-empty { align-content: center; display: grid; gap: 6px; min-height: 104px; padding: 18px; }
@@ -8382,7 +8419,7 @@ body.loading-bootstrap .app-startup-status {
 }
 .le-predrawn-workspace-inspector-head h2 {
   color: #eafaff;
-  font-size: clamp(1rem, 1.4vw, 1.28rem);
+  font-size: 16px;
   margin: 0;
 }
 .le-predrawn-workspace-inspector-head p {
@@ -8780,7 +8817,7 @@ body.loading-bootstrap .app-startup-status {
 .le-predrawn-selection-blocker strong {
   color: #ffe0a8;
   font-size: var(--ds-text-xs);
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 .le-predrawn-selection-blocker span {
@@ -9143,7 +9180,7 @@ body.loading-bootstrap .app-startup-status {
 .le-war-balance dd { color: #9fe0ff; font-size: var(--ds-text-lg); font-weight: 800; margin: 0; }
 .le-war-verdict {
   font-size: var(--ds-text-xs);
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   margin: 0;
   text-transform: uppercase;
 }
@@ -9186,7 +9223,7 @@ body.loading-bootstrap .app-startup-status {
 .le-war-curve li span:not(:first-child):not(:nth-child(2)) { text-align: right; }
 .le-war-curve .le-war-curve-head {
   color: var(--skirmish-muted);
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 .le-war-curve li.is-current { color: #fff5df; font-weight: 800; }
@@ -9548,7 +9585,7 @@ body.loading-bootstrap .app-startup-status {
 
 .skirmish-log-card li.is-move em {
   color: #f3ead8;
-  letter-spacing: .02em;
+  letter-spacing: 0;
 }
 
 /* ---- Move review ---------------------------------------------------------
@@ -9697,7 +9734,7 @@ body.loading-bootstrap .app-startup-status {
   color: #ffe9a8;
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
   font-size: var(--ds-text-sm, .9rem);
-  letter-spacing: .06em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -10063,8 +10100,10 @@ body.loading-bootstrap .app-startup-status {
   .account { justify-content: space-between; width: 100%; }
   
 
-body { font-size: 17px; }
-  h1 { font-size: .82rem; }
+  /* 16px is the house font's floor, not a starting point to shrink from — a narrow
+     viewport does not give the face a smaller size to land on. Was 17px/.82rem. */
+  body { font-size: var(--ds-text-md); }
+  h1 { font-size: var(--ds-text-md); }
   
 
 .lobby-seats { grid-template-columns: 1fr; }
@@ -10263,7 +10302,7 @@ body { font-size: 17px; }
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-2xs);
   font-weight: 400;
-  letter-spacing: .14em;
+  letter-spacing: 2px;
   line-height: 1.55;
   margin: 0;
   text-transform: uppercase;
@@ -10313,7 +10352,7 @@ body { font-size: 17px; }
 .ce-official-badge {
   color: var(--ce-gold-bright);
   font-weight: 700;
-  letter-spacing: .08em;
+  letter-spacing: 1px;
 }
 
 .ce-icon-button {
@@ -11147,7 +11186,7 @@ body { font-size: 17px; }
   color: var(--ce-label);
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-2xs);
-  letter-spacing: .05em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -12439,7 +12478,7 @@ body { font-size: 17px; }
 .tileset-view-empty h2 {
   margin: 0;
   color: #f3f7fb;
-  font-size: 24px;
+  font-size: 32px;
   line-height: 1.1;
 }
 
@@ -12940,7 +12979,7 @@ body { font-size: 17px; }
 .tileset-candidate-compare h2 {
   margin: 0;
   color: #f3f7fb;
-  font-size: 26px;
+  font-size: 32px;
   line-height: 1.1;
 }
 
@@ -13067,7 +13106,7 @@ body { font-size: 17px; }
 }
 
 .tileset-studio-toolbar h2 {
-  font-size: 24px;
+  font-size: 32px;
 }
 
 .tileset-studio-title-row {
@@ -14183,7 +14222,7 @@ body { font-size: 17px; }
   color: #cfe4f8;
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.07em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -15101,7 +15140,7 @@ button.tileset-relationship-cell {
   margin: 5px 0 0;
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
   color: #72bde8;
 }
@@ -15123,7 +15162,7 @@ button.tileset-relationship-cell {
   cursor: pointer;
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
   color: #72bde8;
 }
@@ -15316,7 +15355,7 @@ button.tileset-relationship-cell {
 .tileset-card-missing-media {
   color: rgba(207, 230, 241, .72);
   font-size: var(--ds-text-xs);
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -15609,7 +15648,7 @@ button.tileset-relationship-cell {
   font-family: inherit;
   font-size: 7px;
   font-weight: 800;
-  letter-spacing: .01em;
+  letter-spacing: 0;
   paint-order: stroke fill;
   stroke: rgba(2, 6, 10, .96);
   stroke-width: 2.5px;
@@ -15725,7 +15764,7 @@ button.tileset-relationship-cell {
 .ps-ctl-label {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: .06em;
+  letter-spacing: 1px;
   text-transform: uppercase;
   color: #8fa8cc;
 }
@@ -15921,7 +15960,7 @@ button.tileset-relationship-cell {
   color: #789fb3;
   font-size: 9px;
   font-weight: 900;
-  letter-spacing: .06em;
+  letter-spacing: 1px;
 }
 
 .chrome-unit-card-hierarchy code {
@@ -17073,7 +17112,7 @@ button.tileset-relationship-cell {
   content: "Soon";
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 1px;
   text-transform: uppercase;
   color: #5f748a;
 }
@@ -18194,7 +18233,7 @@ button.tileset-relationship-cell {
   font-size: var(--ds-text-sm);
   gap: 8px;
   image-rendering: pixelated;
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   padding: 0 16px;
   text-decoration: none;
   text-transform: uppercase;
@@ -18259,7 +18298,7 @@ button.tileset-relationship-cell {
   gap: var(--titlebar-label-gap, var(--ds-space-2));
   image-rendering: pixelated;
   justify-content: center;
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   line-height: 1;
   min-block-size: 0;
   overflow: hidden;
@@ -18548,7 +18587,7 @@ button.tileset-relationship-cell {
   color: #79d3ff;
   font-size: var(--ds-text-sm);
   font-weight: 400;
-  letter-spacing: .14em;
+  letter-spacing: 2px;
   line-height: 1;
   text-transform: uppercase;
   white-space: nowrap;
@@ -18559,7 +18598,7 @@ button.tileset-relationship-cell {
   color: #79d3ff;
   font-size: var(--ds-text-sm);
   font-weight: 400;
-  letter-spacing: .14em;
+  letter-spacing: 2px;
   line-height: 1.2;
   text-transform: uppercase;
 }
@@ -19250,7 +19289,7 @@ button.tileset-relationship-cell {
   margin: 4px 6px 0;
   font-size: var(--ds-text-2xs, .72rem);
   font-weight: 700;
-  letter-spacing: .1em;
+  letter-spacing: 2px;
   text-transform: uppercase;
   color: var(--ds-color-ink-dim, rgba(230, 225, 215, .55));
 }
@@ -19476,7 +19515,7 @@ button.tileset-relationship-cell {
      position (settings-only bump — the shared brand stays lg to avoid resizing
      every screen). Active tab is marked by the frame fill swap + color, not size. */
   font-size: var(--ds-text-lg);
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
   text-transform: uppercase;
   /* Outline, auditioned in the Pages tuner (Studio → Pages → Main Menu → Button label) and baked
      at 5px. A -webkit-text-stroke is centred on the glyph outline, so half of it grows INWARD;
@@ -19640,7 +19679,7 @@ button.tileset-relationship-cell {
   font-size: var(--ds-text-2xs);
   font-weight: 400;
   gap: 12px;
-  letter-spacing: .14em;
+  letter-spacing: 2px;
   margin: 0;
   padding-left: 6px;
   text-shadow: 0 2px 0 #02070b;
@@ -19776,7 +19815,7 @@ button.tileset-relationship-cell {
 .cluster-run-row { display: flex; gap: 8px; align-items: center; width: 100%; text-align: left; color: #c3ccd8; padding: 6px 8px; font-size: 12px; cursor: pointer; }
 .cluster-run-row.active { color: #e7ebf0; }
 .cluster-run-id { font-family: monospace; color: #93a0b0; }
-.cluster-run-status { margin-left: auto; text-transform: uppercase; font-size: 10px; letter-spacing: .04em; }
+.cluster-run-status { margin-left: auto; text-transform: uppercase; font-size: 10px; letter-spacing: 1px; }
 .cluster-run-status.s-running, .cluster-run-status.s-pending { color: #d9b871; }
 .cluster-run-status.s-done { color: #8fce9b; }
 .cluster-run-status.s-error, .cluster-run-status.s-cancelled { color: #e2a0a0; }
@@ -19831,7 +19870,7 @@ button.tileset-relationship-cell {
   color: #8fb0c2;
   display: block;
   font-size: var(--ds-text-2xs);
-  letter-spacing: .06em;
+  letter-spacing: 1px;
   margin-bottom: 2px;
   text-transform: uppercase;
 }
@@ -19842,7 +19881,7 @@ button.tileset-relationship-cell {
   color: #c9a877;
   display: block;
   font-size: var(--ds-text-2xs);
-  letter-spacing: .12em;
+  letter-spacing: 2px;
   margin-bottom: 4px;
   text-transform: uppercase;
 }
@@ -20201,7 +20240,7 @@ button.tileset-relationship-cell {
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-2xs);
   font-weight: 400;
-  letter-spacing: .14em;
+  letter-spacing: 2px;
   line-height: 1.55;
   margin: 0;
   overflow: visible;
@@ -20830,7 +20869,7 @@ button.tileset-relationship-cell {
 /* Row labels are the bottom of the scale. */
 .run-battle-preview-info .ce-li-title {
   font-size: var(--ds-text-sm);
-  letter-spacing: .06em;
+  letter-spacing: 1px;
 }
 
 /* A section header governs the rows under it, so it reads LARGER than they do — the borrowed
@@ -20839,7 +20878,7 @@ button.tileset-relationship-cell {
 .run-battle-preview-info :is(.ce-li-board, .ce-li-forces, .ce-li-deployment) > .ce-li-title {
   color: var(--ce-ink);
   font-size: var(--ds-text-lg);
-  letter-spacing: .04em;
+  letter-spacing: 1px;
 }
 
 .run-battle-preview-info :is(.ce-li-stat span, .ce-li-roster li span, .ce-li-roster-head span) {
@@ -21679,7 +21718,7 @@ button.tileset-relationship-cell {
   color: #eaf6ff;
   font: var(--ds-weight-strong) var(--ds-text-md)/1 var(--ds-font-display);
   gap: var(--ds-inline-tight);
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   min-width: 0;
   white-space: nowrap;
 }
@@ -22224,7 +22263,7 @@ button.tileset-relationship-cell {
 .run-card-row-call {
   color: var(--ink-strong);
   font-size: var(--ds-text-xl);
-  letter-spacing: .02em;
+  letter-spacing: 0;
   margin: 0;
   text-align: center;
   text-shadow: 0 3px 0 #02070b;
@@ -23867,7 +23906,7 @@ button.tileset-relationship-cell {
   font-weight: 700;
   gap: var(--ds-space-1);
   justify-content: center;
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   margin: 0;
   text-transform: uppercase;
 }
@@ -24566,7 +24605,7 @@ button.tileset-relationship-cell {
   font: var(--ds-weight-medium) var(--ds-text-md)/1 var(--ds-font-display);
   gap: var(--ds-space-2);
   justify-content: end;
-  letter-spacing: .06em;
+  letter-spacing: 1px;
   min-inline-size: 112px;
   padding-inline: var(--ds-inset);
   text-transform: uppercase;
@@ -24589,7 +24628,7 @@ button.tileset-relationship-cell {
 .run-army-ledger-value > small {
   color: var(--skirmish-muted);
   font: var(--ds-weight-medium) var(--ds-text-md)/1 var(--ds-font-display);
-  letter-spacing: .06em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -25406,7 +25445,7 @@ button.tileset-relationship-cell {
   color: var(--skirmish-muted);
   font-size: var(--ds-text-xs);
   font-weight: 800;
-  letter-spacing: .06em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -25649,7 +25688,7 @@ button.tileset-relationship-cell {
   color: var(--skirmish-muted);
   font-size: var(--ds-text-xs);
   font-weight: 800;
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -26517,7 +26556,7 @@ button.tileset-relationship-cell {
 .settings-toggle-opt {
   color: #46586a;
   font-size: var(--ds-text-sm);
-  letter-spacing: .08em;
+  letter-spacing: 1px;
   text-transform: uppercase;
   transition: color .18s ease, text-shadow .18s ease;
 }
@@ -26684,7 +26723,7 @@ button.tileset-relationship-cell {
 .al-filter button span { color: #5d7a8c; }
 .al-tree-scroll { overflow-y: auto; padding: 8px; min-height: 0; }
 .al-tree-group { margin-bottom: 10px; }
-.al-tree-label { color: #5d7a8c; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .58rem; letter-spacing: .12em; text-transform: uppercase; margin: 6px 4px; }
+.al-tree-label { color: #5d7a8c; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .58rem; letter-spacing: 2px; text-transform: uppercase; margin: 6px 4px; }
 .al-tree-leaf { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: 0; border-radius: 6px; color: #cfe3ef; padding: 5px 6px; cursor: pointer; text-align: left; }
 .al-tree-leaf:hover { background: rgba(95, 184, 255, .1); }
 .al-tree-leaf.is-selected { background: rgba(95, 184, 255, .18); color: #fff; }
@@ -26696,7 +26735,7 @@ button.tileset-relationship-cell {
 
 .al-viewer { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; padding: 20px 24px; gap: 18px; }
 .al-viewer-head h2 { margin: 4px 0 0; font-size: 1.3rem; }
-.al-viewer-head .al-kicker { color: #79d3ff; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .62rem; letter-spacing: .14em; text-transform: uppercase; }
+.al-viewer-head .al-kicker { color: #79d3ff; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .62rem; letter-spacing: 2px; text-transform: uppercase; }
 .al-viewer-head p { color: #5d7a8c; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .7rem; margin: 4px 0 0; }
 .al-stages { display: flex; flex-wrap: wrap; gap: 16px; }
 .al-stage { margin: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -26711,7 +26750,7 @@ button.tileset-relationship-cell {
 .al-frame-stretch { display: block; width: 200px; height: 120px; border-style: solid; border-color: transparent; box-sizing: border-box; }
 .al-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 0; }
 .al-meta div { background: #0e1722; border: 1px solid #1f3346; border-radius: 8px; padding: 10px 12px; }
-.al-meta dt { color: #5d7a8c; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .58rem; text-transform: uppercase; letter-spacing: .1em; }
+.al-meta dt { color: #5d7a8c; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .58rem; text-transform: uppercase; letter-spacing: 2px; }
 .al-meta dd { margin: 4px 0 0; font-size: .92rem; }
 .al-ok { color: #54e6a0; } .al-no { color: #ff7a8a; }
 .al-empty { align-items: center; justify-content: center; color: #5d7a8c; }
@@ -26765,7 +26804,7 @@ button.tileset-relationship-cell {
 .tileset-studio-card.is-glossary .tileset-studio-card-text em { color: #9fc4d5; font-size: .82rem; font-style: normal; line-height: 1.45; text-transform: none; white-space: normal; }
 .glossary-card-src { color: #5d7a8c; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .62rem; margin-top: 2px; }
 .glossary-doc-dot { background: #79d3ff; border-radius: 999px; box-shadow: 0 0 6px rgba(121, 211, 255, .8); height: 6px; width: 6px; }
-.glossary-tag { align-self: flex-start; border-radius: 999px; font-size: .56rem; letter-spacing: .04em; padding: 2px 7px; text-transform: uppercase; white-space: nowrap; }
+.glossary-tag { align-self: flex-start; border-radius: 999px; font-size: .56rem; letter-spacing: 1px; padding: 2px 7px; text-transform: uppercase; white-space: nowrap; }
 .glossary-tag.is-asset { background: rgba(143, 211, 154, .14); border: 1px solid rgba(143, 211, 154, .4); color: #8fd39a; }
 .glossary-tag.is-not-asset { background: rgba(214, 170, 90, .12); border: 1px solid rgba(214, 170, 90, .4); color: #d8b364; }
 
@@ -26913,8 +26952,8 @@ button.tileset-relationship-cell {
 }
 .campaign-result-panel h2 {
   margin: 0;
-  font-size: clamp(26px, 3.4vw, 38px);
-  letter-spacing: .04em;
+  font-size: 32px;
+  letter-spacing: 1px;
   color: var(--ds-ink-1, #eaf2f6);
 }
 .campaign-result-panel p {
@@ -26975,8 +27014,8 @@ button.tileset-relationship-cell {
 .rotate-gate-title {
   margin: 0;
   font-family: var(--ds-font-display, ui-monospace, monospace);
-  font-size: 1.5rem;
-  letter-spacing: .04em;
+  font-size: 32px;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 .rotate-gate-copy { margin: 0; color: var(--ds-ink-3, #948C7E); font-size: 1rem; line-height: 1.4; }
@@ -27247,7 +27286,7 @@ button.tileset-relationship-cell {
 .le-fence-review-banner strong {
   color: #f3f8ff;
   font-size: 11px;
-  letter-spacing: 0.035em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -27312,7 +27351,7 @@ button.tileset-relationship-cell {
 .le-persistence-emergency strong {
   color: #fff4f5;
   font-size: 12px;
-  letter-spacing: 0.04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -27389,7 +27428,7 @@ button.tileset-relationship-cell {
 .le-fence-artwork-status strong {
   color: #f0b35b;
   font-size: 9px;
-  letter-spacing: 0.04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -27540,7 +27579,7 @@ button.tileset-relationship-cell {
 }
 
 .predrawn-reference-toolbar h1 {
-  font-size: 24px;
+  font-size: 32px;
 }
 
 .predrawn-reference-toolbar > div > p,
@@ -27743,7 +27782,7 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 .run-card-rarity-study-heading > span {
   color: var(--ds-color-text-muted, #a9a393);
   font: 700 11px/1.2 var(--ds-font-display);
-  letter-spacing: .08em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -27866,7 +27905,7 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   color: var(--ds-color-text-muted, #a9a393);
   font-family: var(--ds-font-display);
   font-size: 11px;
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -28897,7 +28936,7 @@ button.run-card-formation-cell {
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-2xs);
   font-weight: 400;
-  letter-spacing: .14em;
+  letter-spacing: 2px;
   line-height: 1.55;
   margin: 0;
   text-transform: uppercase;
@@ -29313,11 +29352,11 @@ button.run-card-formation-cell {
 .deployment-lab-card-media {
   align-items: center;
   display: flex;
-  font-size: clamp(24px, 4vw, 52px);
+  font-size: 48px;
   gap: clamp(3px, .8vw, 12px);
   height: 100%;
   justify-content: center;
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   width: 100%;
 }
 
