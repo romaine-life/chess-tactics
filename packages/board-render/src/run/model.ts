@@ -303,6 +303,7 @@ export const RUN_ROYAL_FORK_MIN_VICTIM_VALUE = PIECE_VALUE.rook;
 
 export type ManubiumId =
   | 'advantageous-capture'
+  | 'capture-with-check'
   | 'royal-fork'
   | 'discovered-check'
   | 'double-check'
@@ -459,6 +460,12 @@ export const RUN_MANUBIAE: readonly ManubiumDefinition[] = Object.freeze([
     goldTenths: null,
     // Written from the rate rather than beside it, so the sentence cannot drift from the gold.
     priceNote: `${knightForkGoldTenths(2)} for two prongs, ${knightForkGoldTenths(3)} for three, ${knightForkGoldTenths(4)} for four, ${knightForkGoldTenths(5)} for five`,
+  },
+  {
+    id: 'capture-with-check',
+    name: 'Capture with check',
+    earnedBy: 'Take an enemy unit and give check with the same move, and leave the unit that took where nothing of theirs attacks it. A capture that hangs it earns nothing — they answer the check by taking it back, and the free move was yours to give. Any unit may earn it, and the check need not come from the unit that took: a line the capture opened counts.',
+    goldTenths: GOLD_SCALE,
   },
   {
     id: 'royal-fork',

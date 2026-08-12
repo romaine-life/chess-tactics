@@ -1,5 +1,23 @@
 import type { RunDocument } from '../run/model';
+import { ensureGuestRunKey, readGuestRunKey } from '../run/guestIdentity';
 import { HttpError } from './http';
+
+/** The header a signed-out player's Run travels under (ADR-0587). The server prefers a signed-in
+ * session whenever there is one, so sending this while signed in is harmless — and is exactly
+ * what `adoptGuestRun` relies on to name the row being inherited. */
+const GUEST_RUN_KEY_HEADER = 'x-guest-run-key';
+
+/**
+ * Request headers carrying the guest identity, when there is one to carry.
+ *
+ * `mint` distinguishes reading from writing. A read must not create an identity — hydrating the
+ * game is not playing it — so it asks only for a key that already exists. A write is the act that
+ * warrants one, so it mints on first use.
+ */
+function guestHeaders(mint: boolean): Record<string, string> {
+  const key = mint ? ensureGuestRunKey() : readGuestRunKey();
+  return key ? { [GUEST_RUN_KEY_HEADER]: key } : {};
+}
 
 export interface RevisionedActiveRun {
   run: RunDocument | null;
@@ -35,7 +53,11 @@ function parsedCraftedActiveRun(value: unknown): CraftedActiveRun {
 }
 
 export async function loadActiveRun(): Promise<RevisionedActiveRun> {
-  const response = await fetch('/api/active-run', { credentials: 'include', cache: 'no-cache' });
+  const response = await fetch('/api/active-run', {
+    credentials: 'include',
+    cache: 'no-cache',
+    headers: guestHeaders(false),
+  });
   if (!response.ok) throw await HttpError.fromResponse('load-active-run', response);
   return parsedActiveRun(await response.json());
 }
@@ -45,7 +67,7 @@ async function putActiveRun(
 ): Promise<Response> {
   return fetch('/api/active-run', {
     method: 'PUT',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...guestHeaders(true) },
     credentials: 'include',
     body: JSON.stringify(body),
   });
@@ -126,9 +148,34 @@ async function craftRefusal(response: Response): Promise<string> {
 export async function deleteActiveRun(revision: number): Promise<void> {
   const response = await fetch('/api/active-run', {
     method: 'DELETE',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...guestHeaders(false) },
     credentials: 'include',
     body: JSON.stringify({ revision }),
   });
   if (!response.ok) throw await HttpError.fromResponse('delete-active-run', response);
+}
+
+/**
+ * Hand this browser's guest Run row to the account that just signed in (ADR-0587).
+ *
+ * `adopted` reports whether the account TOOK the row. False covers both "there was no guest row"
+ * and "the account was already playing something, so the guest row was released" — the caller
+ * treats them alike, because the guest's Run is in this browser's local storage either way and the
+ * store's existing browser-versus-account merge is what decides between them.
+ *
+ * Returns null when this browser holds no guest identity, which is the ordinary case for someone
+ * who has always been signed in.
+ */
+export async function adoptGuestRun(): Promise<(RevisionedActiveRun & { adopted: boolean }) | null> {
+  const key = readGuestRunKey();
+  if (!key) return null;
+  const response = await fetch('/api/active-run/adopt-guest', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', [GUEST_RUN_KEY_HEADER]: key },
+    credentials: 'include',
+    body: '{}',
+  });
+  if (!response.ok) throw await HttpError.fromResponse('adopt-guest-run', response);
+  const body = await response.json() as { adopted?: unknown };
+  return { ...parsedActiveRun(body), adopted: body.adopted === true };
 }

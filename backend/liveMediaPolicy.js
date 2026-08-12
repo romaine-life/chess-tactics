@@ -26,7 +26,10 @@ const MAIN_MENU_MARK_FITTED_TRANSFORM = 'ink-crop-lanczos-fit-height-52-even-qua
 // rail must share an ink height or one of them silently reads a different size. That is a
 // property of the seat, not of the screen: the gear is here because the Battle HUD, Settings
 // and `.icon-gear` all draw it, and the Editor's War and Levels marks are here because they
-// stack in the Editor rail beside campaign-editor.png, which is already fitted to 52.
+// stack in the Editor rail beside campaign-editor.png, which is already fitted to 52. The
+// Battle command card's ten marks are here for the same reason and not a weaker one: they sit
+// in a 3x5 grid of equal buttons, which is a denser size comparison than any column, and they
+// are drawn through the identical fixed-seat-plus-contain rule.
 const MAIN_MENU_MARK_FITTED_SLOTS = Object.freeze([
   'ui/main-menu/icons-carved/solo-skirmish.png',
   'ui/main-menu/icons-carved/campaign-editor.png',
@@ -36,6 +39,16 @@ const MAIN_MENU_MARK_FITTED_SLOTS = Object.freeze([
   'ui/kit/icons/gear.png',
   'ui/kit/icons/war.png',
   'ui/kit/icons/levels.png',
+  'ui/kit/icons/shortcuts/enemy-attacks.png',
+  'ui/kit/icons/shortcuts/enemy-moves.png',
+  'ui/kit/icons/shortcuts/grid.png',
+  'ui/kit/icons/shortcuts/deselect.png',
+  'ui/kit/icons/shortcuts/clear-overlays.png',
+  'ui/kit/icons/shortcuts/player-attacks.png',
+  'ui/kit/icons/shortcuts/player-moves.png',
+  'ui/kit/icons/shortcuts/promotion-zones.png',
+  'ui/kit/icons/shortcuts/zoom-in.png',
+  'ui/kit/icons/shortcuts/zoom-out.png',
 ]);
 
 const LIPSANON_ICON_COMPONENT = 'run-lipsanon-icon';
@@ -859,8 +872,9 @@ function titleBarMarkMediaIssue(row, projectedRuntime = null) {
  * different sizes and a mark accepted for one must not silently satisfy the other.
  */
 /**
- * Run preparation's rail-tab marks: the glyphs the Current Run and Start New Run tabs wear
- * (ADR-0558 made those tabs the shared ApparatusRailTab, and a rail tab carries a mark).
+ * Run preparation's rail-tab marks: the glyphs the Continue and New tabs wear (ADR-0558 made
+ * those tabs the shared ApparatusRailTab, and a rail tab carries a mark; ADR-0582 named them —
+ * the `run/current` and `run/new` slot paths below predate the labels and do not follow them).
  *
  * Their contract is the OPPOSITE of a title-bar mark's, which is why they cannot borrow that
  * validator. A title-bar mark is drawn into a square seat with `contain`, so it must be trimmed

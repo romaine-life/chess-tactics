@@ -126,7 +126,8 @@ export interface RunBattlePresentation {
   onRerollDeployment: () => boolean;
   canRerollDeployment: boolean;
   deploymentRerollCostTenths: number;
-  onAbandonRun?: () => void;
+  /** The Run's own Abandon control, which confirms in its seat rather than over the board. */
+  abandonRun?: ReactNode;
   transformCommittedBoard?: RunBattleTransformSink;
   undoAdapter: RunBattleUndoAdapter;
 }
@@ -1331,7 +1332,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
     returnLabel,
     netInteractive: netSeatInteractive,
     onOpenPredrawnRegistration: predrawnPreview ? () => setPredrawnPickerOpen(true) : null,
-    onAbandonRun: runBattle?.onAbandonRun ?? null,
+    abandonRun: runBattle?.abandonRun ?? null,
     onRerollDeployment: runBattle ? () => { runBattle.onRerollDeployment(); } : null,
     canRerollDeployment: !unitDeparture && (runBattle?.canRerollDeployment ?? false),
     deploymentRerollCostTenths: runBattle?.deploymentRerollCostTenths,

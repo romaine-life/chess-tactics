@@ -207,6 +207,7 @@ export function Tooltip({
   popupClassName = '',
   triggerClassName = '',
   focusable = true,
+  triggerIsInteractive = false,
   explainMechanics = true,
   style,
   suppressed = false,
@@ -220,6 +221,17 @@ export function Tooltip({
   popupClassName?: string;
   triggerClassName?: string;
   focusable?: boolean;
+  /**
+   * The trigger is itself a control — a button, a link — that already owns the tab stop
+   * and the accessible name. The wrapper then takes NEITHER: a second `tabIndex` would
+   * put two stops on one control, and `aria-hidden` (what `focusable={false}` gives an
+   * ornamental trigger) would hide the control from a screen reader entirely. Focus still
+   * raises the tip, because React's focus events bubble from the control inside.
+   *
+   * The caller owes the control its own `aria-label`; `label` here stays the spoken form
+   * of the whole explanation for anything that reads the wrapper.
+   */
+  triggerIsInteractive?: boolean;
   /**
    * Resolve named Run mechanics into definition panes (ADR-0370). Ataraxia's
    * cumulative rule list is the one closed exception: its own rows need the
@@ -265,9 +277,9 @@ export function Tooltip({
       <span
         ref={ref}
         className={`tooltip-trigger ${triggerClassName}`.trim()}
-        tabIndex={focusable ? 0 : undefined}
-        aria-label={focusable ? label : undefined}
-        aria-hidden={focusable ? undefined : 'true'}
+        tabIndex={focusable && !triggerIsInteractive ? 0 : undefined}
+        aria-label={focusable && !triggerIsInteractive ? label : undefined}
+        aria-hidden={focusable || triggerIsInteractive ? undefined : 'true'}
         aria-describedby={focusable && pos && !suppressed ? describedBy : undefined}
         onFocus={onFocus}
         onBlur={onBlur}

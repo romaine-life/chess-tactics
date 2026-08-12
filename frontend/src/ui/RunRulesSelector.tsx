@@ -5,7 +5,8 @@ import { ChromeButton } from './shared/ChromeButton';
 import { ChromeDividedGridRow } from './shared/ChromeDividedGrid';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 
-// Start New Run → the rules the Run is bound to, behind a disclosure that starts closed.
+// Run preparation's **New** tab → the rules the Run is bound to, behind a disclosure that starts
+// closed. (The tab said "Start New Run" until ADR-0582; its column is unchanged.)
 //
 // The defaults ARE the game. Everything in here changes what the market deals or what may be done
 // with a card, and almost nobody should touch it -- it exists to play the alternatives against
@@ -16,7 +17,7 @@ import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 // Not hidden, though: a Run is bound to these for its whole life, so a player who did change one
 // has to be able to see what they are about to start.
 //
-// These are the LAST CELLS of Start New Run's one box, and three things follow from being cells
+// These are the LAST CELLS of that one box, and three things follow from being cells
 // rather than a box of their own:
 //
 //   The trigger is a SQUARE KEY, not the slab. A cell has no frame — the box's frame is around all

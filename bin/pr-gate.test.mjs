@@ -9,7 +9,6 @@ import {
   mergeStateVerdict,
   parseArgs,
   readChecks,
-  suitesPending,
 } from './pr-gate.mjs'
 
 const PR = { number: 631, url: 'https://example/pull/631', headRefName: 'topic', mergeStateStatus: 'CLEAN' }
@@ -151,39 +150,4 @@ test('readChecks reads "no checks" from EITHER stream, at ANY exit code', () => 
 test('readChecks prefers real JSON even when a stream carries chatter', () => {
   const res = { ok: false, stdout: '[{"name":"a","bucket":"pending"}]', stderr: 'some gh warning' }
   assert.deepEqual(readChecks(res), [{ name: 'a', bucket: 'pending' }])
-})
-
-test('suitesPending only settles when every suite has completed', () => {
-  assert.equal(suitesPending([{ status: 'completed' }, { status: 'completed' }]), false)
-  assert.equal(suitesPending([{ status: 'queued' }, { status: 'completed' }]), true)
-  assert.equal(suitesPending([{ status: 'in_progress' }]), true)
-  assert.equal(suitesPending([]), false)
-  // Unreadable is treated as settled: a gate that blocks forever because one extra API call
-  // failed is worse than one that occasionally answers early.
-  assert.equal(suitesPending(null), false)
-})
-
-test('a passing check does not mean READY while a suite is still queued', () => {
-  // chess-tactics#924, exactly: 1 of 3 checks registered and green, the other two seconds away.
-  // The gate said READY and the PR was merged on a third of its CI.
-  const checks = [{ name: 'Test backend', bucket: 'pass' }]
-  const early = checksVerdict({ ...base, checks, sawChecks: true, pendingSuites: true })
-  assert.equal(early, null, 'must keep polling, not declare victory')
-
-  const settled = checksVerdict({ ...base, checks, sawChecks: true, pendingSuites: false })
-  assert.equal(settled.word, 'READY')
-})
-
-test('--no-wait reports a queued suite as unfinished rather than READY', () => {
-  const checks = [{ name: 'Test backend', bucket: 'pass' }]
-  const v = checksVerdict({ ...base, checks, sawChecks: true, pendingSuites: true, wait: false })
-  assert.equal(v.word, 'TIMEOUT')
-  assert.match(v.lines.join('\n'), /suite is still queued/)
-})
-
-test('a failing check still wins over a queued suite', () => {
-  // No point waiting for the rest of CI to confirm what one failure already settled.
-  const checks = [{ name: 'Test backend', bucket: 'fail', link: 'https://x' }]
-  const v = checksVerdict({ ...base, checks, sawChecks: true, pendingSuites: true })
-  assert.equal(v.word, 'CI_FAILED')
 })

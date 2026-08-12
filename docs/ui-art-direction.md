@@ -262,7 +262,7 @@ The default work surfaces are `/`, `/enchiridion`, `/enchiridion/units`,
 `/editor/level`, and exact `/play?...` for a selected live board. The main menu has
 five top-level controls — Play, Editor, Lobbies, Enchiridion, Settings — and **Play**
 opens Run, the sole player-facing mode (ADR-0514). There is no nested Play source rail:
-Current Run / Start New Run is the first destination column beside the main-menu rail,
+**Continue / New** (ADR-0582) is the first destination column beside the main-menu rail,
 and its selected detail follows at full width. Campaign, Skirmish, Levels, and Continue
 remain directly routable for development but are absent from ordinary navigation.
 Run preparation uses Campaign Levels' master-detail geometry, with current-Run
