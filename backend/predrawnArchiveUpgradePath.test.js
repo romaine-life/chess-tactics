@@ -684,11 +684,11 @@ test('required-schema readiness and repair enforce the migrations 37 through 68 
     /\['run_progression',\s*49\]/,
     'Ataraxia progression relation repair must replay migration 49',
   );
-  assert.match(relations, /active_runs/, 'account Run documents must be required runtime schema');
+  assert.match(relations, /active_runs/, 'Run documents must be required runtime schema');
   assert.match(
     repairs,
-    /\['active_runs',\s*44\]/,
-    'active Run relation repair must replay its canonical creation migration',
+    /\['active_runs',\s*\[44,\s*79\]\]/,
+    'active Run relation repair must replay migration 44 and the 79 guest ownership it gained',
   );
   // Craft links (migration 50) are a debugging instrument, not schema the app needs to serve a
   // route. Requiring the relation would take every route down on a database missing only that
