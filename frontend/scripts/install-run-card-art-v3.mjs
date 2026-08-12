@@ -49,7 +49,7 @@ function candidates() {
     const pieces = [...String(card.seats)].filter((ch) => ch !== '.').map((ch) => PIECE_OF[ch]);
     rows.push({
       artId: card.cardId,
-      title: card.voice[0],
+      title: card.voice.name,
       pieces,
       anchor: `${card.king.name} — ${card.king.world}`,
       sceneDirection: card.act.moment,
@@ -157,6 +157,38 @@ if (DRY) {
 
 const session = await signIn();
 try {
+  // --repair rewrites the metadata of candidates this batch already created, for when a payload
+  // field was wrong on the first upload. Candidates only — an accepted row is never patched, and
+  // the media bytes are untouched.
+  if (args.includes('--repair')) {
+    const catalog = await api(session, '/api/admin/media-assets');
+    const bySlot = new Map(catalog.versions
+      .filter((version) => version.provenance?.schema === 'run-card-art-prompt-v3' && version.status === 'candidate')
+      .map((version) => [version.slot, version]));
+    let patched = 0;
+    const problems = [];
+    for (const row of rows) {
+      const payload = payloadFor(row);
+      const version = bySlot.get(payload.slot);
+      if (!version) continue;
+      if (JSON.stringify(version.metadata) === JSON.stringify(payload.metadata)) continue;
+      try {
+        await api(session, `/api/admin/media-versions/${encodeURIComponent(version.id)}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ expectedRevision: version.rowRevision, metadata: payload.metadata }),
+        });
+        patched += 1;
+        process.stdout.write(`patched ${row.artId}\n`);
+      } catch (error) {
+        const message = String(error.message ?? error);
+        problems.push({ artId: row.artId, error: message.slice(0, 200) });
+        process.stdout.write(`FAIL    ${row.artId} ${message.slice(0, 150)}\n`);
+      }
+    }
+    process.stdout.write(`${JSON.stringify({ patched, failed: problems.length, problems: problems.slice(0, 3) }, null, 2)}\n`);
+    process.exit(problems.length ? 1 : 0);
+  }
   if (args.includes('--status')) {
     const catalog = await api(session, '/api/admin/media-assets');
     const v3 = catalog.versions.filter((v) => v.provenance?.schema === 'run-card-art-prompt-v3');
