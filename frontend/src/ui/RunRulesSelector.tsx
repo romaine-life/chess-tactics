@@ -6,7 +6,7 @@ import { ChromeDividedGridRow } from './shared/ChromeDividedGrid';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 
 // Run preparation's **New** tab → the rules the Run is bound to, behind a disclosure that starts
-// closed. (The tab said "Start New Run" until ADR-0581; its column is unchanged.)
+// closed. (The tab said "Start New Run" until ADR-0582; its column is unchanged.)
 //
 // The defaults ARE the game. Everything in here changes what the market deals or what may be done
 // with a card, and almost nobody should touch it -- it exists to play the alternatives against

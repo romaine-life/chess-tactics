@@ -4,7 +4,7 @@ import { ChromeDividedGridRow } from './shared/ChromeDividedGrid';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 
 // Ataraxia: the bare picker for a row that already names it (the War editor), and the CELLS it
-// takes in the one box behind Run preparation's **New** tab (ADR-0571's box, ADR-0581's name).
+// takes in the one box behind Run preparation's **New** tab (ADR-0571's box, ADR-0582's name).
 //
 // It used to be a box of its own, standing above three more boxes with the page showing through
 // between them. The column is a single divided box now and this is its first pair of cells: a name,

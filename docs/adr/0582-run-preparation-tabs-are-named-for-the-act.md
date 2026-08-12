@@ -8,7 +8,7 @@ refines:
   - "[ADR-0289](0289-run-preparation-is-control-first-and-ataraxia-uses-one-selector.md)"
 ---
 
-# ADR-0581: Run preparation's tabs are named for the act, not the object
+# ADR-0582: Run preparation's tabs are named for the act, not the object
 
 ## Context
 

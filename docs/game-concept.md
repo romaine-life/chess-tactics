@@ -213,7 +213,7 @@ these.
   action. Any other unfinished activity is reached through its own rail
   destination, and an empty Continue says **Nothing to continue** once.
   Ordinary Run remains a
-  separate preparation destination between **Continue** and **New** (ADR-0581),
+  separate preparation destination between **Continue** and **New** (ADR-0582),
   with Ataraxia setup and confirmed replacement (ADR-0232, ADR-0289, ADR-0290,
   ADR-0294, ADR-0356, ADR-0474).
 - Army and Lipsana are grouped as player **Self inspection** in Run Controls.

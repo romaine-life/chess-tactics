@@ -413,7 +413,7 @@ function RunPanel({
             ADR-0334's "No active Run" is the tab's detail line, which is why it appears only
             when the tab cannot be taken. The name is the ACT, not the object: Continue says what
             pressing it does, where "Current Run" named the thing behind it and left the player to
-            infer the verb (ADR-0581). */}
+            infer the verb (ADR-0582). */}
         {presentedRun || (hydrated && !loading) ? (
           <ApparatusRailTab
             label="Continue"
@@ -444,7 +444,7 @@ function RunPanel({
         ) : null}
         {/* Its name is the act too, and the pair reads as one choice: Continue / New. What a new
             Run costs the one you are holding is the first thing the column it opens says, so the
-            tab does not have to carry "Start" to warn anybody (ADR-0581). */}
+            tab does not have to carry "Start" to warn anybody (ADR-0582). */}
         <ApparatusRailTab
           label="New"
           to={PLAY_RUN_NEW_SELECTOR_HREF}

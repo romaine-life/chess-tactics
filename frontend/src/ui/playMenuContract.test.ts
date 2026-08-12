@@ -108,7 +108,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // Both destinations are the shared rail tab, which carries the family's oak itself — the
     // fill is stamped once by ApparatusRailColumn rather than per call site (ADR-0558).
     expect(playMenu).toContain('testId="run-choice-current"');
-    // The tab is named for the ACT, not the object it acts on (ADR-0581). "Current Run" named the
+    // The tab is named for the ACT, not the object it acts on (ADR-0582). "Current Run" named the
     // thing behind the tab and left the press to be inferred; the pair reads Continue / New now.
     expect(playMenu).toMatch(/<ApparatusRailTab[\s\S]*?label="Continue"/);
     expect(playMenu).not.toContain('label="Current Run"');
@@ -278,7 +278,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).not.toContain('<h3>{run.war.name}</h3>');
     expect(playMenu).not.toContain("run.war.description || 'Active War'");
     expect(playMenu).toContain('testId="run-choice-new"');
-    // Named for the act, like its sibling (ADR-0581). "Start" is not the tab's to carry: what a
+    // Named for the act, like its sibling (ADR-0582). "Start" is not the tab's to carry: what a
     // new Run costs the one being held is the first thing the column it opens says.
     expect(playMenu).toMatch(/<ApparatusRailTab[\s\S]*?label="New"/);
     expect(playMenu).not.toContain('label="Start New Run"');

@@ -12,7 +12,7 @@ import { StudioCatalogCard } from './studio/StudioCatalogCard';
 
 /**
  * Owner review for the two marks Run preparation's rail tabs wear — Continue and New (ADR-0558
- * made those tabs the shared primitive, and a rail tab carries a mark; ADR-0581 named them).
+ * made those tabs the shared primitive, and a rail tab carries a mark; ADR-0582 named them).
  *
  * Judged in the seat it ships in: every candidate is mounted on a real `ApparatusRailTab`
  * at its native 44px, not in a contact sheet and not in the title bar's tight measure chip,
@@ -30,7 +30,7 @@ interface RailMarkSeat {
   slot: string;
   role: string;
   /** Exactly what the shipped tab says, because the preview mounts a real tab and must read as
-   *  the one on the Play screen. The slot and role names predate the labels (ADR-0581) and are
+   *  the one on the Play screen. The slot and role names predate the labels (ADR-0582) and are
    *  installed media identities — they are not renamed to follow the words. */
   label: string;
   idea: string;
