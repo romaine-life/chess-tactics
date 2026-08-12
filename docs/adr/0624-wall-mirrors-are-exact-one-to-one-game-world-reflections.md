@@ -4,10 +4,10 @@ date: 2026-07-11
 deciders: Nelson, Codex
 ---
 
-# ADR-0082: Wall mirrors are exact one-to-one game-world reflections
+# ADR-0624: Wall mirrors are exact one-to-one game-world reflections
 
 > **Superseded by
-> [ADR-0083](0083-mirror-aperture-coverage-is-authored-per-asset.md)
+> [ADR-0625](0625-mirror-aperture-coverage-is-authored-per-asset.md)
 > (2026-07-11).** ADR-0082's exact position, 1:1 size, floor-contact, and no-fit
 > transform rules remain. ADR-0083 narrows full-silhouette containment to Grand Gallery
 > and other full-body mirrors; intentionally small authored apertures may crop.
@@ -164,9 +164,9 @@ composition, and shared-planner requirements inherited from ADR-0080.
 ## More Information
 
 - Superseded decision:
-  [ADR-0081](0081-wall-mirrors-reflect-piece-facing-in-board-grid-space.md)
+  [ADR-0623](0623-wall-mirrors-reflect-piece-facing-in-board-grid-space.md)
 - Position and corridor predecessor:
-  [ADR-0080](0080-wall-mirrors-reflect-along-the-board-grid-wall-normal.md)
+  [ADR-0622](0622-wall-mirrors-reflect-along-the-board-grid-wall-normal.md)
 - Generated material rule:
   [ADR-0040](0040-feature-tiles-own-geometry-generate-material.md)
 - Unit sizing and directional art:

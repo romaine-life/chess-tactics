@@ -96,9 +96,9 @@ proof, and a game-owned Studio instrument that both mounts and accepts them.**
 
 ## More Information
 
-- Full-height wall geometry: [ADR-0086](0086-all-perimeter-walls-use-full-height-geometry.md)
+- Full-height wall geometry: [ADR-0628](0628-all-perimeter-walls-use-full-height-geometry.md)
 - Wall-face support and floor occlusion:
-  [ADR-0085](0085-mirror-surfaces-end-at-the-wall-floor-boundary.md)
+  [ADR-0627](0627-mirror-surfaces-end-at-the-wall-floor-boundary.md)
 - Studio surfaces are navigable, not bespoke routes:
   [ADR-0058](0058-every-route-is-click-reachable.md)
 - Generated feature-material rule:

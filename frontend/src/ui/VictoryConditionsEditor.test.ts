@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { appendRules, rulesEqual, conditionKey } from './VictoryConditionsEditor';
 import type { VictoryRules } from '../core/level';
 
-// The pure helpers behind additive event templates (ADR-0064 if-then rules).
+// The pure helpers behind additive event templates (ADR-0617 if-then rules).
 
-describe('victory rule helpers (ADR-0064)', () => {
+describe('victory rule helpers (ADR-0617)', () => {
   it('appendRules always adds template rules with fresh identities, even when content duplicates', () => {
     const base: VictoryRules = [{ id: 'reach-goal', name: 'Reach goal', if: [{ kind: 'reach', side: 'player' }], do: [{ kind: 'win', side: 'player' }] }];
     const add: VictoryRules = [

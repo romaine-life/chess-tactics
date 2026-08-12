@@ -52,18 +52,30 @@ the candidate ADRs?), and the topic of the citing file read against both candida
 scoring over both agreed with a hand review about 80% of the time, so it is a way to propose a
 decision, never to make one.
 
-Five numbers are drained here — 0078, 0079, 0559, 0561, 0562 — chosen because every citation was read
-individually and all but one belonged to the keeper. The remaining 18 are named in the baseline. The
-biggest are not close calls but volume: 0064 has 31 citations belonging to the mover and 16 more
-needing a judgement, and 0085 has 36 spread across 30 documents.
+**All 23 are drained, in two passes.** The first took the five whose citations were unambiguous —
+0078, 0079, 0559, 0561, 0562. The second took the other 18, moving **25 ADRs** to 0591-0636 and
+**87 citations** with them. Later ADRs keep the earliest-landed record's number, because that
+record's citations were correct when they were written; a moved block keeps its internal order, so
+the wall-mirror sequence still reads in sequence.
+
+Three traps the drain surfaced, all worth knowing before touching a number again:
+
+- **`evidence.decision` in `liveMediaPolicy.js` is persisted production data**, not a reference.
+  `'ADR-0556'` there means what is now ADR-0560, kept because accepted media rows cannot be patched.
+  Renaming it would have broken validation of live rows. It is untouched.
+- **Two ADRs head with `# NNNN — Title`** rather than `# ADR-NNNN:`, so a retitle keyed on one form
+  silently skips them.
+- **`git grep` line numbers go stale** the moment `main` moves — mid-drain, twice. A rewrite must be
+  anchored on distinctive text and require exactly one match, or it edits the wrong comment.
 
 ## Consequences
 
 - A new collision fails CI on the branch that creates it, when it is still free to fix.
-- The remaining debt is explicit, counted, and in a file that cannot silently grow.
-- Draining the rest is per-number work, and each number's citations must be read. `docs/adr` is
-  exempt from the citation scan, so renumbering only ever has to move links keyed on the filename —
-  which is mechanical — plus the plain-text citations outside it, which are not.
+- Every `(ADR-NNNN)` in the tree now resolves to exactly one decision, so following one is reliable.
+- The baseline is empty and kept: it is the seam that made the drain reviewable in batches rather
+  than one sweep, and the place to reach if a collision ever has to be tolerated for a release.
+- `docs/adr` is exempt from the citation scan, so a future renumber moves filename-keyed links —
+  mechanical — plus the plain-text citations outside it, which are not.
 - Numeric ordering stays unchecked. The 0050-0064 stretch has been out of order since long before
   any of this, and reordering accepted rows is a separate decision.
 

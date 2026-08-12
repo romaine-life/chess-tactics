@@ -10,7 +10,7 @@
 //
 //   * Run's list stepped by the shared 10px row gap while the rail beside it stepped by
 //     --main-menu-tab-column-gap, and grew a min-height seat the clamp()ed copy pushed past.
-//     Same width, same first row, 2.76px out by the second and worse at other widths (ADR-0556).
+//     Same width, same first row, 2.76px out by the second and worse at other widths (ADR-0631).
 //   * A mark that arrived as a class name once painted itself under another surface's sizing
 //     rules, which is how one destination ended up drawing two marks (ApparatusRailTab's
 //     `iconSrc` doc).
@@ -19,7 +19,7 @@
 //
 // New states belong on the primitive as props — `disabled`, `locked`, `trailing`, `onSelect`,
 // `ariaLabel` and the non-navigating host all arrived by converting a lookalike back into it. If a surface needs something the tab
-// cannot express, grow the tab. ADR-0558.
+// cannot express, grow the tab. ADR-0633.
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -69,7 +69,7 @@ export function check(files, read) {
     for (const hit of hits) {
       failures.push(
         `${file}:${hit.line} assembles a rail tab by class name — mount <ApparatusRailTab> instead, `
-        + 'and add a prop to it if this surface needs something it cannot express (ADR-0558)',
+        + 'and add a prop to it if this surface needs something it cannot express (ADR-0633)',
       );
     }
   }

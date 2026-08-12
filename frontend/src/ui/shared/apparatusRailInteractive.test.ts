@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 // .settings-screen is a full-screen placement layer that keeps unused canvas click-through, so
 // every panel standing on it must opt back into pointer input. Two classes did that —
 // .settings-frame and .menu-dest-col — and every rail wore one of them by hand. Converting Run
-// preparation to the shared primitive (ADR-0558) replaced its hand-assembled .menu-dest-col
+// preparation to the shared primitive (ADR-0633) replaced its hand-assembled .menu-dest-col
 // column with a bare .apparatus-rail-column, and Current Run / Start New Run rendered at the
 // right size, in the right seat, wearing the right oak and the right marks, hovered as buttons,
 // reported `disabled: false` — and swallowed every click, because the whole column inherited

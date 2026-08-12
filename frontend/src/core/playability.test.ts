@@ -409,7 +409,7 @@ describe('P5 — battle clock', () => {
   });
 });
 
-describe('P6 — authored victory conditions (ADR-0064)', () => {
+describe('P6 — authored victory conditions (ADR-0617)', () => {
   it('accepts a rule set with at least one win rule and one lose rule, and an absent field (preset)', () => {
     const authored = fixedLevel((l) => {
       l.victory = [
@@ -439,7 +439,7 @@ describe('P6 — authored victory conditions (ADR-0064)', () => {
   });
 });
 
-describe('P7 — authored victory event names (ADR-0064)', () => {
+describe('P7 — authored victory event names (ADR-0617)', () => {
   // A well-formed, fully-decidable rule set so P7 is the only thing under test — mutate its names.
   const named = (mutate: (v: NonNullable<Level['victory']>) => void): Level =>
     fixedLevel((l) => {

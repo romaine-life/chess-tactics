@@ -79,7 +79,7 @@ describe('Main Menu chrome hierarchy', () => {
     expect(playMenu).toContain('<ApparatusRailTab');
     // The primitive is the ONLY place a rail tab is assembled — Settings and the Editor mount
     // <ApparatusRailTab> now, and check-rail-tab-primitive.mjs fails the build on any file that
-    // names these classes in markup again (ADR-0558). So this asserts the one remaining
+    // names these classes in markup again (ADR-0633). So this asserts the one remaining
     // assembly is registered, and that the converted surfaces carry none.
     // The primitive assembles the tab across several lines now, so match its registered call
     // rather than a single-tag regex: chromeUnitClassNames + a registered unit on both hosts.

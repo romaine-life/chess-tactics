@@ -1,5 +1,5 @@
 // Owner review for perimeter wall candidates. Walls live in the terrain domain but carry the
-// ADR-0086 full-height frame instead of the 96x180 board-tile projection, so they have their
+// ADR-0628 full-height frame instead of the 96x180 board-tile projection, so they have their
 // own typed proof: mounted on the real barrier renderer, at canonical 1x, beside live terrain.
 //
 // One proof covers the whole wall batch. The backend pins each candidate to its OWN entry, so

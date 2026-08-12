@@ -4,7 +4,7 @@ date: 2026-07-04
 deciders: Nelson, Claude
 ---
 
-# ADR-0063: Section dividers are a 1-D horizontal "bar" kit primitive that tees into the frame rail; N per panel, placed by one shared rule
+# ADR-0618: Section dividers are a 1-D horizontal "bar" kit primitive that tees into the frame rail; N per panel, placed by one shared rule
 
 Extends the atom-assembled 9-slice kit ([ADR-0012](0012-nine-slice-frames-are-atom-assembled.md))
 and its single-source registry ([ADR-0016](0016-single-source-nine-slice-registry.md)) to a

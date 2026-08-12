@@ -468,7 +468,7 @@ and short-wall proof expectations must be deleted end to end. Source history may
 old renders only as clearly labeled retired evidence outside runtime asset paths. New
 material bakes, thumbnails, contact sheets, and runtime seat proofs all target the
 canonical full-height frame. See
-[ADR-0086](adr/0086-all-perimeter-walls-use-full-height-geometry.md).
+[ADR-0628](adr/0628-all-perimeter-walls-use-full-height-geometry.md).
 
 ### Live Mirror Assets
 
@@ -478,7 +478,7 @@ bitmap assets. Its reflected chess piece is never baked into those pixels; the s
 board renderer supplies the current physical unit through the frame-owned aperture.
 
 Mirror fit follows the exact one-to-one game-world and wall-height rules in
-[ADR-0086](adr/0086-all-perimeter-walls-use-full-height-geometry.md):
+[ADR-0628](adr/0628-all-perimeter-walls-use-full-height-geometry.md):
 
 - the reflected draw keeps the physical board draw's resolved width and height, with no
   mirror-only scale or depth-compression treatment
@@ -512,7 +512,7 @@ horizontal pixel mirrors of the west frame and glass. Its north mount and normal
 mirror the west geometry with polygon winding restored. Independently shearing directional
 source highlights for the two faces is not an eligible bake because it changes the material's
 visual identity by wall orientation. The image-generation gate compares every emitted RGBA
-sample. See [ADR-0087](adr/0087-grand-gallery-wall-faces-are-exact-visual-counterparts.md).
+sample. See [ADR-0629](adr/0629-grand-gallery-wall-faces-are-exact-visual-counterparts.md).
 
 Grand Gallery acceptance evidence must show the full tallest-unit reflection at 1:1
 beside its physical board draw on both wall faces, with aperture bounds visible. It must
@@ -522,7 +522,7 @@ aperture and an actual supporting-wall segment, while every crossing below the p
 wall/floor seam is reported separately as floor-occluded. Supported-glass plus
 floor-occluded must equal the visible-alpha total, with no failure class. Representative
 rays may explain the construction, but cannot replace the per-pixel pass/fail gate. See
-[ADR-0085](adr/0085-mirror-surfaces-end-at-the-wall-floor-boundary.md). Small
+[ADR-0627](adr/0627-mirror-surfaces-end-at-the-wall-floor-boundary.md). Small
 mirror evidence may show a partial silhouette, but must prove that it is an aperture clip
 of the unchanged exact-size, exact-anchor draw. Contact sheets alone are insufficient:
 include actual board-scale proofs without resampling or fitting displacement.

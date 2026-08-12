@@ -93,7 +93,7 @@ function stillDecidable(rules: VictoryRules): boolean {
 
 /**
  * Resolve one COMMITTED, settled position using the single precedence required by
- * ADR-0064 and ADR-0072:
+ * ADR-0617 and ADR-0072:
  *
  *  1. ordered authored/preset victory rules (first match wins),
  *  2. checkmate or stalemate for a side with no legal action,

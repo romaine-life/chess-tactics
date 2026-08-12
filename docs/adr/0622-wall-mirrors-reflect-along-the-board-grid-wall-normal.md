@@ -4,9 +4,9 @@ date: 2026-07-11
 deciders: Nelson, Codex
 ---
 
-# ADR-0080: Wall mirrors reflect along the board-grid wall normal
+# ADR-0622: Wall mirrors reflect along the board-grid wall normal
 
-> **Superseded by [ADR-0081](0081-wall-mirrors-reflect-piece-facing-in-board-grid-space.md)
+> **Superseded by [ADR-0623](0623-wall-mirrors-reflect-piece-facing-in-board-grid-space.md)
 > (2026-07-11).** Grid-axis corridor, placement, FOV, projection, aperture, and
 > composition rules remain. ADR-0081 replaces only the source-facing-plus-`flipX`
 > orientation rule with wall-specific board-grid facing reflection and directional
@@ -213,7 +213,7 @@ directional-sprite remapping.
 - Earlier screen-horizontal decision:
   [ADR-0596](0596-wall-mirrors-reflect-pieces-horizontally-in-screen-space.md)
 - Original live-mirror decision:
-  [ADR-0077](0077-wall-mirrors-are-live-piece-reflective-surfaces.md)
+  [ADR-0621](0621-wall-mirrors-are-live-piece-reflective-surfaces.md)
 - Derived current-state contract: [Board render contract](../board-render-contract.md)
 - Shared primitive rule:
   [ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)

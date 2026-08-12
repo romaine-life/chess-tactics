@@ -4,10 +4,10 @@ date: 2026-07-12
 deciders: Nelson, Codex
 ---
 
-# ADR-0084: Full-body mirrors prove grounded board-axis line of sight
+# ADR-0626: Full-body mirrors prove grounded board-axis line of sight
 
 > **Superseded by
-> [ADR-0085](0085-mirror-surfaces-end-at-the-wall-floor-boundary.md)
+> [ADR-0627](0627-mirror-surfaces-end-at-the-wall-floor-boundary.md)
 > (2026-07-12).** ADR-0085 keeps this grounded board-axis crossing construction and
 > exhaustive alpha proof, but classifies crossings below the generated wall/floor seam
 > as floor-occluded and clips every mirror layer to the real wall-face support. Those
@@ -125,10 +125,10 @@ ADR-0084 adds the missing grounded semantic-coverage gate for full-body claims.
 ## More Information
 
 - Exact reflection and aperture roles:
-  [ADR-0083](0083-mirror-aperture-coverage-is-authored-per-asset.md)
+  [ADR-0625](0625-mirror-aperture-coverage-is-authored-per-asset.md)
 - Exact position, size, and floor contact:
-  [ADR-0082](0082-wall-mirrors-are-exact-one-to-one-game-world-reflections.md)
+  [ADR-0624](0624-wall-mirrors-are-exact-one-to-one-game-world-reflections.md)
 - Board-axis reflection transform:
-  [ADR-0080](0080-wall-mirrors-reflect-along-the-board-grid-wall-normal.md)
+  [ADR-0622](0622-wall-mirrors-reflect-along-the-board-grid-wall-normal.md)
 - Derived contract: [Board render contract](../board-render-contract.md)
 - Generated material rules: [Asset generation contract](../asset-generation-contract.md)

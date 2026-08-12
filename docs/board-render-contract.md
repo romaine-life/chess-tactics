@@ -79,7 +79,7 @@ contact footprint, tangent span, seat anchor, projected back-edge/floor seam, vi
 corridor, and scene-depth semantics. Only the generated visual extent above that seam is
 taller. Runtime consumers, editor palettes, Studio previews, thumbnails, and proofs use
 the same full-height wall assets; no short-wall fallback or compatibility lane remains.
-See [ADR-0086](adr/0086-all-perimeter-walls-use-full-height-geometry.md).
+See [ADR-0628](adr/0628-all-perimeter-walls-use-full-height-geometry.md).
 
 ## Live wall mirrors
 
@@ -94,7 +94,7 @@ Grand Gallery's generated material is face-parity exact: its north frame and gla
 horizontal pixel mirrors of west, with mirrored mount and aperture geometry. This affects only
 the generated material projection; runtime board-grid reflection and facing rules below remain
 unchanged. See
-[ADR-0087](adr/0087-grand-gallery-wall-faces-are-exact-visual-counterparts.md).
+[ADR-0629](adr/0629-grand-gallery-wall-faces-are-exact-visual-counterparts.md).
 
 For a mirror covering `N >= 1` wall cells from integer tangent anchor `a`, the authored
 tangent interval is `I(a, N) = [a - 0.5, a + N - 0.5)`. A west-wall mirror casts inward
@@ -196,19 +196,19 @@ semantic unit identity, palette, and facing so every consumer resolves the same 
 orientation; an opaque physical draw operation alone is insufficient. For example, a
 west-facing piece appears east-facing in a west mirror and remains west-facing in a north
 mirror. See
-[ADR-0085](adr/0085-mirror-surfaces-end-at-the-wall-floor-boundary.md) for the wall-face
+[ADR-0627](adr/0627-mirror-surfaces-end-at-the-wall-floor-boundary.md) for the wall-face
 support mask and current grounded full-silhouette proof;
-[ADR-0084](adr/0084-full-body-mirrors-prove-grounded-board-axis-line-of-sight.md) for the
+[ADR-0626](adr/0626-full-body-mirrors-prove-grounded-board-axis-line-of-sight.md) for the
 superseded all-supported-glass predecessor;
-[ADR-0086](adr/0086-all-perimeter-walls-use-full-height-geometry.md) for the current
+[ADR-0628](adr/0628-all-perimeter-walls-use-full-height-geometry.md) for the current
 full-height wall and authored aperture-coverage rules;
-[ADR-0083](adr/0083-mirror-aperture-coverage-is-authored-per-asset.md) for the superseded
+[ADR-0625](adr/0625-mirror-aperture-coverage-is-authored-per-asset.md) for the superseded
 mirror-specific wall-height lane and retained aperture-role derivation;
-[ADR-0082](adr/0082-wall-mirrors-are-exact-one-to-one-game-world-reflections.md) for the
+[ADR-0624](adr/0624-wall-mirrors-are-exact-one-to-one-game-world-reflections.md) for the
 exact position, size, and floor-contact derivation;
-[ADR-0081](adr/0081-wall-mirrors-reflect-piece-facing-in-board-grid-space.md) for the
+[ADR-0623](adr/0623-wall-mirrors-reflect-piece-facing-in-board-grid-space.md) for the
 carried-forward facing derivation; and
-[ADR-0080](adr/0080-wall-mirrors-reflect-along-the-board-grid-wall-normal.md) for corridor
+[ADR-0622](adr/0622-wall-mirrors-reflect-along-the-board-grid-wall-normal.md) for corridor
 admission and canonical board-grid projection.
 
 ## The grid is logical, not a visual cage

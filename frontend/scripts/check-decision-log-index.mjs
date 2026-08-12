@@ -9,17 +9,17 @@
 // review, because both files are individually well-formed.
 //
 // It had happened 14 times before this check existed. ADR-0518 and ADR-0539 were accepted with
-// no row at all; the whole wall-mirror sequence (ADR-0077 through ADR-0087) plus ADR-0081's TD
-// run library, ADR-0082's named level AI and ADR-0516's hand-placed playable grid were lost the
-// same way, most of them numbered off a stale `main` so their numbers collide with unrelated
-// ADRs. Separately, a terminology pass rewrote ten "relic" ADR links to "lipsanon" without
-// renaming the files, so ten rows pointed at nothing while their ADRs sat there rowless.
+// no row at all; the whole wall-mirror sequence, the TD run library, the named level AI and the
+// hand-placed playable grid were lost the same way, most of them numbered off a stale `main` so
+// their numbers collided with unrelated ADRs. (Those collisions are gone — ADR-0616 renumbered all
+// 23 and `check-adr-numbers.mjs` now fails a new one — so the numbers that story used to name have
+// moved, and it is told without them.) Separately, a terminology pass rewrote ten "relic" ADR links
+// to "lipsanon" without renaming the files, so ten rows pointed at nothing while their ADRs sat
+// there rowless.
 //
-// Keyed by FILENAME, not by number, because a number is not reliably unique yet: collisions from
-// that same stale-`main` cause are still being drained. This check is deliberately indifferent to
-// that — a row's job is to index a FILE. Whether the number itself identifies one decision is
-// `check-adr-numbers.mjs`, which holds the remaining collisions as a shrinking worklist; sharing a
-// number is no longer treated as legitimate, only as debt that has not been paid off.
+// Still keyed by FILENAME, not by number, and that is not redundancy: this check answers "is every
+// decision INDEXED", which is a question about files, and it must keep working on a tree whose
+// numbering is mid-repair. Whether a number identifies one decision is `check-adr-numbers.mjs`.
 //
 // Deliberately NOT checked: numeric ordering. The 0050-0064 stretch has been out of order since
 // long before this guard, and reordering accepted rows is a separate decision.

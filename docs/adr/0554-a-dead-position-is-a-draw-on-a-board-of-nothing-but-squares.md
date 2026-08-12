@@ -4,7 +4,7 @@ date: 2026-08-09
 deciders: owner (Nelson) + Claude
 refines:
   - "[ADR-0072](0072-castling-and-chess-draw-rules-as-authored-events.md)"
-  - "[ADR-0064](0064-victory-conditions-two-list-model.md)"
+  - "[ADR-0617](0617-victory-conditions-two-list-model.md)"
 ---
 
 # ADR-0554: A dead position is a draw on a board of nothing but squares

@@ -4,7 +4,7 @@ date: 2026-08-10
 deciders: owner (Nelson) + Claude
 refines:
   - "[ADR-0369](0369-one-cold-load-ladder-builds-background-then-chrome-then-scene.md)"
-  - "[ADR-0558](0558-a-menu-language-rail-tab-is-the-primitive-or-it-fails-the-build.md)"
+  - "[ADR-0633](0633-a-menu-language-rail-tab-is-the-primitive-or-it-fails-the-build.md)"
 ---
 
 # ADR-0561: A rail tab marks what it opened, on the press

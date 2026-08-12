@@ -669,7 +669,7 @@ describe('Run chrome hierarchy', () => {
   });
 
   /**
-   * ADR-0589. The army roster is the Prosopography, so the Strategikon's adoption is the Run Army
+   * ADR-0636. The army roster is the Prosopography, so the Strategikon's adoption is the Run Army
    * view's too — they are one component. The ledger is the structural box and every row in it is a
    * control, so the two take OPPOSITE materials: a row that IS the button wears the oak (the shape
    * SectionBox's `press` member already ships), phased from the roster index the renderer is walking

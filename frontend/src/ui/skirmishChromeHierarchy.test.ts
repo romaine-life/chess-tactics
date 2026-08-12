@@ -18,7 +18,7 @@ const runBattleUndoButton = readFileSync(new URL('./RunBattleUndoButton.tsx', im
 const runArmyWorkspace = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
 const chromeUnitRegistry = readFileSync(new URL('./chromeUnitRegistry.ts', import.meta.url), 'utf8');
 // The command card is one shared component, painted by the Controls tab and by the Studio
-// review that composes its marks (ADR-0586). Its assertions follow it there.
+// review that composes its marks (ADR-0635). Its assertions follow it there.
 const commandCard = readFileSync(new URL('./shared/CommandCard.tsx', import.meta.url), 'utf8');
 const chromeSeatGrid = readFileSync(new URL('./shared/ChromeSeatGrid.tsx', import.meta.url), 'utf8');
 
@@ -240,7 +240,7 @@ describe('Skirmish chrome hierarchy', () => {
     expect(skirmishHud).toContain('style: leafSurfacePhase(index),');
     expect(skirmishHud).toContain('COMMAND_CARD_KEY_ROWS.flat().map((key) =>');
     // The command card is a divided pad, so its planks are phased by the seat's place in the
-    // DATA by the pad itself — the card states the block, never a per-key offset (ADR-0586).
+    // DATA by the pad itself — the card states the block, never a per-key offset (ADR-0635).
     expect(commandCard).not.toContain('leafSurfacePhase');
     expect(chromeSeatGrid).toContain('leafSurfacePhase(rowIndex * columnCount + columnIndex)');
     expect(stepper).toContain('style={leafSurfacePhase(0)}');
@@ -348,7 +348,7 @@ describe('Skirmish chrome hierarchy', () => {
     expect(chromeBox).not.toMatch(/chromeUnitClassNames\([^)]*shell-controls-head-section/);
     // The card is ONE divided box of compartments, not fifteen framed buttons in a gapped
     // grid: between two marks that shape shows a frame, a strip of panel and another frame,
-    // which is what ChromeSeatGrid exists to replace (ADR-0242/ADR-0586).
+    // which is what ChromeSeatGrid exists to replace (ADR-0242/ADR-0635).
     expect(commandCard).toContain('<ChromeSeatGrid');
     expect(commandCard).not.toMatch(/<ChromeButton\b|app-header-button/);
     // A compartment is a cap and a mark. The command's name lives in the tip, not in a label

@@ -152,7 +152,7 @@ square and tool square sizes cannot drift back in through local CSS.
 
 - Builds on [ADR-0081](0081-empty-control-panel-frames-are-overlays-not-layout-borders.md):
   the outer rail remains an overlay-only transparent frame.
-- Builds on [ADR-0063](0063-section-dividers-are-a-1d-bar-primitive-teeing-into-the-rail.md):
+- Builds on [ADR-0618](0618-section-dividers-are-a-1d-bar-primitive-teeing-into-the-rail.md):
   dividers are repeatable bar primitives tied to a host frame, not bespoke box
   chrome.
 - Related: [ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)

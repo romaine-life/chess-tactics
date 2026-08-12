@@ -62,7 +62,7 @@ ledger is the first dense table-shaped use of that existing system.
 
 - Partially supersedes
   [ADR-0239](0239-run-army-rows-use-a-divided-portrait-bay-and-explicit-type-hierarchy.md).
-- Applies [ADR-0063](0063-section-dividers-are-a-1d-bar-primitive-teeing-into-the-rail.md),
+- Applies [ADR-0618](0618-section-dividers-are-a-1d-bar-primitive-teeing-into-the-rail.md),
   [ADR-0092](0092-dividers-inherit-their-host-chrome-role.md), and
   [ADR-0093](0093-chrome-rails-own-alignment-atoms-use-clip-aprons.md).
 - Upholds [ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md).

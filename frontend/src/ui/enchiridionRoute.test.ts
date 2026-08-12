@@ -131,7 +131,7 @@ describe('card gallery filter addresses', () => {
   });
 
   /**
-   * ADR-0589. The lipsana browse layout is part of the address for the reason the card filters are:
+   * ADR-0636. The lipsana browse layout is part of the address for the reason the card filters are:
    * a layout is a thing worth linking someone to, and held as component state the grouped case could
    * only be reached by pressing a tab — so no handoff link could put a reader on it.
    */

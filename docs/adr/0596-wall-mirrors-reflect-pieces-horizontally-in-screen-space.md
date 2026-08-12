@@ -151,7 +151,7 @@ retired.
 
 ## More Information
 
-- Superseded decision: [ADR-0077](0077-wall-mirrors-are-live-piece-reflective-surfaces.md)
+- Superseded decision: [ADR-0621](0621-wall-mirrors-are-live-piece-reflective-surfaces.md)
 - Derived current-state contract: [Board render contract](../board-render-contract.md)
 - Shared primitive rule:
   [ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)

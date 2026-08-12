@@ -3,7 +3,7 @@ status: accepted
 date: 2026-08-10
 deciders: owner (Nelson) + Claude
 refines:
-  - "[ADR-0558](0558-a-menu-language-rail-tab-is-the-primitive-or-it-fails-the-build.md)"
+  - "[ADR-0633](0633-a-menu-language-rail-tab-is-the-primitive-or-it-fails-the-build.md)"
   - "[ADR-0026](0026-ui-kit-icon-canvas.md)"
 ---
 

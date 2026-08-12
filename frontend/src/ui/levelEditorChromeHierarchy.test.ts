@@ -320,7 +320,7 @@ describe('Level Editor chrome hierarchy', () => {
 
   it('seats both facing pads in one divided box instead of framing every key', () => {
     // A key is a COMPARTMENT of the pad, so it must not bring a frame of its own: the unit is what
-    // brings one, and the box already drew one around all nine (ADR-0570). Neither pad may state a
+    // brings one, and the box already drew one around all nine (ADR-0634). Neither pad may state a
     // track, a gap or a compartment size either — the grid derives all of it from one opening.
     for (const source of [levelEditor, studioBoard]) {
       expect(source).toContain('<ChromeSeatGrid');
