@@ -96,6 +96,12 @@ Strategikon marks now ride that same seat rather than being pinned to the top of
 stopped tracking the name the moment the field changed height, which is exactly what this change
 did.
 
+The marks also take the same INLINE clearance the name takes, measured from the visible field
+rather than from the panel box: the content inset alone is not that, because no rail is drawn at
+the viewport edge, so an equal 31px inset left the name 9px inside the field and the marks 31px
+inside it. `--shell-controls-name-clearance` is the inset less whatever frame stands in front of
+it, so the title row is padded the same at both ends whatever rail is or is not drawn there.
+
 Measured against the app bar, that centring is the house seating and not a departure from it. The
 bar's brand lockup sits low in its field (copy at 13.2/3.2 slack in a 60px field, the mark hanging
 2px past the rule) because 54px of lockup in a 60px field has almost no slack to spend — not

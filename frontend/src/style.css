@@ -6242,6 +6242,15 @@ body.loading-bootstrap .app-startup-status {
     max(0px, calc(var(--le-chrome-outer-rail-w, 24px) - var(--le-outer-fill-box-left, 0px)));
   --shell-controls-frame-cover-end:
     max(0px, calc(var(--le-chrome-outer-rail-w, 24px) - var(--le-outer-fill-box-right, 0px)));
+  /* What the panel's NAME clears the visible field by — its content inset less the frame standing
+     in front of it. The marks at the other end of the title take the same clearance from their own
+     edge, so the row is padded the same at both ends whatever rail is or is not drawn there. The
+     inset alone is not that: at the viewport edge no rail is drawn, so an equal inset left the name
+     9px inside the field and the marks 31px inside it. */
+  --shell-controls-name-clearance:
+    max(0px, calc(var(--le-control-content-inset) - var(--shell-controls-frame-cover-start)));
+  --shell-controls-title-actions-inset:
+    calc(var(--shell-controls-frame-cover-end) + var(--shell-controls-name-clearance));
 }
 
 /* The titled shell is the one full-bleed contents exception: its title belongs
@@ -6265,7 +6274,10 @@ body.loading-bootstrap .app-startup-status {
   inset-block:
     calc(var(--le-outer-fill-box-top, 0px) + var(--le-control-rail-w, 12px))
     0;
-  inset-inline-end: calc(var(--ds-space-3) + var(--le-panel-title-align-extra-x, 0px) + var(--le-control-content-inset));
+  inset-inline-end: var(
+    --shell-controls-title-actions-inset,
+    calc(var(--ds-space-3) + var(--le-panel-title-align-extra-x, 0px) + var(--le-control-content-inset))
+  );
   margin-inline: 0;
   position: absolute;
   z-index: 3;
@@ -25915,17 +25927,22 @@ button.tileset-relationship-cell {
 }
 
 .skirmish-hud-titlebar > .kit-panel-title {
-  /* Five 24px marks and four 4px gaps. */
-  padding-inline-end: calc(136px + var(--ds-space-3) + var(--le-control-content-inset));
+  /* Five 24px marks and four 4px gaps, held off the row's own right clearance. */
+  padding-inline-end: calc(
+    136px + var(--ds-space-3)
+    + var(--shell-controls-title-actions-inset, var(--le-control-content-inset))
+  );
 }
 
 .skirmish-screen .skirmish-hud-titlebar > .outer-chrome-header-title-actions {
-  /* Seat the mark row on the same right boundary as every control below it. The
-     seat below bleeds each glyph's canvas margin back out, so a mark's footprint is
-     its own 24px hit target rather than whatever margin its art happened to bake in
-     — no hand-measured nudge, and the last mark's ink stops 1px inside the boundary
-     because every mark in the row is a 22px seat centred in that target. */
-  inset-inline-end: var(--le-control-content-inset);
+  /* The mark row clears the panel's visible field by exactly what the NAME at the other end of
+     this title clears it by. The content inset alone is not that: no rail is drawn at the viewport
+     edge, so an equal inset put the name 9px inside the field and the marks 31px inside it. The
+     seat below bleeds each glyph's canvas margin back out, so a mark's footprint is its own 24px
+     hit target rather than whatever margin its art happened to bake in — no hand-measured nudge,
+     and the last mark's ink stops 1px inside the boundary because every mark in the row is a 22px
+     seat centred in that target. */
+  inset-inline-end: var(--shell-controls-title-actions-inset, var(--le-control-content-inset));
 }
 
 .skirmish-hud-title-action {
