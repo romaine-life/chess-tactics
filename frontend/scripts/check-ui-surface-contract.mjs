@@ -124,6 +124,16 @@ const APPROVED_FRAMELESS_SURFACE_RESETS = new Map([
     'border-radius:0',
     'box-shadow:none',
   ])],
+  // The Controls head is one divided block and each tab is a COMPARTMENT of it: the panel's own
+  // frame is the strip's outer edge and the block's rail is the edge each tab shares with the one
+  // beside it. So these declarations remove the shell's native button chrome and paint nothing in
+  // its place. Same category as the three resets above.
+  ['src/style.css|.shell-controls-head-section', new Set([
+    'background:none',
+    'border:0',
+    'border-radius:0',
+    'box-shadow:none',
+  ])],
 ]);
 
 function normalize(value) {

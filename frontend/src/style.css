@@ -5433,47 +5433,17 @@ body.loading-bootstrap .app-startup-status {
 }
 
 /* Tabbed HUD (ADR-0006 in-game density): one section visible at a time so the
-   growing command surface stays scannable. Tabs + bottom actions are pinned; the
-   active panel takes the remaining height and scrolls on its own. */
-.skirmish-hud-tabs {
-  display: flex;
-  flex: none;
-  flex-wrap: wrap;
-  gap: var(--ds-inline-tight);
-}
-
+   growing command surface stays scannable. The tab strip is the Controls head's own
+   divided block — five compartments of one box, ruled by the panel's rails — so the
+   tabs declare nothing about their frame, spacing, or width here. Bottom actions are
+   pinned; the active panel takes the remaining height and scrolls on its own. */
 .skirmish-hud-tab {
-  appearance: none;
-  align-items: center;
-  display: flex;
-  justify-content: center;
-  /* Icon-only: equal-share basis (0) keeps all five on ONE compact row instead of
-     stretching to a text width and wrapping to a second row. */
-  flex: 1 1 0;
-  color: var(--skirmish-muted);
-  cursor: pointer;
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
   font-size: var(--ds-text-sm);
   image-rendering: pixelated;
   letter-spacing: 1px;
   line-height: 1;
-  min-block-size: 0;
-  padding: 2px;
   text-transform: uppercase;
-}
-
-.skirmish-hud-tab:hover {
-  color: #f4fbff;
-}
-
-.skirmish-hud-tab:focus-visible {
-  color: #f4fbff;
-  outline: 2px solid rgba(101, 184, 255, .72);
-  outline-offset: 2px;
-}
-
-.skirmish-hud-tab.active {
-  color: #f3fbff;
 }
 
 /* Icon-based tab glyphs — reused curated kit icons (ADR-0011/0032), full-colour on
@@ -6157,8 +6127,138 @@ body.loading-bootstrap .app-startup-status {
   padding-block-start: 0;
 }
 
-:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .le-outer-panel > .le-outer-panel-content--titled > .outer-chrome-header {
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .le-outer-panel > .le-outer-panel-content--titled > :is(.outer-chrome-header, .shell-controls-head) {
   margin-inline: calc(-1 * var(--le-control-content-inset));
+}
+
+/* The Controls head: the panel's name and the strip of compartments under it, as ONE divided
+   block (ShellControlsPanel), built like the title bar's invariant cluster — inner-box chrome,
+   one rail on every internal boundary, and each member a compartment of the block. It runs the
+   full width of the panel, so its left and right edges are the panel's OWN side rails: the block
+   draws no frame there, and the rails that reach them simply run under them. Nothing here places
+   a rail; the block's topology does, from its grid lines. */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .chrome-divided-grid.shell-controls-head {
+  --shell-controls-head-seat: var(--le-inner-square, 38px);
+  --shell-controls-head-rail-half: calc(var(--le-chrome-inner-rail-w, 7px) / 2);
+  /* The block's rails reach its own edges and stop: the panel's frame is what they run into, and
+     it is already there. Without this they bleed a rail-width past the panel and paint on the
+     board beside it. */
+  --chrome-divided-grid-reach: 0px;
+  display: block;
+  /* A pinned head in the panel's column, like every other fixed section: it is not the thing that
+     gives way when the body is long. */
+  flex: none;
+  /* An unframed block clips itself, because one that IS a shell workspace would otherwise drop its
+     rails onto the title bar and the Controls rail around it. This block's boundary is its host's
+     FRAME, and the only thing outside its box is the closing rail on its bottom edge — which
+     straddles that edge, as a rail on a boundary does, and was coming out half-height with its
+     four caps cut through the middle. What it overflows onto is the panel's own field, a few
+     pixels into the gutter above the body. Nothing bleeds inline: the reach above is zero. */
+  overflow: visible;
+}
+
+/* The name spans the whole block and carries no compartment of its own, so its row contributes no
+   box: the title element inside it already owns the band's height and inline padding. */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-title-row {
+  display: block;
+  min-inline-size: 0;
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-title-row > .outer-chrome-header {
+  margin-inline: 0;
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head .skirmish-card h2.kit-panel-title {
+  /* The rail under the name is the block's own boundary, so the name stacks straight onto it —
+     the stack gap here would only push the seam down into bare marble. */
+  margin-block-end: 0;
+}
+
+/* The strip is one seat tall plus what the rails above and below take back: each is drawn ON its
+   boundary and covers half its width from the row. The same half comes off the seats as padding,
+   so a mark centres in the opening rather than in the cell — the inline halves are declared here
+   for the same reason, matching the tracks ShellControlsHead lays (ADR-0569). */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-strip {
+  block-size: calc(var(--shell-controls-head-seat) + var(--le-chrome-inner-rail-w, 7px));
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-strip > * {
+  padding-block: var(--shell-controls-head-rail-half);
+}
+
+/* A single undivided compartment holds other people's controls rather than being one. It has a
+   rail above it and nothing below, and it keeps the content boundary every other control in the
+   panel sits on. */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-single > .shell-controls-head-section {
+  block-size: auto;
+  padding-block: var(--shell-controls-head-rail-half) 0;
+  padding-inline: var(--le-control-content-inset);
+}
+
+/* The head's foot: a boundary, not a row. Its rail is the block's bottom edge and the caps on it
+   are where the strip's verticals end. */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-foot {
+  block-size: 0;
+  min-inline-size: 0;
+}
+
+/* One compartment of the Controls head's block. It IS the control — the rails on either side are
+   already its edges — so it paints no frame, fills its cell, and wears the leaf oak the panel
+   gives every trigger. Its native-button reset is the same one .chrome-seat and
+   .section-box-member-verb make, so check-ui-surface-contract.mjs carries it as an approved
+   frameless reset keyed on the BARE selector — which is why that rule follows this one with no
+   comment directly above it, and why the reset is split out from the layout at all. */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-section {
+  align-items: center;
+  block-size: 100%;
+  box-sizing: border-box;
+  color: var(--skirmish-muted);
+  display: flex;
+  justify-content: center;
+  min-inline-size: 0;
+  position: relative;
+}
+
+.shell-controls-head-section {
+  appearance: none;
+  -webkit-appearance: none;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) button.shell-controls-head-section {
+  cursor: pointer;
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-section:is(:hover, :focus-visible, .active) {
+  color: #f4fbff;
+}
+
+/* Which compartment is CURRENT, carried by its content. A compartment has no frame of its own to
+   light — the rails on either side belong to the block, and the block lights nothing — so the mark
+   inside it holds the whole state, the same way the title bar's music seat and the Strategikon
+   marks do. Selecting a tab used to swap a kit button frame; there is no such frame here, and
+   without this every section looked equally current. */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) button.shell-controls-head-section > * {
+  filter: grayscale(.55) brightness(.72);
+  transition:
+    filter var(--ds-duration-fast) var(--ds-ease-standard),
+    opacity var(--ds-duration-fast) var(--ds-ease-standard);
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) button.shell-controls-head-section:is(:hover, :focus-visible) > * {
+  filter: grayscale(.2) brightness(.92);
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) button.shell-controls-head-section.active > * {
+  filter: none;
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-section:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: -4px;
 }
 
 /* No scrollbar-gutter here: this HUD is overflow:hidden (never scrolls), so a stable
@@ -6166,6 +6266,28 @@ body.loading-bootstrap .app-startup-status {
    lopsided (14px frame on the left, 14px + 10px gutter on the right). */
 .level-editor-screen .skirmish-hud {
   grid-area: rail;
+}
+
+/* How much of the panel's own frame rail sits ON TOP of a full-bleed child. The head block runs
+   edge to edge so its rails can reach that frame, which means the frame covers the head's first
+   and last compartments and nothing else — the outer compartments were 42px of visible oak beside
+   64px ones until the tracks were told about it. Measured from the rail the panel actually draws,
+   not from the box: the fill is held a little inside the panel so the rail can sit over its edge,
+   and that inset is rail the compartment keeps. */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) [data-shell-controls-panel] {
+  --shell-controls-frame-cover-start:
+    max(0px, calc(var(--le-chrome-outer-rail-w, 24px) - var(--le-outer-fill-box-left, 0px)));
+  --shell-controls-frame-cover-end:
+    max(0px, calc(var(--le-chrome-outer-rail-w, 24px) - var(--le-outer-fill-box-right, 0px)));
+  /* What the panel's NAME clears the visible field by — its content inset less the frame standing
+     in front of it. The marks at the other end of the title take the same clearance from their own
+     edge, so the row is padded the same at both ends whatever rail is or is not drawn there. The
+     inset alone is not that: at the viewport edge no rail is drawn, so an equal inset left the name
+     9px inside the field and the marks 31px inside it. */
+  --shell-controls-name-clearance:
+    max(0px, calc(var(--le-control-content-inset) - var(--shell-controls-frame-cover-start)));
+  --shell-controls-title-actions-inset:
+    calc(var(--shell-controls-frame-cover-end) + var(--shell-controls-name-clearance));
 }
 
 /* The titled shell is the one full-bleed contents exception: its title belongs
@@ -6179,11 +6301,20 @@ body.loading-bootstrap .app-startup-status {
   position: relative;
 }
 
+/* The marks ride the title's own seat: the band's field, measured from the bottom of the frame
+   rail above it. Pinned to the TOP of that field instead, they stopped tracking the name the
+   moment the field changed height — which is exactly what happened when the band's bolted strip
+   came off and the name re-centred in the taller field it left behind. */
 :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .outer-chrome-header > .outer-chrome-header-title-actions {
   align-items: center;
   display: flex;
-  inset-block-start: calc(var(--le-outer-fill-box-top, 0px) + var(--le-control-rail-w, 12px));
-  inset-inline-end: calc(var(--ds-space-3) + var(--le-panel-title-align-extra-x, 0px) + var(--le-control-content-inset));
+  inset-block:
+    calc(var(--le-outer-fill-box-top, 0px) + var(--le-control-rail-w, 12px))
+    0;
+  inset-inline-end: var(
+    --shell-controls-title-actions-inset,
+    calc(var(--ds-space-3) + var(--le-panel-title-align-extra-x, 0px) + var(--le-control-content-inset))
+  );
   margin-inline: 0;
   position: absolute;
   z-index: 3;
@@ -6261,19 +6392,26 @@ body.loading-bootstrap .app-startup-status {
 .level-editor-screen .skirmish-card h2 { color: #f1cf86; letter-spacing: 0; }
 .level-editor-screen .skirmish-card h2.le-card-subhead { margin-top: var(--ds-gutter); }
 
-/* First non-app-bar use of the title-bar visual language: a compact panel title
-   strip. It borrows the title font + forged nailhead rule, but its height is a
-   SUB-header proportion of the app bar (not a second full title bar). The text
-   keeps normal tracking; the chrome carries the connection to the global bar. */
+/* First non-app-bar use of the title-bar visual language: a compact panel title strip. It
+   borrows the title font and a SUB-header proportion of the app bar's height (not a second full
+   title bar). The text keeps normal tracking.
+
+   It declares NO surface of its own. A panel name is not pressable, and under ADR-0433 the wood
+   is the material of things that are — this band was the last unpressable oak in the app, and
+   reading as a control is exactly what that promised. So the band is a field of the panel it
+   names, and the panel's own installed marble runs through it unbroken. A second surface layer
+   here could not do that: it would restart the stone at the band's own origin and seam against
+   the body below.
+
+   What used to close it was a bolted forged strip baked into this element — an earlier
+   iteration's private rule, from before this panel had section breaks. The head is a divided
+   block now, so the line under the name is the block's own rail, drawn by the same primitive as
+   every other break in the panel and capped where it meets the frame. See ShellControlsPanel. */
 :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .skirmish-card h2.kit-panel-title {
-  --kit-panel-title-rule-h: 10px;
   --kit-panel-title-base-frame-w: 12px;
   --kit-panel-title-base-h: clamp(44px, calc(var(--app-header-h) * .58), 50px);
   --kit-panel-title-visible-h: calc(var(--kit-panel-title-base-h) - var(--kit-panel-title-base-frame-w));
   align-items: flex-start;
-  background:
-    var(--media-ui-titlebar-band-forged-png) left bottom / auto var(--kit-panel-title-rule-h) repeat-x,
-    var(--media-ui-surfaces-hybrid-wood-oak-png) 0 0 / 1024px repeat fixed;
   /* The outer frame is painted above this title. Keep the visible title field
      measured from the bottom of that frame, so thicker outer chrome does not
      eat the title's usable vertical space. */
@@ -6295,7 +6433,7 @@ body.loading-bootstrap .app-startup-status {
   padding:
     0
     calc(var(--ds-space-3) + var(--le-panel-title-align-extra-x, 0px) + var(--le-control-content-inset) - var(--le-outer-fill-box-right, 0px))
-    var(--kit-panel-title-rule-h)
+    0
     calc(var(--ds-space-3) + var(--le-panel-title-align-extra-x, 0px) + var(--le-control-content-inset) - var(--le-outer-fill-box-left, 0px));
   text-shadow: 0 2px 0 #02070b;
   text-transform: uppercase;
@@ -6303,7 +6441,7 @@ body.loading-bootstrap .app-startup-status {
 
 :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .skirmish-card h2.kit-panel-title .kit-panel-title-text {
   display: inline-block;
-  margin-block-start: calc(var(--le-control-rail-w, var(--kit-panel-title-base-frame-w)) + (var(--kit-panel-title-visible-h) - var(--kit-panel-title-rule-h) - 1em) / 2);
+  margin-block-start: calc(var(--le-control-rail-w, var(--kit-panel-title-base-frame-w)) + (var(--kit-panel-title-visible-h) - 1em) / 2);
   transform: translate(
     var(--le-panel-title-effective-text-x, var(--le-panel-title-text-x, 0px)),
     var(--le-panel-title-effective-text-y, var(--le-panel-title-text-y, 0px))
@@ -18185,6 +18323,8 @@ button.tileset-relationship-cell {
    text and marks stay exactly where they were while its wood reaches the edge. */
 :root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel] {
   --le-outer-fill-box-right: 0px;
+  /* No rail is drawn on this edge, so nothing covers what reaches it. */
+  --shell-controls-frame-cover-end: 0px;
 }
 
 /* Persistent app-shell title bar (src/ui/shell/AppTitleBar) — rendered once by
@@ -25759,17 +25899,22 @@ button.tileset-relationship-cell {
 }
 
 .skirmish-hud-titlebar > .kit-panel-title {
-  /* Five 24px marks and four 4px gaps. */
-  padding-inline-end: calc(136px + var(--ds-space-3) + var(--le-control-content-inset));
+  /* Five 24px marks and four 4px gaps, held off the row's own right clearance. */
+  padding-inline-end: calc(
+    136px + var(--ds-space-3)
+    + var(--shell-controls-title-actions-inset, var(--le-control-content-inset))
+  );
 }
 
 .skirmish-screen .skirmish-hud-titlebar > .outer-chrome-header-title-actions {
-  /* Seat the mark row on the same right boundary as every control below it. The
-     seat below bleeds each glyph's canvas margin back out, so a mark's footprint is
-     its own 24px hit target rather than whatever margin its art happened to bake in
-     — no hand-measured nudge, and the last mark's ink stops 1px inside the boundary
-     because every mark in the row is a 22px seat centred in that target. */
-  inset-inline-end: var(--le-control-content-inset);
+  /* The mark row clears the panel's visible field by exactly what the NAME at the other end of
+     this title clears it by. The content inset alone is not that: no rail is drawn at the viewport
+     edge, so an equal inset put the name 9px inside the field and the marks 31px inside it. The
+     seat below bleeds each glyph's canvas margin back out, so a mark's footprint is its own 24px
+     hit target rather than whatever margin its art happened to bake in — no hand-measured nudge,
+     and the last mark's ink stops 1px inside the boundary because every mark in the row is a 22px
+     seat centred in that target. */
+  inset-inline-end: var(--shell-controls-title-actions-inset, var(--le-control-content-inset));
 }
 
 .skirmish-hud-title-action {
