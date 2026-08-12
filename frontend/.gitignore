@@ -21,3 +21,4 @@ scripts/__pycache__/
 # frontend stage, copied into the runtime image; never committed).
 trainer-bundle/
 tmp-forge-titlebar/
+tmp-card-art-v3/

@@ -200,9 +200,23 @@ describe('formation card catalog', () => {
       .sort();
     expect(signatures).toEqual(['pawn@0,0|queen@0,1']);
     expect(queenPawnCards.every((card) => card.rarity === 'rare')).toBe(true);
-    // Art is keyed to (footprint, roster), so Queen and Pawn owns its own illustration
-    // rather than borrowing the lone Queen's.
-    expect(queenPawnCards.every((card) => card.artId === '0001-pq')).toBe(true);
+    // ADR-0579: a card dealable under the default rules owns its illustration, keyed to its own
+    // id rather than to the (footprint, roster) family it shares with re-seatings of itself.
+    expect(queenPawnCards.every((card) => card.artId === card.id)).toBe(true);
+  });
+
+  it('gives per-card art to the default-rules deck and keeps family art for everything wider', () => {
+    const dealable = RUN_CARD_DECK.filter((card) => cardAllowedByRules(card, DEFAULT_RUN_RULES));
+    const wider = RUN_CARD_DECK.filter((card) => !cardAllowedByRules(card, DEFAULT_RUN_RULES));
+    // Every card the market can actually deal has a picture of its own, which is what ends the
+    // shared-illustration duplication ADR-0520 shipped.
+    expect(dealable).toHaveLength(69);
+    expect(dealable.every((card) => card.artId === card.id)).toBe(true);
+    expect(new Set(dealable.map((card) => card.artId)).size).toBe(dealable.length);
+    // And nothing outside that deck loses the art it already resolves to: per-card art is only
+    // affordable for a bounded deck, so the wider catalog keeps the family key.
+    expect(wider.length).toBeGreaterThan(0);
+    expect(wider.every((card) => /^[0-9]+-[pkbrq]+$/.test(card.artId ?? ''))).toBe(true);
   });
 
   it('gives every card one coordinate per unit and keeps coordinates unique', () => {
