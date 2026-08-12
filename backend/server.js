@@ -18752,6 +18752,8 @@ async function dbReadMediaCatalog({
   includeEvents = false,
   eventBeforeId = null,
   eventLimit = 200,
+  /** Restrict `versions` to these slots, or null for every version in the catalog. */
+  versionSlots = null,
   queryable = null,
 } = {}) {
   let client = null;
@@ -18834,13 +18836,20 @@ async function dbReadMediaCatalog({
       }),
     };
     if (includeVersions) {
+      // `versionSlots` narrows the version list to the slots a caller is actually reviewing.
+      // Every version row carries its metadata, provenance and evidence, so the unfiltered
+      // list is the whole weight of this response — a review page that wants one seat's
+      // candidates was downloading the catalog's entire history to find them. Null keeps the
+      // old behaviour for every caller that wants everything.
       const { rows } = await db.query(
       `SELECT v.id, v.slot, v.source_path, v.domain, v.role, v.label, v.status,
               v.blob_sha256, v.metadata, v.provenance, v.native_evidence,
               v.review_evidence, v.row_revision, v.created_at, v.updated_at, v.updated_by,
               b.media_type, b.byte_length, b.width, b.height
          FROM media_versions v LEFT JOIN media_blobs b ON b.sha256 = v.blob_sha256
+        WHERE ($1::text[] IS NULL OR v.slot = ANY($1::text[]))
         ORDER BY v.updated_at DESC, v.id`,
+      [versionSlots],
     );
       body.versions = rows.map((row) => ({
       id: String(row.id),
@@ -20394,12 +20403,26 @@ app.get('/api/admin/media-assets', async (req, res) => {
       res.status(400).json({ error: 'invalid_media_event_cursor' });
       return;
     }
+    // `?slot=` (repeatable, or one comma-separated list) narrows the version list to the slots
+    // the caller is reviewing. Omitting it returns every version, which is what the surfaces
+    // that browse the whole catalog still ask for.
+    const rawSlots = [req.query.slot, req.query.slots]
+      .flatMap((value) => (Array.isArray(value) ? value : [value]))
+      .filter((value) => typeof value === 'string')
+      .flatMap((value) => value.split(','))
+      .map((value) => value.trim())
+      .filter(Boolean);
+    if (rawSlots.length > 64) {
+      res.status(400).json({ error: 'invalid_media_slot_filter' });
+      return;
+    }
     res.setHeader('Cache-Control', 'no-store');
     res.status(200).json(await dbReadMediaCatalog({
       includeVersions: true,
       includeEvents: true,
       eventBeforeId,
       eventLimit,
+      versionSlots: rawSlots.length ? rawSlots : null,
     }));
   } catch (error) {
     dbUnavailable(res, 'media admin catalog read failed', error, 'media_catalog_unavailable');

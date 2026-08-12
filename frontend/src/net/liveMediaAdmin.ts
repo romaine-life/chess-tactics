@@ -77,8 +77,18 @@ async function jsonResponse<T>(action: string, response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function fetchAdminLiveMediaCatalog(): Promise<AdminLiveMediaCatalog> {
-  const response = await fetch('/api/admin/media-assets', {
+/**
+ * The admin catalog. `slots` narrows the VERSION list to the slots the caller reviews; without
+ * it the response carries every version in the catalog, which is most of its weight — six
+ * thousand rows and 15 MB at the time this argument was added, for a page that wanted sixteen
+ * of them. A review surface that knows its slots should say so; a surface that browses the
+ * whole catalog omits it and is unaffected.
+ */
+export async function fetchAdminLiveMediaCatalog(
+  slots?: readonly string[],
+): Promise<AdminLiveMediaCatalog> {
+  const query = slots?.length ? `?slot=${encodeURIComponent(slots.join(','))}` : '';
+  const response = await fetch(`/api/admin/media-assets${query}`, {
     cache: 'no-store',
     credentials: 'include',
   });
