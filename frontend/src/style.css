@@ -6056,13 +6056,24 @@ body.loading-bootstrap .app-startup-status {
    full width of the panel, so its left and right edges are the panel's OWN side rails: the block
    draws no frame there, and the rails that reach them simply run under them. Nothing here places
    a rail; the block's topology does, from its grid lines. */
-:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head {
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .chrome-divided-grid.shell-controls-head {
   --shell-controls-head-seat: var(--le-inner-square, 38px);
   --shell-controls-head-rail-half: calc(var(--le-chrome-inner-rail-w, 7px) / 2);
+  /* The block's rails reach its own edges and stop: the panel's frame is what they run into, and
+     it is already there. Without this they bleed a rail-width past the panel and paint on the
+     board beside it. */
+  --chrome-divided-grid-reach: 0px;
   display: block;
   /* A pinned head in the panel's column, like every other fixed section: it is not the thing that
      gives way when the body is long. */
   flex: none;
+  /* An unframed block clips itself, because one that IS a shell workspace would otherwise drop its
+     rails onto the title bar and the Controls rail around it. This block's boundary is its host's
+     FRAME, and the only thing outside its box is the closing rail on its bottom edge — which
+     straddles that edge, as a rail on a boundary does, and was coming out half-height with its
+     four caps cut through the middle. What it overflows onto is the panel's own field, a few
+     pixels into the gutter above the body. Nothing bleeds inline: the reach above is zero. */
+  overflow: visible;
 }
 
 /* The name spans the whole block and carries no compartment of its own, so its row contributes no

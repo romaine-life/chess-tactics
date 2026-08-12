@@ -47,6 +47,14 @@ right edges are the panel's OWN side rails; drawing a second pair a rail-width i
 put a strip of marble between two frames. The rails that reach those edges simply run under them,
 which is also why the block stays below the panel's frame in the paint order rather than above it.
 
+An unframed grid clips itself, because one that IS a shell workspace would otherwise drop its rails
+onto the title bar and the Controls rail around it. That is the wrong answer for a block whose
+boundary is its host's FRAME: a rail on a boundary straddles it, so the closing rail came out
+half-height with its four caps cut through the middle. The block therefore does not clip, and pays
+for it by not bleeding — its `--chrome-divided-grid-reach` is zero, so the only thing outside its
+box is that closing rail, a few pixels into the gutter above the panel body. Left at the default
+reach, the rails would have painted a rail-width past the panel and onto the board beside it.
+
 **A compartment is not a registered chrome unit.** The unit is what brings the frame, and the block
 has already drawn every edge this thing has. A pressable compartment wears the leaf oak, because a
 trigger wears the oak wherever it sits (ADR-0433); one that merely holds other people's controls
