@@ -10100,8 +10100,10 @@ body.loading-bootstrap .app-startup-status {
   .account { justify-content: space-between; width: 100%; }
   
 
-body { font-size: 17px; }
-  h1 { font-size: .82rem; }
+  /* 16px is the house font's floor, not a starting point to shrink from — a narrow
+     viewport does not give the face a smaller size to land on. Was 17px/.82rem. */
+  body { font-size: var(--ds-text-md); }
+  h1 { font-size: var(--ds-text-md); }
   
 
 .lobby-seats { grid-template-columns: 1fr; }
