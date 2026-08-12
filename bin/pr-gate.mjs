@@ -120,14 +120,34 @@ export function mergeStateVerdict(pr) {
 }
 
 /**
+ * True while GitHub still has check suites that may produce more check runs.
+ *
+ * `gh pr checks` reports the runs that EXIST RIGHT NOW, and a workflow's runs appear only once
+ * its suite starts dispatching them. So "every check I can see has passed" is not "CI passed" —
+ * during the first seconds after a push it is routinely "the one check that registered so far
+ * has passed", and this tool answered READY to that. Observed on chess-tactics#924: READY with
+ * 1 of 3 checks, the other two still queued.
+ *
+ * A suite that is `queued` or `in_progress` is the authoritative signal that more may be coming.
+ * `null` means the suites could not be read, which is treated as settled rather than blocking
+ * forever on a call this tool has never needed before.
+ */
+export function suitesPending(suites) {
+  if (!Array.isArray(suites)) return false
+  return suites.some((s) => s.status !== 'completed')
+}
+
+/**
  * Verdict for the current check set, or null to keep polling.
  * `checks` is the parsed `gh pr checks --json` array; `sawChecks` stays true once any
  * check has ever appeared, so a transient empty read cannot trip the NO_CHECKS path.
+ * `pendingSuites` keeps READY off the table while more checks may still register.
  */
 export function checksVerdict({
   pr,
   checks,
   sawChecks,
+  pendingSuites = false,
   appearExpired,
   overallExpired,
   wait,
@@ -151,7 +171,7 @@ export function checksVerdict({
       }
     }
     const pending = checks.filter((c) => c.bucket === 'pending')
-    if (pending.length === 0) {
+    if (pending.length === 0 && !pendingSuites) {
       return {
         word: 'READY',
         code: EXIT.READY,
@@ -163,11 +183,12 @@ export function checksVerdict({
       }
     }
     if (!wait) {
-      return {
-        word: 'TIMEOUT',
-        code: EXIT.TIMEOUT,
-        lines: [where, `${pending.length} check(s) still running.`, ...notes],
-      }
+      // A suite still dispatching is every bit as unfinished as a running check, and saying
+      // READY here is what this tool got wrong. Report it as unfinished.
+      const unfinished = pending.length > 0
+        ? `${pending.length} check(s) still running.`
+        : 'All registered checks passed, but a check suite is still queued — more may appear.'
+      return { word: 'TIMEOUT', code: EXIT.TIMEOUT, lines: [where, unfinished, ...notes] }
     }
   } else if (!sawChecks && (!wait || appearExpired)) {
     // The bug class this tool exists for: zero checks is NOT a terminal state, and it does
@@ -248,6 +269,29 @@ function emit(v) {
   process.exit(v.code)
 }
 
+/**
+ * Check suites for the PR's head commit, or null if unreadable.
+ *
+ * Its own gh call because `gh pr checks` cannot report this: it lists check RUNS, and the whole
+ * problem is runs that do not exist yet. Failure is non-fatal — a gate that dies because one
+ * extra API call did is worse than one that occasionally answers early.
+ */
+async function readCheckSuites(pr) {
+  if (!pr?.headRefOid || !pr?.repoOwner || !pr?.repoName) return null
+  const res = await gh([
+    'api',
+    `repos/${pr.repoOwner}/${pr.repoName}/commits/${pr.headRefOid}/check-suites`,
+    '--jq',
+    '[.check_suites[] | {status: .status}]',
+  ])
+  try {
+    const parsed = JSON.parse((res.stdout ?? '').trim() || 'null')
+    return Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
 async function readWorkflowFiles() {
   try {
     const dir = '.github/workflows'
@@ -311,11 +355,19 @@ async function main() {
     }
     if (checks.length > 0) sawChecks = true
 
+    // Only asked once the visible checks look done — that is the only moment the answer can
+    // change a verdict, and it keeps the extra call off every poll.
+    const suites = checks.length > 0 && checks.every((c) => c.bucket !== 'pending')
+      ? await readCheckSuites(pr)
+      : null
+    const pendingSuites = suitesPending(suites)
+
     const files = checks.length === 0 && !sawChecks ? await readWorkflowFiles() : []
     const verdict = checksVerdict({
       pr,
       checks,
       sawChecks,
+      pendingSuites,
       appearExpired: Date.now() > appearBy,
       overallExpired: Date.now() > overallBy,
       wait: opts.wait,
