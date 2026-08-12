@@ -2150,7 +2150,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     },
     {
       id: 'cardartreview', label: 'Card Art', hint: 'Every card illustration on the face it ships on, grouped by the King world it belongs to, with the raw candidate beneath each so the frame’s crop is visible.',
-      main: <RunCardArtReviewCatalog />,
+      main: <div className="tileset-studio-scroll"><RunCardArtReviewCatalog /></div>,
       controls: (
         <p className="tileset-view-note">
           Candidates only. Accepting a card is done from Card Prompts, one card at a time.
@@ -2159,32 +2159,32 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     },
     {
       id: 'sectioart', label: 'Sectio Art', hint: 'Sectio card-row wrap candidates, mounted in the band they ship in.',
-      main: <RunSectioArtReview />,
+      main: <div className="tileset-studio-scroll"><RunSectioArtReview /></div>,
       controls: <p className="tileset-view-note">Review only.</p>,
     },
     {
       id: 'lipsanonart', label: 'Lipsanon Art', hint: 'Every lipsanon icon candidate in the live catalog, mounted together.',
-      main: <LipsanonReview />,
+      main: <div className="tileset-studio-scroll"><LipsanonReview /></div>,
       controls: <p className="tileset-view-note">Review only.</p>,
     },
     {
       id: 'brushicons', label: 'Brush Icons', hint: 'Level Editor brush icon candidates, mounted together.',
-      main: <BrushIconReview />,
+      main: <div className="tileset-studio-scroll"><BrushIconReview /></div>,
       controls: <p className="tileset-view-note">Review only.</p>,
     },
     {
       id: 'runrailicons', label: 'Run Rail Icons', hint: 'Run title-bar and rail icon candidates, mounted together.',
-      main: <RunProgressIconReview />,
+      main: <div className="tileset-studio-scroll"><RunProgressIconReview /></div>,
       controls: <p className="tileset-view-note">Review only.</p>,
     },
     {
       id: 'menuicons', label: 'Menu Icons', hint: 'Main-menu icon treatments, mounted together.',
-      main: <MenuIconReview />,
+      main: <div className="tileset-studio-scroll"><MenuIconReview /></div>,
       controls: <p className="tileset-view-note">Review only.</p>,
     },
     {
       id: 'commandcardmarks', label: 'Command Card Marks', hint: 'Command card mark candidates, mounted together.',
-      main: <CommandCardMarkReview />,
+      main: <div className="tileset-studio-scroll"><CommandCardMarkReview /></div>,
       controls: <p className="tileset-view-note">Review only.</p>,
     },
     {

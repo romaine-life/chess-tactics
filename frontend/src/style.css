@@ -29784,6 +29784,15 @@ button.section-box-head {
   transform: none;
 }
 
+/* A catalog body that is not the shared .tileset-studio-grid still has to own its own scroll:
+   .tileset-studio-main is overflow:hidden by design, so a body that does not claim the scroll is
+   simply clipped. Layout only -- no surface paint. */
+.tileset-studio-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 /* --- Run card art review (ADR-0579) -------------------------------------------------------
    Every candidate on the card face it ships on. The cards are drawn at their real size and
    scaled down as a whole, so what is judged is the real composition -- the art window crop,
