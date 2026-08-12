@@ -143,6 +143,23 @@ Two normative violations:
 This is upstream, in a plugin its own authors have marked deprecated (`src/auth.ts:205-208`), and
 it affects every relying party on `auth.romaine.life`, not just Chess Tactics.
 
+### F11 — `auth_time` is emitted in milliseconds where the spec requires seconds *(identity provider)*
+
+`better-auth/dist/plugins/oidc-provider/index.mjs:607` emits
+`auth_time: new Date(session.createdAt).getTime()`. OIDC Core §2 defines `auth_time` as a
+NumericDate — seconds since the epoch. The value is therefore ~1000× too large.
+
+A relying party verifying authentication freshness computes a time in the far future, so a naive
+`now - auth_time <= max_age` check passes unconditionally. A step-up control that always succeeds
+is worse than none.
+
+Server-side `max_age` enforcement (`authorize.mjs:127-132`) is **correct** and does convert
+properly, so the provider does force re-authentication when asked; it is only the claim an RP
+would verify against that is unusable. Chess Tactics therefore reads authentication time from its
+own session row (decision 3) and does not depend on this claim.
+
+**Fixed in the successor package** — `@better-auth/oauth-provider@1.6.27` emits `authTimeSec`.
+
 ### F6 — Sign-out is local only
 
 `clearSession` (`oidcAuth.js:212-215`) expires the two cookies. It never calls the provider's
@@ -260,30 +277,51 @@ precondition for trusting anything that follows.
 
 **Stage 2 — Server-side session store (F3, F8, F9).**
 New `auth_sessions` table plus a migration through the normal PR path. The browser cookie becomes
-an opaque identifier. Tokens, cached claims, and pending-login state move server-side. Idle and
-absolute lifetimes become enforced policy rather than a cookie `Max-Age`.
+an opaque identifier, `Strict` per decision 2. Tokens, cached claims, and pending-login state move
+server-side. The 30-day idle and 90-day absolute deadlines from decision 1 become enforced
+columns rather than a cookie `Max-Age`, alongside the `authenticated_at` that decision 3's 8-hour
+admin window reads.
 
-**Stage 3 — Confidential client and working refresh (F1, F4).**
-Register a client secret, add `offline_access` to the authorization request, and implement
-server-side refresh with rotation handling. The `offline_access` line is required by the final
-design, not a stopgap — it is simply the first line of it.
+**Stage 3 — Identity provider migration (F5, F11, and decision 1's dependency).**
+*Moved ahead of the Chess Tactics refresh work, because that work depends on it.* In the `auth`
+repository: migrate from the deprecated `oidcProvider` plugin to `@better-auth/oauth-provider`,
+which brings correct refresh-token rotation with reuse detection and family revocation, and a
+spec-conforming `auth_time`. Add per-client refresh lifetime on top — neither package has it, and
+decision 1 requires 90 days for Chess Tactics while Grafana and Argo CD keep 7. Carries its own
+ADR and rollout in that repository. Affects Grafana, Argo CD, ambience and Chess Tactics; the
+first-party cookie/JWKS apps are untouched.
 
-**Stage 4 — Real sign-out (F6).**
+**Stage 4 — Confidential client and working refresh (F1, F4).**
+Register a client secret through the existing Key Vault path, add `offline_access` to the
+authorization request, and refresh server-side against the rotation semantics Stage 3 installed.
+
+**Stage 5 — Real sign-out (F6).**
 Delete the session row, revoke upstream, and call the end-session endpoint.
 
-**Stage 5 — Delete the bypass and make CSRF deliberate (F7, F10).**
+**Stage 6 — Delete the bypass, name the CSRF defence, gate admin (F7, F10, decision 3).**
 Remove the `.tank.dev.romaine.life` branch outright — per `docs/migration-policy.md`, retiring
 means deleting, not leaving it runnable behind a flag. Give dev slots the same real authentication
-every other lane uses. State the CSRF mechanism explicitly and add a check that fails if it is
-removed.
-
-**Stage 6 — Upstream refresh-token invalidation (F5).**
-In the `auth` repository: invalidate the previous refresh token on rotation, cap the chain at the
-initial token's lifetime, and revoke the chain on replay. Affects every relying party on
-`auth.romaine.life`, so it carries its own ADR and its own rollout.
+every other lane uses. State `SameSite=Strict` as the CSRF mechanism in code and add a check that
+fails if it is removed. Enforce the 8-hour admin window with `prompt=login` re-arming.
 
 Each stage lands with an ADR recording the decision, tests, and verification against the running
 application.
+
+### Why F1 is not fixed first
+
+The hourly sign-out is the symptom that started this, and the one-line `offline_access` change
+would end it within a day. It is deliberately scheduled after Stage 2 anyway.
+
+Shipping it today would put a refresh token in a browser cookie while F5 is still live upstream —
+a bearer credential that cannot be revoked, cannot have its reuse detected, and (because of F5's
+lifetime extension) renews indefinitely. That trades a 1-hour exposure window for an unbounded
+one, in exchange for convenience. Holding it until Stage 2 means the refresh token is born
+server-side and never enters a browser.
+
+The cost of that ordering is that the hourly sign-out persists for the duration of Stages 1-2, and
+it falls on exactly one person: the owner. That is the intended trade and it is reversible — if
+the friction outweighs the exposure, the scope line can ship early, since it is permanent to the
+final design either way.
 
 ---
 
@@ -291,17 +329,71 @@ application.
 
 These are product calls, not engineering ones.
 
-1. **Session lifetime policy.** The stated intent is that a session persists across restarts and
-   is not lost by an active user. That still needs two numbers: an idle timeout (how long
-   untouched before it dies) and an absolute maximum (how long before re-authentication is
-   required regardless of activity).
-2. **`SameSite=Strict` versus `Lax`.** Strict is the draft's recommendation (§6.1.3.2). The cost
-   is that a visitor arriving from an external link — a Discord share, a search result — appears
-   signed out on that first page load. There are standard ways to have both; the question is
-   whether that first-paint state is acceptable.
-3. **Step-up authentication for admin actions.** Publishing official campaigns and writing live
-   media are production content changes made from an ordinary session. Whether those should
-   require a recent re-authentication is a policy decision.
-4. **Scope of the upstream fix (Stage 6).** Whether this effort takes on correcting the identity
-   provider's refresh-token handling for all of `auth.romaine.life`, or stops at the Chess Tactics
-   boundary and files it separately.
+1. ~~**Session lifetime policy.**~~ **DECIDED 2026-08-11: 30-day idle, 90-day absolute.**
+
+   A player who does not play for a month is signed out; anyone still playing re-authenticates
+   quarterly. What contains a compromised session is the server-side revocation arriving in
+   Stage 2, not the absolute cap; the cap is a backstop.
+
+   This exceeds the provider's current 7-day refresh-token lifetime (`auth.ts:222`), which is the
+   ceiling on renewing a session without user interaction. That setting is plugin-global, so
+   raising it would also give Grafana and Argo CD 90-day sessions. **It therefore becomes
+   per-client in the `auth` repository** — Chess Tactics gets 90 days, the admin tools keep 7.
+   That work joins Stage 6, but Stage 3 depends on it, so it is scheduled before Stage 3 lands.
+
+   Note that this cap is currently disguised: the F5 defect re-stamps the refresh expiry on every
+   use, so an active session renews indefinitely. Fixing F5 correctly *creates* the 7-day wall
+   that the bug was concealing, which is why the per-client change is a dependency and not a
+   nicety.
+2. ~~**`SameSite=Strict` versus `Lax`.**~~ **DECIDED 2026-08-11: `Strict` session cookie, `Lax`
+   state cookie.**
+
+   `Strict` is nearly free here because no user-specific content is server-rendered —
+   `renderShellWithOg` (`server.js:24538`) injects OG tags from public level content and never
+   reads a session. Identity arrives via a same-site `fetch` after the document loads, and
+   same-site fetches carry `Strict` cookies. The residual cost is a brief `checking` state on
+   external entry and immediately after login, because a redirect chain that began cross-site
+   does not carry the cookie on its final document request.
+
+   The 10-minute OIDC state cookie **must** stay `Lax`: the callback is a cross-site top-level
+   navigation, and a `Strict` state cookie would fail every login with
+   `oidc_login_state_invalid`.
+
+   `SameSite=Strict` is hereby the **named** CSRF mechanism (draft-26 §6.1.3.3.1), closing F10.
+   It must be stated in code and covered by a check, so that removing it fails something.
+
+3. ~~**Step-up authentication for admin actions.**~~ **DECIDED 2026-08-11: no step-up; admin
+   capability expires 8 hours after authentication.**
+
+   The 90-day player session is unaffected; the admin capability inside it dies after 8 hours.
+   Chosen over per-write step-up with the accepted trade-off stated plainly: **this does not
+   defend against same-origin XSS**, which can issue admin writes with the ambient session
+   without ever reading the cookie. It does bound a stolen session's production-content authority
+   to 8 hours.
+
+   Two implementation consequences, decided rather than asked:
+
+   - The clock reads `authenticated_at` on our own session row, **not** the provider's `auth_time`
+     claim, which F11 makes unusable. We performed the code exchange, so we know the time
+     first-hand and the gate needs no upstream fix.
+   - Re-arming uses `prompt=login` (supported and correctly enforced, `authorize.mjs:126-132`) to
+     stamp a fresh `authenticated_at` on the **same** session row. Regaining admin never disturbs
+     the player session.
+4. ~~**Scope of the upstream fix.**~~ **DECIDED 2026-08-11: migrate `auth.romaine.life` to
+   `@better-auth/oauth-provider`, and add per-client refresh lifetime.**
+
+   Verified in the published package at 1.6.27: refresh tokens carry a `revoked` field, presenting
+   a revoked token calls `invalidateRefreshFamily`, rotation preserves the original `exp` instead
+   of extending it, and `auth_time` is emitted in seconds. That is F5 and F11 fixed by the vendor,
+   with reuse detection we would otherwise have to author ourselves.
+
+   Both defects were confirmed still present in the deprecated plugin at its own latest release
+   (1.6.27), so they will never be fixed there. The stale comment at `src/auth.ts:205-208` saying
+   the successor is not yet published should be removed as part of this work.
+
+   Per-client refresh lifetime exists in neither package (`opts.refreshTokenExpiresIn` is
+   plugin-global, default now 30 days) and is added on top.
+
+   This is Stage 3, ahead of the Chess Tactics refresh work that depends on it.
+
+**No open decisions remain.** Implementation begins at Stage 0.
