@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+const { createTokenCipher } = require('./tokenCipher');
 
 // Chess Tactics is a Backend-For-Frontend, and a BFF hands the browser a session cookie while the
 // OAuth tokens stay on the server (draft-ietf-oauth-browser-based-apps-26 §6.1.1). One cookie, and
@@ -96,6 +97,7 @@ function createOIDCSessionManager({
   clientSecret = '',
   publicOrigin,
   store,
+  tokenEncryptionKey = '',
   fetchImpl = globalThis.fetch,
   now = () => Date.now(),
 }) {
@@ -107,6 +109,21 @@ function createOIDCSessionManager({
     throw new Error('issuer, clientId, and publicOrigin are required');
   }
   if (!store) throw new Error('a session store is required');
+
+  // Tokens are encrypted on the way into the store and decrypted on the way out, so no caller has
+  // to remember to do it and no store implementation can forget. The session row is the only thing
+  // that ever holds them; the browser never does (ADR-0576).
+  const tokenCipher = createTokenCipher(tokenEncryptionKey, {
+    onMissingKey: () => console.warn(
+      'auth sessions: AUTH_TOKEN_ENCRYPTION_KEY is unset; OAuth tokens are stored in PLAINTEXT. '
+      + 'A read of the database is then a working refresh token.',
+    ),
+  });
+  const decryptRecord = (record) => (record ? {
+    ...record,
+    accessToken: tokenCipher.decrypt(record.accessToken),
+    refreshToken: tokenCipher.decrypt(record.refreshToken),
+  } : record);
 
   const issuerOrigin = new URL(normalizedIssuer).origin;
   const callbackURL = `${normalizedOrigin}/api/auth/callback`;
@@ -333,7 +350,18 @@ function createOIDCSessionManager({
   }
 
   async function refreshSession(record) {
-    if (!record.refreshToken) return record;
+    // Nothing to renew with, and the access token is spent — so we can no longer show that the
+    // provider still stands behind this session. Returning the record unchanged would leave it
+    // alive on cached claims until its idle deadline weeks away, never revalidating: a session
+    // that outlives the grant behind it. It ends here instead.
+    //
+    // Reachable two ways. A provider that issued no refresh token (no `offline_access`), and a
+    // row whose encrypted tokens cannot be decrypted because the key changed — in which case the
+    // honest answer is the same one.
+    if (!record.refreshToken) {
+      await store.deleteSession(record.id);
+      return null;
+    }
     const result = await tokenRequest({
       grant_type: 'refresh_token',
       refresh_token: record.refreshToken,
@@ -361,9 +389,9 @@ function createOIDCSessionManager({
       claims,
     };
     await store.updateSessionTokens(record.id, {
-      accessToken: next.accessToken,
+      accessToken: tokenCipher.encrypt(next.accessToken),
       accessExpiresAt: next.accessExpiresAt,
-      refreshToken: next.refreshToken,
+      refreshToken: tokenCipher.encrypt(next.refreshToken),
       claims: next.claims,
     });
     return next;
@@ -380,7 +408,7 @@ function createOIDCSessionManager({
   async function readSession(cookieHeader, res) {
     const token = parseCookieHeader(cookieHeader).get(SESSION_COOKIE) || '';
     if (!token) return null;
-    let record = await store.readSessionByTokenHash(hashToken(token));
+    let record = decryptRecord(await store.readSessionByTokenHash(hashToken(token)));
     if (!record) {
       // The cookie names a session that no longer exists — signed out elsewhere, expired, or
       // revoked. Take it off the browser so it stops being presented.
@@ -493,15 +521,15 @@ function createOIDCSessionManager({
     // the cap would exist and never fire.
     const existingToken = parseCookieHeader(cookieHeader).get(SESSION_COOKIE) || '';
     if (existingToken) {
-      const existing = await store.readSessionByTokenHash(hashToken(existingToken));
+      const existing = decryptRecord(await store.readSessionByTokenHash(hashToken(existingToken)));
       const live = existing
         && Math.min(existing.idleExpiresAt.getTime(), existing.absoluteExpiresAt.getTime()) > at;
       if (live && existing.claims.email === claims.email) {
         await store.markAuthenticated(existing.id, new Date(at));
         await store.updateSessionTokens(existing.id, {
-          accessToken,
+          accessToken: tokenCipher.encrypt(accessToken),
           accessExpiresAt: accessExpiryFrom(result.body),
-          refreshToken: String(result.body.refresh_token || existing.refreshToken || ''),
+          refreshToken: tokenCipher.encrypt(String(result.body.refresh_token || existing.refreshToken || '')),
           claims,
         });
         return attempt.returnTo;
@@ -515,9 +543,9 @@ function createOIDCSessionManager({
       tokenHash: hashToken(token),
       userEmail: claims.email,
       claims,
-      accessToken,
+      accessToken: tokenCipher.encrypt(accessToken),
       accessExpiresAt: accessExpiryFrom(result.body),
-      refreshToken: String(result.body.refresh_token || ''),
+      refreshToken: tokenCipher.encrypt(String(result.body.refresh_token || '')),
       authenticatedAt: new Date(at),
       createdAt: new Date(at),
       lastSeenAt: new Date(at),
@@ -553,7 +581,7 @@ function createOIDCSessionManager({
     const token = parseCookieHeader(cookieHeader).get(SESSION_COOKIE) || '';
     clearSessionCookie(res);
     if (!token) return { revoked: false, reason: 'no_session' };
-    const record = await store.readSessionByTokenHash(hashToken(token));
+    const record = decryptRecord(await store.readSessionByTokenHash(hashToken(token)));
     if (!record) return { revoked: false, reason: 'no_session' };
     await store.deleteSession(record.id);
 

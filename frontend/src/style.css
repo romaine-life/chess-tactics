@@ -4652,15 +4652,21 @@ h1 {
   text-align: center;
 }
 
-/* The two flank chips share ONE width so the status cluster is symmetric about its
-   middle chip. The whole cluster is already page-centered (it's the centred `auto`
-   track of the title bar's 1fr·auto·1fr grid), so an equal-width pair puts the battle
-   clock — the middle chip — dead centre of the page, directly over the title bar's
-   nailhead diamond, with the turn plate and objective hugging it as a mirrored pair.
+/* The two labelled flank chips share ONE width, so the row's two copy panels read as a
+   mirrored pair rather than two differently-sized slabs. The whole cluster is page-centered
+   (it's the centred `auto` track of the title bar's 1fr·auto·1fr grid), and this equal pair is
+   what makes that centring look deliberate at both ends.
+   This rule used to be described as putting the battle clock dead centre of the page, directly
+   over the title bar's nailhead diamond. Material's box now stands between the turn plate and
+   the clock, so the clock is no longer the row's midpoint — and that was checked on the running
+   app rather than assumed. On a Battle route `.app-shell-titlebar-stud` and the retry stud that
+   shares its seat both draw NOTHING: captured at 4x, the seat is bare bar. So the alignment was
+   to an ornament the player cannot see here, and re-balancing the flanks around material would
+   have cost the objective 144px of empty box to line the clock up with it. What IS visible —
+   the cluster centred as a whole, and these two panels matching — is kept.
    min- (not fixed) width so an unusually long objective line grows rather than clips;
    the widest real content is ~139px ("Defeat every enemy piece"), so 150 sits both
-   comfortably on one line. The clock is always the centre chip (untimed counts up),
-   so this equal pair centres it on every play surface, timed or not.
+   comfortably on one line.
    Scoped to the cluster so the standalone board status chips that reuse
    .skirmish-turn-plate (loading / map-error) keep sizing to their own content. */
 .skirmish-topbar-status .skirmish-turn-plate,
@@ -4669,7 +4675,7 @@ h1 {
 }
 
 /* Centre the objective's glyph+copy within its now-wider box so it mirrors the
-   centred turn plate across the clock (both flanks read as balanced panels). */
+   centred turn plate at the other end of the row (both flanks read as balanced panels). */
 .skirmish-topbar-status .skirmish-objective {
   justify-content: center;
 }
@@ -4711,6 +4717,62 @@ h1 {
    urgency channel the board uses. */
 .skirmish-topbar .skirmish-clock.is-low strong {
   color: var(--threat);
+}
+
+/* Material: ONE box holding both forces (ADR-0580) — a live Pawn in each army's palette and the
+   points it is still worth. Material is one FACT, who is ahead and by how much, so the two
+   numbers have to be readable together; when they sat in separate boxes the battle clock stood
+   between the very things being compared. The frame and the control height come from
+   .skirmish-status-chip; this is inner layout only.
+   The gap BETWEEN the forces is the wide one and the gap inside each is the tight one, so the
+   box reads as two pairs rather than four loose marks — the only grouping the box needs, which
+   is why there is no internal rail. */
+.skirmish-material {
+  gap: var(--ds-inline);
+}
+
+.skirmish-material-force {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline-tight);
+  min-width: 0;
+}
+
+.skirmish-material-points {
+  color: #eaf6ff;
+  font: var(--ds-weight-strong) var(--ds-text-md)/1 var(--ds-font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .04em;
+  /* The READOUT owns a stable width, exactly as the clock's does: the box holds two numbers
+     that change independently as pieces come off, and a box that breathed with them would
+     shove the clock beside it on every capture. Two tabular digits is the width every real
+     board needs — a full chess army is 39 points — and the span grows past it rather than
+     clipping if a Run ever fields a three-digit force. */
+  min-inline-size: 2ch;
+  text-align: center;
+}
+
+/* The mark is a live unit sprite rather than a forged kit glyph, so it answers to the bar's
+   shared mark seat through the ink-fraction mechanism above — AlphaBoundIcon draws visible ink
+   at 82% of its box BY CONSTRUCTION (alphaBoundIconLayout's fill), for every sprite, so the
+   fraction is stated once here and is not a per-asset measurement. The drawn Pawn then lands at
+   the same size as the hourglass beside it and the surplus box bleeds back out. */
+.skirmish-material-mark {
+  --titlebar-mark-ink-fill: .82;
+  --titlebar-mark-canvas: calc(var(--titlebar-mark-seat) / var(--titlebar-mark-ink-fill));
+  block-size: var(--titlebar-mark-canvas);
+  display: grid;
+  flex: none;
+  inline-size: var(--titlebar-mark-canvas);
+  margin: calc((var(--titlebar-mark-seat) - var(--titlebar-mark-canvas)) / 2);
+  place-items: center;
+}
+
+/* The sprite fills the seat the mark box just sized; the 58px utility default is for dense
+   pickers, not a title-bar row. */
+.skirmish-material-mark .utility-piece-icon {
+  block-size: 100%;
+  inline-size: 100%;
 }
 
 .skirmish-field {
@@ -9702,6 +9764,26 @@ body.loading-bootstrap .app-startup-status {
     font-size: var(--ds-text-xs);
     gap: 2px;
   }
+
+  /* Material sheds with the row it sits in: same smaller face, same tight gaps, so a Run's bar
+     does not narrow its measures around a box that kept the comfortable size. The stable
+     two-digit readout goes as well — it is there so the box does not breathe as pieces come
+     off, and at this width the whole row is already re-laying out around a dropped identity
+     chip. The gap BETWEEN the two forces stays wider than the gap inside each, because that
+     grouping is the only thing telling the reader which number belongs to which mark.
+     The Skirmish bar keeps the comfortable size: nothing has been dropped from it here. */
+  .app-shell-titlebar .run-topbar-status .skirmish-material {
+    gap: var(--ds-space-1);
+  }
+
+  .app-shell-titlebar .run-topbar-status .skirmish-material-force {
+    gap: 2px;
+  }
+
+  .app-shell-titlebar .run-topbar-status .skirmish-material-points {
+    font-size: var(--ds-text-xs);
+    min-inline-size: 0;
+  }
 }
 
 @media (max-width: 860px) {
@@ -9800,6 +9882,23 @@ body.loading-bootstrap .app-startup-status {
     --skirmish-status-chip-inset: var(--ds-space-1);
     --titlebar-mark-seat: 18px;
     gap: var(--ds-space-1);
+  }
+
+  /* That floor is now the design call the note above said it would take, and material is what
+     pays it. Below 860 the lane closes on the row far enough that the last Run measure runs
+     under it, and material is the row's newest arrival rather than something it was already
+     built around — the clock and the four measures were AT the floor before it existed. Nothing
+     else in the bar is asked to give up a box to make room for it.
+     Measured rather than assumed, and it is genuinely marginal: at 740 the row without material
+     is 332px against a 440px budget, and the tightened box is ~90px, which fits by about 14px
+     total. That is the whole margin, and it goes to nothing as soon as both forces read two
+     digits — the shed is 14px of certainty instead of a measure sliding under the lane on a
+     board nobody thought to test.
+     The Skirmish bar's whole status row is already gone at this width (its summary moves into
+     Controls), so this is the same answer both bars give: a stacked narrow Battle reads its
+     forces off the board and its Controls, not off the title bar. */
+  .app-shell-titlebar .run-topbar-status .skirmish-material {
+    display: none;
   }
 }
 
@@ -29323,4 +29422,196 @@ button.section-box-head {
   display: grid;
   gap: var(--ds-inline-tight);
   padding: 0 var(--ds-inset) var(--ds-inset);
+}
+/* Unit Roster — the shipped roster at 1:1, for comparative judgement.
+   No zoom control by design: these sprites are authored at their delivery size,
+   so magnifying them would hide the thing being inspected. */
+.unit-roster-lab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+ /* Pinned: auditing 49 tiers means scrolling deep into the grid and still needing
+    the zoom stepper and the palette picker, which otherwise scroll away above. */
+.unit-roster-controls {
+  align-items: center;
+  /* Frosted rather than painted: an opaque bar would be surface paint, which belongs
+     to registered chrome (ADR-0032/0059/0201). A backdrop blur keeps the controls
+     legible over the grid scrolling beneath them without inventing a surface. */
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 8px 4px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.unit-roster-controls label {
+  align-items: center;
+  display: flex;
+  font-size: var(--ds-text-xs);
+  gap: 6px;
+}
+
+.unit-roster-toggle { cursor: pointer; }
+
+.unit-roster-note {
+  color: var(--ds-text-muted, #9aa4b0);
+  font-size: var(--ds-text-xs);
+  margin: 0;
+}
+
+.unit-roster-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.unit-roster-row {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.unit-roster-row-label {
+  color: #f2f6ea;
+  flex: 0 0 84px;
+  font-size: var(--ds-text-xs);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
+}
+
+.unit-roster-cells {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.unit-roster-cell {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+}
+
+/* Intrinsic size only — never width/height, which would scale the sprite. */
+.unit-roster-cell img { image-rendering: pixelated; }
+
+.unit-roster-cell figcaption {
+  color: #e7eedd;
+  font-size: 10px;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
+}
+
+.unit-roster-missing {
+  color: #ffb4b4;
+  font-size: 10px;
+}
+
+/* A unit is drawn standing on a tile, so inspect it standing on one. The seat is
+   sized by the tile art itself; the unit is bottom-anchored so its contact point
+   sits where the board would put it. */
+.unit-roster-seat {
+  display: inline-block;
+  position: relative;
+}
+
+.unit-roster-ground {
+  display: block;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+/* Every unit image is capped to the board's 1x draw rect, scaled by the tier. Four
+   families still ship 512x512 sprites, and without this they render at natural size
+   and blow the grid apart -- rows overflow into each other and the labels stop
+   matching the pieces beside them. The board caps them the same way. */
+.unit-roster-unit,
+.unit-roster-unit-slot canvas {
+  max-height: calc(92px * var(--roster-tier, 1));
+  max-width: calc(78px * var(--roster-tier, 1));
+}
+
+/* Seated exactly where the board seats it. The tile frame is 96x180 with its top
+   face near the TOP -- the equator is 68px down -- so anchoring to the frame's
+   bottom edge drops the unit clean off the tile. The unit's own contact point is
+   80.241% down its sprite (the anchor the render pipeline validates), and a
+   percentage in `translate` resolves against the element, so this puts that point
+   on the equator whatever size the sprite is. */
+.unit-roster-unit {
+  image-rendering: pixelated;
+  left: 50%;
+  position: absolute;
+  top: var(--iso-tile-equator, 68px);
+  transform: translate(-50%, -80.241%);
+}
+
+.unit-roster-pair {
+  display: flex;
+  gap: 6px;
+}
+
+/* The superseded sprites are mostly the old 512px renders, which at 1:1 would be
+   six times the tile. They are capped to the board's 1x draw rect -- precisely what
+   the board did to them -- and then scaled BY THE TIER like everything else in the
+   seat. A fixed cap left the before stuck at 78px while the tier-sized canvas beside
+   it grew past 200, so the pair stopped being a comparison at all. */
+.unit-roster-unit.is-before {
+  max-height: calc(92px * var(--roster-tier, 1));
+  max-width: calc(78px * var(--roster-tier, 1));
+}
+
+/* A stepper, not a slider: the magnifications are a fixed ladder, so the control
+   that walks them should have one press per rung. */
+.unit-roster-magnify {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.unit-roster-magnify button {
+  cursor: pointer;
+  font-size: var(--ds-text-sm);
+  line-height: 1;
+  min-width: 26px;
+  padding: 2px 6px;
+}
+
+.unit-roster-magnify button:disabled { cursor: default; opacity: 0.4; }
+
+.unit-roster-magnify-value {
+  font-size: var(--ds-text-xs);
+  min-width: 26px;
+  text-align: center;
+}
+
+/* Zoomed OUT, the board minifies through its mip chain rather than dropping
+   columns, so let the browser resample here too — forcing nearest would show an
+   artifact the game no longer has. */
+.unit-roster-grid[data-nearest='0'] .unit-roster-unit,
+.unit-roster-grid[data-nearest='0'] .unit-roster-ground {
+  image-rendering: auto;
+}
+
+/* The seat scales with the tier so the tile grows with the piece, but the unit
+   canvas is already sized in real pixels for that tier — so it is un-zoomed back
+   out, leaving the canvas to speak for itself. */
+ /* `top` is supplied inline, scaled to the tier, because the tile's equator moves
+    with it. Only the contact-point offset lives here. */
+.unit-roster-unit-slot {
+  left: 50%;
+  position: absolute;
+  transform: translate(-50%, -80.241%);
+}
+
+.unit-roster-unit-slot canvas {
+  display: block;
+  position: static;
+  transform: none;
 }

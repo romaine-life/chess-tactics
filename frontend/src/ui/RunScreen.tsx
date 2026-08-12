@@ -15,6 +15,7 @@ import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleRoute, type TitleRouteSegment } from './shell/TitleRoute';
 import { RunIdentityChip, RunTitleBarMeasures } from './RunTitleBarChips';
 import { BattleClockChip } from './BattleClockChip';
+import { BattleMaterialChip } from './BattleMaterialChip';
 import { PLAY_RUN_SELECTOR_HREF } from './playHubRoute';
 import {
   Skirmish,
@@ -281,9 +282,21 @@ function RunTitleBarStatus({ run, path, search, view, battlefieldMounted }: {
             one — a Run bar rendered beside any other workspace (a craft still landing, most
             visibly) would fall through to the module default store and report a clock
             belonging to no Battle on screen. So it is seated exactly while the battlefield
-            it is timing is. */}
+            it is timing is.
+            Material is the same kind of fact and answers to the same condition — a force's
+            points exist only while there is a board to count them on — so it rides in and out
+            with the clock rather than standing among the Run's durable measures. It is ONE box
+            holding both forces (ADR-0580), and it sits ahead of the clock exactly as it does on
+            the Skirmish bar, so the reading is the same on every play surface. The enemy's
+            number IS the Deditio forecast, priced by the same reader (`standingForceValue`) the
+            mate is paid through. */}
         {battlefieldMounted && run.phase === 'battle'
-          ? <BattleClockChip fillSurface={CHROME_LEAF_FILL_SURFACE} />
+          ? (
+              <>
+                <BattleMaterialChip fillSurface={CHROME_LEAF_FILL_SURFACE} />
+                <BattleClockChip fillSurface={CHROME_LEAF_FILL_SURFACE} />
+              </>
+            )
           : null}
         <RunTitleBarMeasures
           tier={run.ataraxiaTier}

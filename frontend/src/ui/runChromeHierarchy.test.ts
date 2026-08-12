@@ -273,7 +273,7 @@ describe('Run chrome hierarchy', () => {
   });
 
   // Abandoning asks in the seat that raised the question — the verb SPLITS into its two answers,
-  // the same confirmation Start New Run uses for replacing an active Run (ADR-0571/0578). No
+  // the same confirmation Start New Run uses for replacing an active Run (ADR-0571/0581). No
   // dialog is opened over the Run being discussed.
   it('confirms Abandon Run in its own seat instead of a popup', () => {
     expect(runScreen).not.toContain('useConfirm');
@@ -302,7 +302,7 @@ describe('Run chrome hierarchy', () => {
   // The armed question is ONE box. Two framed buttons in a row with a gap is what this kit puts
   // between things that are NOT related; the line between Keep Run and Abandon Run is the box's
   // own column line and the line above them is its row boundary, both laid and capped from the
-  // box's topology (ADR-0242/0571/0578).
+  // box's topology (ADR-0242/0571/0581).
   it('draws the armed answers as cells of one box rather than framed buttons in a row', () => {
     expect(runScreen).toMatch(
       /<DividedInnerChromeBox\b[\s\S]{0,400}?className="run-abandon-box"[\s\S]{0,400}?columns=\{verbColumns\(answers\)\}[\s\S]{0,200}?fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/,
@@ -574,8 +574,14 @@ describe('Run chrome hierarchy', () => {
     // workspace would report the module default store's clock instead.
     expect(runScreen).toContain("import { BattleClockChip } from './BattleClockChip';");
     expect(runScreen).toContain('battlefieldMounted={battlefieldActive}');
+    // Material answers to the same seat for the same reason, and sits ahead of the clock exactly
+    // as it does on the Skirmish bar, so every play surface reads alike (ADR-0580). ONE box holds
+    // both forces — a comparison cannot have the clock standing in the middle of it. It rides in
+    // and out WITH the clock: a force's points exist only while there is a board to count them
+    // on, so it is not a Run measure.
+    expect(runScreen).toContain("import { BattleMaterialChip } from './BattleMaterialChip';");
     expect(runScreen).toMatch(
-      /\{battlefieldMounted && run\.phase === 'battle'\s*\?\s*<BattleClockChip fillSurface=\{CHROME_LEAF_FILL_SURFACE\} \/>\s*:\s*null\}/,
+      /\{battlefieldMounted && run\.phase === 'battle'\s*\?\s*\(\s*<>\s*<BattleMaterialChip fillSurface=\{CHROME_LEAF_FILL_SURFACE\} \/>\s*<BattleClockChip fillSurface=\{CHROME_LEAF_FILL_SURFACE\} \/>\s*<\/>\s*\)\s*:\s*null\}/,
     );
     // Address-only Play breadcrumbs are App-owned, so they remain present even
     // while the replaceable battlefield scene is not yet active.
