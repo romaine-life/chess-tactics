@@ -7,6 +7,7 @@ const pawnPromotionPicker = readFileSync(new URL('./PawnPromotionPicker.tsx', im
 const portraitEditor = readFileSync(new URL('./PortraitEditor.tsx', import.meta.url), 'utf8');
 const stepper = readFileSync(new URL('./shared/Stepper.tsx', import.meta.url), 'utf8');
 const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url), 'utf8');
+const chromeDividedGrid = readFileSync(new URL('./shared/ChromeDividedGrid.tsx', import.meta.url), 'utf8');
 const appTitleBar = readFileSync(new URL('./shell/AppTitleBar.tsx', import.meta.url), 'utf8');
 const chromeRuntime = readFileSync(new URL('./chromeFamilyRuntime.ts', import.meta.url), 'utf8');
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
@@ -227,9 +228,11 @@ describe('Skirmish chrome hierarchy', () => {
     expect(chromeRuntime).toContain(':not(.has-backdrop):not([data-chrome-fill-surface])');
     expect(chromeRuntime).toContain(':not(${CHROME_LEAF_HOST_INHERITED_SELECTOR})');
 
-    // Repeated collections phase their wood from the index their own data already has.
+    // Repeated collections phase their wood from the index their own data already has. The HUD
+    // sections are declared to the panel rather than rendered here, so the phase rides the
+    // declaration; the command grid still writes it as a prop.
     expect(skirmishHud).toContain('HUD_TABS.map((t, index) =>');
-    expect(skirmishHud).toContain('style={leafSurfacePhase(index)}');
+    expect(skirmishHud).toContain('style: leafSurfacePhase(index),');
     expect(skirmishHud).toContain('SHORTCUT_KEY_ROWS.flat().map((key, index) =>');
     expect(skirmishHud).toContain('const surfacePhase = leafSurfacePhase(index);');
     expect(stepper).toContain('style={leafSurfacePhase(0)}');
@@ -314,7 +317,6 @@ describe('Skirmish chrome hierarchy', () => {
 
   it('maps tabs, promotion choices, and command-grid cells to existing units', () => {
     const promotion = buttonBlocks(pawnPromotionPicker).find((candidate) => candidate.includes('onChoose(type)'));
-    const tab = buttonUsing('setTab(t.id)');
     const commandKey = buttonUsing('runSkirmishShortcut(key, false, skirmishViewStore, skirmishStore)');
 
     expect(promotion, 'expected anchored Pawn promotion choice').toBeDefined();
@@ -326,8 +328,15 @@ describe('Skirmish chrome hierarchy', () => {
     expect(pawnPromotionPicker).toContain('onPointerDown={(event) => event.stopPropagation()}');
     expect(pawnPromotionPicker).not.toContain('autoFocus');
     expect(skirmishHud).not.toContain('aria-label="Pawn promotion"');
-    expectChromeUnit(tab, 'inner-text-button');
-    expect(tab).toContain("tab === t.id && 'active'");
+    // A HUD section is a COMPARTMENT of the Controls head's divided block, not a framed button
+    // standing in a row: the panel's own rails are its edges, so it declares no unit and paints
+    // no frame. It is handed to the panel as a typed member and the panel lays the rails.
+    expect(skirmishHud).toContain('titleSections={controlsContent === undefined ? HUD_TABS.map');
+    expect(skirmishHud).toContain("press: { onPress: () => setTab(t.id), ariaLabel: t.label, title: t.label, active: tab === t.id }");
+    expect(skirmishHud).not.toMatch(/<ChromeButton[\s\S]*?'skirmish-hud-tab'/);
+    expect(chromeBox).toContain('<ChromeDividedGridCell');
+    expect(chromeBox).toContain('as="button"');
+    expect(chromeDividedGrid).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
     expectChromeUnit(commandKey, 'inner-text-button');
     expect(commandKey).toContain("active && 'active is-active'");
 

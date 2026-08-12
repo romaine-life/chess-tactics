@@ -304,9 +304,11 @@ describe('professional loading architecture guards', () => {
   it('keeps gameplay control-panel tabs immediate while navigation remains explicit', () => {
     const hud = read('./ui/SkirmishHud.tsx');
     const titleNavigation = read('./ui/StrategikonTitleNavigation.tsx');
-    expect(hud).toContain('data-transition-policy="immediate-local"');
-    expect(hud).toContain('onClick={() => setTab(t.id)}');
-    expect(hud).not.toContain('onClick={() => navigateApp(t.id)}');
+    // The tabs are compartments of the Controls head's divided block now, declared to the panel
+    // rather than rendered here, so the policy and the press ride that declaration.
+    expect(hud).toContain("'data-transition-policy': 'immediate-local',");
+    expect(hud).toContain('press: { onPress: () => setTab(t.id)');
+    expect(hud).not.toContain('onPress: () => navigateApp(t.id)');
     expect(hud).toContain('<StrategikonTitleNavigation');
     expect(titleNavigation).toContain('<NavButton');
     expect(read('../scripts/shot.mjs')).toContain("const assertImmediateLocalControl = has('assert-immediate-local-control')");

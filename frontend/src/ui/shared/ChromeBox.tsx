@@ -1,10 +1,18 @@
-import type { ComponentPropsWithoutRef, HTMLAttributes, ReactElement, ReactNode } from 'react';
+import type { ComponentPropsWithoutRef, CSSProperties, HTMLAttributes, ReactElement, ReactNode } from 'react';
 import type { ChromeRole } from '../chromeCandidateSources';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
 import {
   GameplayWorkspaceActivation,
   gameplayWorkspaceTransitionTarget,
 } from '../shell/AuthoredSceneSlot';
+// Cyclic with ChromeDividedGrid on purpose and safely: the grid needs this module's box and fill,
+// and the Controls panel's head IS a divided block. Every reference on both sides is inside a
+// component body, so neither module touches the other while it is still evaluating.
+import {
+  ChromeDividedGridCell,
+  ChromeDividedGridRow,
+  DividedInnerChromeBox,
+} from './ChromeDividedGrid';
 
 export function ChromeSurfaceFill({
   role,
@@ -177,15 +185,36 @@ export function OuterChromeHeader({
   );
 }
 
+/** One compartment of the Controls head's divided strip. */
+export type ShellControlsHeadSection = {
+  /** Stable identity for the compartment, so React keeps it across reorders. */
+  id: string;
+  content: ReactNode;
+  /** Makes the compartment ITSELF the control — pressable edge to edge, wearing the leaf oak. */
+  press?: { onPress: () => void; ariaLabel?: string; title?: string; active?: boolean };
+  className?: string;
+  /** Attributes the compartment carries as a tab or nav mark. */
+  attrs?: Record<string, string | boolean | undefined>;
+  style?: CSSProperties;
+};
+
 /**
  * The one application-shell Controls rail. The title, outer role, placement
  * class, and shell-divider seam marker are invariants supplied here rather than
  * facts each workflow must redeclare.
+ *
+ * The head — the name and whatever strip sits under it — is ONE divided block, laid here.
+ * Its inline edges are the panel's own outer rails, so its rails tee into them exactly as the
+ * break under a fixed section does; both are section rails of this panel and neither is a caller's
+ * to place. The name spans the whole block, so the strip's verticals begin at that break rather
+ * than ruling a line through the title.
  */
 export function ShellControlsPanel({
   className = '',
   titleActions,
   titleClassName = '',
+  titleSections = [],
+  titleStrip,
   titleContent = null,
   fixed = null,
   children,
@@ -193,6 +222,16 @@ export function ShellControlsPanel({
 }: ComponentPropsWithoutRef<'aside'> & {
   titleActions?: ReactNode;
   titleClassName?: string;
+  /**
+   * The head's compartments — one per column of the block under the name. The panel owns the
+   * rails between them and the caps at every crossing, which is why this is a member list and
+   * not a node: a caller that could author the space between compartments could put a rail
+   * there, and a hand-placed rail cannot know what it meets (see ChromeDivider).
+   */
+  titleSections?: readonly ShellControlsHeadSection[];
+  /** What the strip of compartments IS, when it is more than a row of controls — a tab list. */
+  titleStrip?: { role?: string; ariaLabel?: string };
+  /** One undivided row under the name, for a head whose strip is a single control. */
   titleContent?: ReactNode;
   /**
    * Content pinned above the scrolling body. The panel lays the rail between the two itself,
@@ -211,13 +250,13 @@ export function ShellControlsPanel({
       data-chrome-leaf-surface=""
       className={`shell-controls-panel skirmish-hud ${className}`.trim()}
     >
-      <OuterChromeHeader
-        title="Controls"
+      <ShellControlsHead
         actions={titleActions}
         className={titleClassName}
-      >
-        {titleContent}
-      </OuterChromeHeader>
+        sections={titleSections}
+        strip={titleStrip}
+        content={titleContent}
+      />
       {fixed}
       {fixed ? (
         <div className="le-control-divider-host shell-controls-break" aria-hidden="true">
@@ -226,6 +265,89 @@ export function ShellControlsPanel({
       ) : null}
       {children}
     </OuterChromeBox>
+  );
+}
+
+function ShellControlsHead({
+  actions,
+  className,
+  sections,
+  strip,
+  content,
+}: {
+  actions?: ReactNode;
+  className: string;
+  sections: readonly ShellControlsHeadSection[];
+  strip?: { role?: string; ariaLabel?: string };
+  content?: ReactNode;
+}): ReactElement {
+  const name = (
+    <OuterChromeHeader
+      title="Controls"
+      actions={actions}
+      className={`shell-controls-head-name ${className}`.trim()}
+    />
+  );
+  // No strip of sections: the name simply closes with the panel's own section rail, the same one
+  // that closes a fixed dock. A single control under the head is a control, not a compartment —
+  // ruling a second line under it would divide a strip with nothing on the other side of it.
+  if (!sections.length) {
+    return (
+      <>
+        {name}
+        <div className="le-control-divider-host shell-controls-break shell-controls-head-break" aria-hidden="true">
+          <ChromeDivider role="outer" />
+        </div>
+        {content}
+      </>
+    );
+  }
+  return (
+    <DividedInnerChromeBox
+      className="shell-controls-head"
+      columns={sections.map(() => 'minmax(0, 1fr)')}
+      framed={false}
+      hostFrame="outer"
+    >
+      <ChromeDividedGridRow spans="all" className="shell-controls-head-title-row">
+        {name}
+      </ChromeDividedGridRow>
+      <ChromeDividedGridRow
+        className="shell-controls-head-strip"
+        role={strip?.role}
+        aria-label={strip?.ariaLabel}
+      >
+        {sections.map((section) => section.press ? (
+          <ChromeDividedGridCell
+            key={section.id}
+            as="button"
+            {...section.attrs}
+            aria-label={section.press.ariaLabel}
+            title={section.press.title}
+            style={section.style}
+            onClick={section.press.onPress}
+            className={`shell-controls-head-section${section.press.active ? ' active' : ''} ${section.className ?? ''}`.trim()}
+          >
+            {section.content}
+          </ChromeDividedGridCell>
+        ) : (
+          <ChromeDividedGridCell
+            key={section.id}
+            {...section.attrs}
+            style={section.style}
+            className={`shell-controls-head-section ${section.className ?? ''}`.trim()}
+          >
+            {section.content}
+          </ChromeDividedGridCell>
+        ))}
+      </ChromeDividedGridRow>
+      {/* The block's foot. It carries nothing and takes no height; what it is for is the row
+          BOUNDARY above it, which is the head's rail against the panel body and the thing that
+          closes the strip's verticals. Left off, four rails ended in mid-air at the last
+          compartment — the exact failure this module exists to prevent — and the strip read as
+          an open-bottomed comb rather than a block of sections. */}
+      <ChromeDividedGridRow spans="all" className="shell-controls-head-foot" />
+    </DividedInnerChromeBox>
   );
 }
 

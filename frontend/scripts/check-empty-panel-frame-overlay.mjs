@@ -216,7 +216,7 @@ if (/\.level-editor-screen \.skirmish-hud > \.le-outer-panel-content[^\{]*\{[\s\
   failures.push('outer-panel ordinary content must inherit wrapper padding instead of selector-specific inset margins');
 }
 if (!/:is\(\.level-editor-screen, \.skirmish-screen\) \.le-outer-panel > \.le-outer-panel-content--titled\s*\{[\s\S]*?padding-block-start\s*:\s*0\s*;/.test(css)
-  || !/:is\(\.level-editor-screen, \.skirmish-screen, \.chrome-family-surface\) \.le-outer-panel > \.le-outer-panel-content--titled > \.outer-chrome-header\s*\{[\s\S]*?margin-inline\s*:\s*calc\(-1 \* var\(--le-control-content-inset\)\)\s*;/.test(css)) {
+  || !/:is\(\.level-editor-screen, \.skirmish-screen, \.chrome-family-surface\) \.le-outer-panel > \.le-outer-panel-content--titled > :is\(\.outer-chrome-header, \.shell-controls-head\)\s*\{[\s\S]*?margin-inline\s*:\s*calc\(-1 \* var\(--le-control-content-inset\)\)\s*;/.test(css)) {
   failures.push('the titled panel shell must be an explicit full-bleed exception to the inherited contents box');
 }
 
@@ -1183,7 +1183,7 @@ if (!/<InnerChromeBox className="skirmish-service-record">/.test(skirmishHud)
   // The grid's own rails are drawn with the PRIVATE rail part, not a public ChromeDivider with its
   // caps switched off: the grid places every junction itself from its line topology, and no call
   // site may say "no caps" any more (see check-chrome-rails.mjs).
-  || !/<ChromeGridRail[\s\S]*?role="inner"[\s\S]*?orientation="vertical"/.test(chromeDividedGrid)
+  || !/<ChromeGridRail[\s\S]*?role=\{railRole\}[\s\S]*?orientation="vertical"/.test(chromeDividedGrid)
   || !/from '\.\/chromeRailInternals'/.test(chromeDividedGrid)) {
   failures.push('Portrait hosts must use the registered InnerChromeBox or the Run Army row’s registered vertical divider composition');
 }
@@ -1200,7 +1200,12 @@ for (const selector of ['.skirmish-service-record', '.unit-portrait', '.unit-por
 if (!/<InnerChromeBox[\s\S]*?className=\{`skirmish-promotion-picker is-\$\{side\}`\}/.test(pawnPromotionPicker)
   || !/<ChromeButton[\s\S]*?unit="inner-asset-swatch"[\s\S]*?chromeUnitClassNames\('inner-asset-swatch',\s*'app-header-button',\s*'skirmish-promotion-option'\)/.test(pawnPromotionPicker)
   || /aria-label="Pawn promotion"/.test(skirmishHud)
-  || !/<ChromeButton unit="inner-text-button"[\s\S]*?chromeUnitClassNames\('inner-text-button',\s*'skirmish-hud-tab'/.test(skirmishHud)
+  // The HUD's sections are COMPARTMENTS of the Controls head's divided block, not framed buttons
+  // standing in a row: the panel's rails are their edges. So the pin is on the declaration that
+  // hands them to the panel, and on the panel keeping the rails to itself.
+  || !/titleSections=\{controlsContent === undefined \? HUD_TABS\.map/.test(skirmishHud)
+  || /<ChromeButton[\s\S]*?'skirmish-hud-tab'/.test(skirmishHud)
+  || !/<ChromeDividedGridCell\s*\n\s*key=\{section\.id\}\s*\n\s*as="button"/.test(chromeBox)
   || !/<ChromeButton unit="inner-text-button"[\s\S]*?chromeUnitClassNames\('inner-text-button',\s*'app-header-button',\s*'skirmish-grid-key'/.test(skirmishHud)) {
   failures.push('Skirmish promotion must use its registered anchored inner composition while tab and command-grid controls inherit existing registered inner units');
 }
