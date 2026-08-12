@@ -40,10 +40,15 @@ import { StudioCatalogCard } from './studio/StudioCatalogCard';
  * could only retire a family by taking its unrelated siblings with it. The bytes stay uploaded
  * and unaccepted either way; nothing here deletes anything.
  *
- * Two families have been ruled out so far, and both are recorded rather than merely dropped:
+ * Three families have been ruled out so far, and each is recorded rather than merely dropped:
  * - `battle-log-defeat-mark-2026-08-11-v1` — every headstone carried a cross on its face.
  * - the laurel wreaths in `battle-log-marks-2026-08-12-v1` — a wreath is already the Ataraxia
  *   mark, so the Battle's victory would have worn the Run's ladder emblem.
+ * - the white flags in `battle-log-cause-marks-2026-08-12-v1` — a white flag is a surrender
+ *   symbol borrowed from warfare rather than anything chess does, and it collides with the
+ *   objective flag a few rows up. Lichess draws resign as a flag and carries a standing
+ *   complaint that players read it as a peace offer and click it meaning to offer a draw
+ *   (lichess-org/lila#12306, whose suggested replacement is the toppled king).
  */
 export const BATTLE_LOG_MARK_BATCH_IDS: Readonly<Record<BattleLogForgedMark, readonly string[]>> =
   Object.freeze({
@@ -51,7 +56,7 @@ export const BATTLE_LOG_MARK_BATCH_IDS: Readonly<Record<BattleLogForgedMark, rea
     defeat: ['battle-log-defeat-mark-2026-08-12-v2'],
     draw: ['battle-log-marks-2026-08-12-v1'],
     checkmate: ['battle-log-cause-marks-2026-08-12-v1'],
-    resign: ['battle-log-cause-marks-2026-08-12-v1'],
+    resign: ['battle-log-resign-mark-2026-08-12-v2'],
     check: ['battle-log-marks-2026-08-12-v1'],
     gold: ['battle-log-gold-mark-2026-08-12-v1'],
     'gold-loss': ['battle-log-gold-loss-mark-2026-08-12-v1'],
