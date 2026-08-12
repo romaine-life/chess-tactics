@@ -24505,12 +24505,16 @@ button.tileset-relationship-cell {
   overflow: hidden;
 }
 
+/* One structural field holding the three terminal triggers, inset off its own frame exactly as
+   the Cards gallery's filter row is (ADR-0433/ADR-0510). */
 .run-roster-filters {
   --run-roster-filter-surface-pitch: calc(var(--le-inner-field-h, 38px) + var(--ds-inline-tight));
   align-items: end;
+  box-sizing: border-box;
   display: grid;
   gap: var(--ds-inline-tight);
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  padding: var(--ds-space-2) var(--ds-inset);
 }
 
 .run-roster-filters > label {
@@ -25393,6 +25397,11 @@ button.tileset-relationship-cell {
   justify-content: start;
 }
 
+/* The grouped case shows the relics themselves, so the RELIC is the control: its trigger paints
+   nothing at all — no seat, no frame, no material — and the press is answered by the art lighting up
+   (ADR-0254's unframed icon triggers, restated as ADR-0589's one material exception). The reset rule
+   below must keep a comment-free header: the surface-contract gate folds a preceding comment into
+   the selector it looks up, and the approved frameless resets are keyed on the bare selector. */
 .enchiridion-lipsanon-group-grid > li,
 .enchiridion-lipsanon-grouped-trigger {
   block-size: 64px;
@@ -25480,6 +25489,19 @@ button.tileset-relationship-cell {
   display: grid;
   gap: 4px;
   min-inline-size: 0;
+}
+
+/* The fourth seat is a VERB, not a field, so it takes only the width its label needs — the three
+   fields share the flexible tracks and this one is intrinsic. The row declares the extra track
+   only when that seat is filled: an always-declared empty column would leave its gap behind on
+   every gallery that has no fourth narrowing, and the count would wrap to a second line without
+   it. */
+.enchiridion-card-filters.has-scope {
+  grid-template-columns: repeat(3, minmax(132px, 1fr)) auto auto;
+}
+
+.enchiridion-card-filter-scope {
+  justify-items: start;
 }
 
 .enchiridion-card-filter > span {
@@ -25754,6 +25776,16 @@ button.tileset-relationship-cell {
   display: grid;
   gap: var(--ds-space-2);
   padding: var(--ds-inset);
+}
+
+/* The no-Run notice is a NOTICE, not the pane. It is the only thing in a layout whose second row is
+   the flexible one, so it stretched to the whole lane: inconspicuous while it wore the flat field,
+   a wall of stone the moment it wears the marble (the ADR-0557 `Finish Run` shape). It takes the
+   size its copy needs, in the same lane width the sibling record boxes use. */
+.strategikon-unavailable-panel > .enchiridion-empty {
+  align-self: start;
+  justify-self: start;
+  max-inline-size: 560px;
 }
 
 .strategikon-workspace {

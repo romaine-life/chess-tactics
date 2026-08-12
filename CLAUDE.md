@@ -65,6 +65,14 @@ stands", never as the handoff for a state you crafted.
 - **A playable board-link** — `/play?board=<code>&obj=capture-all&returnTo=<editor url>` boots
   straight into the live game with a "Back to editor" so tweak → play → back is a loop. Prefer this
   over the editor when the thing to judge is how it PLAYS.
+- **Reference sections** — the Enchiridion's sections are `/enchiridion/<section>` and the
+  Strategikon's are `/play|/run/strategikon/<section>`, plus one record: a lipsanon is
+  `/enchiridion/lipsana/<lipsanon-id>`, a card face is `/enchiridion/cards/<card-name-hyphenated>`
+  (the name on the banner, never the model's piece-initial id). The Cards gallery's filters are
+  `?gold=&unit=&rarity=`, and the Lipsana browse layout is **`?browse=rows|grouped`** — `rows` is the
+  bare address, and the param rides the Strategikon's own query too, so
+  `/run/craft/<id>?to=/run/strategikon/lipsanotheca%3Fbrowse%3Dgrouped` crafts a Run and opens the
+  grouped case (encode the inner `?` and `=` — `to` takes one address as one value).
 - **Studio** — `mode=catalog|lab|viewer`, `cat=`, `vk=`, `lab=`, and per-item params; see
   "Reaching a specific UI state" below.
 

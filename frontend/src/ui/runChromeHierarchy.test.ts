@@ -669,6 +669,26 @@ describe('Run chrome hierarchy', () => {
   });
 
   /**
+   * ADR-0589. The army roster is the Prosopography, so the Strategikon's adoption is the Run Army
+   * view's too — they are one component. The ledger is the structural box and every row in it is a
+   * control, so the two take OPPOSITE materials: a row that IS the button wears the oak (the shape
+   * SectionBox's `press` member already ships), phased from the roster index the renderer is walking
+   * rather than from DOM position (ADR-0063). The filter row is one field like the Cards gallery's,
+   * not three oak triggers standing on the vista.
+   */
+  it('opposes the ledger box and its rows, and makes the roster filters one field', () => {
+    expect(runArmyWorkspace).toMatch(/className="run-roster-filters"\s*\r?\n\s*fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
+    expect(styleCss).toMatch(/\.run-roster-filters\s*\{[\s\S]*?padding:\s*var\(--ds-space-2\) var\(--ds-inset\);/);
+    expect(runArmyWorkspace).toMatch(/className="run-army-ledger-grid"[\s\S]*?fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
+    expect(runArmyWorkspace).toContain('className="run-army-profile-stats" fillRole={CHROME_STRUCTURAL_FILL_ROLE}');
+    expect(runArmyWorkspace).toContain('{units.map((unit, index) => (');
+    expect(runArmyWorkspace).toMatch(
+      /className="run-army-ledger-row"\s*\r?\n\s*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}\s*\r?\n\s*style=\{leafSurfacePhase\(index\)\}/,
+    );
+    expect(styleCss).not.toMatch(/\.run-army-ledger-row[^}]*:nth-child/);
+  });
+
+  /**
    * ADR-0557. The screens a Battle or a Run ENDS on are one family the player meets in one
    * moment, so they adopt the leaf material together — a half-adopted family reads as a bug
    * the first time a Battle is lost. Every one of them declares adoption with the single host

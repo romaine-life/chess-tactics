@@ -51,12 +51,16 @@ import {
   ENCHIRIDION_CARD_FILTERS_ALL,
   ENCHIRIDION_SECTIONS,
   ENCHIRIDION_SECTION_LABEL,
+  LIPSANA_BROWSE_MODES,
+  LIPSANA_BROWSE_MODE_DEFAULT,
+  LIPSANA_BROWSE_MODE_LABEL,
   enchiridionSectionHref,
   type CardGoldFilter,
   type CardRarityFilter,
   type CardUnitFilter,
   type EnchiridionCardFilters,
   type EnchiridionSection,
+  type LipsanaBrowseMode,
 } from './enchiridionRoute';
 import { installedUiMedia } from './installedUiMedia';
 import { STRATEGIKON_CARD_MARK_CLASS, useStrategikonCardsIcon } from './strategikonNavigation';
@@ -82,7 +86,11 @@ import { useRunCardCostCrownSource } from './shared/runCardCostCrown';
 import { RUN_PROGRESS_MEDIA_ROLE } from './shared/RunProgressIcon';
 import { KitScroll } from './KitScroll';
 import { EnchiridionContentSceneSlot } from './shell/AuthoredSceneSlot';
-import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
+import {
+  CHROME_LEAF_FILL_SURFACE,
+  CHROME_STRUCTURAL_FILL_ROLE,
+  leafSurfacePhase,
+} from './shared/chromeSurfacePolicy';
 
 /**
  * Every section's mark, resolved to installed media. These are the same kit icons the
@@ -229,6 +237,14 @@ function MovementDiagram({ type }: { type: PlayablePieceType }): ReactElement {
 // own titled chrome box on a host that owns no header, unframed under a host that does.
 // Exported because the Strategikon's Run-fed sections (the Chartulary) are the same kind
 // of panel and must not grow a lookalike frame (ADR-0059).
+//
+// It is also where these sections declare that they have adopted ADR-0433's material
+// hierarchy wholesale (ADR-0555/ADR-0557): every record box inside wears the structural
+// marble by naming the shared role, and every registered leaf unit — the browse tabs, the
+// Chartulary's This Combat, any control a later section borrows — wears the oak from this
+// one attribute. Declaring it on the FRAME rather than on a host is what keeps the two
+// transports agreeing: the same reference gallery cannot be oak inside the Strategikon and
+// teal on the main menu.
 export function ReferenceSectionFrame({
   children,
   chromeConsumer,
@@ -245,14 +261,19 @@ export function ReferenceSectionFrame({
   const panelClassName = `enchiridion-panel ${className}`.trim();
   if (framed) {
     return (
-      <OuterChromeBox chromeConsumer={chromeConsumer} titled className={panelClassName}>
+      <OuterChromeBox
+        chromeConsumer={chromeConsumer}
+        titled
+        className={panelClassName}
+        data-chrome-leaf-surface=""
+      >
         <OuterChromeHeader title={title} />
         {children}
       </OuterChromeBox>
     );
   }
   return (
-    <section className={`${panelClassName} enchiridion-panel-unframed`}>
+    <section className={`${panelClassName} enchiridion-panel-unframed`} data-chrome-leaf-surface="">
       <h2 className="settings-section-title">{title}</h2>
       {children}
     </section>
@@ -271,7 +292,7 @@ function UnitsSection({ framed }: { framed: boolean }): ReactElement {
       <KitScroll className="enchiridion-reference-scroll">
         <div className="enchiridion-unit-grid">
           {PLAYABLE_PIECE_TYPES.map((type) => (
-            <InnerChromeBox className="enchiridion-unit-card" key={type}>
+            <InnerChromeBox className="enchiridion-unit-card" fillRole={CHROME_STRUCTURAL_FILL_ROLE} key={type}>
               <div className="enchiridion-unit-copy">
                 <h3>{PIECE_LABEL[type]}</h3>
                 <p>{UNIT_COPY[type]}</p>
@@ -588,7 +609,7 @@ function ManubiaeSection({ framed }: { framed: boolean }): ReactElement {
       <KitScroll className="enchiridion-reference-scroll">
         <div className="enchiridion-unit-grid">
           {RUN_MANUBIAE.map((entry) => (
-            <InnerChromeBox className="enchiridion-unit-card" key={entry.id}>
+            <InnerChromeBox className="enchiridion-unit-card" fillRole={CHROME_STRUCTURAL_FILL_ROLE} key={entry.id}>
               <div className="enchiridion-unit-copy">
                 <h3>{entry.name}</h3>
                 <ManubiumPrice entry={entry} />
@@ -599,7 +620,7 @@ function ManubiaeSection({ framed }: { framed: boolean }): ReactElement {
           ))}
         </div>
       </KitScroll>
-      <InnerChromeBox className="enchiridion-rule-exceptions">
+      <InnerChromeBox className="enchiridion-rule-exceptions" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
         <h3>How they add up</h3>
         <p>Only <strong>your</strong> units earn these — the enemy does the same things and is paid nothing — and each one pays again every time you land it.</p>
         <p>One move may earn <strong>several</strong> at once, and each pays in full: a capture that also forks is both, and a promotion that mates is paid alongside the check it discovered.</p>
@@ -623,7 +644,7 @@ function TerrainSection({ framed }: { framed: boolean }): ReactElement {
       <KitScroll className="enchiridion-reference-scroll">
         <div className="enchiridion-terrain-list">
           {TERRAIN_FEATURES.map((feature) => (
-            <InnerChromeBox className="enchiridion-terrain-row" key={feature.label}>
+            <InnerChromeBox className="enchiridion-terrain-row" fillRole={CHROME_STRUCTURAL_FILL_ROLE} key={feature.label}>
               <span className={feature.icon} aria-hidden="true" />
               <span>
                 <h3>{feature.label}</h3>
@@ -633,7 +654,7 @@ function TerrainSection({ framed }: { framed: boolean }): ReactElement {
           ))}
         </div>
       </KitScroll>
-      <InnerChromeBox className="enchiridion-rule-exceptions">
+      <InnerChromeBox className="enchiridion-rule-exceptions" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
         <h3>Path exceptions</h3>
         <p><strong>Knights</strong> jump over gaps, fences, and intervening obstacles. Only the landing square must be legal.</p>
         <p><strong>Bishops</strong> inspect the diagonal they actually travel. Obstacles on neighboring non-diagonal tiles are ignored; a blocker on the diagonal itself still ends the path.</p>
@@ -646,7 +667,9 @@ function statisticFor(statistics: LipsanaStatistics, lipsanonId: LipsanonId) {
   return statistics[lipsanonId] ?? { timesPicked: 0, battlesWonWhileHeld: 0 };
 }
 
-type LipsanonBrowseMode = 'rows' | 'grouped';
+// The two browse layouts and their labels live in the route module, because the address is what
+// validates them (see enchiridionRoute).
+export type { LipsanaBrowseMode } from './enchiridionRoute';
 
 // One reference entry control in two transports (ADR-0256): a host that gives records
 // addresses (lipsana, cards) renders a NavButton whose route is the record's address
@@ -667,6 +690,8 @@ export function LipsanaCodex({
   framed = true,
   selectedLipsanonId = null,
   lipsanonHref,
+  browseMode: addressedBrowseMode = null,
+  browseModeHref,
 }: {
   lipsanonIds?: readonly LipsanonId[];
   title?: string;
@@ -676,12 +701,21 @@ export function LipsanaCodex({
   selectedLipsanonId?: LipsanonId | null;
   /** When present, lipsanon selection navigates to this address instead of setting local state. */
   lipsanonHref?: (lipsanonId: LipsanonId) => string;
+  /** The route-addressed browse layout; read only when browseModeHref makes it navigational. */
+  browseMode?: LipsanaBrowseMode | null;
+  /** When present, choosing a layout navigates to this address instead of setting local state. */
+  browseModeHref?: (mode: LipsanaBrowseMode) => string;
 }): ReactElement {
   const [localSelectedId, setLocalSelectedId] = useState<LipsanonId>(lipsanonIds[0] ?? RUN_LIPSANA[0].id);
   // Routed hosts derive the selection from the address every render; an unknown or
   // absent lipsanon address falls back to the first visible lipsanon without rewriting the URL.
   const selectedId = lipsanonHref ? (selectedLipsanonId ?? lipsanonIds[0] ?? RUN_LIPSANA[0].id) : localSelectedId;
-  const [browseMode, setBrowseMode] = useState<LipsanonBrowseMode>('rows');
+  // The layout follows the same two-transport rule the selection does: addressed where a host gives
+  // it an href, local state where one does not. That is what makes the grouped case linkable.
+  const [localBrowseMode, setLocalBrowseMode] = useState<LipsanaBrowseMode>(LIPSANA_BROWSE_MODE_DEFAULT);
+  const browseMode = browseModeHref
+    ? (addressedBrowseMode ?? LIPSANA_BROWSE_MODE_DEFAULT)
+    : localBrowseMode;
   const [statistics, setStatistics] = useState<LipsanaStatistics>({});
   const [statisticsStatus, setStatisticsStatus] = useState<'loading' | 'account' | 'browser'>('loading');
   const browsePanelId = useId();
@@ -724,27 +758,25 @@ export function LipsanaCodex({
       {lipsanonIds.length ? (
         <div className="enchiridion-lipsanon-layout">
           <div className="enchiridion-lipsanon-browser">
+            {/* Each layout is its own address, so a tab is the same ReferenceTrigger the records
+                are: a NavButton to that address under a host that gives it one, a plain selection
+                button under one that does not (ADR-0256). One control, two transports. */}
             <div className="le-seg enchiridion-lipsanon-view-tabs" role="tablist" aria-label="Lipsanon browsing layout">
-              <ChromeButton unit="inner-text-button"
-                data-testid="lipsanon-view-rows"
-                role="tab"
-                aria-controls={browsePanelId}
-                aria-selected={browseMode === 'rows'}
-                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', browseMode === 'rows' && 'active')}
-                onClick={() => setBrowseMode('rows')}
-              >
-                Rows
-              </ChromeButton>
-              <ChromeButton unit="inner-text-button"
-                data-testid="lipsanon-view-grouped"
-                role="tab"
-                aria-controls={browsePanelId}
-                aria-selected={browseMode === 'grouped'}
-                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', browseMode === 'grouped' && 'active')}
-                onClick={() => setBrowseMode('grouped')}
-              >
-                Grouped
-              </ChromeButton>
+              {LIPSANA_BROWSE_MODES.map((mode) => (
+                <ReferenceTrigger
+                  key={mode}
+                  to={browseModeHref?.(mode)}
+                  onSelect={() => setLocalBrowseMode(mode)}
+                  data-testid={`lipsanon-view-${mode}`}
+                  data-chrome-unit="inner-text-button"
+                  role="tab"
+                  aria-controls={browsePanelId}
+                  aria-selected={browseMode === mode}
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', browseMode === mode && 'active')}
+                >
+                  {LIPSANA_BROWSE_MODE_LABEL[mode]}
+                </ReferenceTrigger>
+              ))}
             </div>
             <div
               id={browsePanelId}
@@ -755,12 +787,19 @@ export function LipsanaCodex({
               <KitScroll className="enchiridion-lipsanon-scroll">
                 {browseMode === 'rows' ? (
                   <ul className="enchiridion-lipsanon-rows" aria-label={title}>
-                    {visibleLipsana.map((lipsanon) => (
+                    {/* A browse row NAMES the oak rather than inheriting it. `inner-list-row` is a
+                        structural template because it also serves dropdown option rows, which
+                        ADR-0433 keeps teal inside the popup field that hosts them — but here the
+                        row IS the control that picks a record, so it wears the leaf material and
+                        phases it from the record's own place in the list (ADR-0063). */}
+                    {visibleLipsana.map((lipsanon, index) => (
                       <li key={lipsanon.id}>
                         <ReferenceTrigger
                           to={lipsanonHref?.(lipsanon.id)}
                           onSelect={() => setLocalSelectedId(lipsanon.id)}
                           data-chrome-unit="inner-list-row"
+                          data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                          style={leafSurfacePhase(index)}
                           className={chromeUnitClassNames(
                             'inner-list-row',
                             'enchiridion-lipsanon-row',
@@ -776,8 +815,15 @@ export function LipsanaCodex({
                     ))}
                   </ul>
                 ) : (
-                  <InnerChromeBox className="enchiridion-lipsanon-group">
+                  <InnerChromeBox className="enchiridion-lipsanon-group" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
                     <ul className="enchiridion-lipsanon-group-grid" aria-label={title}>
+                      {/* The RELIC is the clickable surface here — the owner's call, and the stated
+                          exception ADR-0433 asks to be recorded. The grouped case shows the objects
+                          themselves, so the art is the control's whole body: it takes no seat, no
+                          frame and no material, and pressing it is answered by the art lighting up.
+                          A wooden seat under each one made the case a box of buttons holding
+                          pictures of relics rather than a case of relics. The named rows view is
+                          where a lipsanon reads as a row of chrome; this view is the objects. */}
                       {visibleLipsana.map((lipsanon) => (
                         <li key={lipsanon.id}>
                           <ReferenceTrigger
@@ -797,7 +843,7 @@ export function LipsanaCodex({
               </KitScroll>
             </div>
           </div>
-          <InnerChromeBox className="enchiridion-lipsanon-detail">
+          <InnerChromeBox className="enchiridion-lipsanon-detail" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
             <LipsanonIcon lipsanonId={selected.id} />
             <div>
               <h3>{selected.name}</h3>
@@ -815,7 +861,7 @@ export function LipsanaCodex({
           </InnerChromeBox>
         </div>
       ) : (
-        <InnerChromeBox className="enchiridion-empty">
+        <InnerChromeBox className="enchiridion-empty" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
           <h3>No lipsana held</h3>
           <p>This Lipsanotheca is presently, and perhaps suspiciously, empty.</p>
         </InnerChromeBox>
@@ -886,6 +932,7 @@ export function CardGalleryFilters({
   onRarityFilterChange,
   count,
   testIdPrefix,
+  scope,
 }: {
   goldFilter: CardGoldFilter;
   unitFilter: CardUnitFilter;
@@ -895,9 +942,22 @@ export function CardGalleryFilters({
   onRarityFilterChange: (filter: CardRarityFilter) => void;
   count: number;
   testIdPrefix: string;
+  /**
+   * A fourth narrowing that only one gallery has — the Chartulary's This Combat. It is a filter,
+   * so it is seated IN the field with the other three rather than beside it. Standing outside, it
+   * was a third child of a layout that declares one row for this field and one for the gallery: it
+   * took the gallery's own flexible track, so it stretched the full lane and pushed the cards into
+   * an implicit row the layout clips. Under the flat field that read as a wide button; wearing the
+   * plank it reads as a wall (the ADR-0557 `Finish Run` failure, one row up).
+   */
+  scope?: { label: string; active: boolean; onToggle: () => void };
 }): ReactElement {
   return (
-    <InnerChromeBox className="enchiridion-card-filters" fillRole="outer" aria-label="Card filters">
+    <InnerChromeBox
+      className={`enchiridion-card-filters${scope ? ' has-scope' : ''}`}
+      fillRole={CHROME_STRUCTURAL_FILL_ROLE}
+      aria-label="Card filters"
+    >
       <div
         className="enchiridion-card-filter"
         style={{ ['--enchiridion-card-filter-index' as string]: 0 } as CSSProperties}
@@ -940,6 +1000,23 @@ export function CardGalleryFilters({
           fillSurface={CHROME_LEAF_FILL_SURFACE}
         />
       </div>
+      {scope ? (
+        <div className="enchiridion-card-filter enchiridion-card-filter-scope">
+          <span>Scope</span>
+          {/* Oak from the section frame's adoption; its PHASE from the seat it was authored in,
+              through the one shared derivation rather than a copy of the row's own calc. */}
+          <ChromeButton
+            unit="inner-text-button"
+            className={chromeUnitClassNames('inner-text-button', 'app-header-button', scope.active && 'active')}
+            style={leafSurfacePhase(3)}
+            aria-pressed={scope.active}
+            data-testid={`${testIdPrefix}-scope-filter`}
+            onClick={scope.onToggle}
+          >
+            {scope.label}
+          </ChromeButton>
+        </div>
+      ) : null}
       <span className="enchiridion-card-filter-count" aria-live="polite">
         {count} {count === 1 ? 'card' : 'cards'}
       </span>
@@ -1081,7 +1158,7 @@ export function CardCodex({
               </section>
             ))}
             {!groups.length ? (
-              <InnerChromeBox className="enchiridion-empty">
+              <InnerChromeBox className="enchiridion-empty" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
                 <h3>No matching cards</h3>
                 <p>No card has all of the selected properties.</p>
               </InnerChromeBox>
@@ -1145,6 +1222,7 @@ function AtaraxiaSection({ framed }: { framed: boolean }): ReactElement {
             return (
               <InnerChromeBox
                 className={`enchiridion-ataraxia-card${locked ? ' is-locked' : ''}`}
+                fillRole={CHROME_STRUCTURAL_FILL_ROLE}
                 key={tier}
               >
                 {artUrl(definition.numeral) ? (
@@ -1186,6 +1264,8 @@ export function EnchiridionReference({
   cardHref,
   cardFilters,
   cardFiltersHref,
+  lipsanaBrowseMode = null,
+  lipsanaBrowseModeHref,
 }: {
   section: EnchiridionSection;
   framed: boolean;
@@ -1195,6 +1275,8 @@ export function EnchiridionReference({
   cardHref?: (cardId: string) => string;
   cardFilters?: EnchiridionCardFilters | null;
   cardFiltersHref?: (filters: EnchiridionCardFilters) => string;
+  lipsanaBrowseMode?: LipsanaBrowseMode | null;
+  lipsanaBrowseModeHref?: (mode: LipsanaBrowseMode) => string;
 }): ReactElement {
   if (section === 'terrain') return <TerrainSection framed={framed} />;
   if (section === 'manubiae') return <ManubiaeSection framed={framed} />;
@@ -1209,7 +1291,17 @@ export function EnchiridionReference({
       />
     );
   }
-  if (section === 'lipsana') return <LipsanaCodex framed={framed} selectedLipsanonId={selectedLipsanonId} lipsanonHref={lipsanonHref} />;
+  if (section === 'lipsana') {
+    return (
+      <LipsanaCodex
+        framed={framed}
+        selectedLipsanonId={selectedLipsanonId}
+        lipsanonHref={lipsanonHref}
+        browseMode={lipsanaBrowseMode}
+        browseModeHref={lipsanaBrowseModeHref}
+      />
+    );
+  }
   if (section === 'ataraxia') return <AtaraxiaSection framed={framed} />;
   return <UnitsSection framed={framed} />;
 }
@@ -1223,6 +1315,8 @@ export function Enchiridion({
   cardHref,
   cardFilters = null,
   cardFiltersHref,
+  lipsanaBrowseMode = null,
+  lipsanaBrowseModeHref,
   showSectionRail = true,
   sceneInstanceKey = `enchiridion/${section ?? 'root'}`,
   framed = true,
@@ -1241,6 +1335,10 @@ export function Enchiridion({
   cardFilters?: EnchiridionCardFilters | null;
   /** When present, changing a card filter navigates to this address. */
   cardFiltersHref?: (filters: EnchiridionCardFilters) => string;
+  /** The route-addressed lipsana browse layout; see LipsanaCodex. */
+  lipsanaBrowseMode?: LipsanaBrowseMode | null;
+  /** When present, choosing a lipsana browse layout navigates to this address. */
+  lipsanaBrowseModeHref?: (mode: LipsanaBrowseMode) => string;
   showSectionRail?: boolean;
   sceneInstanceKey?: string;
   framed?: boolean;
@@ -1262,6 +1360,8 @@ export function Enchiridion({
             cardHref={cardHref}
             cardFilters={cardFilters}
             cardFiltersHref={cardFiltersHref}
+            lipsanaBrowseMode={lipsanaBrowseMode}
+            lipsanaBrowseModeHref={lipsanaBrowseModeHref}
           />
         </EnchiridionContentSceneSlot>
       ) : null}
