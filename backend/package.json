@@ -6,6 +6,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node supervisor.js",
+    "build:board-render": "npm --prefix ../packages/board-render run build",
     "schema:check-history": "node scripts/check-schema-migration-history.mjs",
     "schema:migrate": "node scripts/run-schema-migrations.mjs",
     "units:prune-unused": "node scripts/prune-unused-unit-assets.mjs",

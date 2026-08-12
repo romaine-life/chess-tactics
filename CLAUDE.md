@@ -691,13 +691,6 @@ already handled inside `pr-gate`:
 - **`gh pr checks --json` does not emit `[]` when no checks are registered.** It prints a
   plain-English sentence, sometimes on stdout with exit 0 and sometimes on stderr with exit 1.
   Parse the payload; do not key off the exit code or scan only one stream.
-- **"every check I can see has passed" is not "CI passed".** `gh pr checks` lists the check RUNS
-  that exist right now, and a workflow's runs appear only once its suite starts dispatching them.
-  Poll a freshly-pushed PR and you get the one check that registered so far — green, and
-  meaningless. `pr-gate` reported READY on #924 with 1 of 3 checks and the branch was merged on a
-  third of its CI. It now also reads the head commit's **check suites** and refuses to settle
-  while any is `queued` or `in_progress`. A hand-written loop over `gh pr checks` alone cannot
-  see this at all.
 
 A watch must speak on every poll, not only on success — `pr-gate` heartbeats elapsed/pending
 to stderr so a live wait is never mistaken for a dead one.
