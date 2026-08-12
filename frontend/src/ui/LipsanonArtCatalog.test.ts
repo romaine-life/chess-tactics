@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { AdminLiveMediaCatalog } from '../net/liveMediaAdmin';
 import {
-  partitionLipsanonReviewCandidates,
-  runLipsanonReviewCandidates,
-  type LipsanonReviewCandidate,
-} from './LipsanonReview';
+  partitionLipsanonArtCandidates,
+  runLipsanonArtCandidates,
+  type LipsanonArtCandidate,
+} from './LipsanonArtCatalog';
 
 describe('Run lipsanon art review', () => {
   it('ignores unrelated accepted media versions that have no matching Run lipsanon slot', () => {
@@ -74,7 +74,7 @@ describe('Run lipsanon art review', () => {
       ],
     } satisfies AdminLiveMediaCatalog;
 
-    expect(runLipsanonReviewCandidates(catalog)).toEqual([
+    expect(runLipsanonArtCandidates(catalog)).toEqual([
       expect.objectContaining({ lipsanonId: 'royal-tent' }),
     ]);
   });
@@ -84,14 +84,14 @@ describe('Run lipsanon art review', () => {
       lipsanonId: 'royal-tent',
       slot: 'ui/run/lipsana/royal-tent.png',
       version: { status: 'accepted' },
-    } as unknown as LipsanonReviewCandidate;
+    } as unknown as LipsanonArtCandidate;
     const candidate = {
       lipsanonId: 'royal-tent',
       slot: 'ui/run/lipsana/royal-tent.png',
       version: { status: 'candidate' },
-    } as unknown as LipsanonReviewCandidate;
+    } as unknown as LipsanonArtCandidate;
 
-    expect(partitionLipsanonReviewCandidates([installed, candidate])).toEqual({
+    expect(partitionLipsanonArtCandidates([installed, candidate])).toEqual({
       newCandidates: [candidate],
       installedReferences: [installed],
     });

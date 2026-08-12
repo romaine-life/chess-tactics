@@ -405,31 +405,25 @@ export function SkirmishHud({
         aria-label="Skirmish command HUD"
         titleActions={strategikonNavigation}
         titleClassName="skirmish-hud-titlebar"
-        titleContent={controlsContent === undefined ? (
-          <div
-            className="skirmish-hud-tabs"
-            role="tablist"
-            aria-label="HUD sections"
-            data-transition-policy="immediate-local"
-          >
-            {HUD_TABS.map((t, index) => (
-              <ChromeButton unit="inner-text-button"
-                key={t.id}
-                role="tab"
-                id={`skirmish-tab-${t.id}`}
-                aria-selected={tab === t.id}
-                aria-controls={`skirmish-panel-${t.id}`}
-                className={chromeUnitClassNames('inner-text-button', 'skirmish-hud-tab', tab === t.id && 'active')}
-                aria-label={t.label}
-                title={t.label}
-                style={leafSurfacePhase(index)}
-                onClick={() => setTab(t.id)}
-              >
-                <span className={`skirmish-tab-icon skirmish-tab-icon-${t.id}`} aria-hidden="true" />
-              </ChromeButton>
-            ))}
-          </div>
-        ) : null}
+        titleStrip={{ role: 'tablist', ariaLabel: 'HUD sections' }}
+        // One compartment per section, and the panel rules the lines between them. A tab is the
+        // compartment ITSELF — the rails on either side are already its edges, so a framed button
+        // in here would draw a second edge a few pixels inside the first (ADR-0433 leaf oak, no
+        // frame of its own).
+        titleSections={controlsContent === undefined ? HUD_TABS.map((t, index) => ({
+          id: t.id,
+          className: 'skirmish-hud-tab',
+          attrs: {
+            role: 'tab',
+            id: `skirmish-tab-${t.id}`,
+            'aria-selected': tab === t.id,
+            'aria-controls': `skirmish-panel-${t.id}`,
+            'data-transition-policy': 'immediate-local',
+          },
+          style: leafSurfacePhase(index),
+          press: { onPress: () => setTab(t.id), ariaLabel: t.label, title: t.label, active: tab === t.id },
+          content: <span className={`skirmish-tab-icon skirmish-tab-icon-${t.id}`} aria-hidden="true" />,
+        })) : []}
       >
 
         {controlsContent === undefined ? (
