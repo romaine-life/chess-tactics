@@ -11549,10 +11549,13 @@ async function dbReconcileEditorDocument(client, row, { lockCanonical = true } =
   return { ...row, baseline_conflict: true };
 }
 
-async function dbResolveEditorDocument(ownerEmail, workspace, levelId) {
+async function dbResolveEditorDocument(ownerEmail, workspace, levelId, { create = true } = {}) {
   return withEditorDocumentTransaction(async (client) => {
     let row = await dbGetEditorDocumentByLevel(ownerEmail, workspace, levelId, client, { lock: true });
     if (row) return { row: await dbReconcileEditorDocument(client, row), created: false };
+    // An observing caller attaches to a document that already exists or learns that none does.
+    // Initializing one from canonical is a write, so it stays behind the ordinary editing intent.
+    if (!create) throw editorDocumentError(404, 'editor_document_not_found_for_level');
     const canonical = await dbCanonicalLevel(client, ownerEmail, workspace, levelId, { lock: true });
     if (!canonical.level) throw editorDocumentError(404, 'saved_level_not_found');
     const parsed = editorDocumentLevel(canonical.level, levelId);
@@ -13117,7 +13120,14 @@ function editorDocumentResolveRequest(req, res) {
   const rawLevelId = raw.level_id;
   const levelId = rawLevelId === undefined || rawLevelId === null || rawLevelId === '' ? '' : levelStoreId(rawLevelId);
   if (rawLevelId && !levelId) { res.status(400).json({ error: 'invalid_level_id' }); return null; }
-  return { raw, workspace, levelId };
+  // Same intent vocabulary the edit-session open already speaks, so an observing caller declares
+  // itself once and every document-touching request on the path honours it. Resolve is where a
+  // working copy is BORN, so observation has to reach this request too: rewriting only the
+  // session-open leaves an observer that already created the document it then observes.
+  const rawIntent = raw.intent ?? req.get('x-level-editor-session-intent') ?? 'write';
+  const intent = rawIntent === 'write' || rawIntent === 'observe' ? rawIntent : null;
+  if (!intent) { res.status(400).json({ error: 'invalid_editor_document_resolve_intent' }); return null; }
+  return { raw, workspace, levelId, intent };
 }
 
 function editorDocumentOperationRequest(req, res) {
@@ -13303,11 +13313,17 @@ app.post('/api/editor-documents/resolve', async (req, res) => {
     if (!input.levelId) {
       if (input.workspace.kind !== 'user') { res.status(400).json({ error: 'level_id_required' }); return; }
       if (!isObjectRecord(input.raw.level)) { res.status(400).json({ error: 'invalid_level_body' }); return; }
+      if (input.intent === 'observe') {
+        res.status(409).json({ error: 'observation_cannot_create_editor_document' });
+        return;
+      }
       const row = await dbCreateEditorDocument(user.email, input.raw.level);
       res.status(201).json({ document: publicEditorDocument(row) });
       return;
     }
-    const result = await dbResolveEditorDocument(user.email, input.workspace, input.levelId);
+    const result = await dbResolveEditorDocument(user.email, input.workspace, input.levelId, {
+      create: input.intent !== 'observe',
+    });
     res.status(result.created ? 201 : 200).json({ document: publicEditorDocument(result.row) });
   } catch (error) {
     respondEditorDocumentError(res, error, 'resolve');
