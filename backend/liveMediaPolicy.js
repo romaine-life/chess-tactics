@@ -238,8 +238,13 @@ const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
   'ui/kit/icons/game/draw.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'draw' }),
   // The CAUSE half of the vocabulary. An outcome mark and one of these finish a log line
   // between them with no words in it, so each needs a glyph of its own.
+  //
+  // Stalemate is deliberately NOT among them. Chess notation marks check (`+`) and checkmate
+  // (`#`) and appends nothing at all for a stalemate, which is recorded as a draw and named in
+  // words — so a stalemate glyph would be the only mark here with no counterpart in the game's
+  // own notation. Its row wears the draw scales and says `Stalemate`, exactly as the three
+  // other draws do. Do not re-register it without re-reading ADR-0637.
   'ui/kit/icons/game/checkmate.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'checkmate' }),
-  'ui/kit/icons/game/stalemate.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'stalemate' }),
   'ui/kit/icons/game/resign.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'resign' }),
   // Gold ARRIVING and gold LEAVING. The Run's coin is a resource mark and states no direction,
   // so a row drawing it left the number to carry the sign alone. These are transaction marks:

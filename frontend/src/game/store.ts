@@ -279,14 +279,22 @@ export interface LogEntry {
  * The vocabulary is in two halves, and a row may take one from each:
  *
  * - **Outcome** — `victory`, `defeat`, `draw`. How it went, from the reading seat.
- * - **Cause** — `checkmate`, `stalemate`, `resign`, `clock`. Why it went that way.
+ * - **Cause** — `checkmate`, `resign`, `clock`. Why it went that way.
  *
  * Together they finish a sentence with no words in it at all: grave + hash is "lost to
- * checkmate", wreath + flag is "won, they resigned", scales + boxed king is "stalemate".
- * Those rows carry an EMPTY text deliberately — an empty line is the marks doing their whole
- * job, not a hole. Rows whose cause has no glyph keep the clause that distinguishes them
- * (`50 moves without a capture or pawn move`), and the rest of the vocabulary — `objective`,
- * `check`, `gold`, `gold-loss` — marks a line that is not an ending.
+ * checkmate", trophy + flag is "won, they resigned". Those rows carry an EMPTY text
+ * deliberately — an empty line is the marks doing their whole job, not a hole.
+ *
+ * **Stalemate deliberately has no mark**, and chess is why. Notation marks check (`+`) and
+ * checkmate (`#`); it appends NOTHING for a stalemate, which is recorded as a draw like any
+ * other and named in words if the reason matters. Inventing a glyph for it would have been the
+ * only mark here with no counterpart in the game's own notation — and it would have broken the
+ * pattern its three siblings already follow, where the scales say DRAWN and a clause says which
+ * draw: `Stalemate`, `The same position, three times`, `50 moves without a capture or pawn
+ * move`, `Neither side can force a mate`.
+ *
+ * The rest of the vocabulary — `objective`, `check`, `gold`, `gold-loss` — marks a line that is
+ * not an ending.
  *
  * Every kind of prose line the Battle writes has a mark, because a log where only the
  * interesting rows are marked is a log the reader has to read anyway to find out which rows
@@ -304,7 +312,6 @@ export type LogMark =
   | 'defeat'
   | 'draw'
   | 'checkmate'
-  | 'stalemate'
   | 'resign'
   | 'clock'
   | 'gold'
@@ -319,8 +326,8 @@ export const logNote = (text: string, ...marks: LogMark[]): LogEntry =>
  * ONE place so an outcome cannot be written without being marked as one — the alternative is a
  * mark argument at each of the five call sites, four of which would eventually disagree.
  *
- * A checkmate and a stalemate say everything they have to say in two glyphs, so they write no
- * text at all. Everything else keeps the clause that tells it apart from its siblings.
+ * A checkmate says everything it has to say in two glyphs, so it writes no text at all. A
+ * stalemate is a draw NAMED in words, like the three draws beside it — see `LogMark`.
  */
 function adjudicationEntry(
   adjudication: Adjudication,
@@ -329,7 +336,6 @@ function adjudicationEntry(
 ): LogEntry {
   const outcome = outcomeMark(adjudication.winner, localSide);
   if (adjudication.kind === 'checkmate') return logNote('', outcome, 'checkmate');
-  if (adjudication.kind === 'stalemate') return logNote('', outcome, 'stalemate');
   return logNote(adjudicationCopy(adjudication, localSide, authored), outcome);
 }
 
@@ -488,9 +494,10 @@ function adjudicationResultDetail(adjudication: Adjudication | null, localSide: 
 /**
  * What a settled position's row SAYS, given that its marks already say how it went and why.
  *
- * Victory/Defeat/Draw and Checkmate/Stalemate are the marks' words, so they are not repeated
- * here — `adjudicationEntry` writes those two kinds as marks with no text. What is left is the
- * draws that need a clause to be told apart, and the authored rule that gave its own name.
+ * Victory/Defeat/Draw and Checkmate are the marks' words, so they are not repeated here —
+ * `adjudicationEntry` writes a checkmate as marks with no text. What is left is the draws,
+ * each of which needs the clause that tells it from its siblings, and the authored rule that
+ * came with its own name.
  */
 function adjudicationCopy(
   adjudication: Adjudication,
@@ -503,7 +510,8 @@ function adjudicationCopy(
       : victoryRuleDetailForSide(adjudication.rule, localSide);
     return detail ?? '';
   }
-  if (adjudication.kind === 'checkmate' || adjudication.kind === 'stalemate') return '';
+  if (adjudication.kind === 'checkmate') return '';
+  if (adjudication.kind === 'stalemate') return 'Stalemate';
   return DRAW_RULE_COPY[adjudication.kind];
 }
 

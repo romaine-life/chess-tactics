@@ -16,7 +16,7 @@ describe('BattleLogMarks', () => {
   it('names one slot and one app-ui role per forged mark, so two seats cannot drift', () => {
     // Outcomes first, then the causes they pair with — the order a row wears them.
     expect(BATTLE_LOG_FORGED_MARKS)
-      .toEqual(['victory', 'defeat', 'draw', 'checkmate', 'stalemate', 'resign', 'check', 'gold', 'gold-loss']);
+      .toEqual(['victory', 'defeat', 'draw', 'checkmate', 'resign', 'check', 'gold', 'gold-loss']);
     for (const mark of BATTLE_LOG_FORGED_MARKS) {
       expect(BATTLE_LOG_MARK_SLOT[mark]).toBe(`ui/kit/icons/game/${mark}.png`);
       expect(BATTLE_LOG_MARK_MEDIA_ROLE[mark]).toBe(`ui-kit-icons-game-${mark}-png`);

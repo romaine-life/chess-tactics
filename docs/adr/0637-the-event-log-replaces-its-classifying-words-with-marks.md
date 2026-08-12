@@ -36,7 +36,7 @@ says the same thing — the classifier moves into the column the move numbers ta
 keeps only what the marks cannot say.
 
 The vocabulary is in two halves, and an ending takes one from each: an **outcome** (victory,
-defeat, draw) and a **cause** (checkmate, stalemate, resign, clock). Together they finish the
+defeat, draw) and a **cause** (checkmate, resign, clock). Together they finish the
 sentence with no words in it at all, and those rows carry an EMPTY text deliberately — an empty
 line is the marks doing their whole job, not a hole.
 
@@ -52,9 +52,16 @@ line is the marks doing their whole job, not a hole.
 | `Defeat — your clock ran out.` | defeat + clock | *(nothing)* |
 | `Defeat — you resigned.` | defeat + resign | *(nothing)* |
 | `Victory — your opponent resigned.` | victory + resign | *(nothing)* |
-| `Stalemate — the skirmish is a draw.` | draw + stalemate | *(nothing)* |
+| `Stalemate — the skirmish is a draw.` | draw | `Stalemate` |
 | `Draw — the same position has occurred three times.` | draw | `The same position, three times` |
 
+- **Stalemate deliberately has NO mark, and chess is the reason.** Notation marks check (`+`)
+  and checkmate (`#`); it appends nothing at all for a stalemate, which is recorded as a draw
+  like any other and named in words if the reason matters. A stalemate glyph would have been
+  the only mark here with no counterpart in the game’s own notation, and it would have broken
+  the pattern its three siblings already follow — the scales say DRAWN and a clause says which
+  draw. So its row is `⚖ Stalemate`, beside `⚖ The same position, three times`. Sixteen
+  candidates were generated and are not offered.
 - **Every kind of prose line gets a mark**, not just the ones worth stopping on. The two
   exceptions are the lines that classify nothing: a Run change narrating itself ("Roland
   answers the call…") and a browser-storage failure. Those keep their whole sentence.
