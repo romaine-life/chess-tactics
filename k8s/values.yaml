@@ -179,9 +179,13 @@ adminEmails: "nelson@romaine.life"
 #
 #   kubectl create secret generic chess-tactics-token-key -n chess-tactics #     --from-literal=key="$(openssl rand -base64 32)"
 #
-tokenEncryptionSecret:
-  name: chess-tactics-token-key
-  key: key
+# External Secrets Operator syncs the OAuth secrets from Key Vault into `chess-tactics-oauth`.
+# Unset renders no ExternalSecret and no secret env: the backend then stores tokens in plaintext
+# and sends no client secret, saying so on boot rather than refusing to start.
+externalSecret:
+  storeName: romaine-kv
+  storeKind: ClusterSecretStore
+  refreshInterval: 1h
 
 # Kubernetes Secret holding this app's OAuth client secret. The SAME value must exist in the auth
 # namespace under the same name, or the provider cannot verify what this backend sends.
