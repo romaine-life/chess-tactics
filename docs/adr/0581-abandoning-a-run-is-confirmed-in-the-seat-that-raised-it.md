@@ -9,7 +9,7 @@ refines:
   - "[ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)"
 ---
 
-# ADR-0578: Abandoning a Run is confirmed in the seat that raised it, and the HUD is handed the control
+# ADR-0581: Abandoning a Run is confirmed in the seat that raised it, and the HUD is handed the control
 
 ## Context
 
@@ -66,6 +66,17 @@ action assembled separately in three places drifts by definition, and it had.
   Run screen is noise on the screens nobody is abandoning from. It reads in the same dimmed ink as
   Start New Run's replacement warning — the two confirmations in this game state their stakes in
   one voice.
+- **The sentence is a PARAGRAPH at the full measure, left aligned, with its rag balanced.** A
+  spanning row spans by giving each of its ELEMENT children the whole track list; an anonymous text
+  item is not one and no selector can name it, so a bare sentence took the first of the box's two
+  tracks, wrapped at half its width, and left the second track of empty marble reading as lopsided
+  padding. `.chrome-divided-grid__row--spanning` now carries one track as well as spanning its
+  children, so that state cannot be expressed by any consumer. Centring the warning was the wrong
+  instinct and is not what was wrong: prose is read from a fixed left edge, and a block ragged on
+  both sides is hardest to read at exactly the moment the reader is deciding whether to destroy
+  something. The RAG is what deserved fixing — the break orphaned "This" onto the closing line — and
+  `text-wrap: balance` is what fixes it, because this control stands in three seats at three widths
+  and a break authored for one of them is wrong in the other two.
 - **The answers share one ROW**, each its own compartment of it. They are two answers to one
   question; stacked, they read as two separate things to do. Neither wears a mark: the mark belongs
   to the control that ASKED, and at half a rail's width there is no room for one beside the word.

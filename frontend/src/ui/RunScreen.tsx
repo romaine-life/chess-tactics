@@ -438,9 +438,15 @@ export function RunAbandonControl({
       {/* Bare marble — nothing in this cell can be pressed, and the oak is what tells you a surface
           takes a click (ADR-0433). It is what the dialog's body said, in the seat that raised the
           question; the Run names itself all over this screen already, so the sentence spends its
-          words on what is lost. */}
+          words on what is lost.
+
+          The sentence is a PARAGRAPH, not a bare text node in the row. A row spans by giving each
+          of its ELEMENT children the whole track list; an anonymous text item is not one, so the
+          sentence took the first of the box's two tracks and wrapped at half its width, against a
+          second track of empty marble that read as lopsided padding. Every other cell in the app
+          passes an element for the same reason. */}
       <ChromeDividedGridRow spans="all" className="run-abandon-stakes" role="note">
-        Your army, gold, lipsana and Battle progress are permanently removed. This cannot be undone.
+        <p>Your army, gold, lipsana and Battle progress are permanently removed. This cannot be undone.</p>
       </ChromeDividedGridRow>
       <ChromeVerbRow verbs={answers} className="run-abandon-verbs" cellClassName="run-abandon-verb" />
     </DividedInnerChromeBox>

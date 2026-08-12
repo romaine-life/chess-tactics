@@ -19650,7 +19650,17 @@ button.tileset-relationship-cell {
    and the kit's inner rail between members is what tells them apart. */
 /* A row that declared itself one thing across every column IS one cell: its content spans the
    whole width. Stated on the grid's own class, not on the section box, because it is the other
-   half of what `spans="all"` means — the rail breaks there AND the content fills the row. */
+   half of what `spans="all"` means — the rail breaks there AND the content fills the row.
+
+   The row carries ONE track as well as spanning each child across it. `> *` reaches elements
+   only, so a row handed a bare sentence — an anonymous grid item, which no selector can name —
+   took the first of the box's tracks and wrapped at that width, against the remaining tracks of
+   empty surface reading as lopsided padding. A single-track row cannot express that state at
+   all, and the child rule stays because a row may still hold several children. */
+.chrome-divided-grid__row--spanning {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .chrome-divided-grid__row--spanning > * {
   grid-column: 1 / -1;
 }
@@ -24195,9 +24205,23 @@ button.tileset-relationship-cell {
    says it cannot be pressed, between a frame and a row of solid wood. The dimmed ink is Start New
    Run's replacement warning's: the two confirmations state their stakes in one voice. */
 .run-abandon-stakes {
+  padding: var(--ds-inset);
+}
+
+/* The sentence runs the full measure between the insets and stays LEFT aligned. Centring a
+   wrapped warning is the wrong instinct: prose is read from a fixed left edge, and a block ragged
+   on both sides is harder to read at exactly the moment the reader is deciding whether to destroy
+   something. A short last line is simply what left-aligned prose looks like.
+   What IS worth fixing is the rag itself — the break fell after "This", orphaning one word onto
+   the closing line. `balance` evens the lines instead, which is the browser doing the job a hard
+   break would do worse: this control stands in three seats at three widths, and any break authored
+   for one of them is wrong in the other two. */
+.run-abandon-stakes p {
   color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
   font-size: var(--ds-text-xs);
-  padding: var(--ds-inset);
+  margin: 0;
+  text-align: start;
+  text-wrap: balance;
 }
 
 /* A cell that IS something takes no inset at all: the verb fills the whole area between the rails

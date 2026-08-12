@@ -310,6 +310,15 @@ describe('Run chrome hierarchy', () => {
     // The stakes are a CELL of the same box, spanning it — bare marble, so nothing about it reads
     // as pressable between a frame and a row of solid wood.
     expect(runScreen).toMatch(/<ChromeDividedGridRow spans="all" className="run-abandon-stakes" role="note"/);
+    // The sentence is a PARAGRAPH, not a bare text node: a row spans by giving each of its ELEMENT
+    // children the whole track list, and an anonymous text item is not one — it took the first of
+    // the box's two tracks and wrapped at half its width. The row now carries one track as well,
+    // so the state cannot be expressed at all.
+    expect(runScreen).toMatch(/className="run-abandon-stakes" role="note"[\s\S]{0,40}?<p>Your army, gold, lipsana and Battle progress/);
+    expect(styleCss).toMatch(/\.chrome-divided-grid__row--spanning \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\);/);
+    // Left-aligned prose at the full measure, with the rag BALANCED rather than hard-broken: this
+    // control stands in three seats at three widths, so any authored break is wrong in two of them.
+    expect(styleCss).toMatch(/\.run-abandon-stakes p \{[\s\S]*?text-align: start;[\s\S]*?text-wrap: balance;/);
     // The answers are ChromeVerbRow's cells, not a private copy of one (ADR-0059).
     expect(runScreen).toContain('<ChromeVerbRow verbs={answers} className="run-abandon-verbs" cellClassName="run-abandon-verb" />');
     expect(runScreen).toMatch(/const answers: readonly ChromeVerb\[\] = \[/);
