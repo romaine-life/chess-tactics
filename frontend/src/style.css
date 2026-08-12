@@ -27367,6 +27367,37 @@ button.tileset-relationship-cell {
     max-block-size: min(58vh, 460px);
     min-block-size: 0;
   }
+  /* The rail belongs on whichever edge is INTERIOR, and this dock changes which one that is.
+     Docked right, the panel meets the viewport on its right, the title bar on its top and the
+     floor on its bottom, so the offscreen-rails contract reduces its frame to a LEFT rail
+     only. Pinned to the bottom it spans the full width instead: left and right now reach the
+     viewport and the TOP is the one edge facing the board. Left as-is it drew a rail down the
+     side it no longer needs and nothing at all where the board meets it, which is the "just
+     abruptly starts" edge.
+
+     Same installed frame and the same rail width — only the side moves. Written at the same
+     specificity as the contract it amends, because that rule carries !important. */
+  :root:has(.app-titlebar.chrome-rails-offscreen)
+    :is(.level-editor-screen, .skirmish-screen)
+    [data-shell-controls-panel][data-controls-mobile="sheet"]::before {
+    border-width: var(--le-chrome-outer-rail-w) 0 0 0 !important;
+    border-image-width: var(--le-chrome-outer-rail-w) 0 0 0 !important;
+  }
+  /* Both side edges now reach the screen, so neither carries a rail for the fill to hide
+     under — the inset that keeps the surface from bleeding past the art becomes a visible
+     strip of backdrop instead. Spend it only on the top, where the rail actually lands. */
+  :root:has(.app-titlebar.chrome-rails-offscreen)
+    :is(.level-editor-screen, .skirmish-screen)
+    [data-shell-controls-panel][data-controls-mobile="sheet"] {
+    --le-outer-fill-box-right: 0px;
+    --le-outer-fill-box-left: 0px;
+    /* Both covers go to zero with the rails they stood in for. These are what the panel's
+       name and its title marks clear themselves by, so leaving them derived would inset the
+       head by a rail that is no longer drawn on either side. */
+    --shell-controls-frame-cover-start: 0px;
+    --shell-controls-frame-cover-end: 0px;
+  }
+
   /* OuterChromeBox wraps its children in this content div, so the column lives here — the
      panel element itself holds only the installed fill and that wrapper. */
   [data-controls-mobile="sheet"] .le-outer-panel-content {
