@@ -29376,6 +29376,98 @@ button.run-card-formation-cell {
   outline-offset: -2px;
 }
 
+/* ── The COMMITTING verb (ADR-0638) ────────────────────────────────────────────────────────────
+   Play on a Run being resumed, Start Run on one about to begin: the press its whole screen exists
+   for, seated as that screen's FIRST row and drawn at the main menu's own scale.
+
+   It is the primitive's rule, not Play's, but it is seated HERE — after `.play-detail-verb` and
+   `.run-prep-verb` above — because those consumers size their own band at the card's 16px, and a
+   band is decided by the row rather than by whichever consumer's selector happens to be longer.
+   Source order is the tie-break at equal specificity; moving this block above them silently
+   restores the small type.
+
+   The measurements are the rail tab's, taken from `.settings-tab.main-menu-mode-tab` rather than
+   chosen to look similar: the same 61px seat, the same 40px mark slot, the same 44px drawn glyph
+   and the same 11px between mark and word. A menu button and this button are the same act one
+   screen apart, and two seats that agree by eye drift the first time either is retuned. */
+.chrome-verb-row--confirm {
+  --chrome-verb-confirm-h: 61px;
+  --chrome-verb-confirm-mark-slot: 40px;
+  --chrome-verb-confirm-mark-size: 44px;
+  min-block-size: var(--chrome-verb-confirm-h);
+  padding: 0;
+}
+
+.chrome-verb-row--confirm .section-box-member-verb {
+  display: grid;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-lg);
+  letter-spacing: 0;
+  min-block-size: var(--chrome-verb-confirm-h);
+  padding: 0 var(--ds-inset);
+  text-transform: uppercase;
+}
+
+/* Mark and word travel together and centre as ONE group, where a rail tab left-aligns them: a tab
+   is one of a stack whose marks must line up down the rail, and this is a single band across a
+   card with nothing above or below to align to. */
+.chrome-verb-commit {
+  align-items: center;
+  column-gap: 11px;
+  display: grid;
+  grid-template-columns: auto minmax(0, auto);
+  justify-items: start;
+  max-inline-size: 100%;
+}
+
+/* Reserved, not conditional: the slot holds its width whether or not the mark's art is installed,
+   so installing it later cannot move the label (ADR-0318). `overflow: visible` lets the 44px glyph
+   spill its 40px slot exactly as the rail tab's does — the button's own edge is what clips it. */
+.chrome-verb-mark {
+  block-size: var(--chrome-verb-confirm-mark-slot);
+  display: grid;
+  inline-size: var(--chrome-verb-confirm-mark-slot);
+  overflow: visible;
+  place-items: center;
+  position: relative;
+}
+
+.chrome-verb-mark img {
+  block-size: var(--chrome-verb-confirm-mark-size);
+  image-rendering: pixelated;
+  inline-size: var(--chrome-verb-confirm-mark-size);
+  object-fit: contain;
+  /* Grow from a FIXED centre, the same way the rail tab seats an oversized mark. */
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+
+/* The menu label's outline, from the one place that states it — the same declaration
+   `.settings-tab strong` takes, so the two cannot drift (see --menu-label-stroke-*). */
+.chrome-verb-label {
+  -webkit-text-stroke: var(--menu-label-stroke-w) var(--menu-label-stroke-ink);
+  min-inline-size: 0;
+  overflow: hidden;
+  paint-order: stroke fill;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A verb BESIDE the commitment — Keep Run, while the replacement question is open — keeps the
+   band's height and lettering and carries no mark: it is the same size of decision, and only one
+   of the two is the confirm. */
+.chrome-verb-row--confirm .section-box-member-verb:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.chrome-verb-row--confirm .section-box-member-verb:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: -2px;
+}
+
 /* The disclosure is a registered tool square; this rule only seats it at the end of the name row.
    It keeps its own frame — it is a control standing ON the marble cell, not filling one.
    The mark is CENTRED in it rather than sitting on a text baseline: the glyph is an inline-block,
