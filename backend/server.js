@@ -336,6 +336,11 @@ const oidcSessions = createOIDCSessionManager({
   // local runs, where the dev-auth lanes do not reach the token endpoint at all.
   clientSecret: process.env.OIDC_CLIENT_SECRET || '',
   publicOrigin,
+  // The session row holds live OAuth tokens: the refresh token cannot be hashed, because the
+  // backend must present it to renew. Encrypted at rest so a database read is not by itself a
+  // working credential — which matters here because localhost development connects to the
+  // production database, so DB read access is far wider than pod-environment access.
+  tokenEncryptionKey: process.env.AUTH_TOKEN_ENCRYPTION_KEY || '',
   store: useTestAuthSessionStore ? createInMemoryAuthSessionStore() : authSessionStore,
 });
 // Multiplayer lobbies + netplay relay live entirely in process: this Map is the

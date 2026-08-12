@@ -83,6 +83,24 @@ spec:
             - name: ADMIN_EMAILS
               value: {{ .Values.adminEmails | quote }}
             {{- end }}
+            {{- if .Values.tokenEncryptionSecret }}
+            # Encrypts the OAuth tokens held in `auth_sessions` (ADR-0576). The session cookie's
+            # token is hashed; these two cannot be, because the backend must present them to the
+            # identity provider to renew — so they are encrypted at rest instead.
+            #
+            # It comes from a Secret rather than values.yaml for the obvious reason, and it is
+            # OPTIONAL so a cluster without the Secret still starts: the backend then stores
+            # tokens plainly and says so loudly on every boot. That is the status quo it improves
+            # on, and refusing to start would take sign-in away entirely over a missing variable.
+            #
+            # Rotating the key ends every live session — rows encrypted under the old key can no
+            # longer be renewed and are deleted on next use, which is the honest outcome.
+            - name: AUTH_TOKEN_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.tokenEncryptionSecret.name | quote }}
+                  key: {{ .Values.tokenEncryptionSecret.key | default "key" | quote }}
+            {{- end }}
             {{- if and (ne (include "chess-tactics.isTestEnv" .) "true") .Values.serviceAccountClientId }}
             # Headless AI training Jobs (POST /api/train-runs) run THIS image with a
             # different command on the tainted trainer pool, under this same SA so

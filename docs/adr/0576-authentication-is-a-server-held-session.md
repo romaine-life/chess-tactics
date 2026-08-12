@@ -57,6 +57,20 @@ browser ── __Host-chess-tactics-session (opaque, HttpOnly/Secure/Strict) ─
 - **Only the SHA-256 of the session token is stored.** The cookie carries the token itself, so a
   database read yields nothing replayable. The same holds for the login state, whose row would
   otherwise let a reader finish somebody else's sign-in.
+- **The OAuth tokens are encrypted at rest**, because they are the one thing that cannot be
+  hashed: the backend must present them to the provider to renew. Stored plainly, a read of the
+  database *is* a working refresh token. That is not a distant threat here —
+  **there is no dev database, so every developer's localhost connects to the production
+  Postgres**, and the set of machines that can read these rows is far larger than the set that can
+  read a pod's environment, which is where the key lives. AES-256-GCM, so a tampered value fails
+  to decrypt rather than being handed to the provider as a token; values carry a format marker so
+  switching encryption on does not sign anybody out, and rows written earlier are upgraded on
+  their next rotation. Absent a key the backend stores plainly and says so on every boot rather
+  than refusing to start — that would remove sign-in entirely over a missing variable.
+- **A session that cannot be renewed ends.** No refresh token — because none was issued, or
+  because the encryption key changed and the stored one is unreadable — means we can no longer
+  show that the provider stands behind this session. Leaving it alive on cached claims until an
+  idle deadline weeks away would be a session outliving its own grant.
 - **Claims are cached on the row and refreshed only on renewal.** An ordinary authenticated request
   is one local read. This is the trade that takes the identity provider off the hot path: a role or
   display name changed upstream lands on the next renewal rather than the next request.
