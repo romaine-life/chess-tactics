@@ -9,7 +9,6 @@ import { useAdminLiveMediaCatalog } from './studio/useAdminLiveMediaCatalog';
 import { EnchiridionSectionRail } from './Enchiridion';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { enchiridionSectionHref } from './enchiridionRoute';
-import { StudioCatalogCard } from './studio/StudioCatalogCard';
 
 /**
  * Owner review for the Enchiridion rail's TERRAIN mark, as a Studio CATEGORY.
@@ -20,9 +19,10 @@ import { StudioCatalogCard } from './studio/StudioCatalogCard';
  * rail's OWN measured box — ink exactly 40px tall, centred, 12px of margin above and below — so
  * what is being judged is the drawing, not a size difference (ADR-0026, ADR-0560).
  *
- * A mark can only be judged against the five it stands beside, so each card mounts the REAL
- * `EnchiridionSectionRail` with one seat swapped, not a lookalike column. Nothing is installed
- * until the owner installs one.
+ * A mark can only be judged against the five it stands beside, so the comparison at the top is
+ * the REAL `EnchiridionSectionRail` with one seat swapped, not a lookalike column. Below it the
+ * candidates stand in their own rails — four concepts side by side, sixteen seats each, at the
+ * pitch the Enchiridion stacks them at. Nothing is installed until the owner installs one.
  */
 export const TERRAIN_MARK_BATCH_ID = 'terrain-mark-2026-08-11-pixellab';
 export const TERRAIN_MARK_SLOT = 'ui/kit/icons/tileset-studio.png';
@@ -107,16 +107,6 @@ function RailPreview({ mark }: { mark?: string }): ReactElement {
   );
 }
 
-/** One candidate in the seat it ships in — a real rail tab, wearing the real label, at the size
- *  the Enchiridion draws it. This is what a CARD holds; the rail above holds the neighbours. */
-function SeatPreview({ mark }: { mark: string }): ReactElement {
-  return (
-    <ApparatusRailColumn opens="no-panel" className="terrain-mark-seat-preview" aria-label="Terrain tab preview">
-      <ApparatusRailTab label="Terrain" index={0} iconSrc={mark} onSelect={() => undefined} />
-    </ApparatusRailColumn>
-  );
-}
-
 export interface TerrainMarkState {
   catalog: AdminLiveMediaCatalog | null;
   selectedId: string;
@@ -155,35 +145,44 @@ export function TerrainMarkCatalog({ state }: { state: TerrainMarkState }): Reac
           {selected?.media ? <RailPreview mark={selected.media.url} /> : null}
         </div>
       </section>
-      {TERRAIN_MARK_CONCEPTS.map((concept) => {
-        const entries = grouped.get(concept.key) ?? [];
-        return (
-          <section
-            className="terrain-mark-seat"
-            data-testid={`terrain-mark-concept-${concept.key}`}
-            key={concept.key}
-          >
-            <h3>{concept.label}</h3>
-            <p className="tileset-catalog-note">{concept.note}</p>
-            {entries.length ? (
-              <div className="tileset-studio-grid studio-seat-grid">
-                {entries.map((version) => (
-                  <StudioCatalogCard
-                    key={version.id}
-                    className="studio-seat-card"
-                    title={terrainMarkCode(version)}
-                    badge={`${version.media!.width}×${version.media!.height}`}
-                    selected={selectedId === version.id}
-                    onSelect={() => select(version.id)}
-                    ariaLabel={`Terrain mark ${terrainMarkCode(version)}`}
-                    media={<SeatPreview mark={version.media!.url} />}
-                  />
-                ))}
-              </div>
-            ) : <p>No candidates uploaded.</p>}
-          </section>
-        );
-      })}
+      {/* One COLUMN per concept, each a real rail of its sixteen seats. Not catalog cards: a card
+          is 360px wide because a rail tab is, so sixteen of them run three-across down a very long
+          page and the mark — the only thing being judged — ends up a fraction of a mostly empty
+          card. Stacked in their own rail the seats sit at the pitch the Enchiridion stacks them at,
+          four concepts read side by side, and the whole batch is one screen of scrolling. */}
+      <div className="terrain-mark-specimens">
+        {TERRAIN_MARK_CONCEPTS.map((concept) => {
+          const entries = grouped.get(concept.key) ?? [];
+          return (
+            <section
+              className="terrain-mark-concept"
+              data-testid={`terrain-mark-concept-${concept.key}`}
+              key={concept.key}
+            >
+              <h3>{concept.label}</h3>
+              <p className="tileset-catalog-note">{concept.note}</p>
+              {entries.length ? (
+                <ApparatusRailColumn opens="no-panel" aria-label={`${concept.label} candidates`}>
+                  {entries.map((version, index) => (
+                    <ApparatusRailTab
+                      key={version.id}
+                      label="Terrain"
+                      className="terrain-mark-tab"
+                      index={index}
+                      active={selectedId === version.id}
+                      iconSrc={version.media!.url}
+                      ariaLabel={`Terrain mark ${terrainMarkCode(version)}`}
+                      title={terrainMarkCode(version)}
+                      onSelect={() => select(version.id)}
+                      trailing={<span className="terrain-mark-code" aria-hidden="true">{terrainMarkCode(version)}</span>}
+                    />
+                  ))}
+                </ApparatusRailColumn>
+              ) : <p>No candidates uploaded.</p>}
+            </section>
+          );
+        })}
+      </div>
       {!all.length ? <p>No candidates are uploaded for this batch.</p> : null}
     </div>
   );
@@ -243,8 +242,9 @@ export function TerrainMarkControls({ state }: { state: TerrainMarkState }): Rea
       <p className="tileset-catalog-note">
         The installed grass cube is both plainer and SHORTER than the marks it stands beside —
         40×35 of ink where Units and Lipsana are 40 tall. Every candidate is packed to the rail's
-        own measured box: ink exactly 40px tall, centred, 12px of margin above and below. Each card
-        is a real rail with that one seat swapped, so the grid is the comparison.
+        own measured box: ink exactly 40px tall, centred, 12px of margin above and below. Each
+        candidate stands in a real rail seat, so the columns are the comparison; picking one moves
+        it into the rail at the top, beside the five marks it would stand with.
       </p>
       <button
         type="button"

@@ -22966,9 +22966,53 @@ button.tileset-relationship-cell {
 
 /* A one-tab rail is still a rail, so it brings the column's own fixed width. In a seat card the
    card owns the track, so the rail fills it rather than setting it. */
-.terrain-mark-seat-preview,
 .run-rail-mark-preview {
   inline-size: 100%;
+}
+
+/* Four concepts side by side, each its own rail of sixteen seats. One row, always: a wrapped
+   concept is one that can no longer be read against the other three, which is the whole job. */
+.terrain-mark-specimens {
+  align-items: start;
+  display: flex;
+  gap: var(--ds-inline);
+  overflow-x: auto;
+}
+
+.terrain-mark-concept {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.terrain-mark-concept > h3,
+.terrain-mark-concept > p {
+  margin: 0;
+  /* The rail sets the column width; the note wraps inside it rather than widening it. */
+  max-inline-size: var(--main-menu-tab-column-w, 322px);
+}
+
+/* A specimen tab carries its candidate's code as a trailing badge, so the seat keeps the exact
+   mark and the exact word the live rail draws and still says which candidate it is. The tab is a
+   two-column grid (mark slot, label); a trailing child needs a third column declared by the
+   consumer's own tab class, the way `.ce-campaign-tab` declares one for its lock — without it the
+   badge starts a new ROW under the mark and is clipped by the tab's own height. */
+.terrain-mark-tab {
+  grid-template-columns: var(--settings-tab-icon-slot) minmax(0, 1fr) auto;
+}
+
+/* Neutralise the shared label nudge for the badge so it stays in its own grid cell. */
+.terrain-mark-tab > span.terrain-mark-code {
+  transform: none;
+}
+
+.terrain-mark-code {
+  align-items: center;
+  color: #f0e4c4;
+  display: inline-flex;
+  font-size: 0.8rem;
+  justify-content: center;
+  letter-spacing: 0.08em;
+  text-shadow: 0 2px 0 #02070b;
 }
 
 .brush-mark-toolbar-comparison {
