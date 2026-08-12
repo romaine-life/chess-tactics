@@ -128,14 +128,18 @@ should be judged by sight rather than described.
   unmarked and shows their full original sentences. No `PersistedMatch` version bump and no Run
   save migration follows — this is presentation plus seven additive live-media slots, each
   recoverable by retiring it.
-- **A payout needs a TRANSACTION mark, not a resource mark.** The Run’s `RunGoldIcon` means
+- **A gold row needs a TRANSACTION mark, not a resource mark.** The Run’s `RunGoldIcon` means
   “gold” and states no direction, so drawing it on a payout put a bare number under an
-  undirected glyph — beside a loss row whose mark says its direction outright. `gold` is
-  therefore FORGED rather than borrowed: the game’s own coin stack carrying a green plus,
-  installed at `ui/kit/icons/game/gold.png`. That is a different fact from the Run’s resource
-  coin, not the same fact drawn twice, which is what keeps it inside ADR-0059 rather than
-  against it. The number keeps its sign too — `Knight’s fork — +5`, `Move undone — −10` — so the
-  row reads right even at a glance that misses the glyph.
+  undirected glyph and left the reader to work out whether five gold was won or spent. BOTH
+  gold marks are therefore FORGED rather than borrowed — the game’s own coin stack carrying a
+  green plus or a red minus, at `ui/kit/icons/game/gold.png` and `…/gold-loss.png`. That is a
+  different fact from the Run’s resource coin, not the same fact drawn twice, which is what
+  keeps it inside ADR-0059 rather than against it. The Run DOES own a loss transaction mark
+  (coins scattering behind a red arrow) but it is a different composition from anything that
+  could pair with a gain, and a log wants its pair to differ in one STROKE rather than in their
+  whole silhouette — same stack, same seat, opposite sign is the fastest possible read. The
+  numbers keep their signs too (`+5`, `−10`), so a row still reads right at a glance that misses
+  the glyph.
 - The Run’s retired gain mark (coins rising behind a green arrow, ADR-0486, retired by
   ADR-0511) was considered first and rejected by the owner as too vague. Its slot is retired in
   the database and refuses uploads with `media_slot_retired`, so restoring it would have been a

@@ -906,7 +906,7 @@ test('condition icon projection keeps all four card properties and granted state
   // Event Log marks sit in an 18px seat beside a line of type, so they ship trimmed to their
   // own ink for the same reason the action mark does.
   let defeat = null;
-  for (const variant of ['check', 'victory', 'defeat', 'draw', 'checkmate', 'stalemate', 'resign', 'gold']) {
+  for (const variant of ['check', 'victory', 'defeat', 'draw', 'checkmate', 'stalemate', 'resign', 'gold', 'gold-loss']) {
     const mark = gameConditionIcon({
       slot: `ui/kit/icons/game/${variant}.png`,
       width: 51,
@@ -935,7 +935,7 @@ test('condition icon projection keeps all four card properties and granted state
   // registered, because the Run's coin is a resource mark that states no direction and a payout
   // needs one — a different fact, not the same fact drawn twice.
   assert.equal(gameConditionIconSlot('ui/kit/icons/game/clock.png'), null);
-  assert.equal(gameConditionIconSlot('ui/kit/icons/game/lose-gold.png'), null);
+  assert.equal(gameConditionIconSlot('ui/run/resources/gold.png'), null);
   assert.deepEqual(gameConditionIconSlot('ui/kit/icons/game/gold.png'), { component: 'battle-log-mark', variant: 'gold' });
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({ role: 'media' })), /icon role/);
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({ width: 32 })), /64x64/);
