@@ -70,15 +70,22 @@ Chosen: **the reference frame and the roster declare the hierarchy, so both tran
   for the dropdown option rows ADR-0433 keeps teal inside the popup field that hosts them. It is the
   same shape `SectionBox`'s `press` member already ships: the row is the button, pressable edge to
   edge, wearing the leaf oak.
-- **A grouped lipsanon seat is the kit's registered asset swatch** — `inner-asset-swatch`, the unit
-  for a choice whose art the feature sizes — so it brings its own frame and takes the oak because the
-  registry calls it a leaf. It reached that through two wrong answers, both caught in pixels rather
-  than argued. Unpainted, the relics lay on the stone with nothing saying they could be pressed. Given
-  the oak by hand, they became **bare plank rectangles with no frame at all**, which is what zeroing a
-  control's `border` does when the frame is a border-image: the seat's CSS was stripping `appearance`,
-  `background`, `border`, `border-radius` and `padding` to make room for the icon, and stripped the
-  frame with them. The registered unit is the answer to both, and it is one already in the kit
-  (ADR-0059); only the art inside it is sized, which is that unit's own contract.
+- **EXCEPTION — in the grouped Lipsana case the RELIC is the clickable surface**, so its trigger
+  wears no seat, no frame and no material, and the press is answered by the art lighting up. This is
+  the material exception ADR-0433 asks a destination to record, and it is the owner's call: *"the
+  relics are the clickable surface in this case."* It is also not new — ADR-0253/ADR-0254 had already
+  decided these are direct selection buttons, visually unframed inside the group's own owned surface,
+  and the surface-contract gate has carried an approved frameless-reset entry for this exact selector
+  since. Painting them was overriding a standing decision, and two wrong answers went by before that
+  was noticed, both settled in pixels rather than argued: given the oak by hand the seats came out as
+  **bare plank rectangles with no frame at all** (zeroing a control's `border` removes a border-image
+  frame, and that CSS zeroes it to make room for the icon), and rebuilding them as the kit's
+  registered `inner-asset-swatch` fixed the frame while still being wrong — a seat under each relic
+  makes the case **a box of buttons holding pictures of relics** rather than a case of relics. The
+  rule this leaves behind is the useful part: where a control's whole body is its own art, that art IS
+  the surface, and giving it a material puts a control *around* a thing instead of making the thing
+  the control. The named **Rows** view is where a lipsanon reads as chrome and takes the oak; the
+  grouped view is the objects.
 - **This Combat moves INTO the filter field** as an optional typed `scope` seat, because it is a
   filter. That removes the third child that was taking the gallery's flexible track, so the stretch
   and the clipped gallery are one fix, and the field declares its extra track only when the seat is

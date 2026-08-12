@@ -817,23 +817,19 @@ export function LipsanaCodex({
                 ) : (
                   <InnerChromeBox className="enchiridion-lipsanon-group" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
                     <ul className="enchiridion-lipsanon-group-grid" aria-label={title}>
-                      {/* A seat is the kit's ASSET SWATCH — the registered unit for a choice whose
-                          art the feature sizes (ADR-0059). It brings its own frame and, being a
-                          registry leaf, takes the oak from the section frame's adoption; hand-rolling
-                          the seat instead painted a bare plank rectangle with no frame at all. Phased
-                          from the record's place in the list, like the rows view. */}
-                      {visibleLipsana.map((lipsanon, index) => (
+                      {/* The RELIC is the clickable surface here — the owner's call, and the stated
+                          exception ADR-0433 asks to be recorded. The grouped case shows the objects
+                          themselves, so the art is the control's whole body: it takes no seat, no
+                          frame and no material, and pressing it is answered by the art lighting up.
+                          A wooden seat under each one made the case a box of buttons holding
+                          pictures of relics rather than a case of relics. The named rows view is
+                          where a lipsanon reads as a row of chrome; this view is the objects. */}
+                      {visibleLipsana.map((lipsanon) => (
                         <li key={lipsanon.id}>
                           <ReferenceTrigger
                             to={lipsanonHref?.(lipsanon.id)}
                             onSelect={() => setLocalSelectedId(lipsanon.id)}
-                            data-chrome-unit="inner-asset-swatch"
-                            style={leafSurfacePhase(index)}
-                            className={chromeUnitClassNames(
-                              'inner-asset-swatch',
-                              'enchiridion-lipsanon-grouped-trigger',
-                              selected.id === lipsanon.id && 'is-active',
-                            )}
+                            className={`enchiridion-lipsanon-grouped-trigger${selected.id === lipsanon.id ? ' is-active' : ''}`}
                             aria-label={`${lipsanon.name}. ${lipsanon.description}`}
                             aria-pressed={selected.id === lipsanon.id}
                           >

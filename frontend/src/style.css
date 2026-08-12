@@ -25317,27 +25317,24 @@ button.tileset-relationship-cell {
   justify-content: start;
 }
 
+/* The grouped case shows the relics themselves, so the RELIC is the control: its trigger paints
+   nothing at all — no seat, no frame, no material — and the press is answered by the art lighting up
+   (ADR-0254's unframed icon triggers, restated as ADR-0587's one material exception). The reset rule
+   below must keep a comment-free header: the surface-contract gate folds a preceding comment into
+   the selector it looks up, and the approved frameless resets are keyed on the bare selector. */
 .enchiridion-lipsanon-group-grid > li,
 .enchiridion-lipsanon-grouped-trigger {
   block-size: 64px;
   inline-size: 64px;
 }
 
-/* The seat is a registered asset swatch, so its frame is a border-image the chrome family paints:
-   it takes NO border, background or padding reset here, because zeroing those is what strips the
-   frame off and leaves a bare plank. Only the art it holds is sized — the swatch's own contract is
-   that the feature owns its content dimensions. */
 .enchiridion-lipsanon-grouped-trigger {
-  align-content: center;
-  display: grid;
-  justify-items: center;
+  appearance: none;
+  background: none;
+  border: 0;
+  border-radius: 0;
   min-block-size: 64px;
-}
-
-.enchiridion-lipsanon-grouped-trigger .run-lipsanon-icon,
-.enchiridion-lipsanon-grouped-trigger .run-lipsanon-icon img {
-  block-size: 46px;
-  inline-size: 46px;
+  padding: 0;
 }
 
 .enchiridion-lipsanon-grouped-trigger:is(:hover, :focus-visible, .is-active) .run-lipsanon-icon {

@@ -133,30 +133,36 @@ describe('Enchiridion and Strategikon reference contract', () => {
    */
   it('wears the oak on a reference row that is itself the control, phased from its own data', () => {
     expect(chromeUnitRegistry).toMatch(/id: 'inner-list-row'[\s\S]*?material: 'structural'/);
-    // Both browse views: the named row and the grouped seat. Each takes the phase from the record's
-    // index in the list being walked, never from DOM position (ADR-0063).
-    expect(enchiridion).toContain('{visibleLipsana.map((lipsanon, index) => (');
-    expect((enchiridion.match(/style=\{leafSurfacePhase\(index\)\}/g) ?? [])).toHaveLength(2);
+    // The named ROW is chrome, so it takes the phase from the record's index in the list being
+    // walked, never from DOM position (ADR-0063).
     expect(enchiridion).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
+    expect(enchiridion).toContain('style={leafSurfacePhase(index)}');
     expect(enchiridion).not.toMatch(/\.enchiridion-lipsanon-(?:row|grouped-trigger):nth-child/);
     expect(style).not.toMatch(/\.enchiridion-lipsanon-(?:rows|group-grid)[^}]*:nth-child/);
   });
 
   /**
-   * A grouped seat is the kit's registered ASSET SWATCH — the unit for a choice whose art the
-   * feature sizes (ADR-0059) — so it brings its own frame and takes the oak from the section frame's
-   * adoption because the registry calls it a leaf. Hand-rolling the seat instead shipped a bare
-   * plank rectangle with no frame, which is what zeroing a registered unit's border does.
+   * ADR-0587's recorded material EXCEPTION. The grouped case shows the relics themselves, so the art
+   * is the control's whole body: the trigger paints no seat, no frame and no material, and the press
+   * is answered by the art lighting up. A wooden seat under each one made the case a box of buttons
+   * holding pictures of relics rather than a case of relics. The named rows view is where a lipsanon
+   * reads as chrome; this view is the objects.
    */
-  it('builds a grouped lipsanon seat from the registered asset swatch, frame included', () => {
-    expect(chromeUnitRegistry).toMatch(/id: 'inner-asset-swatch'[\s\S]*?material: 'leaf'/);
-    expect(enchiridion).toContain('data-chrome-unit="inner-asset-swatch"');
-    expect(enchiridion).toMatch(/chromeUnitClassNames\(\s*\r?\n?\s*'inner-asset-swatch',/);
-    // The seat must not strip the frame the unit paints. `border: 0` here is the defect, not a
-    // reset: the frame is a border-image, so zeroing the border removes it outright.
-    const seat = style.match(/\.enchiridion-lipsanon-grouped-trigger \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(seat).toBeTruthy();
-    expect(seat).not.toMatch(/border|background|padding|appearance/);
+  it('lets the relic itself be the grouped control, wearing no seat or material', () => {
+    // `[^}]*` cannot cross a rule boundary, so this is the ONE rule carrying all three.
+    expect(style).toMatch(
+      /\.enchiridion-lipsanon-grouped-trigger \{[^}]*appearance: none;[^}]*background: none;[^}]*border: 0;[^}]*\}/,
+    );
+    // No chrome unit, no named surface and no phase: all three would be a seat, and there is none.
+    const grouped = enchiridion.match(
+      /className=\{`enchiridion-lipsanon-grouped-trigger\$\{[\s\S]*?\/>\s*\r?\n\s*<\/ReferenceTrigger>/,
+    )?.[0] ?? enchiridion.match(/enchiridion-lipsanon-grouped-trigger[\s\S]{0,400}/)?.[0] ?? '';
+    expect(grouped).toBeTruthy();
+    expect(grouped).not.toContain('data-chrome-unit');
+    expect(grouped).not.toContain('data-chrome-fill-surface');
+    expect(grouped).not.toContain('leafSurfacePhase');
+    // The press is answered on the ART, which is the only thing there to answer with.
+    expect(style).toMatch(/\.enchiridion-lipsanon-grouped-trigger:is\([^)]*\) \.run-lipsanon-icon/);
   });
 
   /**
