@@ -289,8 +289,12 @@ describe('Run Deployment hand', () => {
   // not repeat one another's grain.
   it('gives every control on the panel the installed wooden fill', () => {
     expect(hand).toContain("import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';");
-    // Both steppers, both turns, Remove, Begin Battle and Abandon — nothing bare.
+    // Both steppers, both turns, Remove and Begin Battle — nothing bare. Abandon Run is the one
+    // control here the panel does not build: it is the shared RunAbandonControl, which carries
+    // the seat's fill through its own `fillSurface` (defaulting to the Run rails' oak).
     expect((hand.match(/data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}/g) ?? [])).toHaveLength(2);
+    expect(runScreen).toContain('fillSurface = CHROME_LEAF_FILL_SURFACE,');
+    expect(runScreen).toContain('<RunAbandonControl disabled={departing} surfaceIndex={6} />');
     const panel = runScreen.match(
       /className="run-meta-controls run-deployment-controls run-arrangement-controls"[\s\S]*?\n {6}<\/section>/,
     )?.[0];
