@@ -168,7 +168,12 @@ function InstallCardControl({
 }): ReactElement {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
-  const missing = SKIRMISH_SHORTCUT_CARD.filter((entry) => !chosen.has(entry.variant));
+  // A command with no candidate is only a gap when it has no installed mark either.
+  // Accepting a version retires it from `candidate`, so after an install every command
+  // reports zero candidates — reading that as a gap would refuse to install the card it
+  // just installed.
+  const missing = SKIRMISH_SHORTCUT_CARD
+    .filter((entry) => !chosen.has(entry.variant) && !skirmishShortcutIconUrl(entry.variant));
 
   const install = async (): Promise<void> => {
     if (busy) return;
@@ -225,7 +230,7 @@ function InstallCardControl({
     <div className="command-card-review-install">
       <ChromeButton
         unit="inner-text-button"
-        disabled={busy || missing.length > 0}
+        disabled={busy || missing.length > 0 || chosen.size === 0}
         data-testid="install-command-card"
         onClick={() => { void install(); }}
       >
@@ -233,8 +238,11 @@ function InstallCardControl({
       </ChromeButton>
       {missing.length ? (
         <p role="status">
-          {`No candidate armed for ${missing.map((entry) => entry.label).join(', ')}.`}
+          {`No candidate armed and nothing installed for ${missing.map((entry) => entry.label).join(', ')}.`}
         </p>
+      ) : null}
+      {!missing.length && chosen.size === 0 ? (
+        <p role="status">Every command already paints its installed mark; nothing to change.</p>
       ) : null}
       {status ? <p role="status">{status}</p> : null}
     </div>
@@ -278,9 +286,14 @@ export function CommandCardMarkReview(): ReactElement {
     return map;
   }, [candidates, picked]);
 
+  /** What the composed card draws: an armed candidate where one exists, else the mark
+   *  already installed for that command, so the card is never missing a key it has art for. */
   const armed = useMemo(() => {
     const map = new Map<SkirmishShortcutIconVariant, string>();
-    for (const [variant, version] of chosen) map.set(variant, version.media!.url);
+    for (const entry of SKIRMISH_SHORTCUT_CARD) {
+      const url = chosen.get(entry.variant)?.media!.url ?? skirmishShortcutIconUrl(entry.variant);
+      if (url) map.set(entry.variant, url);
+    }
     return map;
   }, [chosen]);
 
@@ -350,7 +363,11 @@ export function CommandCardMarkReview(): ReactElement {
                         })}
                       </div>
                     ) : (
-                      <p role="status">No candidate uploaded for this command.</p>
+                      <p role="status">
+                        {skirmishShortcutIconUrl(entry.variant)
+                          ? 'Installed. No other candidate is waiting for this command.'
+                          : 'No candidate uploaded for this command.'}
+                      </p>
                     )}
                   </div>
                 );
