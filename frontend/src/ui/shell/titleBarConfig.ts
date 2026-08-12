@@ -101,6 +101,17 @@ export function titleBarConfig(path: string, search = ''): TitleBarConfig | null
     // save-state chip in the center slot.
     return { screenName: 'Editor', barClass: 'ce-topbar', centerSlot: true };
   }
+  if (path.startsWith('/run/watch/')) {
+    // Names the person being watched, not the screen: "Run" would read as the viewer's own Run,
+    // which is the one thing this page is not. Back lands on the Live Runs list it came from.
+    return {
+      screenName: 'Watching',
+      routeSegments: [{
+        label: decodeURIComponent(path.slice('/run/watch/'.length)),
+        to: path,
+      }],
+    };
+  }
   if (path === '/settings' || path.startsWith('/settings/')) {
     // screen, so only Settings scales.
     // Keep the gear visible on Settings too: every section is its own route
