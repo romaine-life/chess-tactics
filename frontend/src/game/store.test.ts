@@ -310,6 +310,9 @@ describe('skirmish store', () => {
 
     expect(useSkirmish.getState().log.map((entry) => entry.text)).toContain('En passant — 5 gold claimed.');
     expect(useSkirmish.getState().goldNotices).toMatchObject([{ at: { x: 2, y: 3 }, goldTenths: 50 }]);
+    // The coin is written from `goldTenths`, so the mark and the board's rising marker come
+    // from ONE fact rather than from the wording of the line.
+    expect(useSkirmish.getState().log.find((entry) => entry.text.includes('gold claimed'))?.marks).toEqual(['gold']);
   });
 
   it('writes them on the enemy reply too, and seats one marker per gold notice', () => {
@@ -329,6 +332,9 @@ describe('skirmish store', () => {
     // A notice that moved no gold gets its log line and no board marker -- the arriving unit
     // is already the thing you can see.
     expect(useSkirmish.getState().goldNotices).toEqual([]);
+    // And no coin on the line either: an unmarked prose row is the ordinary case, so a mark
+    // stays worth looking for.
+    expect(useSkirmish.getState().log.find((entry) => entry.text.includes('Roland'))?.marks).toBeUndefined();
   });
 
   it('writes them on an admin intervention, and retires a marker once it has risen', () => {
@@ -1198,6 +1204,9 @@ describe('skirmish store: battle clock', () => {
     expect(s.game.turn).toBe('done');
     expect(s.clock).toEqual({ remainingMs: 0, running: false, incrementMs: 0 });
     expect(s.log[0].text).toMatch(/clock ran out/i);
+    // The row states two facts and wears both marks: the Battle is lost, and the clock is
+    // why. Marking it only as a defeat would make a flag fall scan like any other loss.
+    expect(s.log[0].marks).toEqual(['defeat', 'clock']);
     // Input is locked exactly like any other decided game.
     expect(useSkirmish.getState().movesForSelected()).toEqual([]);
   });
@@ -2051,6 +2060,7 @@ describe('local resign', () => {
     expect(s.focusedId).toBeNull();
     expect(s.clock?.running).toBe(false);
     expect(s.log[0].text).toMatch(/you resigned/i);
+    expect(s.log[0].marks).toEqual(['defeat']);
   });
 
   it('does not decide a netplay match locally', () => {
@@ -2100,6 +2110,9 @@ describe('netplay resign', () => {
     expect(s.game.turn).toBe('done');
     expect(s.selectedId).toBeNull();
     expect(s.log[0].text).toMatch(/opponent resigned/i);
+    // A win wears nothing. The mark says the Battle went badly, so marking every outcome
+    // would leave a scan with nothing to find.
+    expect(s.log[0].marks).toBeUndefined();
     // A redelivered result frame must not overwrite the decided game.
     useSkirmish.getState().concludeNet('enemy', 'resign');
     expect(useSkirmish.getState().game.winner).toBe('player');
@@ -2112,6 +2125,7 @@ describe('netplay resign', () => {
     const s = useSkirmish.getState();
     expect(s.game.winner).toBe('player');
     expect(s.log[0].text).toMatch(/you resigned/i);
+    expect(s.log[0].marks).toEqual(['defeat']);
   });
 
   it('lets the first authoritative resignation resolve a different local disputed verdict', () => {

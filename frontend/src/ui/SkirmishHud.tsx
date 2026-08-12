@@ -21,7 +21,8 @@ import { SkirmishClockControl } from './SkirmishClockControl';
 import { loadSkirmishClockPref } from '../game/skirmishClockPref';
 import { Stepper } from './shared/Stepper';
 import { MoveReviewControls } from './shared/MoveReviewControls';
-import { moveNumberFor, reviewIndexForLoggedPly } from '../game/moveReview';
+import { EventLogRow } from './shared/BattleLogMark';
+import { reviewIndexForLoggedPly } from '../game/moveReview';
 import { clientSide, clientSideLabel, clientSideOrder, clientSideRelation, clientTurnLabel, type PlayingSide } from '../game/clientPerspective';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox, ShellControlsPanel } from './shared/ChromeBox';
@@ -161,16 +162,10 @@ function parseDelaySeconds(raw: string): number | null {
   return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : null;
 }
 
-/**
- * The score sheet's move number for one Event Log row: `12.` for the half-move that
- * opens a full move and `12…` for the reply, which is how a score sheet says whose move
- * it was without a second column. Rows that are not moves (the briefing, an
- * adjudication) carry no number and leave the column empty.
- */
-export function moveNumberLabel(entry: LogEntry): string {
-  if (entry.ply === undefined) return '';
-  return moveNumberFor(entry.ply);
-}
+// The score sheet's move number moved to shared/BattleLogMark beside the row that draws it,
+// so the review surface mounts the same row the player gets. Re-exported here because this
+// module's own tests and callers already name it.
+export { moveNumberLabel } from './shared/BattleLogMark';
 
 function UnitBadge({ piece, large = false }: { piece: Piece | null; large?: boolean }) {
   const side = piece?.side ?? 'neutral';
@@ -535,33 +530,19 @@ export function SkirmishHud({
                 with it: the same first/back/forward/live row the battlefield plate carries. */}
             <MoveReviewControls variant="panel" />
             <ul>
+              {/* A row whose board this match recorded is a place you can go: pressing it shows
+                  that position. Prose rows, and moves from a match resumed without a history,
+                  stay plain text — there is nothing to show. */}
               {logLines.map((entry, i) => {
                 const seat = entry.ply === undefined ? null : reviewIndexForLoggedPly(positions, entry.ply);
-                const showing = seat !== null && seat === reviewIndex;
-                const className = `${entry.side ? `is-move is-${entry.side}` : 'is-note'}${showing ? ' is-showing' : ''}`;
                 return (
-                  <li key={`${entry.text}-${entry.ply ?? 'note'}-${i}`} className={className}>
-                    <span aria-hidden="true" />
-                    {/* A row whose board this match recorded is a place you can go: pressing it
-                        shows that position. Prose rows, and moves from a match resumed without a
-                        history, stay plain text — there is nothing to show. */}
-                    {seat === null ? (
-                      <>
-                        <strong>{moveNumberLabel(entry)}</strong>
-                        <em>{entry.text}</em>
-                      </>
-                    ) : (
-                      <button
-                        type="button"
-                        className="skirmish-log-move"
-                        aria-current={showing ? 'true' : undefined}
-                        onClick={() => reviewPosition(seat)}
-                      >
-                        <strong>{moveNumberLabel(entry)}</strong>
-                        <em>{entry.text}</em>
-                      </button>
-                    )}
-                  </li>
+                  <EventLogRow
+                    key={`${entry.text}-${entry.ply ?? 'note'}-${i}`}
+                    entry={entry}
+                    seat={seat}
+                    showing={seat !== null && seat === reviewIndex}
+                    onReview={reviewPosition}
+                  />
                 );
               })}
             </ul>

@@ -153,6 +153,11 @@ const RUN_PROGRESS_ICON_COMPONENT = 'run-progress-icon';
 // than on a screen. Trimmed to its own ink like the position marks, because it
 // shares a row with a label instead of sitting in a padded 64x64 frame.
 const RUN_ACTION_ICON_COMPONENT = 'run-action-icon';
+// The mark one Event Log prose line wears, drawn in the column the move numbers take.
+// Trimmed to its own ink like the position and action marks, for the same reason: it
+// shares an 18px seat with a line of type instead of sitting in a padded 64x64 frame,
+// so transparent margin left on the canvas would come straight off the drawn glyph.
+const BATTLE_LOG_MARK_COMPONENT = 'battle-log-mark';
 // Each state and property is registered under the word the game says (ADR-0374): the slot,
 // the stored value and the name a player reads are one vocabulary.
 const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
@@ -174,6 +179,10 @@ const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
   // family the board verbs are drawn in rather than the Run-position marks, because
   // what it names is a button's effect, not a place in the War.
   'ui/kit/icons/game/athetize.png': Object.freeze({ component: RUN_ACTION_ICON_COMPONENT, variant: 'athetize' }),
+  // Defeat: the one Event Log mark with no existing home. The clock's hourglass and the
+  // Run's coin are already installed for the title bar and the board's rising gold, and
+  // the log reuses those verbatim rather than forging a second of either (ADR-0059).
+  'ui/kit/icons/game/defeat.png': Object.freeze({ component: BATTLE_LOG_MARK_COMPONENT, variant: 'defeat' }),
 });
 const CARD_TYPE_ROW_TEXTURE_COMPONENT = 'card-type-row-texture';
 const CARD_TYPE_ROW_TEXTURE_GROUP_ID = 'card-type-row-textures-pixen-v1';
@@ -1359,11 +1368,12 @@ function gameConditionIconMediaIssue(row, projectedRuntime = null) {
   if (row.domain !== 'ui-kit') return 'game condition icons require the ui-kit domain';
   if (row.role !== 'icon') return 'game condition icons require the icon role';
   if (row.media_type !== 'image/png') return 'game condition icons require image/png';
-  // Run-position and action marks sit unframed beside a label and ship trimmed to
-  // their own ink; the established unit-ability and card-property icons keep their
-  // full frame.
+  // Run-position, action and Event Log marks sit unframed beside a label or a line of
+  // type and ship trimmed to their own ink; the established unit-ability and
+  // card-property icons keep their full frame.
   const trimmed = contract.component === RUN_PROGRESS_ICON_COMPONENT
-    || contract.component === RUN_ACTION_ICON_COMPONENT;
+    || contract.component === RUN_ACTION_ICON_COMPONENT
+    || contract.component === BATTLE_LOG_MARK_COMPONENT;
   const rasterIssue = trimmed
     ? trimmedIconRasterIssue(row, 'Run position icons')
     : (Number(row.width) !== 64 || Number(row.height) !== 64

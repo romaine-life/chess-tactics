@@ -815,6 +815,32 @@ test('condition icon projection keeps all four card properties and granted state
     ...athetize,
     metadata: { runtime: { ...athetize.metadata.runtime, variant: 'expunctio' } },
   }), /variant/);
+  // The Event Log's defeat mark sits in an 18px seat beside a line of type, so it ships
+  // trimmed to its own ink for the same reason the action mark does.
+  const defeat = gameConditionIcon({
+    slot: 'ui/kit/icons/game/defeat.png',
+    width: 51,
+    height: 51,
+    metadata: { runtime: {
+      ...cacochymic.metadata.runtime,
+      component: 'battle-log-mark',
+      variant: 'defeat',
+      nativeRole: 'battle-log-mark',
+      frameWidth: 51,
+      frameHeight: 51,
+    } },
+  });
+  assert.deepEqual(gameConditionIconSlot(defeat.slot), { component: 'battle-log-mark', variant: 'defeat' });
+  assert.equal(gameConditionIconMediaIssue(defeat), null);
+  assert.match(gameConditionIconMediaIssue({ ...defeat, width: 47 }), /square/);
+  assert.match(gameConditionIconMediaIssue({
+    ...defeat,
+    metadata: { runtime: { ...defeat.metadata.runtime, variant: 'clock' } },
+  }), /variant/);
+  // The clock and the coin are NOT registered here: the log reuses the installed title-bar
+  // hourglass and the Run's own coin rather than forging a second of either (ADR-0059).
+  assert.equal(gameConditionIconSlot('ui/kit/icons/game/clock.png'), null);
+  assert.equal(gameConditionIconSlot('ui/kit/icons/game/gold.png'), null);
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({ role: 'media' })), /icon role/);
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({ width: 32 })), /64x64/);
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({

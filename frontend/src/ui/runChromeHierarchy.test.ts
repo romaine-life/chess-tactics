@@ -1110,7 +1110,9 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('const restored = undoRunBattleMove(latest, checkpoint);');
     expect(skirmish).toContain('setRunBattleUndoAdapter(runBattle?.undoAdapter ?? null)');
     expect(gameStore).toContain('const captured = capturePlayerMoveUndo();');
-    expect(gameStore).toContain("log: extendLog(checkpoint.log, [logNote('Move undone — 10 gold paid.')])");
+    // The line wears the coin, because what it reports is the Run's economy moving — the
+    // same mark the bounty lines two rows up wear when it moves the other way.
+    expect(gameStore).toContain("log: extendLog(checkpoint.log, [logNote('Move undone — 10 gold paid.', 'gold')])");
     expect(gameStore).toContain('commitPlayerMove(p, mv, type, true);');
     expect(matchPersistence).toContain('undoStack: state.undoStack ?? []');
   });
