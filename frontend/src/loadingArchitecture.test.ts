@@ -47,8 +47,24 @@ describe('professional loading architecture guards', () => {
     expect(read('./ui/WallCandidateReview.tsx')).toContain('onFirstFrame');
     expect(read('./ui/WallCandidateReview.tsx')).toContain('onFrameError');
     expect(read('./ui/DrawableCatalogLab.tsx').replace(/\r\n/g, '\n')).toContain("useSceneParticipant(\n    'studio'");
-    expect(read('./ui/RunSectioArtReview.tsx')).toContain("useSceneParticipant('studio'");
-    expect(read('./ui/LipsanonReview.tsx')).toContain("useSceneParticipant('studio'");
+  });
+
+  // A review CATEGORY is not a standalone route and must not enrol separately: the Studio itself
+  // is the 'studio' participant, and a second one inside its own catalog body holds the scene on a
+  // fetch the shell already covers. These seven were standalone screens hanging off `/studio?x=1`
+  // until ADR-0588 folded them into categories; each dropped its own participation with its shell.
+  it('leaves scene participation to the Studio for a review category', () => {
+    for (const file of [
+      './ui/BrushMarkCatalog.tsx',
+      './ui/MenuMarkCatalog.tsx',
+      './ui/RunProgressMarkCatalog.tsx',
+      './ui/RunSectioWrapCatalog.tsx',
+      './ui/LipsanonArtCatalog.tsx',
+      './ui/TerrainMarkCatalog.tsx',
+      './ui/CommandCardMarkCatalog.tsx',
+    ]) {
+      expect(read(file), file).not.toContain('useSceneParticipant');
+    }
   });
 
   it('keeps asynchronous deep-linked Studio viewers inside the scene gate', () => {
@@ -304,9 +320,11 @@ describe('professional loading architecture guards', () => {
   it('keeps gameplay control-panel tabs immediate while navigation remains explicit', () => {
     const hud = read('./ui/SkirmishHud.tsx');
     const titleNavigation = read('./ui/StrategikonTitleNavigation.tsx');
-    expect(hud).toContain('data-transition-policy="immediate-local"');
-    expect(hud).toContain('onClick={() => setTab(t.id)}');
-    expect(hud).not.toContain('onClick={() => navigateApp(t.id)}');
+    // The tabs are compartments of the Controls head's divided block now, declared to the panel
+    // rather than rendered here, so the policy and the press ride that declaration.
+    expect(hud).toContain("'data-transition-policy': 'immediate-local',");
+    expect(hud).toContain('press: { onPress: () => setTab(t.id)');
+    expect(hud).not.toContain('onPress: () => navigateApp(t.id)');
     expect(hud).toContain('<StrategikonTitleNavigation');
     expect(titleNavigation).toContain('<NavButton');
     expect(read('../scripts/shot.mjs')).toContain("const assertImmediateLocalControl = has('assert-immediate-local-control')");

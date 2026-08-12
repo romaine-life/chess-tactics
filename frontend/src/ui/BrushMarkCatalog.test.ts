@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AdminLiveMediaCatalog, AdminLiveMediaVersion } from '../net/liveMediaAdmin';
-import { brushIconReviewCandidates } from './BrushIconReview';
+import { brushMarkCandidates } from './BrushMarkCatalog';
 import {
   BRUSH_ICON_EXPLORATION_OBJECT_ID,
   brushIconProductionCandidate,
@@ -58,7 +58,7 @@ describe('Level Editor brush icon review', () => {
       ],
     } satisfies AdminLiveMediaCatalog;
 
-    expect(brushIconReviewCandidates(catalog).map(({ id }) => id)).toEqual(['first', 'second']);
+    expect(brushMarkCandidates(catalog).map(({ id }) => id)).toEqual(['first', 'second']);
   });
 
   it('admits only an exact 18px role-native production candidate and builds a slot-snapshotted proof', () => {

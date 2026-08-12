@@ -374,6 +374,18 @@ const MANUBIUM_EXAMPLE: Readonly<Record<ManubiumId, ManubiumExample>> = {
     opened: ['0,3'],
     seed: 933,
   },
+  'capture-with-check': {
+    // Both halves of the deed in one picture. The Rook comes up the file to take the Bishop, and
+    // from the square it takes on it runs along the rank into the King: the marked empty squares
+    // are the ones it crosses to make the capture and the one the check then runs through. The
+    // third clause is an absence and cannot be marked — nothing on this board attacks the square
+    // the Rook takes on, the King two squares along the rank included.
+    size: { cols: 5, rows: 5 },
+    pieces: [unit('player', 'rook', 2, 4), unit('enemy', 'bishop', 2, 1), unit('enemy', 'king', 0, 1)],
+    struck: ['2,1', '0,1'],
+    opened: ['2,3', '2,2', '1,1'],
+    seed: 944,
+  },
   'royal-fork': {
     size: { cols: 5, rows: 5 },
     pieces: [unit('player', 'knight', 2, 2), unit('enemy', 'king', 3, 0), unit('enemy', 'rook', 1, 0)],
@@ -1260,11 +1272,22 @@ export function Enchiridion({
 export function EnchiridionSectionRail({
   section,
   sectionHref,
+  markOverride,
 }: {
   section: EnchiridionSection | null;
   sectionHref: (section: EnchiridionSection) => string;
+  /**
+   * A mark to draw in place of a section's installed one, for a review surface judging a
+   * candidate. The rail itself is the specimen holder — a mark is only judged against the
+   * five it stands beside — so a review mounts THIS component rather than a lookalike
+   * column, and swaps one seat (ADR-0560). Nothing else may pass it.
+   */
+  markOverride?: Readonly<Partial<Record<EnchiridionSection, string>>>;
 }): ReactElement {
-  const sectionIconSrc = useSectionIconSrc();
+  const installedSectionIconSrc = useSectionIconSrc();
+  const sectionIconSrc = markOverride
+    ? { ...installedSectionIconSrc, ...markOverride }
+    : installedSectionIconSrc;
   // Which section wears the open mark. The sections are siblings under one root, and the root
   // differs by host (main menu vs Strategikon), so the family is derived from the very hrefs
   // this rail is handed — see shared/railOpenIntent.ts. `section` is untouched, so the content

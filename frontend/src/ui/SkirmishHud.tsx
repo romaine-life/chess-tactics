@@ -28,6 +28,8 @@ import { InnerChromeBox, ShellControlsPanel } from './shared/ChromeBox';
 import { useAuthSession } from '../net/authSession';
 import { AdminControls } from './AdminControls';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
+import { type SkirmishShortcutIconVariant } from './shared/SkirmishShortcutIcon';
+import { CommandCard, COMMAND_CARD_KEY_ROWS } from './shared/CommandCard';
 import { CHROME_LEAF_FILL_SURFACE, leafSurfacePhase } from './shared/chromeSurfacePolicy';
 import { StrategikonTitleNavigation } from './StrategikonTitleNavigation';
 import { RunBattleUndoButton } from './RunBattleUndoButton';
@@ -73,29 +75,30 @@ const HUD_TABS: { id: HudTab; label: string }[] = [
 
 type OverlayFlag = 'showEnemyAttacks' | 'showEnemyMoves' | 'showPlayerAttacks' | 'showPlayerMoves' | 'showPromotionZones' | 'showGrid';
 
-type GridAction =
-  | { kind: 'toggle'; flag: OverlayFlag; label: string; hint: string }
-  | { kind: 'zoom'; dir: 1 | -1; label: string; hint: string }
-  | { kind: 'deselect'; label: string; hint: string }
-  | { kind: 'clear-overlays'; label: string; hint: string };
+/** Every command wears its own mark, so `icon` is required rather than optional: a new
+ *  binding cannot be added without deciding what it looks like on the card. */
+type GridActionBase = { label: string; hint: string; icon: SkirmishShortcutIconVariant };
 
-const SHORTCUT_KEY_ROWS: string[][] = [
-  ['q', 'w', 'e', 'r', 't'],
-  ['a', 's', 'd', 'f', 'g'],
-  ['z', 'x', 'c', 'v', 'b'],
-];
+type GridAction =
+  | (GridActionBase & { kind: 'toggle'; flag: OverlayFlag })
+  | (GridActionBase & { kind: 'zoom'; dir: 1 | -1 })
+  | (GridActionBase & { kind: 'deselect' })
+  | (GridActionBase & { kind: 'clear-overlays' });
+
+// The 3x5 block itself lives with the card, so the screen that binds the keys and the
+// review that judges their marks lay out the same keyboard.
 
 export const SHORTCUT_BINDINGS: Record<string, GridAction> = {
-  q: { kind: 'toggle', flag: 'showEnemyAttacks', label: 'Opp. attacks', hint: 'Show all opponent attack squares (danger zone)' },
-  w: { kind: 'toggle', flag: 'showEnemyMoves', label: 'Opp. moves', hint: 'Show all opponent legal-move squares' },
-  e: { kind: 'toggle', flag: 'showGrid', label: 'Grid', hint: 'Show the board grid overlay' },
-  r: { kind: 'deselect', label: 'Deselect all', hint: 'Clear the selected and focused units' },
-  t: { kind: 'clear-overlays', label: 'Clear all', hint: 'Turn off all board overlays' },
-  a: { kind: 'toggle', flag: 'showPlayerAttacks', label: 'Your attacks', hint: 'Show all friendly attack squares' },
-  s: { kind: 'toggle', flag: 'showPlayerMoves', label: 'Your moves', hint: 'Show all friendly legal-move squares' },
-  d: { kind: 'toggle', flag: 'showPromotionZones', label: 'Promotion zones', hint: 'View pawn promotion zones' },
-  z: { kind: 'zoom', dir: 1, label: 'Zoom in', hint: 'Zoom the board in' },
-  x: { kind: 'zoom', dir: -1, label: 'Zoom out', hint: 'Zoom the board out' },
+  q: { kind: 'toggle', flag: 'showEnemyAttacks', icon: 'enemy-attacks', label: 'Opp. attacks', hint: 'Show all opponent attack squares (danger zone)' },
+  w: { kind: 'toggle', flag: 'showEnemyMoves', icon: 'enemy-moves', label: 'Opp. moves', hint: 'Show all opponent legal-move squares' },
+  e: { kind: 'toggle', flag: 'showGrid', icon: 'grid', label: 'Grid', hint: 'Show the board grid overlay' },
+  r: { kind: 'deselect', icon: 'deselect', label: 'Deselect all', hint: 'Clear the selected and focused units' },
+  t: { kind: 'clear-overlays', icon: 'clear-overlays', label: 'Clear all', hint: 'Turn off all board overlays' },
+  a: { kind: 'toggle', flag: 'showPlayerAttacks', icon: 'player-attacks', label: 'Your attacks', hint: 'Show all friendly attack squares' },
+  s: { kind: 'toggle', flag: 'showPlayerMoves', icon: 'player-moves', label: 'Your moves', hint: 'Show all friendly legal-move squares' },
+  d: { kind: 'toggle', flag: 'showPromotionZones', icon: 'promotion-zones', label: 'Promotion zones', hint: 'View pawn promotion zones' },
+  z: { kind: 'zoom', dir: 1, icon: 'zoom-in', label: 'Zoom in', hint: 'Zoom the board in' },
+  x: { kind: 'zoom', dir: -1, icon: 'zoom-out', label: 'Zoom out', hint: 'Zoom the board out' },
 };
 
 const ZOOM_STEP = 0.1;
@@ -247,8 +250,12 @@ export type SkirmishHudProps = {
   netInteractive?: boolean;
   /** Development-only owner calibration for a temporary pre-drawn plate candidate. */
   onOpenPredrawnRegistration?: (() => void) | null;
-  /** Permanently end the active Run. RunScreen owns confirmation and persistence. */
-  onAbandonRun?: (() => void) | null;
+  /**
+   * The Run's own Abandon control, seated in the Controls panel. The Run hands over the CONTROL
+   * rather than a callback: it confirms in its own seat now (a Keep Run / Abandon Run split, no
+   * dialog over the board), so the HUD owns a seat for it and never a second copy of it.
+   */
+  abandonRun?: ReactNode;
   /** Battle-context reference workspace. The route owns whether it is open. */
   strategikonPath?: string | null;
   strategikonSearch?: string;
@@ -284,7 +291,7 @@ export function SkirmishHud({
   returnLabel = 'Back',
   netInteractive = true,
   onOpenPredrawnRegistration = null,
-  onAbandonRun = null,
+  abandonRun = null,
   strategikonPath = null,
   strategikonSearch = '',
   controlsContent,
@@ -398,31 +405,25 @@ export function SkirmishHud({
         aria-label="Skirmish command HUD"
         titleActions={strategikonNavigation}
         titleClassName="skirmish-hud-titlebar"
-        titleContent={controlsContent === undefined ? (
-          <div
-            className="skirmish-hud-tabs"
-            role="tablist"
-            aria-label="HUD sections"
-            data-transition-policy="immediate-local"
-          >
-            {HUD_TABS.map((t, index) => (
-              <ChromeButton unit="inner-text-button"
-                key={t.id}
-                role="tab"
-                id={`skirmish-tab-${t.id}`}
-                aria-selected={tab === t.id}
-                aria-controls={`skirmish-panel-${t.id}`}
-                className={chromeUnitClassNames('inner-text-button', 'skirmish-hud-tab', tab === t.id && 'active')}
-                aria-label={t.label}
-                title={t.label}
-                style={leafSurfacePhase(index)}
-                onClick={() => setTab(t.id)}
-              >
-                <span className={`skirmish-tab-icon skirmish-tab-icon-${t.id}`} aria-hidden="true" />
-              </ChromeButton>
-            ))}
-          </div>
-        ) : null}
+        titleStrip={{ role: 'tablist', ariaLabel: 'HUD sections' }}
+        // One compartment per section, and the panel rules the lines between them. A tab is the
+        // compartment ITSELF — the rails on either side are already its edges, so a framed button
+        // in here would draw a second edge a few pixels inside the first (ADR-0433 leaf oak, no
+        // frame of its own).
+        titleSections={controlsContent === undefined ? HUD_TABS.map((t, index) => ({
+          id: t.id,
+          className: 'skirmish-hud-tab',
+          attrs: {
+            role: 'tab',
+            id: `skirmish-tab-${t.id}`,
+            'aria-selected': tab === t.id,
+            'aria-controls': `skirmish-panel-${t.id}`,
+            'data-transition-policy': 'immediate-local',
+          },
+          style: leafSurfacePhase(index),
+          press: { onPress: () => setTab(t.id), ariaLabel: t.label, title: t.label, active: tab === t.id },
+          content: <span className={`skirmish-tab-icon skirmish-tab-icon-${t.id}`} aria-hidden="true" />,
+        })) : []}
       >
 
         {controlsContent === undefined ? (
@@ -614,38 +615,26 @@ export function SkirmishHud({
           <section className="skirmish-card skirmish-controls-card" aria-label="Page controls">
             <div className="skirmish-view-group">
               <span className="skirmish-eyebrow">Shortcuts</span>
-              <div className="skirmish-grid" role="group" aria-label="Match shortcut grid">
-                {SHORTCUT_KEY_ROWS.flat().map((key, index) => {
+              <CommandCard
+                ariaLabel="Match shortcut grid"
+                commands={COMMAND_CARD_KEY_ROWS.flat().map((key) => {
                   const action = SHORTCUT_BINDINGS[key];
-                  // The command card is one repeated leaf collection, so its wood phases by
-                  // the key's own place in the authored grid (ADR-0433) rather than stamping
-                  // fifteen identical planks.
-                  const surfacePhase = leafSurfacePhase(index);
-                  if (!action) {
-                    return (
-                      <span key={key} data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-grid-key', 'is-empty')} style={surfacePhase} aria-hidden="true">
-                        <kbd className="skirmish-grid-cap">{key.toUpperCase()}</kbd>
-                      </span>
-                    );
-                  }
-                  const isToggle = action.kind === 'toggle';
+                  const isToggle = action?.kind === 'toggle';
                   const active = isToggle ? flagValue[action.flag] : false;
-                  return (
-                    <ChromeButton unit="inner-text-button"
-                      key={key}
-                      data-testid={`shortcut-${key}`}
-                      className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-grid-key', active && 'active is-active')}
-                      style={surfacePhase}
-                      aria-pressed={isToggle ? active : undefined}
-                      title={action.hint}
-                      onClick={() => { runSkirmishShortcut(key, false, skirmishViewStore, skirmishStore); }}
-                    >
-                      <kbd className="skirmish-grid-cap">{key.toUpperCase()}</kbd>
-                      <span className="skirmish-grid-label">{action.label}</span>
-                    </ChromeButton>
-                  );
+                  return {
+                    key,
+                    label: action?.label,
+                    hint: action?.hint,
+                    icon: action?.icon,
+                    active,
+                    pressed: isToggle ? active : undefined,
+                    testId: `shortcut-${key}`,
+                    onPress: action
+                      ? () => { runSkirmishShortcut(key, false, skirmishViewStore, skirmishStore); }
+                      : undefined,
+                  };
                 })}
-              </div>
+              />
               <p className="skirmish-grid-hint">Keys work any time during the match.</p>
             </div>
             {/* Battle clock: skirmish profiles edit the saved preference; editor/test boards edit
@@ -782,21 +771,11 @@ export function SkirmishHud({
                 ) : null}
               </div>
             </div>
-            {onAbandonRun && !net ? (
-              <>
-                <div className="skirmish-view-group">
-                  <span className="skirmish-eyebrow">Run</span>
-                  <div className="run-meta-navigation">
-                  <ChromeButton unit="inner-text-button"
-                    className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
-                    data-testid="abandon-run"
-                    onClick={onAbandonRun}
-                  >
-                    Abandon Run
-                  </ChromeButton>
-                  </div>
-                </div>
-              </>
+            {abandonRun && !net ? (
+              <div className="skirmish-view-group">
+                <span className="skirmish-eyebrow">Run</span>
+                {abandonRun}
+              </div>
             ) : null}
             {adminAuth.isAdmin && !net ? (
               <div className="skirmish-view-group">

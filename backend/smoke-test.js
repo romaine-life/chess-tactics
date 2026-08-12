@@ -986,7 +986,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 78 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 79 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -1001,7 +1001,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 42 }, (_, index) => index + 37),
+    ...Array.from({ length: 43 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1115,7 +1115,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 78: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 79: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -6768,6 +6768,120 @@ async function main() {
     throw new Error(`Active Run did not delete: ${deletedRun.statusCode} ${deletedRun.body}`);
   }
 
+  // --- Guest-owned active Runs (ADR-0588) -----------------------------------
+  // A signed-out player had nowhere to put a Run at all: `owner_email` was the primary key, so the
+  // row could not exist. These prove it does now, that it belongs to the GUEST and not to any
+  // account, that one guest cannot read another's, and that signing in moves it across exactly
+  // once. The account deleted its own Run directly above, so anything visible to `playerCookie`
+  // between here and the adoption could only have leaked from the guest.
+  const guestRunKey = 'a1b2c3d4'.repeat(8);
+  const otherGuestRunKey = 'f9e8d7c6'.repeat(8);
+  const guestEmptyRun = await get('/api/active-run', { 'x-guest-run-key': guestRunKey });
+  const guestEmptyRunBody = JSON.parse(guestEmptyRun.body);
+  if (
+    guestEmptyRun.statusCode !== 200
+    || guestEmptyRunBody.run !== null
+    || guestEmptyRunBody.revision !== 0
+  ) {
+    throw new Error(`A guest identity should reach an empty Run: ${guestEmptyRun.statusCode} ${guestEmptyRun.body}`);
+  }
+  const malformedGuestKey = await get('/api/active-run', { 'x-guest-run-key': 'not-a-key' });
+  if (malformedGuestKey.statusCode !== 401) {
+    throw new Error(`A malformed guest key must not become an identity: ${malformedGuestKey.statusCode} ${malformedGuestKey.body}`);
+  }
+  const savedGuestRun = await request(
+    'PUT', '/api/active-run',
+    { 'x-guest-run-key': guestRunKey, 'content-type': 'application/json' },
+    JSON.stringify({ run: adlectioRun, revision: 0 }),
+  );
+  const savedGuestRunBody = JSON.parse(savedGuestRun.body);
+  if (
+    savedGuestRun.statusCode !== 200
+    || savedGuestRunBody.revision !== 1
+    || savedGuestRunBody.run.id !== 'run-smoke'
+  ) {
+    throw new Error(`A signed-out Run did not save: ${savedGuestRun.statusCode} ${savedGuestRun.body}`);
+  }
+  const reloadedGuestRun = await get('/api/active-run', { 'x-guest-run-key': guestRunKey });
+  if (JSON.parse(reloadedGuestRun.body).run?.id !== 'run-smoke') {
+    throw new Error(`A guest Run did not outlive the request that wrote it: ${reloadedGuestRun.body}`);
+  }
+  const strangerGuestRun = await get('/api/active-run', { 'x-guest-run-key': otherGuestRunKey });
+  if (JSON.parse(strangerGuestRun.body).run !== null) {
+    throw new Error(`One guest must not read another guest's Run: ${strangerGuestRun.body}`);
+  }
+  const accountUnaffectedByGuest = await get('/api/active-run', { cookie: playerCookie });
+  if (JSON.parse(accountUnaffectedByGuest.body).run !== null) {
+    throw new Error(`A guest Run must not appear on an account: ${accountUnaffectedByGuest.body}`);
+  }
+  const anonymousAdoption = await request(
+    'POST', '/api/active-run/adopt-guest',
+    { 'x-guest-run-key': guestRunKey, 'content-type': 'application/json' },
+    '{}',
+  );
+  if (anonymousAdoption.statusCode !== 401) {
+    throw new Error(`Adopting a guest Run must require sign-in: ${anonymousAdoption.statusCode} ${anonymousAdoption.body}`);
+  }
+  const adoptedGuestRun = await request(
+    'POST', '/api/active-run/adopt-guest',
+    { cookie: playerCookie, 'x-guest-run-key': guestRunKey, 'content-type': 'application/json' },
+    '{}',
+  );
+  const adoptedGuestRunBody = JSON.parse(adoptedGuestRun.body);
+  if (
+    adoptedGuestRun.statusCode !== 200
+    || adoptedGuestRunBody.adopted !== true
+    || adoptedGuestRunBody.run?.id !== 'run-smoke'
+    // Ownership MOVES rather than the body being copied, so the revision the client already holds
+    // stays the CAS token for the same Run.
+    || adoptedGuestRunBody.revision !== 1
+  ) {
+    throw new Error(`Signing in did not inherit the guest Run: ${adoptedGuestRun.statusCode} ${adoptedGuestRun.body}`);
+  }
+  const accountAfterAdoption = await get('/api/active-run', { cookie: playerCookie });
+  if (JSON.parse(accountAfterAdoption.body).run?.id !== 'run-smoke') {
+    throw new Error(`The adopted Run should now be the account's: ${accountAfterAdoption.body}`);
+  }
+  const guestAfterAdoption = await get('/api/active-run', { 'x-guest-run-key': guestRunKey });
+  if (JSON.parse(guestAfterAdoption.body).run !== null) {
+    throw new Error(`An adopted row must not stay readable by the key that owned it: ${guestAfterAdoption.body}`);
+  }
+  // A second adoption has nothing to move, and must not disturb the Run it already handed over.
+  const repeatedAdoption = await request(
+    'POST', '/api/active-run/adopt-guest',
+    { cookie: playerCookie, 'x-guest-run-key': guestRunKey, 'content-type': 'application/json' },
+    '{}',
+  );
+  if (repeatedAdoption.statusCode !== 200 || JSON.parse(repeatedAdoption.body).adopted !== false) {
+    throw new Error(`Re-adopting an absent guest row should report nothing taken: ${repeatedAdoption.statusCode} ${repeatedAdoption.body}`);
+  }
+  const accountAfterRepeatedAdoption = await get('/api/active-run', { cookie: playerCookie });
+  if (JSON.parse(accountAfterRepeatedAdoption.body).run?.id !== 'run-smoke') {
+    throw new Error(`A repeated adoption must not disturb the account Run: ${accountAfterRepeatedAdoption.body}`);
+  }
+  const runPopulation = await get('/api/admin/run-population', { cookie: playerCookie });
+  const runPopulationBody = JSON.parse(runPopulation.body);
+  if (
+    runPopulation.statusCode !== 200
+    || runPopulationBody.guest.total !== 0
+    || runPopulationBody.account.total < 1
+    || typeof runPopulationBody.account.phases !== 'object'
+  ) {
+    throw new Error(`Run population should count what exists: ${runPopulation.statusCode} ${runPopulation.body}`);
+  }
+  const rivalPopulation = await get('/api/admin/run-population', { cookie: rivalCookie });
+  if (rivalPopulation.statusCode !== 403) {
+    throw new Error(`Run population must require an administrator: ${rivalPopulation.statusCode} ${rivalPopulation.body}`);
+  }
+  const deletedAdoptedRun = await request(
+    'DELETE', '/api/active-run',
+    { cookie: playerCookie, 'content-type': 'application/json' },
+    JSON.stringify({ revision: 1 }),
+  );
+  if (deletedAdoptedRun.statusCode !== 200) {
+    throw new Error(`The adopted Run did not delete: ${deletedAdoptedRun.statusCode} ${deletedAdoptedRun.body}`);
+  }
+
   // --- Crafted active Runs (ADR-0338): admin-only, and refused before any write ---
   // The composition itself is covered by the shared crafter's own tests; what has to hold here is
   // that only an administrator can reach it and that a spec it cannot honour is reported rather
@@ -7266,6 +7380,85 @@ async function main() {
     resolvedEditorBody.document.dirty !== false
   ) {
     throw new Error(`Unexpected editor resolve: ${resolvedEditor.statusCode} ${resolvedEditor.body}`);
+  }
+
+  // Automated verification observes documents; it must not be able to CREATE one (ADR-0586).
+  // Resolve is where a working copy is born, so `intent: observe` has to reach this request too —
+  // rewriting only the edit-session open left every screenshot of a document-less editor URL
+  // minting an "Untitled level" on the owner's account and then observing what it had just made.
+  const observedExistingResolve = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: playerCookie, 'content-type': 'application/json' },
+    JSON.stringify({ level_id: 'smoke-1', intent: 'observe' }),
+  );
+  const observedExistingBody = JSON.parse(observedExistingResolve.body);
+  if (
+    observedExistingResolve.statusCode !== 200 ||
+    observedExistingBody.document.document_id !== smokeDocumentId ||
+    observedExistingBody.document.revision !== 1
+  ) {
+    throw new Error(`Observing resolve should attach to the existing working copy unchanged: ${observedExistingResolve.statusCode} ${observedExistingResolve.body}`);
+  }
+
+  const observedMissingResolve = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: playerCookie, 'content-type': 'application/json' },
+    JSON.stringify({ level_id: 'smoke-observe-absent', intent: 'observe' }),
+  );
+  if (
+    observedMissingResolve.statusCode !== 404 ||
+    JSON.parse(observedMissingResolve.body).error !== 'editor_document_not_found_for_level'
+  ) {
+    throw new Error(`Observing resolve must refuse to initialize a missing working copy: ${observedMissingResolve.statusCode} ${observedMissingResolve.body}`);
+  }
+
+  const observedCreateResolve = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: playerCookie, 'content-type': 'application/json' },
+    JSON.stringify({ intent: 'observe', level: { formatVersion: 2, id: 'draft', name: 'Untitled level', board: { cols: 10, rows: 10, heightLevels: 1 } } }),
+  );
+  if (
+    observedCreateResolve.statusCode !== 409 ||
+    JSON.parse(observedCreateResolve.body).error !== 'observation_cannot_create_editor_document'
+  ) {
+    throw new Error(`Observing resolve must refuse a create-shaped body: ${observedCreateResolve.statusCode} ${observedCreateResolve.body}`);
+  }
+
+  // The header carries the same declaration as the body field, exactly as the edit-session open
+  // already accepts it, so a caller that cannot reshape a body still observes.
+  const observedHeaderResolve = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: playerCookie, 'content-type': 'application/json', 'x-level-editor-session-intent': 'observe' },
+    JSON.stringify({ level_id: 'smoke-observe-absent' }),
+  );
+  if (observedHeaderResolve.statusCode !== 404) {
+    throw new Error(`Observing intent must be honoured from the header: ${observedHeaderResolve.statusCode} ${observedHeaderResolve.body}`);
+  }
+
+  const invalidIntentResolve = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: playerCookie, 'content-type': 'application/json' },
+    JSON.stringify({ level_id: 'smoke-1', intent: 'peek' }),
+  );
+  if (
+    invalidIntentResolve.statusCode !== 400 ||
+    JSON.parse(invalidIntentResolve.body).error !== 'invalid_editor_document_resolve_intent'
+  ) {
+    throw new Error(`An unknown resolve intent must be refused, not treated as write: ${invalidIntentResolve.statusCode} ${invalidIntentResolve.body}`);
+  }
+
+  // Prove the refusals wrote nothing: the refused level still has no working copy, so an ordinary
+  // WRITE resolve reaches the canonical lookup rather than finding a document observation left behind.
+  const absentAfterObservation = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: playerCookie, 'content-type': 'application/json' },
+    JSON.stringify({ level_id: 'smoke-observe-absent' }),
+  );
+  if (
+    absentAfterObservation.statusCode !== 404 ||
+    JSON.parse(absentAfterObservation.body).error !== 'saved_level_not_found'
+  ) {
+    throw new Error(`Observing resolve left a working copy behind: ${absentAfterObservation.statusCode} ${absentAfterObservation.body}`);
   }
 
   // Every owner page targets the same editable working copy. Page sessions

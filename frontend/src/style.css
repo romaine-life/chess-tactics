@@ -70,13 +70,30 @@ body {
   min-height: 100%;
   color: var(--ink);
   font-family: "Advance Wars 2 GBA", "VT323", ui-monospace, "Cascadia Mono", monospace;
-  font-size: 19px;
+  /* 16px, not 19px: the house font's brick is em/16, so 19px drew every inherited
+     string with a 1.1875px brick and no whole pixel to land on. See the type scale. */
+  font-size: 16px;
   background:
     radial-gradient(980px 680px at 52% -18%, rgba(58, 95, 112, .38) 0%, rgba(11, 25, 34, .92) 42%, rgba(5, 10, 15, 1) 100%),
     linear-gradient(180deg, #0a151d 0%, #05090d 100%);
 }
 
+/* The space-glyph snap, declared on EVERY element so each one resolves the em against
+   its own font-size. That is the whole point of the universal selector here: word-spacing
+   inherits as a computed absolute length, so declaring it once high up would freeze one
+   tier's correction and hand it to every other tier. With this rule a space measures
+   3 bricks at any size the grid allows — 3px at 16px, 6px at 32px, 9px at 48px. */
+* { word-spacing: var(--ds-word-space-snap); }
+
 h1, h2, p { margin: 0; }
+
+/* Headings with no author font-size fall through to the UA stylesheet, whose sizes are
+   em multiples of the parent: h2 is 1.5em = 24px, h3 1.17em = 18.72px, h5 .83em. None of
+   those are multiples of 16, so an unstyled heading lands off the grid however carefully
+   the scale is set — the "No active Run" heading on /run was exactly this. Anchor them to
+   the two tiers; every heading that already declares a size still overrides this. */
+h1, h2 { font-size: var(--ds-text-lg); }
+h3, h4, h5, h6 { font-size: var(--ds-text-md); }
 
 h1,
 button {
@@ -171,7 +188,7 @@ button:disabled {
 
 h1 {
   color: var(--ink-strong);
-  font-size: clamp(.88rem, 1.8vw, 1.34rem);
+  font-size: 16px;
   line-height: 1.15;
   text-shadow: 0 2px 0 #020507, 0 0 18px rgba(101, 184, 255, .18);
 }
@@ -650,7 +667,7 @@ h1 {
   font-family: var(--ds-font-serif);
   font-weight: var(--ds-weight-medium);
   font-size: var(--ds-text-lg);
-  letter-spacing: .03em;
+  letter-spacing: 0;
   color: #f4ead6;
   text-shadow: 0 1px 3px rgba(0, 0, 0, .65);
   white-space: nowrap;
@@ -665,7 +682,7 @@ h1 {
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-xl);
   font-weight: 400;
-  letter-spacing: .035em;
+  letter-spacing: 1px;
   line-height: 1;
   text-transform: uppercase;
   text-shadow:
@@ -836,7 +853,7 @@ h1 {
   color: var(--cobalt-bright);
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-sm);
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -859,7 +876,7 @@ h1 {
   color: var(--ink);
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-sm);
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
   cursor: pointer;
   line-height: 1.2;
@@ -871,7 +888,7 @@ h1 {
   color: var(--cobalt-bright);
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-sm);
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -1900,26 +1917,46 @@ h1 {
      the --ds-* tokens so the dead path resolves; do NOT add new uses. */
   --font-sans: var(--ds-font-sans);
   --font-serif: var(--ds-font-serif);
-  /* Type scale — one modular ramp (~1.2 ratio), responsive via clamp so every
-     surface scales together instead of each role inventing its own clamp triplet.
-     Map text ROLES onto these steps; don't hand-pick font-sizes per element.
-       2xs eyebrow/status · xs caption/button · sm control label · md body/row title
-       lg section/brand heading · xl page/panel display */
-  --ds-text-2xs: clamp(.62rem, .72vw, .72rem);
-  --ds-text-xs:  clamp(.72rem, .82vw, .82rem);
-  --ds-text-sm:  clamp(.82rem, .95vw, .95rem);
-  --ds-text-md:  clamp(.95rem, 1.1vw, 1.1rem);
-  --ds-text-lg:  clamp(1.18rem, 1.55vw, 1.6rem);
-  --ds-text-xl:  clamp(1.5rem, 2.1vw, 2.3rem);
-  --ds-text-display: clamp(2.2rem, 3.72vw, 3.9rem); /* menu title — folds in --menu-type-title (ADR-0016) */
+  /* Type scale — PINNED TO THE HOUSE FONT'S PIXEL GRID.
+     "Advance Wars 2 GBA" is a FontStruct pixel face: unitsPerEm 2000, design brick
+     125 units = em/16. One brick equals one device pixel only when font-size is a
+     whole multiple of 16px. The scale used to be a six-step clamp(rem, vw, rem) ramp,
+     which slid continuously with viewport width and therefore landed on 16 essentially
+     never — every step drew off-grid, and the four steps below 16px had a SUB-PIXEL
+     brick, so their strokes were all partial-coverage grey. A live sweep of six routes
+     found exactly one on-grid node in the whole app.
+     The font has two usable sizes in UI range, so the scale has two. Hierarchy comes
+     from colour, casing, tracking and the kit chrome instead of from size — the same
+     way the GBA games this face is taken from do it.
+     Keep every value here a whole multiple of 16px. A `vw` term anywhere in this block
+     reintroduces the original bug. */
+  --ds-text-2xs: 16px;
+  --ds-text-xs:  16px;
+  --ds-text-sm:  16px;
+  --ds-text-md:  16px;
+  --ds-text-lg:  32px;
+  --ds-text-xl:  32px;
+  --ds-text-display: 48px; /* menu title — folds in --menu-type-title (ADR-0016) */
+  /* The space glyph is the one character that is NOT on the 125-unit brick: its advance
+     is 312.5 units = 2.5 bricks, so a space is always half a brick short of whole. This
+     is the amount that snaps it up to 3 bricks — half a brick, i.e. em/32.
+     It MUST stay in em and be declared per element (see the universal rule below). An
+     absolute px value on a shared ancestor computes once and inherits, so a 32px heading
+     and the 16px text inside it cannot both be right; that is exactly the bug the first
+     attempt shipped. Fixing the glyph in the font retires this token — ADR pending. */
+  --ds-word-space-snap: .03125em;
   /* Weights (ADR-0016): pixel faces are 400-only; serif uses these three, strong (600)
      is reserved for the brand lockup (ADR-0008). */
   --ds-weight-regular: 400;
   --ds-weight-medium: 500;
   --ds-weight-strong: 600;
   /* Tracking (ADR-0016): two roles — labels vs eyebrows/brand descriptor. */
-  --ds-tracking-tight: .01em;
-  --ds-tracking-wide: .14em;
+  /* Tracking is a whole number of device pixels or it walks every glyph after the first
+     off the grid. These were .01em/.14em, which at the 16px tier are .16px and 2.24px —
+     both fractional. Whole px also means one value stays correct at 16px and 32px, which
+     an em value cannot do. */
+  --ds-tracking-tight: 0;
+  --ds-tracking-wide: 2px;
   /* space — the 8px base + 4px half-step scale (ADR-0031). Map spatial ROLES onto
      these steps; don't hand-pick px per element. */
   --ds-space-1: 4px;
@@ -2008,7 +2045,7 @@ h1 {
   font-family: var(--font-sans);
   font-size: .8rem;
   font-weight: 600;
-  letter-spacing: .14em;
+  letter-spacing: 2px;
   line-height: 1.4;
   text-transform: uppercase;
 }
@@ -2026,7 +2063,7 @@ h1 {
   display: inline-flex;
   font-size: .92rem;
   gap: .45em;
-  letter-spacing: .01em;
+  letter-spacing: 0;
 }
 
 .main-assets-summary b {
@@ -2048,7 +2085,7 @@ h1 {
   font-family: var(--font-sans);
   font-size: .72rem;
   font-weight: 600;
-  letter-spacing: .07em;
+  letter-spacing: 1px;
   line-height: 1;
   padding: 5px 11px;
   text-transform: uppercase;
@@ -2086,7 +2123,7 @@ h1 {
   font-family: var(--font-sans);
   font-size: .82rem;
   font-weight: 600;
-  letter-spacing: .01em;
+  letter-spacing: 0;
   min-height: 40px;
   min-width: 0;
   padding: 9px 8px;
@@ -2194,9 +2231,9 @@ h1 {
 .portfolio-asset-title {
   color: var(--c-ink);
   font-family: var(--font-serif);
-  font-size: clamp(1.18rem, 1.7vw, 1.45rem);
+  font-size: 16px;
   font-weight: 500;
-  letter-spacing: -.01em;
+  letter-spacing: 0;
   line-height: 1.25;
   min-width: 0;
 }
@@ -2208,7 +2245,7 @@ h1 {
   font-family: var(--font-sans);
   font-size: .7rem;
   font-weight: 600;
-  letter-spacing: .07em;
+  letter-spacing: 1px;
   padding: 5px 11px;
   text-transform: uppercase;
   white-space: nowrap;
@@ -2270,7 +2307,7 @@ h1 {
   font-family: var(--font-sans);
   font-size: .7rem;
   font-weight: 700;
-  letter-spacing: .1em;
+  letter-spacing: 2px;
   text-transform: uppercase;
 }
 
@@ -2292,7 +2329,7 @@ h1 {
   font-family: var(--font-sans);
   font-size: .82rem;
   font-weight: 500;
-  letter-spacing: .01em;
+  letter-spacing: 0;
   padding: 7px 15px;
   text-decoration: none;
   transition: border-color .15s, color .15s, background .15s;
@@ -2320,7 +2357,7 @@ h1 {
   font-family: var(--font-sans);
   font-size: .7rem;
   font-weight: 700;
-  letter-spacing: .1em;
+  letter-spacing: 2px;
   text-transform: uppercase;
 }
 
@@ -2365,7 +2402,7 @@ h1 {
   font-family: var(--font-sans);
   font-size: .7rem;
   font-weight: 700;
-  letter-spacing: .1em;
+  letter-spacing: 2px;
   text-transform: uppercase;
 }
 
@@ -2746,7 +2783,7 @@ h1 {
   color: #edf7ff;
   display: flex;
   font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: clamp(.55rem, 1.35vw, 1.06rem);
+  font-size: 16px;
   letter-spacing: 0;
   line-height: 1;
   min-height: 0;
@@ -3001,7 +3038,7 @@ h1 {
   color: var(--c-accent);
   font-size: .68rem;
   font-weight: 700;
-  letter-spacing: .1em;
+  letter-spacing: 2px;
   text-transform: uppercase;
 }
 
@@ -3041,7 +3078,7 @@ h1 {
   color: var(--c-accent);
   font-size: .72rem;
   font-weight: 700;
-  letter-spacing: .1em;
+  letter-spacing: 2px;
   margin: 0 0 7px;
   text-transform: uppercase;
 }
@@ -3247,7 +3284,7 @@ h1 {
 .utility-title-copy h1 {
   color: #f8ecd3;
   font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", ui-monospace, monospace;
-  font-size: clamp(.86rem, 2vw, 1.22rem);
+  font-size: 16px;
   line-height: 1.4;
   overflow-wrap: anywhere;
   text-shadow:
@@ -3428,7 +3465,7 @@ h1 {
   color: var(--power);
   font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", ui-monospace, monospace;
   font-size: .46rem;
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   line-height: 1.45;
   text-transform: uppercase;
 }
@@ -4534,7 +4571,7 @@ h1 {
   color: #eaf6ff;
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
   font-size: var(--ds-text-sm);
-  letter-spacing: .06em;
+  letter-spacing: 1px;
   line-height: 1.1;
   text-transform: uppercase;
 }
@@ -4543,7 +4580,7 @@ h1 {
   color: var(--skirmish-muted);
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
   font-size: var(--ds-text-xs);
-  letter-spacing: .02em;
+  letter-spacing: 0;
   line-height: 1.15;
 }
 
@@ -4617,7 +4654,7 @@ h1 {
 
 .skirmish-brand strong {
   display: block;
-  font-size: clamp(1.15rem, 1.55vw, 1.55rem);
+  font-size: 16px;
   line-height: 1;
   text-shadow: 0 3px 0 #02070b;
   white-space: nowrap;
@@ -4742,7 +4779,7 @@ h1 {
   color: #eaf6ff;
   font: var(--ds-weight-strong) var(--ds-text-md)/1 var(--ds-font-display);
   font-variant-numeric: tabular-nums;
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   /* The READOUT owns a stable width, exactly as the clock's does: the box holds two numbers
      that change independently as pieces come off, and a box that breathed with them would
      shove the clock beside it on every capture. Two tabular digits is the width every real
@@ -5396,47 +5433,17 @@ body.loading-bootstrap .app-startup-status {
 }
 
 /* Tabbed HUD (ADR-0006 in-game density): one section visible at a time so the
-   growing command surface stays scannable. Tabs + bottom actions are pinned; the
-   active panel takes the remaining height and scrolls on its own. */
-.skirmish-hud-tabs {
-  display: flex;
-  flex: none;
-  flex-wrap: wrap;
-  gap: var(--ds-inline-tight);
-}
-
+   growing command surface stays scannable. The tab strip is the Controls head's own
+   divided block — five compartments of one box, ruled by the panel's rails — so the
+   tabs declare nothing about their frame, spacing, or width here. Bottom actions are
+   pinned; the active panel takes the remaining height and scrolls on its own. */
 .skirmish-hud-tab {
-  appearance: none;
-  align-items: center;
-  display: flex;
-  justify-content: center;
-  /* Icon-only: equal-share basis (0) keeps all five on ONE compact row instead of
-     stretching to a text width and wrapping to a second row. */
-  flex: 1 1 0;
-  color: var(--skirmish-muted);
-  cursor: pointer;
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
   font-size: var(--ds-text-sm);
   image-rendering: pixelated;
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   line-height: 1;
-  min-block-size: 0;
-  padding: 2px;
   text-transform: uppercase;
-}
-
-.skirmish-hud-tab:hover {
-  color: #f4fbff;
-}
-
-.skirmish-hud-tab:focus-visible {
-  color: #f4fbff;
-  outline: 2px solid rgba(101, 184, 255, .72);
-  outline-offset: 2px;
-}
-
-.skirmish-hud-tab.active {
-  color: #f3fbff;
 }
 
 /* Icon-based tab glyphs — reused curated kit icons (ADR-0011/0032), full-colour on
@@ -5636,7 +5643,7 @@ body.loading-bootstrap .app-startup-status {
 .skirmish-clock-row > span {
   color: #d6ecf5;
   font-size: var(--ds-text-sm);
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -5686,23 +5693,24 @@ body.loading-bootstrap .app-startup-status {
   text-align: center;
 }
 
-/* In-match shortcut grid (Controls tab). Cells reuse the kit mode-button frame
-   (.app-header-button / .app-header-button-active), so this block is layout + the
-   key-cap badge only — no raw-CSS chrome. */
-.skirmish-grid {
-  display: grid;
-  gap: var(--ds-inline);
-  grid-template-columns: repeat(5, 1fr);
+/* The in-match command card (Controls tab). It is ONE divided box of fifteen compartments —
+   ChromeSeatGrid — so this block is the card's measure and the compartment's own stacking,
+   and every edge between two commands is the box's rail. There is nothing here that draws a
+   frame, a gap or a border: the fifteen framed buttons in a gapped CSS grid that this used
+   to be are exactly what that primitive exists to replace (ADR-0242/ADR-0586). */
+.skirmish-grid.chrome-seat-grid {
+  /* Against the pad's own max-content default: this card is not a fixed set of squares, it
+     fills the rail it lives in, and its opening is derived from that width. */
+  inline-size: 100%;
+  /* Cap, mark and the compartment's own breathing room, stated once as the block opening the
+     seat axis is derived from. */
+  --command-card-row-opening: calc(var(--ds-text-2xs) + var(--skirmish-shortcut-icon-size, 28px) + 14px);
 }
 
-.skirmish-grid-key.app-header-button {
-  block-size: auto;
-  flex-direction: column;
-  gap: 3px;
-  justify-content: center;
-  min-block-size: 60px;
-  min-width: 0;
-  padding: 6px 4px;
+.skirmish-grid-key {
+  align-content: center;
+  gap: 2px;
+  grid-auto-flow: row;
   text-align: center;
 }
 
@@ -5713,23 +5721,66 @@ body.loading-bootstrap .app-startup-status {
   line-height: 1;
 }
 
+/* The cap steps down once the mark is the thing being read: on a key with a label it was
+   the largest type in the cell, and against a mark alone at the same size it competes with
+   it for the eye.
+   It stays STACKED above the mark rather than seated in a corner, which was tried and is
+   13px shorter per key: at 42px wide there is no free corner on this card, so the letter
+   landed on the grid lattice, on the cursor's brackets and on both magnifier lenses. A key
+   whose letter cannot be read is not a saving on a card whose whole premise is that the
+   letters map to physical key positions. */
+.skirmish-grid-key .skirmish-grid-cap {
+  font-size: var(--ds-text-2xs);
+  opacity: .78;
+}
+
+/* One command's mark, under its key cap. The seat is a fixed SQUARE rather than a share of
+   the compartment, because the ten marks sit in a 3x5 card where every neighbour is a size
+   reference — a seat that tracked its own compartment would redraw the set at three sizes
+   down the card. The whole 64x64 canvas is drawn and the asset's own transparent margin
+   decides the mark's size inside it (ADR-0026), so the seat carries no per-icon nudge. */
+.skirmish-shortcut-icon {
+  align-items: center;
+  block-size: var(--skirmish-shortcut-icon-size, 28px);
+  display: inline-flex;
+  flex: none;
+  inline-size: var(--skirmish-shortcut-icon-size, 28px);
+  justify-content: center;
+}
+
+.skirmish-shortcut-icon img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: contain;
+}
+
 .skirmish-grid-label {
   font-size: var(--ds-text-xs);
-  letter-spacing: .01em;
+  letter-spacing: 0;
   line-height: 1.05;
   max-width: 100%;
   opacity: .92;
   white-space: normal;
 }
 
+/* An open slot is a real compartment of the card with nothing bound to it yet — dimmed, not
+   removed: dropping it would close the gap and move every command after it one key left, and
+   the card's whole premise is that its cells ARE the keyboard. */
 .skirmish-grid-key.is-empty {
   cursor: default;
   opacity: .32;
-  pointer-events: none;
 }
 
-.skirmish-grid-key.is-empty .skirmish-grid-label {
-  display: none;
+/* The tip wrapper is the compartment when a seat carries a tip, so it takes the half-rail
+   inset and the seat fills what is left. Written against `.tooltip` on purpose: the tip
+   primitive states `inline-flex` for a trigger that sits IN a line of text, which is the
+   opposite of a trigger that is a compartment, and the two rules are otherwise a
+   source-order coin toss. */
+.tooltip.chrome-seat-tip,
+.tooltip.chrome-seat-tip > .tooltip-trigger {
+  display: grid;
+  min-inline-size: 0;
 }
 
 .skirmish-grid-hint {
@@ -6076,8 +6127,138 @@ body.loading-bootstrap .app-startup-status {
   padding-block-start: 0;
 }
 
-:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .le-outer-panel > .le-outer-panel-content--titled > .outer-chrome-header {
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .le-outer-panel > .le-outer-panel-content--titled > :is(.outer-chrome-header, .shell-controls-head) {
   margin-inline: calc(-1 * var(--le-control-content-inset));
+}
+
+/* The Controls head: the panel's name and the strip of compartments under it, as ONE divided
+   block (ShellControlsPanel), built like the title bar's invariant cluster — inner-box chrome,
+   one rail on every internal boundary, and each member a compartment of the block. It runs the
+   full width of the panel, so its left and right edges are the panel's OWN side rails: the block
+   draws no frame there, and the rails that reach them simply run under them. Nothing here places
+   a rail; the block's topology does, from its grid lines. */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .chrome-divided-grid.shell-controls-head {
+  --shell-controls-head-seat: var(--le-inner-square, 38px);
+  --shell-controls-head-rail-half: calc(var(--le-chrome-inner-rail-w, 7px) / 2);
+  /* The block's rails reach its own edges and stop: the panel's frame is what they run into, and
+     it is already there. Without this they bleed a rail-width past the panel and paint on the
+     board beside it. */
+  --chrome-divided-grid-reach: 0px;
+  display: block;
+  /* A pinned head in the panel's column, like every other fixed section: it is not the thing that
+     gives way when the body is long. */
+  flex: none;
+  /* An unframed block clips itself, because one that IS a shell workspace would otherwise drop its
+     rails onto the title bar and the Controls rail around it. This block's boundary is its host's
+     FRAME, and the only thing outside its box is the closing rail on its bottom edge — which
+     straddles that edge, as a rail on a boundary does, and was coming out half-height with its
+     four caps cut through the middle. What it overflows onto is the panel's own field, a few
+     pixels into the gutter above the body. Nothing bleeds inline: the reach above is zero. */
+  overflow: visible;
+}
+
+/* The name spans the whole block and carries no compartment of its own, so its row contributes no
+   box: the title element inside it already owns the band's height and inline padding. */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-title-row {
+  display: block;
+  min-inline-size: 0;
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-title-row > .outer-chrome-header {
+  margin-inline: 0;
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head .skirmish-card h2.kit-panel-title {
+  /* The rail under the name is the block's own boundary, so the name stacks straight onto it —
+     the stack gap here would only push the seam down into bare marble. */
+  margin-block-end: 0;
+}
+
+/* The strip is one seat tall plus what the rails above and below take back: each is drawn ON its
+   boundary and covers half its width from the row. The same half comes off the seats as padding,
+   so a mark centres in the opening rather than in the cell — the inline halves are declared here
+   for the same reason, matching the tracks ShellControlsHead lays (ADR-0569). */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-strip {
+  block-size: calc(var(--shell-controls-head-seat) + var(--le-chrome-inner-rail-w, 7px));
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-strip > * {
+  padding-block: var(--shell-controls-head-rail-half);
+}
+
+/* A single undivided compartment holds other people's controls rather than being one. It has a
+   rail above it and nothing below, and it keeps the content boundary every other control in the
+   panel sits on. */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-single > .shell-controls-head-section {
+  block-size: auto;
+  padding-block: var(--shell-controls-head-rail-half) 0;
+  padding-inline: var(--le-control-content-inset);
+}
+
+/* The head's foot: a boundary, not a row. Its rail is the block's bottom edge and the caps on it
+   are where the strip's verticals end. */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-foot {
+  block-size: 0;
+  min-inline-size: 0;
+}
+
+/* One compartment of the Controls head's block. It IS the control — the rails on either side are
+   already its edges — so it paints no frame, fills its cell, and wears the leaf oak the panel
+   gives every trigger. Its native-button reset is the same one .chrome-seat and
+   .section-box-member-verb make, so check-ui-surface-contract.mjs carries it as an approved
+   frameless reset keyed on the BARE selector — which is why that rule follows this one with no
+   comment directly above it, and why the reset is split out from the layout at all. */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-section {
+  align-items: center;
+  block-size: 100%;
+  box-sizing: border-box;
+  color: var(--skirmish-muted);
+  display: flex;
+  justify-content: center;
+  min-inline-size: 0;
+  position: relative;
+}
+
+.shell-controls-head-section {
+  appearance: none;
+  -webkit-appearance: none;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) button.shell-controls-head-section {
+  cursor: pointer;
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-section:is(:hover, :focus-visible, .active) {
+  color: #f4fbff;
+}
+
+/* Which compartment is CURRENT, carried by its content. A compartment has no frame of its own to
+   light — the rails on either side belong to the block, and the block lights nothing — so the mark
+   inside it holds the whole state, the same way the title bar's music seat and the Strategikon
+   marks do. Selecting a tab used to swap a kit button frame; there is no such frame here, and
+   without this every section looked equally current. */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) button.shell-controls-head-section > * {
+  filter: grayscale(.55) brightness(.72);
+  transition:
+    filter var(--ds-duration-fast) var(--ds-ease-standard),
+    opacity var(--ds-duration-fast) var(--ds-ease-standard);
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) button.shell-controls-head-section:is(:hover, :focus-visible) > * {
+  filter: grayscale(.2) brightness(.92);
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) button.shell-controls-head-section.active > * {
+  filter: none;
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-section:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: -4px;
 }
 
 /* No scrollbar-gutter here: this HUD is overflow:hidden (never scrolls), so a stable
@@ -6085,6 +6266,28 @@ body.loading-bootstrap .app-startup-status {
    lopsided (14px frame on the left, 14px + 10px gutter on the right). */
 .level-editor-screen .skirmish-hud {
   grid-area: rail;
+}
+
+/* How much of the panel's own frame rail sits ON TOP of a full-bleed child. The head block runs
+   edge to edge so its rails can reach that frame, which means the frame covers the head's first
+   and last compartments and nothing else — the outer compartments were 42px of visible oak beside
+   64px ones until the tracks were told about it. Measured from the rail the panel actually draws,
+   not from the box: the fill is held a little inside the panel so the rail can sit over its edge,
+   and that inset is rail the compartment keeps. */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) [data-shell-controls-panel] {
+  --shell-controls-frame-cover-start:
+    max(0px, calc(var(--le-chrome-outer-rail-w, 24px) - var(--le-outer-fill-box-left, 0px)));
+  --shell-controls-frame-cover-end:
+    max(0px, calc(var(--le-chrome-outer-rail-w, 24px) - var(--le-outer-fill-box-right, 0px)));
+  /* What the panel's NAME clears the visible field by — its content inset less the frame standing
+     in front of it. The marks at the other end of the title take the same clearance from their own
+     edge, so the row is padded the same at both ends whatever rail is or is not drawn there. The
+     inset alone is not that: at the viewport edge no rail is drawn, so an equal inset left the name
+     9px inside the field and the marks 31px inside it. */
+  --shell-controls-name-clearance:
+    max(0px, calc(var(--le-control-content-inset) - var(--shell-controls-frame-cover-start)));
+  --shell-controls-title-actions-inset:
+    calc(var(--shell-controls-frame-cover-end) + var(--shell-controls-name-clearance));
 }
 
 /* The titled shell is the one full-bleed contents exception: its title belongs
@@ -6098,11 +6301,20 @@ body.loading-bootstrap .app-startup-status {
   position: relative;
 }
 
+/* The marks ride the title's own seat: the band's field, measured from the bottom of the frame
+   rail above it. Pinned to the TOP of that field instead, they stopped tracking the name the
+   moment the field changed height — which is exactly what happened when the band's bolted strip
+   came off and the name re-centred in the taller field it left behind. */
 :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .outer-chrome-header > .outer-chrome-header-title-actions {
   align-items: center;
   display: flex;
-  inset-block-start: calc(var(--le-outer-fill-box-top, 0px) + var(--le-control-rail-w, 12px));
-  inset-inline-end: calc(var(--ds-space-3) + var(--le-panel-title-align-extra-x, 0px) + var(--le-control-content-inset));
+  inset-block:
+    calc(var(--le-outer-fill-box-top, 0px) + var(--le-control-rail-w, 12px))
+    0;
+  inset-inline-end: var(
+    --shell-controls-title-actions-inset,
+    calc(var(--ds-space-3) + var(--le-panel-title-align-extra-x, 0px) + var(--le-control-content-inset))
+  );
   margin-inline: 0;
   position: absolute;
   z-index: 3;
@@ -6177,22 +6389,29 @@ body.loading-bootstrap .app-startup-status {
   border-image-source: var(--skirmish-chrome-inner-control-danger-image);
 }
 
-.level-editor-screen .skirmish-card h2 { color: #f1cf86; letter-spacing: .03em; }
+.level-editor-screen .skirmish-card h2 { color: #f1cf86; letter-spacing: 0; }
 .level-editor-screen .skirmish-card h2.le-card-subhead { margin-top: var(--ds-gutter); }
 
-/* First non-app-bar use of the title-bar visual language: a compact panel title
-   strip. It borrows the title font + forged nailhead rule, but its height is a
-   SUB-header proportion of the app bar (not a second full title bar). The text
-   keeps normal tracking; the chrome carries the connection to the global bar. */
+/* First non-app-bar use of the title-bar visual language: a compact panel title strip. It
+   borrows the title font and a SUB-header proportion of the app bar's height (not a second full
+   title bar). The text keeps normal tracking.
+
+   It declares NO surface of its own. A panel name is not pressable, and under ADR-0433 the wood
+   is the material of things that are — this band was the last unpressable oak in the app, and
+   reading as a control is exactly what that promised. So the band is a field of the panel it
+   names, and the panel's own installed marble runs through it unbroken. A second surface layer
+   here could not do that: it would restart the stone at the band's own origin and seam against
+   the body below.
+
+   What used to close it was a bolted forged strip baked into this element — an earlier
+   iteration's private rule, from before this panel had section breaks. The head is a divided
+   block now, so the line under the name is the block's own rail, drawn by the same primitive as
+   every other break in the panel and capped where it meets the frame. See ShellControlsPanel. */
 :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .skirmish-card h2.kit-panel-title {
-  --kit-panel-title-rule-h: 10px;
   --kit-panel-title-base-frame-w: 12px;
   --kit-panel-title-base-h: clamp(44px, calc(var(--app-header-h) * .58), 50px);
   --kit-panel-title-visible-h: calc(var(--kit-panel-title-base-h) - var(--kit-panel-title-base-frame-w));
   align-items: flex-start;
-  background:
-    var(--media-ui-titlebar-band-forged-png) left bottom / auto var(--kit-panel-title-rule-h) repeat-x,
-    var(--media-ui-surfaces-hybrid-wood-oak-png) 0 0 / 1024px repeat fixed;
   /* The outer frame is painted above this title. Keep the visible title field
      measured from the bottom of that frame, so thicker outer chrome does not
      eat the title's usable vertical space. */
@@ -6214,7 +6433,7 @@ body.loading-bootstrap .app-startup-status {
   padding:
     0
     calc(var(--ds-space-3) + var(--le-panel-title-align-extra-x, 0px) + var(--le-control-content-inset) - var(--le-outer-fill-box-right, 0px))
-    var(--kit-panel-title-rule-h)
+    0
     calc(var(--ds-space-3) + var(--le-panel-title-align-extra-x, 0px) + var(--le-control-content-inset) - var(--le-outer-fill-box-left, 0px));
   text-shadow: 0 2px 0 #02070b;
   text-transform: uppercase;
@@ -6222,7 +6441,7 @@ body.loading-bootstrap .app-startup-status {
 
 :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .skirmish-card h2.kit-panel-title .kit-panel-title-text {
   display: inline-block;
-  margin-block-start: calc(var(--le-control-rail-w, var(--kit-panel-title-base-frame-w)) + (var(--kit-panel-title-visible-h) - var(--kit-panel-title-rule-h) - 1em) / 2);
+  margin-block-start: calc(var(--le-control-rail-w, var(--kit-panel-title-base-frame-w)) + (var(--kit-panel-title-visible-h) - 1em) / 2);
   transform: translate(
     var(--le-panel-title-effective-text-x, var(--le-panel-title-text-x, 0px)),
     var(--le-panel-title-effective-text-y, var(--le-panel-title-text-y, 0px))
@@ -6658,7 +6877,7 @@ body.loading-bootstrap .app-startup-status {
   background: rgba(4, 15, 24, .78);
   color: #8fbdeb;
   font: 800 var(--ds-text-2xs)/1 var(--ds-font-sans, system-ui, sans-serif);
-  letter-spacing: .06em;
+  letter-spacing: 1px;
   padding: 7px 9px 6px;
   text-shadow: 0 2px 0 #010407;
   text-transform: uppercase;
@@ -7591,7 +7810,7 @@ body.loading-bootstrap .app-startup-status {
 }
 
 .le-pal-group { margin: 0 0 4px; }
-.le-pal-grouplabel { color: #8fb6c6; display: block; font-size: var(--ds-text-xs); letter-spacing: .06em; margin: 8px 0 5px; text-transform: uppercase; }
+.le-pal-grouplabel { color: #8fb6c6; display: block; font-size: var(--ds-text-xs); letter-spacing: 1px; margin: 8px 0 5px; text-transform: uppercase; }
 .le-pal-grouplabel:first-child { margin-top: 0; }
 .le-swatches { display: grid; gap: 6px; grid-template-columns: repeat(4, 1fr); }
 .le-swatch {
@@ -8054,7 +8273,7 @@ body.loading-bootstrap .app-startup-status {
 .le-status-level { align-items: end; display: grid; gap: var(--ds-inline-tight); grid-template-columns: minmax(0, 1fr) auto; min-width: 0; }
 .le-status-name-field { display: grid; gap: 6px; min-width: 0; }
 .le-status-campaign-field .le-board-note { margin: 0; }
-.le-official-tag { align-self: end; color: #f1cf86; flex: none; font-size: var(--ds-text-2xs); letter-spacing: .08em; padding-bottom: 8px; }
+.le-official-tag { align-self: end; color: #f1cf86; flex: none; font-size: var(--ds-text-2xs); letter-spacing: 1px; padding-bottom: 8px; }
 /* Drawn text boxes wear a kit line frame (ADR-0032/0034): the transparent-interior panel-line
    9-slice over the box's own navy surface (a border-box background layer, reaching the frame
    edge). Ready/blocked swap the SOURCE to the success/warning tone twin — one frame, tone at the
@@ -8230,7 +8449,7 @@ body.loading-bootstrap .app-startup-status {
 .le-predrawn-attempt-tab small {
   color: var(--skirmish-cyan, #7fd7ff);
   font-size: var(--ds-text-2xs);
-  letter-spacing: .05em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 .le-predrawn-attempt-tab strong {
@@ -8267,7 +8486,7 @@ body.loading-bootstrap .app-startup-status {
 }
 .le-predrawn-artifact-card img { aspect-ratio: 16 / 9; background: #02070c; display: block; object-fit: cover; width: 100%; }
 .le-predrawn-artifact-card-copy { display: grid; gap: 3px; min-width: 0; padding: 7px 5px 4px; }
-.le-predrawn-artifact-card-copy small { color: var(--skirmish-cyan, #7fd7ff); font-size: var(--ds-text-2xs); letter-spacing: .06em; text-transform: uppercase; }
+.le-predrawn-artifact-card-copy small { color: var(--skirmish-cyan, #7fd7ff); font-size: var(--ds-text-2xs); letter-spacing: 1px; text-transform: uppercase; }
 .le-predrawn-artifact-card-copy strong { color: #eafaff; font-size: var(--ds-text-sm); overflow: hidden; text-overflow: ellipsis; }
 .le-predrawn-artifact-card-copy > span { color: #a9c1cd; font-size: var(--ds-text-2xs); min-height: 1em; }
 .le-predrawn-artifact-empty { align-content: center; display: grid; gap: 6px; min-height: 104px; padding: 18px; }
@@ -8338,7 +8557,7 @@ body.loading-bootstrap .app-startup-status {
 }
 .le-predrawn-workspace-inspector-head h2 {
   color: #eafaff;
-  font-size: clamp(1rem, 1.4vw, 1.28rem);
+  font-size: 16px;
   margin: 0;
 }
 .le-predrawn-workspace-inspector-head p {
@@ -8736,7 +8955,7 @@ body.loading-bootstrap .app-startup-status {
 .le-predrawn-selection-blocker strong {
   color: #ffe0a8;
   font-size: var(--ds-text-xs);
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 .le-predrawn-selection-blocker span {
@@ -9099,7 +9318,7 @@ body.loading-bootstrap .app-startup-status {
 .le-war-balance dd { color: #9fe0ff; font-size: var(--ds-text-lg); font-weight: 800; margin: 0; }
 .le-war-verdict {
   font-size: var(--ds-text-xs);
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   margin: 0;
   text-transform: uppercase;
 }
@@ -9142,7 +9361,7 @@ body.loading-bootstrap .app-startup-status {
 .le-war-curve li span:not(:first-child):not(:nth-child(2)) { text-align: right; }
 .le-war-curve .le-war-curve-head {
   color: var(--skirmish-muted);
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 .le-war-curve li.is-current { color: #fff5df; font-weight: 800; }
@@ -9504,7 +9723,7 @@ body.loading-bootstrap .app-startup-status {
 
 .skirmish-log-card li.is-move em {
   color: #f3ead8;
-  letter-spacing: .02em;
+  letter-spacing: 0;
 }
 
 /* ---- Move review ---------------------------------------------------------
@@ -9653,7 +9872,7 @@ body.loading-bootstrap .app-startup-status {
   color: #ffe9a8;
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
   font-size: var(--ds-text-sm, .9rem);
-  letter-spacing: .06em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -10019,8 +10238,10 @@ body.loading-bootstrap .app-startup-status {
   .account { justify-content: space-between; width: 100%; }
   
 
-body { font-size: 17px; }
-  h1 { font-size: .82rem; }
+  /* 16px is the house font's floor, not a starting point to shrink from — a narrow
+     viewport does not give the face a smaller size to land on. Was 17px/.82rem. */
+  body { font-size: var(--ds-text-md); }
+  h1 { font-size: var(--ds-text-md); }
   
 
 .lobby-seats { grid-template-columns: 1fr; }
@@ -10219,7 +10440,7 @@ body { font-size: 17px; }
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-2xs);
   font-weight: 400;
-  letter-spacing: .14em;
+  letter-spacing: 2px;
   line-height: 1.55;
   margin: 0;
   text-transform: uppercase;
@@ -10269,7 +10490,7 @@ body { font-size: 17px; }
 .ce-official-badge {
   color: var(--ce-gold-bright);
   font-weight: 700;
-  letter-spacing: .08em;
+  letter-spacing: 1px;
 }
 
 .ce-icon-button {
@@ -11103,7 +11324,7 @@ body { font-size: 17px; }
   color: var(--ce-label);
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-2xs);
-  letter-spacing: .05em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -12400,7 +12621,7 @@ body { font-size: 17px; }
 .tileset-view-empty h2 {
   margin: 0;
   color: #f3f7fb;
-  font-size: 24px;
+  font-size: 32px;
   line-height: 1.1;
 }
 
@@ -12901,7 +13122,7 @@ body { font-size: 17px; }
 .tileset-candidate-compare h2 {
   margin: 0;
   color: #f3f7fb;
-  font-size: 26px;
+  font-size: 32px;
   line-height: 1.1;
 }
 
@@ -13028,7 +13249,7 @@ body { font-size: 17px; }
 }
 
 .tileset-studio-toolbar h2 {
-  font-size: 24px;
+  font-size: 32px;
 }
 
 .tileset-studio-title-row {
@@ -14144,7 +14365,7 @@ body { font-size: 17px; }
   color: #cfe4f8;
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.07em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -14890,7 +15111,6 @@ button.tileset-relationship-cell {
   overflow-wrap: anywhere;
 }
 
-
 /* Per-focus layer-visibility toggle (the "vision" eye). Amber when the layer is hidden,
    so it's obvious the board is concealing something rather than empty. */
 .tileset-vision-toggle {
@@ -15062,7 +15282,7 @@ button.tileset-relationship-cell {
   margin: 5px 0 0;
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
   color: #72bde8;
 }
@@ -15084,7 +15304,7 @@ button.tileset-relationship-cell {
   cursor: pointer;
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
   color: #72bde8;
 }
@@ -15277,7 +15497,7 @@ button.tileset-relationship-cell {
 .tileset-card-missing-media {
   color: rgba(207, 230, 241, .72);
   font-size: var(--ds-text-xs);
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -15570,7 +15790,7 @@ button.tileset-relationship-cell {
   font-family: inherit;
   font-size: 7px;
   font-weight: 800;
-  letter-spacing: .01em;
+  letter-spacing: 0;
   paint-order: stroke fill;
   stroke: rgba(2, 6, 10, .96);
   stroke-width: 2.5px;
@@ -15686,7 +15906,7 @@ button.tileset-relationship-cell {
 .ps-ctl-label {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: .06em;
+  letter-spacing: 1px;
   text-transform: uppercase;
   color: #8fa8cc;
 }
@@ -15882,7 +16102,7 @@ button.tileset-relationship-cell {
   color: #789fb3;
   font-size: 9px;
   font-weight: 900;
-  letter-spacing: .06em;
+  letter-spacing: 1px;
 }
 
 .chrome-unit-card-hierarchy code {
@@ -16319,7 +16539,6 @@ button.tileset-relationship-cell {
   inline-size: 100%;
   object-fit: cover;
 }
-
 
 /* Persisted player-camera coverage boundary. Unlike a viewport snapshot, this world-space box is
    stable while zoom and pan vary; Play keeps every possible view inside it. */
@@ -17034,7 +17253,7 @@ button.tileset-relationship-cell {
   content: "Soon";
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 1px;
   text-transform: uppercase;
   color: #5f748a;
 }
@@ -18109,6 +18328,8 @@ button.tileset-relationship-cell {
    text and marks stay exactly where they were while its wood reaches the edge. */
 :root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel] {
   --le-outer-fill-box-right: 0px;
+  /* No rail is drawn on this edge, so nothing covers what reaches it. */
+  --shell-controls-frame-cover-end: 0px;
 }
 
 /* Persistent app-shell title bar (src/ui/shell/AppTitleBar) — rendered once by
@@ -18155,7 +18376,7 @@ button.tileset-relationship-cell {
   font-size: var(--ds-text-sm);
   gap: 8px;
   image-rendering: pixelated;
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   padding: 0 16px;
   text-decoration: none;
   text-transform: uppercase;
@@ -18220,7 +18441,7 @@ button.tileset-relationship-cell {
   gap: var(--titlebar-label-gap, var(--ds-space-2));
   image-rendering: pixelated;
   justify-content: center;
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   line-height: 1;
   min-block-size: 0;
   overflow: hidden;
@@ -18509,7 +18730,7 @@ button.tileset-relationship-cell {
   color: #79d3ff;
   font-size: var(--ds-text-sm);
   font-weight: 400;
-  letter-spacing: .14em;
+  letter-spacing: 2px;
   line-height: 1;
   text-transform: uppercase;
   white-space: nowrap;
@@ -18520,7 +18741,7 @@ button.tileset-relationship-cell {
   color: #79d3ff;
   font-size: var(--ds-text-sm);
   font-weight: 400;
-  letter-spacing: .14em;
+  letter-spacing: 2px;
   line-height: 1.2;
   text-transform: uppercase;
 }
@@ -18641,7 +18862,6 @@ button.tileset-relationship-cell {
   margin-inline-start: calc(-1 * var(--tab-label-stroke-apron));
   padding-inline-start: var(--tab-label-stroke-apron);
 }
-
 
 .apparatus-tab-copy > small {
   color: var(--ds-color-ink-dim, rgba(230, 225, 215, .55));
@@ -19183,7 +19403,6 @@ button.tileset-relationship-cell {
   padding-block-end: var(--ds-gutter);
 }
 
-
 /* A selected campaign level adds the authored preview as the next destination column.
    On narrower desktop viewports, fit that master/detail pair inside the action column's
    original width instead of drawing the preview beyond the right edge. The compact list
@@ -19211,7 +19430,7 @@ button.tileset-relationship-cell {
   margin: 4px 6px 0;
   font-size: var(--ds-text-2xs, .72rem);
   font-weight: 700;
-  letter-spacing: .1em;
+  letter-spacing: 2px;
   text-transform: uppercase;
   color: var(--ds-color-ink-dim, rgba(230, 225, 215, .55));
 }
@@ -19437,7 +19656,7 @@ button.tileset-relationship-cell {
      position (settings-only bump — the shared brand stays lg to avoid resizing
      every screen). Active tab is marked by the frame fill swap + color, not size. */
   font-size: var(--ds-text-lg);
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
   text-transform: uppercase;
   /* Outline, auditioned in the Pages tuner (Studio → Pages → Main Menu → Button label) and baked
      at 5px. A -webkit-text-stroke is centred on the glyph outline, so half of it grows INWARD;
@@ -19601,7 +19820,7 @@ button.tileset-relationship-cell {
   font-size: var(--ds-text-2xs);
   font-weight: 400;
   gap: 12px;
-  letter-spacing: .14em;
+  letter-spacing: 2px;
   margin: 0;
   padding-left: 6px;
   text-shadow: 0 2px 0 #02070b;
@@ -19655,7 +19874,8 @@ button.tileset-relationship-cell {
    and the kit's inner rail between members is what tells them apart. */
 /* A row that declared itself one thing across every column IS one cell: its content spans the
    whole width. Stated on the grid's own class, not on the section box, because it is the other
-   half of what `spans="all"` means — the rail breaks there AND the content fills the row. */
+   half of what `spans="all"` means — the rail breaks there AND the content fills the row.
+ */
 .chrome-divided-grid__row--spanning > * {
   grid-column: 1 / -1;
 }
@@ -19736,7 +19956,7 @@ button.tileset-relationship-cell {
 .cluster-run-row { display: flex; gap: 8px; align-items: center; width: 100%; text-align: left; color: #c3ccd8; padding: 6px 8px; font-size: 12px; cursor: pointer; }
 .cluster-run-row.active { color: #e7ebf0; }
 .cluster-run-id { font-family: monospace; color: #93a0b0; }
-.cluster-run-status { margin-left: auto; text-transform: uppercase; font-size: 10px; letter-spacing: .04em; }
+.cluster-run-status { margin-left: auto; text-transform: uppercase; font-size: 10px; letter-spacing: 1px; }
 .cluster-run-status.s-running, .cluster-run-status.s-pending { color: #d9b871; }
 .cluster-run-status.s-done { color: #8fce9b; }
 .cluster-run-status.s-error, .cluster-run-status.s-cancelled { color: #e2a0a0; }
@@ -19791,7 +20011,7 @@ button.tileset-relationship-cell {
   color: #8fb0c2;
   display: block;
   font-size: var(--ds-text-2xs);
-  letter-spacing: .06em;
+  letter-spacing: 1px;
   margin-bottom: 2px;
   text-transform: uppercase;
 }
@@ -19802,7 +20022,7 @@ button.tileset-relationship-cell {
   color: #c9a877;
   display: block;
   font-size: var(--ds-text-2xs);
-  letter-spacing: .12em;
+  letter-spacing: 2px;
   margin-bottom: 4px;
   text-transform: uppercase;
 }
@@ -20161,7 +20381,7 @@ button.tileset-relationship-cell {
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-2xs);
   font-weight: 400;
-  letter-spacing: .14em;
+  letter-spacing: 2px;
   line-height: 1.55;
   margin: 0;
   overflow: visible;
@@ -20790,7 +21010,7 @@ button.tileset-relationship-cell {
 /* Row labels are the bottom of the scale. */
 .run-battle-preview-info .ce-li-title {
   font-size: var(--ds-text-sm);
-  letter-spacing: .06em;
+  letter-spacing: 1px;
 }
 
 /* A section header governs the rows under it, so it reads LARGER than they do — the borrowed
@@ -20799,7 +21019,7 @@ button.tileset-relationship-cell {
 .run-battle-preview-info :is(.ce-li-board, .ce-li-forces, .ce-li-deployment) > .ce-li-title {
   color: var(--ce-ink);
   font-size: var(--ds-text-lg);
-  letter-spacing: .04em;
+  letter-spacing: 1px;
 }
 
 .run-battle-preview-info :is(.ce-li-stat span, .ce-li-roster li span, .ce-li-roster-head span) {
@@ -21639,7 +21859,7 @@ button.tileset-relationship-cell {
   color: #eaf6ff;
   font: var(--ds-weight-strong) var(--ds-text-md)/1 var(--ds-font-display);
   gap: var(--ds-inline-tight);
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   min-width: 0;
   white-space: nowrap;
 }
@@ -21685,7 +21905,6 @@ button.tileset-relationship-cell {
   inline-size: 100%;
   object-fit: contain;
 }
-
 
 .run-victory-summary > span + span::before {
   content: "·";
@@ -21986,28 +22205,6 @@ button.tileset-relationship-cell {
   padding-block-start: 0;
 }
 
-.run-lipsanon-review-screen {
-  block-size: 100%;
-  box-sizing: border-box;
-  grid-template-columns: minmax(0, 1fr);
-  overflow: auto;
-  padding: var(--ds-inset);
-}
-
-.run-lipsanon-review-panel {
-  grid-column: 1;
-  grid-row: 2;
-  margin-inline: auto;
-  max-inline-size: 1040px;
-  overflow: auto;
-  inline-size: 100%;
-}
-
-.run-lipsanon-review-panel > .le-outer-panel-content {
-  display: grid;
-  gap: var(--ds-inline);
-}
-
 /* Screen-art candidates are wide 640x360 plates meant to be read at 4x, so they get a
    flowing row per screen rather than the lipsanon grid's fixed icon columns. */
 /* A backdrop plate is opaque and object-fit:cover fills the whole box, so the base
@@ -22184,7 +22381,7 @@ button.tileset-relationship-cell {
 .run-card-row-call {
   color: var(--ink-strong);
   font-size: var(--ds-text-xl);
-  letter-spacing: .02em;
+  letter-spacing: 0;
   margin: 0;
   text-align: center;
   text-shadow: 0 3px 0 #02070b;
@@ -22666,94 +22863,29 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
-.run-lipsanon-review-grid {
-  display: grid;
-  gap: var(--ds-inline-tight);
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.run-lipsanon-review-grid figure {
-  align-items: center;
-  display: grid;
-  gap: var(--ds-inline-tight);
-  grid-template-columns: 64px minmax(0, 1fr);
-  margin: 0;
-  min-block-size: 88px;
-  padding: var(--ds-inset);
-}
-
-.run-lipsanon-review-grid img {
-  block-size: 64px;
-  image-rendering: pixelated;
-  inline-size: 64px;
-}
-
-.run-lipsanon-review-grid figcaption {
-  display: grid;
-  gap: var(--ds-space-1);
-}
-
-.run-lipsanon-review-grid small {
-  color: var(--skirmish-muted);
-}
-
 /* Run title-bar icon review: every candidate is mounted in the SAME chip the live
    title bar paints, with its native 64x64 beside it. Layout only — the chip brings
    its own kit frame, and the review never restyles the seat it is judging. */
-.run-progress-icon-review-section {
+.run-progress-mark-seat {
   display: grid;
   gap: var(--ds-inline-tight);
 }
 
-.run-progress-icon-review-section > h2,
-.run-progress-icon-review-section > p {
+.run-progress-mark-seat > h3,
+.run-progress-mark-seat > p {
   margin: 0;
 }
 
-.run-progress-icon-review-grid {
-  display: grid;
-  gap: var(--ds-inline);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.run-progress-icon-review-grid figure {
-  align-items: start;
-  display: grid;
-  gap: var(--ds-inline);
-  grid-template-columns: 64px minmax(0, 1fr);
-  margin: 0;
-  padding: var(--ds-inset);
-}
-
-.run-progress-icon-review-detail {
-  display: grid;
-  gap: var(--ds-inline-tight);
-  justify-items: start;
-  min-width: 0;
-}
-
-.run-progress-icon-review-native {
-  block-size: 64px;
-  image-rendering: pixelated;
-  inline-size: 64px;
-  object-fit: contain;
-}
-
-.run-progress-icon-review-grid figcaption {
-  display: grid;
-  gap: var(--ds-space-1);
-}
-
-.run-progress-icon-review-grid small {
+.menu-mark-missing {
   color: var(--skirmish-muted);
+  margin: 0;
 }
 
-/* Main-menu mark review: each candidate SET is mounted as a whole rail through the same
-   primitive the menu paints, laid out side by side so the sets can be read against each
-   other and against what is installed. Layout only — the rail brings its own column
-   width, gap, surface and seat, and the review never restyles the thing it is judging
-   (a review that re-sizes the seat proves nothing about the seat). */
-.menu-icon-review-screen {
+/* Studio > Battle Command Card Marks. Same rule as the mark review above: layout only,
+   because the thing being judged is the card the Controls tab paints and a review that
+   restyles it proves nothing about it. The card keeps the rail's own 245px measure so its
+   buttons are the size they will be in a match, not the size this wider panel allows. */
+.command-card-review-screen {
   block-size: 100%;
   box-sizing: border-box;
   grid-template-columns: minmax(0, 1fr);
@@ -22761,58 +22893,104 @@ button.tileset-relationship-cell {
   padding: var(--ds-inset);
 }
 
-.menu-icon-review-panel {
+.command-card-review-panel {
   grid-column: 1;
   grid-row: 2;
-  margin-inline: auto;
-  /* Four 322px rails plus their gaps. The panel is sized to hold the comparison, not
-     to a house width — a panel that clips the fourth set hides the set. */
-  max-inline-size: 1480px;
-  overflow: auto;
   inline-size: 100%;
+  margin-inline: auto;
+  max-inline-size: 1180px;
+  overflow: auto;
 }
 
-.menu-icon-review-panel > .le-outer-panel-content {
+.command-card-review-panel > .le-outer-panel-content {
   display: grid;
   gap: var(--ds-inline);
 }
 
-.menu-icon-review-sets {
+.command-card-review-body {
+  display: grid;
+  gap: var(--ds-block);
+}
+
+.command-card-review-cards {
   align-items: start;
   display: flex;
   gap: var(--ds-inline);
-  /* One row, always. A wrapped set is a set that can no longer be compared against the
-     one it wrapped away from, which is the entire job of this page; a narrow window
-     scrolls the row instead of breaking it. */
+  /* One row, always: the installed card and the composed one exist to be read against
+     each other, and a wrapped pair cannot be. */
   overflow-x: auto;
 }
 
-.menu-icon-review-set {
+.command-card-review-column {
   display: grid;
   gap: var(--ds-inline-tight);
   justify-items: start;
 }
 
-.menu-icon-review-set > h2,
-.menu-icon-review-set > p {
+.command-card-review-column > h2,
+.command-card-review-column > p {
   margin: 0;
 }
 
-/* Reserve two lines for the set name whether or not it needs them. A one-line title next
-   to a wrapped one starts its rail a line higher, and two rails at different heights
-   cannot be read against each other — which is the only thing this page does. */
-.menu-icon-review-set > h2 {
-  align-content: end;
-  min-block-size: 2.4em;
-}
-
-.menu-icon-review-set > p {
+.command-card-review-column > p {
   color: var(--skirmish-muted);
 }
 
-.menu-icon-review-missing {
+/* The card derives its compartments from the width it is given, so a review that let it
+   fill this wider panel would judge marks at a size no match ever draws. This is the inner
+   measure of the Battle rail at the default window — stated, because it is not derivable
+   here: the rail is a clamp on the viewport and the card is inside its panel's padding. */
+.command-card-review-card.chrome-seat-grid {
+  inline-size: 245px;
+}
+
+.command-card-review-install {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  justify-items: start;
+}
+
+.command-card-review-install p {
   color: var(--skirmish-muted);
   margin: 0;
+}
+
+.command-card-review-picks {
+  display: grid;
+  gap: var(--ds-inline);
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.command-card-review-pick {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.command-card-review-pick > h3 {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline-tight);
+  margin: 0;
+}
+
+.command-card-review-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-inline-tight);
+}
+
+/* A candidate CHIP is not a command-card key and does not pretend to be one: the key is a
+   compartment of the card above, and a loose framed button wearing its class would be the
+   lookalike this page exists to avoid. The chip is a press target with the candidate's name
+   under it; what is judged at match size is the card, where arming puts it. */
+.command-card-review-option.app-header-button {
+  block-size: auto;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  inline-size: 5.6em;
+  justify-content: center;
+  min-width: 0;
+  text-align: center;
 }
 
 /* Studio > Action Marks: each catalog card carries the candidate in the SAME button the
@@ -23068,66 +23246,127 @@ button.tileset-relationship-cell {
   color: var(--skirmish-muted);
 }
 
-.brush-icon-review-section {
+.brush-mark-section {
   display: grid;
   gap: var(--ds-inline-tight);
 }
 
-.brush-icon-review-section > h2 {
+.brush-mark-section > h3 {
   margin: 0;
 }
 
-.brush-icon-review-toolbar-comparison {
+/* Menu mark sets are whole five-tab rails rather than single glyphs, so their cards need a track
+   wide enough for the rail's own fixed column instead of the shared thumbnail measure. */
+.menu-mark-grid {
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+}
+
+/* A card that mounts a real CONTROL rather than a cut-out asset.
+   Two things are wrong with the asset card for this. The checkerboard says "transparent art"
+   and chrome is opaque — it brings its own material. And the 170px asset track is narrower than
+   the control: a rail tab is a 322px column, so it was being CLIPPED (the Run Rail Marks
+   category has shown "CON…" for its Continue tab since it shipped). Scaling it down instead
+   would be worse — a review that resizes the thing it is judging proves nothing about the seat.
+   So the track widens to the control's own measure and the card draws no stage behind it. */
+.tileset-studio-grid.studio-seat-grid {
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+}
+
+.studio-seat-card .tileset-studio-card-image {
+  /* Drops the checkerboard LAYERS and keeps the base card colour underneath them — a seat card
+     paints no surface of its own, it just stops claiming the art behind it is transparent. */
+  background-image: none;
+  min-height: 0;
+  padding: var(--ds-inset);
+}
+
+/* A one-tab rail is still a rail, so it brings the column's own fixed width. In a seat card the
+   card owns the track, so the rail fills it rather than setting it. */
+.run-rail-mark-preview {
+  inline-size: 100%;
+}
+
+/* ONE row of columns — the two whole rails, then a column per concept. A column is a heading, a
+   note and a rail, and they are all built that way so none is clipped by a neighbour with a
+   different shape. One row, always: a wrapped column is one that can no longer be read against
+   the others, which is the whole job, so the row scrolls sideways instead of breaking. */
+.terrain-mark-columns {
+  align-items: start;
+  display: flex;
+  gap: var(--ds-inline);
+  overflow-x: auto;
+  /* Every column starts at the same line whatever its note wrapped to, so the seats in one column
+     sit level with the seats in the next and the marks can be read across. */
+  align-content: start;
+}
+
+.terrain-mark-column {
+  align-content: start;
+  display: grid;
+  /* The rail sets the width; the heading and note wrap inside it rather than widening it. */
+  flex: 0 0 var(--main-menu-tab-column-w, 322px);
+  gap: var(--ds-inline-tight);
+  inline-size: var(--main-menu-tab-column-w, 322px);
+}
+
+.terrain-mark-column > h3,
+.terrain-mark-column > p {
+  margin: 0;
+}
+
+/* The note is two lines on some columns and one on others. Reserving both keeps every rail
+   starting on the same line, which is what makes the columns comparable across. */
+.terrain-mark-column > p {
+  min-block-size: 2.8em;
+}
+
+/* A specimen tab carries its candidate's code as a trailing badge, so the seat keeps the exact
+   mark and the exact word the live rail draws and still says which candidate it is. The tab is a
+   two-column grid (mark slot, label); a trailing child needs a third column declared by the
+   consumer's own tab class, the way `.ce-campaign-tab` declares one for its lock — without it the
+   badge starts a new ROW under the mark and is clipped by the tab's own height. */
+.terrain-mark-tab {
+  grid-template-columns: var(--settings-tab-icon-slot) minmax(0, 1fr) auto;
+}
+
+/* Neutralise the shared label nudge for the badge so it stays in its own grid cell. */
+.terrain-mark-tab > span.terrain-mark-code {
+  transform: none;
+}
+
+.terrain-mark-code {
+  align-items: center;
+  color: #f0e4c4;
+  display: inline-flex;
+  font-size: 0.8rem;
+  justify-content: center;
+  letter-spacing: 0.08em;
+  text-shadow: 0 2px 0 #02070b;
+}
+
+.brush-mark-toolbar-comparison {
   align-items: start;
   display: grid;
   gap: var(--ds-inline-tight);
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.brush-icon-review-toolbar-card {
+.brush-mark-toolbar-card {
   min-block-size: 88px;
 }
 
-.brush-icon-review-choice-grid {
-  display: grid;
-  gap: var(--ds-inline-tight);
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.brush-icon-review-choice {
-  align-items: center;
-  display: grid;
-  gap: var(--ds-inline-tight);
-  grid-template-columns: var(--le-inner-square) minmax(0, 1fr);
-  min-block-size: 72px;
-  padding: var(--ds-inset);
-}
-
-.brush-icon-review-choice > span {
-  display: grid;
-  gap: var(--ds-space-1);
-  min-inline-size: 0;
-}
-
-.brush-icon-review-choice small {
-  color: var(--skirmish-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.brush-icon-review-glyph {
+.brush-mark-glyph {
   image-rendering: pixelated;
 }
 
-.brush-icon-review-production-actions {
+.brush-mark-production-actions {
   align-items: center;
   display: grid;
   gap: var(--ds-inline);
   grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
 }
 
-.brush-icon-review-production-actions figure {
+.brush-mark-production-actions figure {
   align-items: center;
   display: grid;
   gap: var(--ds-inline-tight);
@@ -23135,18 +23374,18 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
-.brush-icon-review-production-actions img {
+.brush-mark-production-actions img {
   block-size: 144px;
   image-rendering: pixelated;
   inline-size: 144px;
 }
 
-.brush-icon-review-production-actions figcaption {
+.brush-mark-production-actions figcaption {
   display: grid;
   gap: var(--ds-space-1);
 }
 
-.brush-icon-review-production-actions small {
+.brush-mark-production-actions small {
   color: var(--skirmish-muted);
 }
 
@@ -23370,18 +23609,16 @@ button.tileset-relationship-cell {
 }
 
 @media (max-width: 900px) {
-  .run-lipsanon-review-grid,
   .plagued-icon-review-ability-grid,
-  .brush-icon-review-choice-grid,
   .run-icon-pair-options {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .brush-icon-review-toolbar-comparison {
+  .brush-mark-toolbar-comparison {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .brush-icon-review-production-actions {
+  .brush-mark-production-actions {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -23715,7 +23952,7 @@ button.tileset-relationship-cell {
   font-weight: 700;
   gap: var(--ds-space-1);
   justify-content: center;
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   margin: 0;
   text-transform: uppercase;
 }
@@ -24165,6 +24402,74 @@ button.tileset-relationship-cell {
   margin-block-start: auto;
 }
 
+/* Abandon Run asks its question in its own seat rather than over the screen: at rest one control,
+   armed a Keep Run / Abandon Run pair. The control owns its own layout and its own button measure,
+   because the three seats it stands in (the Sectio rail, the Deployment panel and the Battle HUD)
+   each wrapped it in a different row and sized it differently.
+
+   ONE seat height through BOTH states. Pressing a control must not resize the thing under the
+   cursor, and the two states are different objects — a framed button and a framed box — so the
+   height is stated ONCE here and each derives its own measure from it. Declared on both roots
+   because they are alternatives, not nested: neither can inherit from the other.
+
+   46px is what the rail's buttons already measure, every one of them, in all three seats (read off
+   the live DOM, not chosen). Stating it and pinning BOTH states to it is what stops the two from
+   drifting: the resting height was emergent — a 38px floor plus the mark's line box — so a change
+   to the button's font or its mark would have moved one state and not the other, silently. */
+.run-abandon-control,
+.run-abandon-box {
+  --run-abandon-seat-h: 46px;
+}
+
+.run-abandon-control {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.run-abandon-control .app-header-button {
+  block-size: var(--run-abandon-seat-h);
+  font-size: var(--ds-text-xs);
+  inline-size: 100%;
+}
+
+/* Armed, the question is ONE box holding its two answers, so the line between Keep Run and Abandon
+   Run is the box's own column line — laid and capped from its topology where it meets the frame at
+   either end (ADR-0242). Two framed buttons in a row with a gap is what this kit puts between
+   things that are NOT related; this is one question and its two answers, and the same treatment
+   Start New Run's armed replacement wears. It carries no sentence: Abandon Run already says what
+   it does, and a warning restating that is the dialog's body text outliving its dialog. */
+.run-abandon-box {
+  /* The plate a CELL paints when it IS the control, derived so the BOX comes out at the seat
+     height the resting verb already occupies. A cell has no frame of its own — the box's frame and
+     rail are its edges — so it paints everything the box's own 9-slice does not, which is the seat
+     less a rail a side. That also lands its wood on exactly the wood the framed button painted, so
+     arming changes what the seat says and nothing about its size.
+     Read from the installed rail rather than written out: `--le-chrome-inner-rail-w` is stamped
+     from the live chrome catalog (chromeFamilyRuntime), so a re-tuned frame moves this with it
+     instead of leaving a hardcoded plate a few pixels out. */
+  --run-abandon-plate-h: calc(var(--run-abandon-seat-h) - 2 * var(--le-chrome-inner-rail-w, 7px));
+  /* NO padding: a rail has to reach the frame on both sides, and box padding would hold it short
+     of them. */
+  padding: 0;
+}
+
+/* A cell that IS the control takes no inset at all: the verb fills the whole area between the box's
+   frame and its rail, and the wood reaches them. */
+.run-abandon-verbs {
+  min-block-size: var(--run-abandon-plate-h);
+  padding: 0;
+}
+
+/* section-box-member-verb owns the frameless reset; this sizes the plate and gives the label the
+   display treatment every other verb cell in the app wears. */
+.run-abandon-verb {
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xs);
+  min-block-size: var(--run-abandon-plate-h);
+  padding: 0 var(--ds-inset);
+  text-transform: uppercase;
+}
+
 .run-expunctio-workspace {
   position: relative;
   z-index: 35;
@@ -24346,7 +24651,7 @@ button.tileset-relationship-cell {
   font: var(--ds-weight-medium) var(--ds-text-md)/1 var(--ds-font-display);
   gap: var(--ds-space-2);
   justify-content: end;
-  letter-spacing: .06em;
+  letter-spacing: 1px;
   min-inline-size: 112px;
   padding-inline: var(--ds-inset);
   text-transform: uppercase;
@@ -24369,7 +24674,7 @@ button.tileset-relationship-cell {
 .run-army-ledger-value > small {
   color: var(--skirmish-muted);
   font: var(--ds-weight-medium) var(--ds-text-md)/1 var(--ds-font-display);
-  letter-spacing: .06em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -25186,7 +25491,7 @@ button.tileset-relationship-cell {
   color: var(--skirmish-muted);
   font-size: var(--ds-text-xs);
   font-weight: 800;
-  letter-spacing: .06em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -25429,7 +25734,7 @@ button.tileset-relationship-cell {
   color: var(--skirmish-muted);
   font-size: var(--ds-text-xs);
   font-weight: 800;
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -25567,17 +25872,22 @@ button.tileset-relationship-cell {
 }
 
 .skirmish-hud-titlebar > .kit-panel-title {
-  /* Five 24px marks and four 4px gaps. */
-  padding-inline-end: calc(136px + var(--ds-space-3) + var(--le-control-content-inset));
+  /* Five 24px marks and four 4px gaps, held off the row's own right clearance. */
+  padding-inline-end: calc(
+    136px + var(--ds-space-3)
+    + var(--shell-controls-title-actions-inset, var(--le-control-content-inset))
+  );
 }
 
 .skirmish-screen .skirmish-hud-titlebar > .outer-chrome-header-title-actions {
-  /* Seat the mark row on the same right boundary as every control below it. The
-     seat below bleeds each glyph's canvas margin back out, so a mark's footprint is
-     its own 24px hit target rather than whatever margin its art happened to bake in
-     — no hand-measured nudge, and the last mark's ink stops 1px inside the boundary
-     because every mark in the row is a 22px seat centred in that target. */
-  inset-inline-end: var(--le-control-content-inset);
+  /* The mark row clears the panel's visible field by exactly what the NAME at the other end of
+     this title clears it by. The content inset alone is not that: no rail is drawn at the viewport
+     edge, so an equal inset put the name 9px inside the field and the marks 31px inside it. The
+     seat below bleeds each glyph's canvas margin back out, so a mark's footprint is its own 24px
+     hit target rather than whatever margin its art happened to bake in — no hand-measured nudge,
+     and the last mark's ink stops 1px inside the boundary because every mark in the row is a 22px
+     seat centred in that target. */
+  inset-inline-end: var(--shell-controls-title-actions-inset, var(--le-control-content-inset));
 }
 
 .skirmish-hud-title-action {
@@ -26297,7 +26607,7 @@ button.tileset-relationship-cell {
 .settings-toggle-opt {
   color: #46586a;
   font-size: var(--ds-text-sm);
-  letter-spacing: .08em;
+  letter-spacing: 1px;
   text-transform: uppercase;
   transition: color .18s ease, text-shadow .18s ease;
 }
@@ -26464,7 +26774,7 @@ button.tileset-relationship-cell {
 .al-filter button span { color: #5d7a8c; }
 .al-tree-scroll { overflow-y: auto; padding: 8px; min-height: 0; }
 .al-tree-group { margin-bottom: 10px; }
-.al-tree-label { color: #5d7a8c; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .58rem; letter-spacing: .12em; text-transform: uppercase; margin: 6px 4px; }
+.al-tree-label { color: #5d7a8c; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .58rem; letter-spacing: 2px; text-transform: uppercase; margin: 6px 4px; }
 .al-tree-leaf { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: 0; border-radius: 6px; color: #cfe3ef; padding: 5px 6px; cursor: pointer; text-align: left; }
 .al-tree-leaf:hover { background: rgba(95, 184, 255, .1); }
 .al-tree-leaf.is-selected { background: rgba(95, 184, 255, .18); color: #fff; }
@@ -26476,7 +26786,7 @@ button.tileset-relationship-cell {
 
 .al-viewer { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; padding: 20px 24px; gap: 18px; }
 .al-viewer-head h2 { margin: 4px 0 0; font-size: 1.3rem; }
-.al-viewer-head .al-kicker { color: #79d3ff; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .62rem; letter-spacing: .14em; text-transform: uppercase; }
+.al-viewer-head .al-kicker { color: #79d3ff; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .62rem; letter-spacing: 2px; text-transform: uppercase; }
 .al-viewer-head p { color: #5d7a8c; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .7rem; margin: 4px 0 0; }
 .al-stages { display: flex; flex-wrap: wrap; gap: 16px; }
 .al-stage { margin: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -26491,7 +26801,7 @@ button.tileset-relationship-cell {
 .al-frame-stretch { display: block; width: 200px; height: 120px; border-style: solid; border-color: transparent; box-sizing: border-box; }
 .al-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 0; }
 .al-meta div { background: #0e1722; border: 1px solid #1f3346; border-radius: 8px; padding: 10px 12px; }
-.al-meta dt { color: #5d7a8c; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .58rem; text-transform: uppercase; letter-spacing: .1em; }
+.al-meta dt { color: #5d7a8c; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .58rem; text-transform: uppercase; letter-spacing: 2px; }
 .al-meta dd { margin: 4px 0 0; font-size: .92rem; }
 .al-ok { color: #54e6a0; } .al-no { color: #ff7a8a; }
 .al-empty { align-items: center; justify-content: center; color: #5d7a8c; }
@@ -26545,7 +26855,7 @@ button.tileset-relationship-cell {
 .tileset-studio-card.is-glossary .tileset-studio-card-text em { color: #9fc4d5; font-size: .82rem; font-style: normal; line-height: 1.45; text-transform: none; white-space: normal; }
 .glossary-card-src { color: #5d7a8c; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .62rem; margin-top: 2px; }
 .glossary-doc-dot { background: #79d3ff; border-radius: 999px; box-shadow: 0 0 6px rgba(121, 211, 255, .8); height: 6px; width: 6px; }
-.glossary-tag { align-self: flex-start; border-radius: 999px; font-size: .56rem; letter-spacing: .04em; padding: 2px 7px; text-transform: uppercase; white-space: nowrap; }
+.glossary-tag { align-self: flex-start; border-radius: 999px; font-size: .56rem; letter-spacing: 1px; padding: 2px 7px; text-transform: uppercase; white-space: nowrap; }
 .glossary-tag.is-asset { background: rgba(143, 211, 154, .14); border: 1px solid rgba(143, 211, 154, .4); color: #8fd39a; }
 .glossary-tag.is-not-asset { background: rgba(214, 170, 90, .12); border: 1px solid rgba(214, 170, 90, .4); color: #d8b364; }
 
@@ -26693,8 +27003,8 @@ button.tileset-relationship-cell {
 }
 .campaign-result-panel h2 {
   margin: 0;
-  font-size: clamp(26px, 3.4vw, 38px);
-  letter-spacing: .04em;
+  font-size: 32px;
+  letter-spacing: 1px;
   color: var(--ds-ink-1, #eaf2f6);
 }
 .campaign-result-panel p {
@@ -27321,7 +27631,7 @@ button.tileset-relationship-cell {
 .le-fence-review-banner strong {
   color: #f3f8ff;
   font-size: 11px;
-  letter-spacing: 0.035em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -27386,7 +27696,7 @@ button.tileset-relationship-cell {
 .le-persistence-emergency strong {
   color: #fff4f5;
   font-size: 12px;
-  letter-spacing: 0.04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -27463,7 +27773,7 @@ button.tileset-relationship-cell {
 .le-fence-artwork-status strong {
   color: #f0b35b;
   font-size: 9px;
-  letter-spacing: 0.04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -27614,7 +27924,7 @@ button.tileset-relationship-cell {
 }
 
 .predrawn-reference-toolbar h1 {
-  font-size: 24px;
+  font-size: 32px;
 }
 
 .predrawn-reference-toolbar > div > p,
@@ -27817,7 +28127,7 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 .run-card-rarity-study-heading > span {
   color: var(--ds-color-text-muted, #a9a393);
   font: 700 11px/1.2 var(--ds-font-display);
-  letter-spacing: .08em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -27940,7 +28250,7 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   color: var(--ds-color-text-muted, #a9a393);
   font-family: var(--ds-font-display);
   font-size: 11px;
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -28971,7 +29281,7 @@ button.run-card-formation-cell {
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-2xs);
   font-weight: 400;
-  letter-spacing: .14em;
+  letter-spacing: 2px;
   line-height: 1.55;
   margin: 0;
   text-transform: uppercase;
@@ -29387,11 +29697,11 @@ button.run-card-formation-cell {
 .deployment-lab-card-media {
   align-items: center;
   display: flex;
-  font-size: clamp(24px, 4vw, 52px);
+  font-size: 48px;
   gap: clamp(3px, .8vw, 12px);
   height: 100%;
   justify-content: center;
-  letter-spacing: .04em;
+  letter-spacing: 1px;
   width: 100%;
 }
 

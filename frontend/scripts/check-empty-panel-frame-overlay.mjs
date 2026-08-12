@@ -25,6 +25,11 @@ const chromeDividedGrid = readFileSync(join(frontend, 'src/ui/shared/ChromeDivid
 const skirmish = readFileSync(join(frontend, 'src/ui/Skirmish.tsx'), 'utf8');
 const skirmishShell = readFileSync(join(frontend, 'src/ui/SkirmishShell.tsx'), 'utf8');
 const skirmishHud = readFileSync(join(frontend, 'src/ui/SkirmishHud.tsx'), 'utf8');
+// The command card is painted by the Controls tab AND by the Studio review that composes
+// its marks, so the card itself is one shared component. Its assertions follow it there
+// rather than pinning them to the screen it used to live on — a review that painted a
+// lookalike card would prove nothing about the card.
+const commandCard = readFileSync(join(frontend, 'src/ui/shared/CommandCard.tsx'), 'utf8');
 const pawnPromotionPicker = readFileSync(join(frontend, 'src/ui/PawnPromotionPicker.tsx'), 'utf8');
 const strategikon = readFileSync(join(frontend, 'src/ui/Strategikon.tsx'), 'utf8');
 const runScreen = readFileSync(join(frontend, 'src/ui/RunScreen.tsx'), 'utf8');
@@ -216,7 +221,7 @@ if (/\.level-editor-screen \.skirmish-hud > \.le-outer-panel-content[^\{]*\{[\s\
   failures.push('outer-panel ordinary content must inherit wrapper padding instead of selector-specific inset margins');
 }
 if (!/:is\(\.level-editor-screen, \.skirmish-screen\) \.le-outer-panel > \.le-outer-panel-content--titled\s*\{[\s\S]*?padding-block-start\s*:\s*0\s*;/.test(css)
-  || !/:is\(\.level-editor-screen, \.skirmish-screen, \.chrome-family-surface\) \.le-outer-panel > \.le-outer-panel-content--titled > \.outer-chrome-header\s*\{[\s\S]*?margin-inline\s*:\s*calc\(-1 \* var\(--le-control-content-inset\)\)\s*;/.test(css)) {
+  || !/:is\(\.level-editor-screen, \.skirmish-screen, \.chrome-family-surface\) \.le-outer-panel > \.le-outer-panel-content--titled > :is\(\.outer-chrome-header, \.shell-controls-head\)\s*\{[\s\S]*?margin-inline\s*:\s*calc\(-1 \* var\(--le-control-content-inset\)\)\s*;/.test(css)) {
   failures.push('the titled panel shell must be an explicit full-bleed exception to the inherited contents box');
 }
 
@@ -1200,8 +1205,25 @@ for (const selector of ['.skirmish-service-record', '.unit-portrait', '.unit-por
 if (!/<InnerChromeBox[\s\S]*?className=\{`skirmish-promotion-picker is-\$\{side\}`\}/.test(pawnPromotionPicker)
   || !/<ChromeButton[\s\S]*?unit="inner-asset-swatch"[\s\S]*?chromeUnitClassNames\('inner-asset-swatch',\s*'app-header-button',\s*'skirmish-promotion-option'\)/.test(pawnPromotionPicker)
   || /aria-label="Pawn promotion"/.test(skirmishHud)
-  || !/<ChromeButton unit="inner-text-button"[\s\S]*?chromeUnitClassNames\('inner-text-button',\s*'skirmish-hud-tab'/.test(skirmishHud)
-  || !/<ChromeButton unit="inner-text-button"[\s\S]*?chromeUnitClassNames\('inner-text-button',\s*'app-header-button',\s*'skirmish-grid-key'/.test(skirmishHud)) {
+  // The HUD's sections are COMPARTMENTS of the Controls head's divided block, not framed buttons
+  // standing in a row: the panel's rails are their edges. So the pin is on the declaration that
+  // hands them to the panel, and on the panel keeping the rails to itself.
+  || !/titleSections=\{controlsContent === undefined \? HUD_TABS\.map/.test(skirmishHud)
+  || /<ChromeButton[\s\S]*?'skirmish-hud-tab'/.test(skirmishHud)
+  // A head compartment is not a registered unit either: the block already drew every edge it has,
+  // so it is a bare seat carrying the leaf material, exactly like .titlebar-control--seat.
+  || !/className: `shell-controls-head-section/.test(chromeBox)
+  || !/'data-chrome-fill-surface': section\.press \? CHROME_LEAF_FILL_SURFACE : undefined/.test(chromeBox)
+  || /<ChromeButton[\s\S]*?shell-controls-head-section/.test(chromeBox)
+  // The card is ONE divided box of compartments, not fifteen framed buttons in a gapped
+  // grid — that shape is what ChromeSeatGrid exists to replace, and rebuilding it here
+  // would put a frame, a strip of panel and another frame between every pair of marks.
+  || !/<ChromeSeatGrid\b/.test(commandCard)
+  || /<ChromeButton\b|app-header-button/.test(commandCard)
+  // The card carries no per-key label any more; the tip does. A key that grew one back
+  // would restate the wall of type this replaced (ADR-0586).
+  || /skirmish-grid-label/.test(commandCard)
+  || !/tip: \{ title:/.test(commandCard)) {
   failures.push('Skirmish promotion must use its registered anchored inner composition while tab and command-grid controls inherit existing registered inner units');
 }
 for (const selector of ['.skirmish-hud-tab', '.skirmish-hud .app-header-button']) {
