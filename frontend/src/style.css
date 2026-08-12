@@ -18797,11 +18797,11 @@ button.tileset-relationship-cell {
    this takes no track in the cluster's divided grid — the seat count, the rails and the bar's
    measured geometry are identical whether or not anyone is watching. */
 .account-watched-mark {
-  block-size: 14px;
+  block-size: 22px;
   image-rendering: pixelated;
-  inline-size: 14px;
-  inset-block-end: 0;
-  inset-inline-end: 0;
+  inline-size: 22px;
+  inset-block-end: -2px;
+  inset-inline-end: -2px;
   object-fit: contain;
   position: absolute;
 }
