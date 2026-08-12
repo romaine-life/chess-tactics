@@ -524,8 +524,14 @@ describe('Run chrome hierarchy', () => {
     // workspace would report the module default store's clock instead.
     expect(runScreen).toContain("import { BattleClockChip } from './BattleClockChip';");
     expect(runScreen).toContain('battlefieldMounted={battlefieldActive}');
+    // Material answers to the same seat for the same reason, and sits ahead of the clock exactly
+    // as it does on the Skirmish bar, so every play surface reads alike (ADR-0580). ONE box holds
+    // both forces — a comparison cannot have the clock standing in the middle of it. It rides in
+    // and out WITH the clock: a force's points exist only while there is a board to count them
+    // on, so it is not a Run measure.
+    expect(runScreen).toContain("import { BattleMaterialChip } from './BattleMaterialChip';");
     expect(runScreen).toMatch(
-      /\{battlefieldMounted && run\.phase === 'battle'\s*\?\s*<BattleClockChip fillSurface=\{CHROME_LEAF_FILL_SURFACE\} \/>\s*:\s*null\}/,
+      /\{battlefieldMounted && run\.phase === 'battle'\s*\?\s*\(\s*<>\s*<BattleMaterialChip fillSurface=\{CHROME_LEAF_FILL_SURFACE\} \/>\s*<BattleClockChip fillSurface=\{CHROME_LEAF_FILL_SURFACE\} \/>\s*<\/>\s*\)\s*:\s*null\}/,
     );
     // Address-only Play breadcrumbs are App-owned, so they remain present even
     // while the replaceable battlefield scene is not yet active.

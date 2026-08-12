@@ -9,6 +9,7 @@ import {
   migrateRunSaveDocument,
   RUN_DEDITIO_TENTHS_PER_POINT,
   standingEnemyForceValue,
+  standingForceValue,
   type RunDocument,
   type RunWarSnapshot,
 } from './model';
@@ -76,6 +77,28 @@ describe('what the board reports as still standing', () => {
 
   it('reads a level force the same way, for a Battle nobody has fought', () => {
     expect(levelEnemyForceValue(battleLevel('b'))).toBe(15);
+  });
+
+  // The title bar's material readout asks the same question about BOTH forces (ADR-0580), so the
+  // side is an argument rather than a second reduce written beside this one. The point of one
+  // reader is that the number a player watches during the Battle is the number the mate is
+  // priced on: `standingEnemyForceValue` is now this function with the enemy filled in.
+  it('answers for whichever side is asked, and agrees with the enemy reader', () => {
+    const board = [
+      { side: 'player', alive: true, type: 'rook' },
+      { side: 'player', alive: true, type: 'king' },
+      { side: 'player', alive: false, type: 'queen' },
+      { side: 'enemy', alive: true, type: 'queen', promotedFrom: 'pawn' },
+      { side: 'enemy', alive: true, type: 'knight' },
+    ];
+
+    expect(standingForceValue(board, 'player')).toBe(5);
+    expect(standingForceValue(board, 'enemy')).toBe(4);
+    expect(standingForceValue(board, 'enemy')).toBe(standingEnemyForceValue(board));
+  });
+
+  it('scores an emptied side as nothing rather than refusing to answer', () => {
+    expect(standingForceValue([{ side: 'enemy', alive: true, type: 'rook' }], 'player')).toBe(0);
   });
 });
 
