@@ -33,3 +33,4 @@ docs/art/**/runs/evidence/
 
 # Advance Wars ROMs — copyrighted, never commit (see tools/aw-import)
 roms/
+frontend/public/dev-filtered/

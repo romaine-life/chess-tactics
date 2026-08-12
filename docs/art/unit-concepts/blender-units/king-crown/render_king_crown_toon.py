@@ -20,7 +20,22 @@ extend past the model, and what is left is a rim of exactly the authored
 thickness. It is drawn geometry, not a post-process, so it stays hard at every
 size instead of dissolving the way a downsampled line does.
 
-Per-rung knobs, because a 28px king is a redesign and not a smaller 113px king:
+Authored rung ladder, in delivery frames. The camera runs on a global multiplicative
+zoom ladder (`frontend/src/game/zoomTiers.ts`), so the sizes a unit is ever drawn at
+are finite and known. Art is authored one rung per OCTAVE rather than one per tier:
+within an octave the gap is at most 2:1, which is where a single filtered sample is
+still honest, and the renderer's mip chain covers it. Past 2:1 it is not, which is
+what the old 512px sprites looked like on a zoomed-out board.
+
+    55x65    bands=2 simplify=1   the crown is a mass, not a jewelled interior
+    110x130  bands=3
+    220x260  bands=3
+    440x520  bands=3
+
+The bottom rung is a redesign rather than a smaller top rung, which is the whole
+reason it is authored instead of derived.
+
+Per-rung knobs, because a 55px king is a redesign and not a smaller 440px king:
   UNIT_ART_TOON_BANDS       shading steps (3 reads as form, 2 reads as a mass)
   UNIT_ART_TOON_OUTLINE_PX  ink width in DELIVERY pixels, converted to world units
   UNIT_ART_TOON_SIMPLIFY    1 collapses the crown's interior detail to one mass
@@ -66,8 +81,23 @@ def srgb(hex_string):
     return tuple(out)
 
 
-STONE = [srgb("#102030"), srgb("#204060"), srgb("#406090")]
-GOLD = [srgb("#3a2408"), srgb("#8a6a1e"), srgb("#d8b45a")]
+# The team palettes recolour the STONE band only; the crown stays gold-and-red so a
+# king reads as a king whichever side holds it. The golden body is the exception —
+# gold on gold loses the crown, so its accents go to dark iron.
+STONE_PALETTES = {
+    "navy-blue": ("#102030", "#204060", "#406090"),
+    "crimson":   ("#300f14", "#6a1f2a", "#9e4552"),
+    "golden":    ("#33280c", "#7a6118", "#c2a24a"),
+    "emerald":   ("#0f2a1c", "#1f5a3c", "#46916a"),
+    "black":     ("#101214", "#262a30", "#4a525c"),
+    "white":     ("#4a505a", "#8e97a3", "#d8dee6"),
+}
+IRON = ("#14161a", "#3a4048", "#6e7782")
+PALETTE = os.environ.get("UNIT_ART_TOON_PALETTE", "navy-blue")
+if PALETTE not in STONE_PALETTES:
+    raise RuntimeError(f"unknown palette {PALETTE}; expected one of {sorted(STONE_PALETTES)}")
+STONE = [srgb(value) for value in STONE_PALETTES[PALETTE]]
+GOLD = [srgb(value) for value in (IRON if PALETTE == "golden" else ("#3a2408", "#8a6a1e", "#d8b45a"))]
 VELVET = [srgb("#3a0a0c"), srgb("#701010"), srgb("#a83028")]
 
 
@@ -267,4 +297,4 @@ rig.rotation_euler = (0, 0, 0)
 bpy.context.view_layer.update()
 v = world_to_camera_view(scene, scene.camera, mathutils.Vector((0, 0, 0)))
 print("ANCHOR  unitAnchorX=%.3f%%  unitAnchorY=%.3f%%" % (v.x * 100, (1 - v.y) * 100))
-print("KING_TOON_DONE ->", OUT, "bands=%d outline=%.2fpx simplify=%d" % (BANDS, OUTLINE_PX, SIMPLIFY))
+print("KING_TOON_DONE ->", OUT, "palette=%s bands=%d outline=%.2fpx simplify=%d" % (PALETTE, BANDS, OUTLINE_PX, SIMPLIFY))
