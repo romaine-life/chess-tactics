@@ -684,11 +684,11 @@ test('required-schema readiness and repair enforce the migrations 37 through 68 
     /\['run_progression',\s*49\]/,
     'Ataraxia progression relation repair must replay migration 49',
   );
-  assert.match(relations, /active_runs/, 'account Run documents must be required runtime schema');
+  assert.match(relations, /active_runs/, 'Run documents must be required runtime schema');
   assert.match(
     repairs,
-    /\['active_runs',\s*44\]/,
-    'active Run relation repair must replay its canonical creation migration',
+    /\['active_runs',\s*\[44,\s*79\]\]/,
+    'active Run relation repair must replay migration 44 and the 79 guest ownership it gained',
   );
   // Craft links (migration 50) are a debugging instrument, not schema the app needs to serve a
   // route. Requiring the relation would take every route down on a database missing only that
@@ -1230,8 +1230,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*78\s*\}/,
-    'the production upgrade proof must require a complete 1-78 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*79\s*\}/,
+    'the production upgrade proof must require a complete 1-79 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -1245,8 +1245,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*42[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 78',
+    /length:\s*43[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 79',
   );
   assert.match(
     primaryUpgradeProof,
