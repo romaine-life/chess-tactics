@@ -8,7 +8,7 @@ refines:
   - "[ADR-0510](0510-enchiridion-cards-filters-rarity-on-structural-teal.md)"
 ---
 
-# ADR-0588: A browse layout is an address, not component state
+# ADR-0590: A browse layout is an address, not component state
 
 ## Context and Problem Statement
 

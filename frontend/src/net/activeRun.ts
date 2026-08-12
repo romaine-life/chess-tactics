@@ -2,7 +2,7 @@ import type { RunDocument } from '../run/model';
 import { ensureGuestRunKey, readGuestRunKey } from '../run/guestIdentity';
 import { HttpError } from './http';
 
-/** The header a signed-out player's Run travels under (ADR-0587). The server prefers a signed-in
+/** The header a signed-out player's Run travels under (ADR-0588). The server prefers a signed-in
  * session whenever there is one, so sending this while signed in is harmless — and is exactly
  * what `adoptGuestRun` relies on to name the row being inherited. */
 const GUEST_RUN_KEY_HEADER = 'x-guest-run-key';
@@ -156,7 +156,7 @@ export async function deleteActiveRun(revision: number): Promise<void> {
 }
 
 /**
- * Hand this browser's guest Run row to the account that just signed in (ADR-0587).
+ * Hand this browser's guest Run row to the account that just signed in (ADR-0588).
  *
  * `adopted` reports whether the account TOOK the row. False covers both "there was no guest row"
  * and "the account was already playing something, so the guest row was released" — the caller

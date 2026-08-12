@@ -1372,11 +1372,22 @@ export function Enchiridion({
 export function EnchiridionSectionRail({
   section,
   sectionHref,
+  markOverride,
 }: {
   section: EnchiridionSection | null;
   sectionHref: (section: EnchiridionSection) => string;
+  /**
+   * A mark to draw in place of a section's installed one, for a review surface judging a
+   * candidate. The rail itself is the specimen holder — a mark is only judged against the
+   * five it stands beside — so a review mounts THIS component rather than a lookalike
+   * column, and swaps one seat (ADR-0560). Nothing else may pass it.
+   */
+  markOverride?: Readonly<Partial<Record<EnchiridionSection, string>>>;
 }): ReactElement {
-  const sectionIconSrc = useSectionIconSrc();
+  const installedSectionIconSrc = useSectionIconSrc();
+  const sectionIconSrc = markOverride
+    ? { ...installedSectionIconSrc, ...markOverride }
+    : installedSectionIconSrc;
   // Which section wears the open mark. The sections are siblings under one root, and the root
   // differs by host (main menu vs Strategikon), so the family is derived from the very hrefs
   // this rail is handed — see shared/railOpenIntent.ts. `section` is untouched, so the content
