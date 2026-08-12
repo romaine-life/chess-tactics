@@ -102,6 +102,14 @@ export function HeaderAccountCluster({
     window.location.reload();
   };
 
+  // Ask the provider for credentials again without ending the session. The callback recognises
+  // the session already in hand and re-arms it in place, so the 90-day session — and the absolute
+  // deadline it is measured against — survives (ADR-0576).
+  const reauthenticate = (): void => {
+    const returnTo = signInReturnTo ?? `${window.location.pathname}${window.location.search}`;
+    window.location.href = `/api/auth/sign-in?prompt=login&returnTo=${encodeURIComponent(returnTo)}`;
+  };
+
   // The box's compartments, in bar order. Declared as a list because the box's COLUMNS are
   // its members: one track each, so the rail between the music seat and the gear is the box's
   // own column line. A bar without the gear declares two columns and has one rail, never an
@@ -133,6 +141,9 @@ export function HeaderAccountCluster({
         surfacePhase={TITLE_BAR_CLUSTER_LEAF_PHASE.account}
         onRename={renameAccount}
         onSignOut={signOut}
+        // Only an admin can publish, so only an admin is ever asked to re-authenticate for it.
+        needsReauthentication={Boolean(me!.is_admin) && me!.admin_fresh === false}
+        onReauthenticate={reauthenticate}
         defaultOpen={menuOpen}
         defaultEditing={editOpen}
       />
