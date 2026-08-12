@@ -108,7 +108,10 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // Both destinations are the shared rail tab, which carries the family's oak itself — the
     // fill is stamped once by ApparatusRailColumn rather than per call site (ADR-0558).
     expect(playMenu).toContain('testId="run-choice-current"');
-    expect(playMenu).toMatch(/<ApparatusRailTab[\s\S]*?label="Current Run"/);
+    // The tab is named for the ACT, not the object it acts on (ADR-0581). "Current Run" named the
+    // thing behind the tab and left the press to be inferred; the pair reads Continue / New now.
+    expect(playMenu).toMatch(/<ApparatusRailTab[\s\S]*?label="Continue"/);
+    expect(playMenu).not.toContain('label="Current Run"');
     expect(playMenu).toContain('to={PLAY_RUN_CURRENT_SELECTOR_HREF}');
     expect(playMenu).not.toContain('play-choice-row');
     expect(playMenu).toContain('<ApparatusRailColumn opens="panel-beside" className="play-run-choice-rail"');
@@ -137,7 +140,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu.match(/<DividedInnerChromeBox\s+className="play-detail-card/g)).toHaveLength(3);
     expect(playMenu.match(/cellClassName="play-detail-verb"/g)).toHaveLength(3);
     expect(playMenu).toMatch(/className="play-detail-card" columns=\{verbColumns\(RUN_PLAY_VERBS\)\}[\s\S]*?<ChromeVerbRow verbs=\{RUN_PLAY_VERBS\} className="play-detail-verbs"[\s\S]*?<\/DividedInnerChromeBox>/);
-    expect(playMenu).not.toMatch(/<div className="ce-selected-head"><h2>Current Run<\/h2><\/div>/);
+    expect(playMenu).not.toMatch(/<div className="ce-selected-head"><h2>Continue<\/h2><\/div>/);
     // Nothing at all stands outside a card in these columns: a title either says something the
     // rows do not — and then it goes INSIDE the field — or it is discarded. No head is left
     // sitting on the live vista above a box.
@@ -275,14 +278,18 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).not.toContain('<h3>{run.war.name}</h3>');
     expect(playMenu).not.toContain("run.war.description || 'Active War'");
     expect(playMenu).toContain('testId="run-choice-new"');
-    expect(playMenu).toMatch(/<ApparatusRailTab[\s\S]*?label="Start New Run"/);
+    // Named for the act, like its sibling (ADR-0581). "Start" is not the tab's to carry: what a
+    // new Run costs the one being held is the first thing the column it opens says.
+    expect(playMenu).toMatch(/<ApparatusRailTab[\s\S]*?label="New"/);
+    expect(playMenu).not.toContain('label="Start New Run"');
     expect(playMenu).toContain('to={PLAY_RUN_NEW_SELECTOR_HREF}');
     expect(playMenu).toContain('data-testid="run-detail-new"');
-    // No heading over it. The rail tab that opened the column already says Start New Run and the
-    // verb at the bottom says it again, so a title there only spends a row repeating the press
-    // that got you here. The aside's own label keeps the name for the landmark.
-    expect(playMenu).not.toMatch(/<div className="ce-selected-head"><h2>Start New Run<\/h2><\/div>/);
-    expect(playMenu).toMatch(/aria-label="Start New Run" data-testid="run-detail-new"/);
+    // No heading over it. The rail tab that opened the column already says New and the verb at the
+    // bottom says Start Run, so a title between them only spends a row repeating one of the two.
+    // The aside's own label keeps the name for the landmark, and keeps its subject: a landmark is
+    // read away from the rail that supplied it, so the bare "New" of the tab is not enough there.
+    expect(playMenu).not.toMatch(/<div className="ce-selected-head"><h2>New Run<\/h2><\/div>/);
+    expect(playMenu).toMatch(/aria-label="New Run" data-testid="run-detail-new"/);
     expect(playMenu).toContain('<RunDetailContentSceneSlot');
     expect(authoredSceneSlots).toContain('region="run-detail" mode="contents"');
     expect(playMenu).not.toContain("sceneTransitionTargetAttributes('run-detail'");

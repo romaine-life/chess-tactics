@@ -11,8 +11,8 @@ import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
 
 /**
- * Owner review for the two marks Run preparation's rail tabs wear — Current Run and Start
- * New Run (ADR-0558 made those tabs the shared primitive, and a rail tab carries a mark).
+ * Owner review for the two marks Run preparation's rail tabs wear — Continue and New (ADR-0558
+ * made those tabs the shared primitive, and a rail tab carries a mark; ADR-0581 named them).
  *
  * Judged in the seat it ships in: every candidate is mounted on a real `ApparatusRailTab`
  * at its native 44px, not in a contact sheet and not in the title bar's tight measure chip,
@@ -29,6 +29,9 @@ interface RailMarkSeat {
   key: 'current' | 'new';
   slot: string;
   role: string;
+  /** Exactly what the shipped tab says, because the preview mounts a real tab and must read as
+   *  the one on the Play screen. The slot and role names predate the labels (ADR-0581) and are
+   *  installed media identities — they are not renamed to follow the words. */
   label: string;
   idea: string;
 }
@@ -38,14 +41,14 @@ export const RUN_RAIL_MARK_SEATS: readonly RailMarkSeat[] = Object.freeze([
     key: 'current',
     slot: 'ui/kit/icons/run/current.png',
     role: 'ui-kit-icons-run-current-png',
-    label: 'Current Run',
+    label: 'Continue',
     idea: 'The tab that resumes the Run already in progress.',
   },
   {
     key: 'new',
     slot: 'ui/kit/icons/run/new.png',
     role: 'ui-kit-icons-run-new-png',
-    label: 'Start New Run',
+    label: 'New',
     idea: 'The tab that abandons whatever is held and begins again.',
   },
 ]);
@@ -193,12 +196,12 @@ export function RunRailMarkControls({ state }: { state: RunRailMarkState }): Rea
     if (!selected?.media) return;
     const slot = catalog.slots.find((entry) => entry.slot === seat.slot) ?? null;
     setBusy(true);
-    setStatus(`Recording approval for the ${seat.label} bytes…`);
+    setStatus(`Recording approval for the ${seat.label} tab's bytes…`);
     try {
       const reviewed = await reviewLiveMediaVersion({
         id: selected.id,
         expectedRevision: selected.rowRevision,
-        notes: `Selected the ${seat.label} rail-tab mark from the tab it rides.`,
+        notes: `Selected the ${seat.label} rail tab's mark from the tab it rides.`,
         surfaceUrl: window.location.href,
         evidence: {
           schema: 'live-media-owner-proof-v1',
@@ -206,7 +209,7 @@ export function RunRailMarkControls({ state }: { state: RunRailMarkState }): Rea
           contentSha256: selected.media.sha256,
           slot: seat.slot,
           canonicalScale: 1,
-          surfaceKind: `Run preparation ${seat.label} rail tab seat at native size`,
+          surfaceKind: `Run preparation ${seat.label} rail tab's seat at native size`,
         },
       });
       setStatus('Installing…');
@@ -248,7 +251,7 @@ export function RunRailMarkControls({ state }: { state: RunRailMarkState }): Rea
             disabled={busy || !selected || installed}
             onClick={() => { void install(seat); }}
           >
-            {installed ? `${seat.label} installed` : busy ? 'Installing…' : `Use selection for ${seat.label}`}
+            {installed ? `${seat.label} tab installed` : busy ? 'Installing…' : `Use selection for the ${seat.label} tab`}
           </button>
         );
       })}

@@ -8,8 +8,8 @@ references; they are not the production screen architecture.
 Current player navigation is recorded in ADR-0074 and ADR-0514: one main-menu
 **Play** control opens the compatibility selector root `/play/select`, which
 paints Run preparation and canonicalizes to `/play/select/run`. Because Run is the
-only player-facing mode, Play mounts no nested mode rail; Current Run / Start New Run
-and the selected detail shift into the released columns. Campaign, Skirmish, Levels,
+only player-facing mode, Play mounts no nested mode rail; **Continue / New**
+(ADR-0581) and the selected detail shift into the released columns. Campaign, Skirmish, Levels,
 and Continue remain implemented on direct review addresses but have no ordinary entry.
 
 ## Contract

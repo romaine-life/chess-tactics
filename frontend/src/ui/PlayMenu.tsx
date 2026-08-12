@@ -199,7 +199,7 @@ function ContinuePanel({ inventory }: { inventory: ContinueInventory }): ReactEl
 const PLAY_CHOICE_ROW_SEATS = { current: 0, new: 1 } as const;
 
 /**
- * The Current Run card's closing verb. One verb, so its row spans the card and there is no column
+ * The Continue card's closing verb. One verb, so its row spans the card and there is no column
  * line for a rail to be — `verbColumns` states that rather than the card counting its own tracks.
  */
 const RUN_PLAY_VERBS: readonly ChromeVerb[] = [{ id: 'play', label: 'Play', to: '/run' }];
@@ -411,10 +411,12 @@ function RunPanel({
             An available tab carries its name and nothing else — the Battle position and Ataraxia
             it used to restate are the first two facts of the detail column it opens (ADR-0556).
             ADR-0334's "No active Run" is the tab's detail line, which is why it appears only
-            when the tab cannot be taken. */}
+            when the tab cannot be taken. The name is the ACT, not the object: Continue says what
+            pressing it does, where "Current Run" named the thing behind it and left the player to
+            infer the verb (ADR-0581). */}
         {presentedRun || (hydrated && !loading) ? (
           <ApparatusRailTab
-            label="Current Run"
+            label="Continue"
             detail={presentedRun ? undefined : 'No active Run'}
             to={PLAY_RUN_CURRENT_SELECTOR_HREF}
             index={PLAY_CHOICE_ROW_SEATS.current}
@@ -440,8 +442,11 @@ function RunPanel({
             </div>
           </section>
         ) : null}
+        {/* Its name is the act too, and the pair reads as one choice: Continue / New. What a new
+            Run costs the one you are holding is the first thing the column it opens says, so the
+            tab does not have to carry "Start" to warn anybody (ADR-0581). */}
         <ApparatusRailTab
-          label="Start New Run"
+          label="New"
           to={PLAY_RUN_NEW_SELECTOR_HREF}
           index={PLAY_CHOICE_ROW_SEATS.new}
           active={choice === 'new'}
@@ -457,7 +462,7 @@ function RunPanel({
         sceneInstance={choice ? `play/run/${choice}` : 'play/run'}
       >
         {/* Which Run the account keeps is a question for the player who is about to RESUME one,
-            so it is answered here, behind Current Run, in the seat that already holds "what
+            so it is answered here, behind Continue, in the seat that already holds "what
             happens if I take this row". Someone starting a new Run never has to read it —
             starting one is itself a third answer, and it was already never blocked by the
             question (ADR-0557). */}
@@ -515,9 +520,9 @@ function RunPanel({
           </aside>
         ) : choice === 'current' && presentedRun ? (
           /* No heading, for the same reason the sibling column has none: the rail tab that
-             opened this column already says Current Run, so a title there spends a row
+             opened this column already says Continue, so a title there spends a row
              restating the press that got you here. The aside keeps the name as a landmark. */
-          <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Current Run" data-testid="run-detail-current">
+          <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Continue" data-testid="run-detail-current">
             <div className="play-detail-body">
               {/* One field, not a stack of floats. The facts and the verb that completes them
                   share a single structural stone card, so neither stands as bare text on the live
@@ -552,11 +557,13 @@ function RunPanel({
         ) : null}
 
         {choice === 'new' ? (
-          /* No heading. The rail tab that opened this column already says Start New Run, and the
-             verb at the bottom says it again — a title that only repeats the tab you just pressed
-             spends a row of the column and settles nothing. The aside keeps the name for anyone
-             reading the page by its landmarks. */
-          <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Start New Run" data-testid="run-detail-new">
+          /* No heading. The rail tab that opened this column already says New, and the verb at the
+             bottom says Start Run — a title sitting between the press and the verb it arms could
+             only repeat one of them, and it would spend a row of the column to do it. The aside
+             keeps the name for anyone reading the page by its landmarks — "New Run" rather than
+             the tab's bare "New", because a landmark is read out of the rail that gave it its
+             subject, where Continue's name still stands on its own. */
+          <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="New Run" data-testid="run-detail-new">
             {/* ONE field, not four slabs with the vista showing through between them. Preparing a
                 Run is a single control — choose the rung, read what it costs you, press the verb —
                 and it was drawn as four separate boxes whose gaps read as four unrelated things

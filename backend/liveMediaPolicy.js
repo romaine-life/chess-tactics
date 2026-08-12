@@ -859,8 +859,9 @@ function titleBarMarkMediaIssue(row, projectedRuntime = null) {
  * different sizes and a mark accepted for one must not silently satisfy the other.
  */
 /**
- * Run preparation's rail-tab marks: the glyphs the Current Run and Start New Run tabs wear
- * (ADR-0558 made those tabs the shared ApparatusRailTab, and a rail tab carries a mark).
+ * Run preparation's rail-tab marks: the glyphs the Continue and New tabs wear (ADR-0558 made
+ * those tabs the shared ApparatusRailTab, and a rail tab carries a mark; ADR-0581 named them —
+ * the `run/current` and `run/new` slot paths below predate the labels and do not follow them).
  *
  * Their contract is the OPPOSITE of a title-bar mark's, which is why they cannot borrow that
  * validator. A title-bar mark is drawn into a square seat with `contain`, so it must be trimmed
