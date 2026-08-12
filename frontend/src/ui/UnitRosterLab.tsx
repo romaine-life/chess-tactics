@@ -299,10 +299,12 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
                         ? <img
                             className="unit-roster-ground"
                             src={tileFrameSrc(groundTile)}
-                            style={{
-                              width: `${Math.round(96 * tierZoom)}px`,
-                              height: `${Math.round(180 * tierZoom)}px`,
-                            }}
+                            // The grid box already carries `zoom: tierZoom`, so this is stated at
+                            // 1x and scaled ONCE by that. Multiplying by the tier here as well put
+                            // the ground at 96 * tier squared — 212px where the contract wants 143
+                            // at tier 8 — so every piece read small against its own tile, and worse
+                            // the further in you zoomed. Exactly the regime the surface is for.
+                            style={{ width: '96px', height: '180px' }}
                             alt=""
                             aria-hidden="true"
                           />
@@ -311,7 +313,8 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
                         ? (mode
                           ? <span
                               className="unit-roster-unit-slot"
-                              style={{ top: `${Math.round(68 * tierZoom)}px` }}
+                              // 1x like the tile above it: the grid box applies the tier.
+                              style={{ top: '68px' }}
                             >
                               <UnitRungSprite
                                 src={sprite}

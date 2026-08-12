@@ -29702,8 +29702,10 @@ button.section-box-head {
    matching the pieces beside them. The board caps them the same way. */
 .unit-roster-unit,
 .unit-roster-unit-slot canvas {
-  max-height: calc(92px * var(--roster-tier, 1));
-  max-width: calc(78px * var(--roster-tier, 1));
+  /* The board's 1x draw rect, flat. The grid box carries `zoom: tierZoom`, so a cap
+     multiplied by the tier here would be applied a second time and stop capping. */
+  max-height: 92px;
+  max-width: 78px;
 }
 
 /* Seated exactly where the board seats it. The tile frame is 96x180 with its top
@@ -29731,8 +29733,10 @@ button.section-box-head {
    seat. A fixed cap left the before stuck at 78px while the tier-sized canvas beside
    it grew past 200, so the pair stopped being a comparison at all. */
 .unit-roster-unit.is-before {
-  max-height: calc(92px * var(--roster-tier, 1));
-  max-width: calc(78px * var(--roster-tier, 1));
+  /* The board's 1x draw rect, flat. The grid box carries `zoom: tierZoom`, so a cap
+     multiplied by the tier here would be applied a second time and stop capping. */
+  max-height: 92px;
+  max-width: 78px;
 }
 
 /* A stepper, not a slider: the magnifications are a fixed ladder, so the control

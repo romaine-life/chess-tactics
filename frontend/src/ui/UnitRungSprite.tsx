@@ -111,5 +111,19 @@ export function UnitRungSprite({
     return () => { cancelled = true; };
   }, [src, authoredSrc, baseWidth, baseHeight, width, height, zoom, mode]);
 
-  return <canvas ref={canvasRef} className="unit-roster-unit" width={width} height={height} aria-label={alt} role="img" />;
+  // Backing store in REAL tier pixels so an authored rung lands 1:1; laid out at the 1x
+  // rect, because the grid box scales everything by the tier already. Without the CSS
+  // size the element occupied its backing store and was scaled a second time, so the
+  // unit and the ground it stands on disagreed by a whole tier zoom.
+  return (
+    <canvas
+      ref={canvasRef}
+      className="unit-roster-unit"
+      width={width}
+      height={height}
+      style={{ width: `${baseWidth}px`, height: `${baseHeight}px` }}
+      aria-label={alt}
+      role="img"
+    />
+  );
 }
