@@ -19,7 +19,7 @@
 // screen can take the address, because App.tsx may not name `/studio` beside a query at all.
 //
 // If a surface needs something a category cannot express, grow the category contract in
-// TilePreview.tsx (`main` and `controls` are both arbitrary elements). ADR-0587.
+// TilePreview.tsx (`main` and `controls` are both arbitrary elements). ADR-0588.
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -44,7 +44,7 @@ export function check(source) {
   return offendingLines(source).map((hit) => (
     `ui/App.tsx:${hit.line} routes /studio on a query parameter, which returns a screen before the `
     + 'Studio renders — so it has no category rail, no Controls panel and no way in but a '
-    + 'hand-passed URL. Add a StudioCategory in ui/TilePreview.tsx instead (ADR-0587):\n'
+    + 'hand-passed URL. Add a StudioCategory in ui/TilePreview.tsx instead (ADR-0588):\n'
     + `      ${hit.text}`
   ));
 }

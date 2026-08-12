@@ -23,7 +23,7 @@ import {
 /**
  * Owner review for the Battle command card's marks, as a Studio CATEGORY.
  *
- * It arrived on `main` as `/studio?commandCardMarkReview=1` while ADR-0587 was converting the six
+ * It arrived on `main` as `/studio?commandCardMarkReview=1` while ADR-0588 was converting the six
  * that already did that — written, like each of those, by copying the last one. That is the whole
  * argument for the gate: the pattern reproduces itself faster than it can be cleaned up by hand.
  *

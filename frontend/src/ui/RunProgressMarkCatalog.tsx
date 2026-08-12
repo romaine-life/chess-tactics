@@ -23,7 +23,7 @@ import { StudioCatalogCard } from './studio/StudioCatalogCard';
  * public drawable catalog refuses a role bound to an unaccepted slot, so the binding can only
  * ever follow acceptance (ADR-0316 review shape, ADR-0318 roles).
  *
- * This was its own screen at `/studio?runProgressIconReview=1` until ADR-0587.
+ * This was its own screen at `/studio?runProgressIconReview=1` until ADR-0588.
  */
 /** The candidate batches this category presents. Ataraxia's emblem was forged in its
  *  own pass after the position marks, so it reads a set rather than one id. */

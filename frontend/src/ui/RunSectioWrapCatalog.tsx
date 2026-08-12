@@ -23,7 +23,7 @@ import { ChromeButton } from './shared/ChromeButton';
  *
  * Each wrap is mounted around LIVE card faces, at the geometry the Sectio would give it, so the
  * thing on screen is the arrangement rather than a picture of the artwork. It was its own screen
- * at `/studio?runSectioReview=1` until ADR-0587, which is why it had no category rail and no way
+ * at `/studio?runSectioReview=1` until ADR-0588, which is why it had no category rail and no way
  * in but a hand-passed URL.
  */
 const REVIEW_CARDS: readonly RunCoreCard[] = [

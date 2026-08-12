@@ -304,7 +304,7 @@ const isUnitAssetId = (value: string | null): value is string => Boolean(
  * no Controls panel and no way in but a hand-passed URL. Each is a category now; the flag selects
  * it and the route writer, which rebuilds the query from scratch, drops the flag on the first
  * write. Old links therefore keep working and canonicalise themselves, exactly as the path
- * aliases above do (ADR-0587). `check-studio-surfaces.mjs` fails the build on a new one.
+ * aliases above do (ADR-0588). `check-studio-surfaces.mjs` fails the build on a new one.
  *
  * This table is the whole migration surface: it does not grow. A new review surface is a
  * category from the start and is reached by `?cat=<id>`.

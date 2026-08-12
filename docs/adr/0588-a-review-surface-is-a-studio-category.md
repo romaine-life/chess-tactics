@@ -7,7 +7,7 @@ refines:
   - "[ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)"
 ---
 
-# ADR-0587: A review surface is a Studio category, and the Studio's address cannot be borrowed
+# ADR-0588: A review surface is a Studio category, and the Studio's address cannot be borrowed
 
 ## Context
 

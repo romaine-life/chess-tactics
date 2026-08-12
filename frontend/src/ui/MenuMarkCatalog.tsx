@@ -25,7 +25,7 @@ import { StudioCatalogCard } from './studio/StudioCatalogCard';
  * approval of those exact bytes, acceptance into the five slots, and the one drawable re-point
  * the Enchiridion mark needs.
  *
- * This was its own screen at `/studio?menuIconReview=1` until ADR-0587 — an address that
+ * This was its own screen at `/studio?menuIconReview=1` until ADR-0588 — an address that
  * borrowed the Studio's path and returned before the Studio rendered, so it had no category
  * rail and no way in but a hand-passed URL.
  */

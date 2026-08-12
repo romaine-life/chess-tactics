@@ -23,7 +23,7 @@ import { StudioCatalogCard } from './studio/StudioCatalogCard';
  * borrowed the Studio's path and then returned before the Studio rendered, so it had no
  * category rail, no Controls panel and no way in but a hand-passed URL. Every review surface
  * is a category now, and `check-studio-surfaces.mjs` fails the build on a screen that tries
- * the old trick (ADR-0587).
+ * the old trick (ADR-0588).
  *
  * Each candidate is mounted in the REGISTERED Level Editor tool button, so the mark is drawn
  * by the seat it ships in rather than in a contact sheet. Nothing here installs: the pencil

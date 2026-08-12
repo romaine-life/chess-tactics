@@ -13,7 +13,7 @@ import { StudioCatalogCard } from './studio/StudioCatalogCard';
  *
  * Review only: this surface shows exact candidate or installed bytes at 64×64 and does not
  * install or substitute artwork. It was its own screen at `/studio?lipsanonReview=1` until
- * ADR-0587, which is why it had no category rail and no way in but a hand-passed URL.
+ * ADR-0588, which is why it had no category rail and no way in but a hand-passed URL.
  */
 const RUN_LIPSANON_SLOT = /^ui\/run\/lipsana\/([a-z][a-z0-9-]*)\.png$/;
 
