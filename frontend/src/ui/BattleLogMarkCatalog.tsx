@@ -31,8 +31,17 @@ import { StudioCatalogCard } from './studio/StudioCatalogCard';
  * public drawable catalog refuses a role bound to an unaccepted slot, so the binding can only
  * ever follow acceptance (ADR-0316 review shape, ADR-0318 roles).
  */
+/**
+ * Which batches this page offers. A batch that has been ruled out comes OFF the list rather
+ * than staying up beside its replacement — a review page that keeps showing a rejected family
+ * asks the same question twice. The bytes stay uploaded and unaccepted either way.
+ *
+ * `battle-log-defeat-mark-2026-08-11-v1` is the first headstone family. Every one of its
+ * sixteen carried a cross on its face; the owner ruled the cross out, so the whole batch is
+ * retired and `-v2` replaces it with plain stone.
+ */
 export const BATTLE_LOG_MARK_BATCH_IDS: readonly string[] = Object.freeze([
-  'battle-log-defeat-mark-2026-08-11-v1',
+  'battle-log-defeat-mark-2026-08-12-v2',
   'battle-log-marks-2026-08-12-v1',
   'battle-log-cause-marks-2026-08-12-v1',
 ]);

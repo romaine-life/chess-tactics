@@ -143,13 +143,17 @@ should be judged by sight rather than described.
   `ui/kit/icons/game/objective.png` as the style image, then trimmed by
   `frontend/scripts/bake-icon-stroke.mjs`'s `trimToInkSquare` — crop and pad only, so the bytes
   stay honestly native 1× under [ADR-0076](0076-scaling-is-calibration-production-art-is-native-1x.md).
-  Batches: `battle-log-defeat-mark-2026-08-11-v1` (16 headstones) and
+  Batches: `battle-log-defeat-mark-2026-08-12-v2` (16 headstones) and
   `battle-log-marks-2026-08-12-v1` (16 chess plus signs and 16 threatened crowns for `check`,
   16 laurel wreaths, 16 balance scales).
 - **Check is offered as two concepts deliberately.** The chess plus is the symbol the notation
   directly above the row already ends in; the threatened crown is the fact rather than its
   notation. Both read at 18px, and which one belongs in a log that is already full of `+` is a
   judgement about the whole surface, not about the art.
+- The first headstone family carried a gold cross on every stone. The owner ruled the cross
+  out, so that whole batch is retired from the review list rather than left up beside its
+  replacement — a page that keeps showing a rejected family asks the same question twice. The
+  bytes stay uploaded and unaccepted; `-v2` is plain weathered stone.
 - A toppled chess king was generated for `defeat` and is **not** offered: it renders cleanly at
   64px and fails at the seat, where a horizontal piece collapses into a blue smear with a gold
   blob. That is a legibility fact about this seat, recorded so the idea is not re-attempted at
