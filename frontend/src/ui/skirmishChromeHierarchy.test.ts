@@ -7,7 +7,6 @@ const pawnPromotionPicker = readFileSync(new URL('./PawnPromotionPicker.tsx', im
 const portraitEditor = readFileSync(new URL('./PortraitEditor.tsx', import.meta.url), 'utf8');
 const stepper = readFileSync(new URL('./shared/Stepper.tsx', import.meta.url), 'utf8');
 const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url), 'utf8');
-const chromeDividedGrid = readFileSync(new URL('./shared/ChromeDividedGrid.tsx', import.meta.url), 'utf8');
 const appTitleBar = readFileSync(new URL('./shell/AppTitleBar.tsx', import.meta.url), 'utf8');
 const chromeRuntime = readFileSync(new URL('./chromeFamilyRuntime.ts', import.meta.url), 'utf8');
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
@@ -334,9 +333,10 @@ describe('Skirmish chrome hierarchy', () => {
     expect(skirmishHud).toContain('titleSections={controlsContent === undefined ? HUD_TABS.map');
     expect(skirmishHud).toContain("press: { onPress: () => setTab(t.id), ariaLabel: t.label, title: t.label, active: tab === t.id }");
     expect(skirmishHud).not.toMatch(/<ChromeButton[\s\S]*?'skirmish-hud-tab'/);
-    expect(chromeBox).toContain('<ChromeDividedGridCell');
-    expect(chromeBox).toContain('as="button"');
-    expect(chromeDividedGrid).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
+    expect(chromeBox).toContain('<DividedInnerChromeBox');
+    expect(chromeBox).toContain('framed={false}');
+    expect(chromeBox).toContain("'data-chrome-fill-surface': section.press ? CHROME_LEAF_FILL_SURFACE : undefined");
+    expect(chromeBox).not.toMatch(/chromeUnitClassNames\([^)]*shell-controls-head-section/);
     expectChromeUnit(commandKey, 'inner-text-button');
     expect(commandKey).toContain("active && 'active is-active'");
 

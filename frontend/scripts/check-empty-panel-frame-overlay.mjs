@@ -1183,7 +1183,7 @@ if (!/<InnerChromeBox className="skirmish-service-record">/.test(skirmishHud)
   // The grid's own rails are drawn with the PRIVATE rail part, not a public ChromeDivider with its
   // caps switched off: the grid places every junction itself from its line topology, and no call
   // site may say "no caps" any more (see check-chrome-rails.mjs).
-  || !/<ChromeGridRail[\s\S]*?role=\{railRole\}[\s\S]*?orientation="vertical"/.test(chromeDividedGrid)
+  || !/<ChromeGridRail[\s\S]*?role="inner"[\s\S]*?orientation="vertical"/.test(chromeDividedGrid)
   || !/from '\.\/chromeRailInternals'/.test(chromeDividedGrid)) {
   failures.push('Portrait hosts must use the registered InnerChromeBox or the Run Army row’s registered vertical divider composition');
 }
@@ -1205,7 +1205,11 @@ if (!/<InnerChromeBox[\s\S]*?className=\{`skirmish-promotion-picker is-\$\{side\
   // hands them to the panel, and on the panel keeping the rails to itself.
   || !/titleSections=\{controlsContent === undefined \? HUD_TABS\.map/.test(skirmishHud)
   || /<ChromeButton[\s\S]*?'skirmish-hud-tab'/.test(skirmishHud)
-  || !/<ChromeDividedGridCell\s*\n\s*key=\{section\.id\}\s*\n\s*as="button"/.test(chromeBox)
+  // A head compartment is not a registered unit either: the block already drew every edge it has,
+  // so it is a bare seat carrying the leaf material, exactly like .titlebar-control--seat.
+  || !/className: `shell-controls-head-section/.test(chromeBox)
+  || !/'data-chrome-fill-surface': section\.press \? CHROME_LEAF_FILL_SURFACE : undefined/.test(chromeBox)
+  || /<ChromeButton[\s\S]*?shell-controls-head-section/.test(chromeBox)
   || !/<ChromeButton unit="inner-text-button"[\s\S]*?chromeUnitClassNames\('inner-text-button',\s*'app-header-button',\s*'skirmish-grid-key'/.test(skirmishHud)) {
   failures.push('Skirmish promotion must use its registered anchored inner composition while tab and command-grid controls inherit existing registered inner units');
 }

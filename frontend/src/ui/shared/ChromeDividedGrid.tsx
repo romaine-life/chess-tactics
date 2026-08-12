@@ -15,9 +15,7 @@ import {
   type RefObject,
 } from 'react';
 import { KitScroll } from '../KitScroll';
-import type { ChromeRole } from '../chromeCandidateSources';
 import { ChromeSurfaceFill, InnerChromeBox } from './ChromeBox';
-import { CHROME_LEAF_FILL_SURFACE } from './chromeSurfacePolicy';
 import { ChromeGridRail, ChromeJunction, type ChromeJunctionSides } from './chromeRailInternals';
 
 export type ChromeDividedGridNode = {
@@ -153,18 +151,16 @@ function linePlacement(line: number, trackCount: number): CSSProperties {
 
 function GridJunction({
   node,
-  role,
   trackCount,
   blockBoundary,
 }: {
   node: ChromeDividedGridNode;
-  role: ChromeRole;
   trackCount: number;
   blockBoundary?: 'frame-start' | 'frame-end';
 }): ReactElement {
   return (
     <ChromeJunction
-      role={role}
+      role="inner"
       sides={node.sides}
       className="chrome-divided-grid__junction"
       data-chrome-grid-inline-boundary={node.inlineBoundary}
@@ -183,8 +179,6 @@ type ChromeDividedGridSegments = {
   trackCount: number;
   /** True once ANY row spans every column, which is when one full-height rail stops being right. */
   segmented: boolean;
-  /** The role every rail and junction in this grid is drawn at. */
-  railRole: ChromeRole;
 };
 const ChromeDividedGridSegmentContext = createContext<ChromeDividedGridSegments | null>(null);
 
@@ -217,7 +211,7 @@ export function ChromeDividedGridRow({
       {segments.verticalLines.map((line) => (
         <ChromeGridRail
           key={`row-vertical-${line}`}
-          role={segments.railRole}
+          role="inner"
           orientation="vertical"
           className="chrome-divided-grid__vertical-rail"
           style={linePlacement(line, segments.trackCount)}
@@ -231,44 +225,6 @@ export function ChromeDividedGridRow({
     return <button {...buttonProps} type={buttonProps.type ?? 'button'} className={classes}>{body}</button>;
   }
   return <div {...props as HTMLAttributes<HTMLDivElement>} className={classes}>{body}</div>;
-}
-
-/**
- * One COMPARTMENT of a divided row, when the compartment itself is the control.
- *
- * The same reasoning as a pressable row, one axis over: the rails on either side of this cell are
- * already its edges, so a button nested inside it would draw a second frame a few pixels in and
- * read as something placed in the compartment rather than as the compartment. It therefore paints
- * no frame of its own and wears the leaf oak, exactly like `section-box-member-verb`.
- *
- * An ordinary cell needs none of this — a plain node in the row is one, and that stays the default.
- */
-export function ChromeDividedGridCell({
-  as = 'div',
-  className = '',
-  children,
-  ...props
-}: (
-  | HTMLAttributes<HTMLDivElement>
-  | ButtonHTMLAttributes<HTMLButtonElement>
-) & {
-  as?: 'div' | 'button';
-}): ReactElement {
-  const classes = `chrome-divided-grid__cell ${className}`.trim();
-  if (as === 'button') {
-    const buttonProps = props as ButtonHTMLAttributes<HTMLButtonElement>;
-    return (
-      <button
-        {...buttonProps}
-        type={buttonProps.type ?? 'button'}
-        data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-        className={`${classes} chrome-divided-grid__cell--press`}
-      >
-        {children}
-      </button>
-    );
-  }
-  return <div {...props as HTMLAttributes<HTMLDivElement>} className={classes}>{children}</div>;
 }
 
 /**
@@ -406,7 +362,6 @@ export function DividedInnerChromeBox({
   contentRef,
   className = '',
   framed = true,
-  hostFrame,
   children,
   ...props
 }: Omit<HTMLAttributes<HTMLElement>, 'children'> & {
@@ -425,39 +380,20 @@ export function DividedInnerChromeBox({
    * The internal rails are unaffected — they are the whole point.
    */
   framed?: boolean;
-  /**
-   * The role of the HOST's frame, for a grid that draws no frame of its own and yet has real
-   * rails on its inline edges to tee into — the Controls panel's head, whose section breaks meet
-   * the panel's own outer rails exactly as the panel's break under its fixed head does.
-   *
-   * It is a separate decision from `framed` because the two questions genuinely are separate:
-   * whether the grid DRAWS a boundary, and whether one is THERE. `framed={false}` alone answers
-   * both with no, which is right for a workspace floating inside shell chrome and wrong here —
-   * the rails would stop dead a rail-width short of a frame they visibly run into.
-   *
-   * Naming it also chooses the material: these rails are continuous with the host's chrome rather
-   * than internal to a box, so they are drawn at the host's role instead of the inner one.
-   */
-  hostFrame?: ChromeRole;
 }): ReactElement {
   const entries = flattenGridChildren(children);
   const rows = entries.map((entry) => entry.row);
   const topology = chromeDividedGridTopology(columns.length, scroll);
-  const railRole: ChromeRole = hostFrame ?? 'inner';
-  // A junction is the cap where a rail MEETS a frame. The grid's own frame is one; a host frame it
-  // was told about is another, and the caps land in the same place either way. Only a grid whose
-  // boundary is bare workspace chrome has nothing there to cap, and its boundary atoms would sit on
-  // top of that chrome as strays. Internal crossings, where two of the grid's own rails actually
-  // meet, are the whole point and are kept in every case.
-  const bounded = framed || hostFrame !== undefined;
+  // A junction is the cap where a rail MEETS the box's own frame. An unframed grid has no such
+  // frame — the host's chrome is its boundary — so its boundary caps caps nothing and simply sits
+  // on top of that chrome as a stray atom. Internal crossings, where two of the grid's own rails
+  // actually meet, are the whole point and are kept either way.
   const boundaryNodes = (nodes: readonly ChromeDividedGridNode[]): ChromeDividedGridNode[] => (
-    bounded ? [...nodes] : nodes.filter((node) => node.inlineBoundary === 'internal')
+    framed ? [...nodes] : nodes.filter((node) => node.inlineBoundary === 'internal')
   );
   // The caps where a VERTICAL rail meets the box's top and bottom frame — so only where a vertical
-  // rail reaches that edge. Gated on the grid's OWN frame, not on `bounded`: a host frame is an
-  // inline boundary, the two rails the grid runs between, and a grid told about one has nothing
-  // above or below it to cap — a block edge there is whatever the host stacked next, which may be
-  // no rail at all. A grid whose first or last row spans every column has no rail arriving either.
+  // rail reaches that edge. An unframed grid has no frame for them to meet; a grid whose first or
+  // last row spans every column has no rail arriving there either.
   const blockBoundaryNodes = {
     ...topology,
     topNodes: framed && !rowSpansAllColumns(rows[0]) ? topology.topNodes : [],
@@ -480,7 +416,7 @@ export function DividedInnerChromeBox({
         {index > 0 ? (
           <div className="chrome-divided-grid__row-boundary">
               <ChromeGridRail
-                role={railRole}
+                role="inner"
                 className="chrome-divided-grid__horizontal-rail"
                 data-chrome-grid-inline-start="frame-start"
                 data-chrome-grid-inline-end={topology.horizontalEndBoundary}
@@ -499,7 +435,6 @@ export function DividedInnerChromeBox({
                 <GridJunction
                   key={`${node.line}-${node.sides}`}
                   node={node}
-                  role={railRole}
                   trackCount={topology.trackCount}
                 />
               ))}
@@ -537,13 +472,11 @@ export function DividedInnerChromeBox({
     verticalLines: topology.verticalLines,
     trackCount: topology.trackCount,
     segmented: rows.some(rowSpansAllColumns),
-    railRole,
   };
   return (
     <ChromeDividedGridSegmentContext.Provider value={segments}>
     <Frame
       {...props}
-      data-chrome-grid-host-frame={hostFrame}
       className={`chrome-divided-grid ${className}`.trim()}
       style={{ ...gridStyle, ...props.style }}
     >
@@ -556,7 +489,7 @@ export function DividedInnerChromeBox({
         {rows.some(rowSpansAllColumns) ? null : topology.verticalLines.map((line) => (
           <ChromeGridRail
             key={`vertical-${line}`}
-            role={railRole}
+            role="inner"
             orientation="vertical"
             className="chrome-divided-grid__vertical-rail"
             data-chrome-grid-block-start="frame-start"
@@ -568,7 +501,6 @@ export function DividedInnerChromeBox({
           <GridJunction
             key={`top-${node.line}`}
             node={node}
-            role={railRole}
             trackCount={topology.trackCount}
             blockBoundary="frame-start"
           />
@@ -577,7 +509,6 @@ export function DividedInnerChromeBox({
           <GridJunction
             key={`bottom-${node.line}`}
             node={node}
-            role={railRole}
             trackCount={topology.trackCount}
             blockBoundary="frame-end"
           />

@@ -6051,58 +6051,18 @@ body.loading-bootstrap .app-startup-status {
 }
 
 /* The Controls head: the panel's name and the strip of compartments under it, as ONE divided
-   block (ShellControlsPanel). It reaches the panel's own frame on both sides, so its rails need
-   no bleed of their own — the block's edge IS the boundary they tee into — and the compartments
-   inside it run edge to edge for the same reason. Nothing here places a rail; the block's
-   topology does, from its grid lines. */
+   block (ShellControlsPanel), built like the title bar's invariant cluster — inner-box chrome,
+   one rail on every internal boundary, and each member a compartment of the block. It runs the
+   full width of the panel, so its left and right edges are the panel's OWN side rails: the block
+   draws no frame there, and the rails that reach them simply run under them. Nothing here places
+   a rail; the block's topology does, from its grid lines. */
 :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head {
-  /* The block reaches the frame already, so its rails need no bleed to get there. */
-  --chrome-divided-grid-reach: 0px;
-  /* ...and its frame is INSIDE the block rather than outside it, which is the whole difference
-     between a host frame and the grid's own: a cap sits on the middle of that rail, so it steps
-     INWARD from the block's edge where a framed grid's steps out. One negated token, because the
-     two directions are the same measurement seen from either side of the same rail. */
-  --chrome-divided-grid-boundary-node-offset: calc(-.5 * var(--le-chrome-outer-rail-w, 24px));
+  --shell-controls-head-seat: var(--le-inner-square, 38px);
+  --shell-controls-head-rail-half: calc(var(--le-chrome-inner-rail-w, 7px) / 2);
   display: block;
   /* A pinned head in the panel's column, like every other fixed section: it is not the thing that
      gives way when the body is long. */
   flex: none;
-}
-
-/* The block's own layers have to sort against the panel's FRAME, not travel as one lump either
-   side of it: the compartments run under that frame, and the rails and their caps sit on top of
-   it, because a cap is a meeting WITH the frame and is drawn on the middle of it. So the block
-   raises no layer of its own — the ordinary section z-index the panel gives every child would
-   make it a stacking context and trap the caps under the very rail they terminate against. */
-:is(.level-editor-screen, .skirmish-screen)
-  .le-outer-panel
-  > .le-outer-panel-content
-  > .shell-controls-head {
-  z-index: auto;
-}
-
-/* The right frame rail is the viewport edge and is not drawn there (chrome-rails-offscreen), so
-   the block has nothing to tee into on that side — the same reason the panel's own section break
-   draws only its left cap. */
-:root:has(.app-titlebar.chrome-rails-offscreen)
-  :is(.level-editor-screen, .skirmish-screen)
-  [data-shell-controls-panel]
-  [data-chrome-grid-inline-boundary="frame-end"].chrome-junction {
-  display: none;
-}
-
-/* The head's foot: a boundary, not a row. Its rail is the block's bottom edge and the caps on it
-   are where the strip's verticals end. */
-:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-foot {
-  block-size: 0;
-  min-inline-size: 0;
-}
-
-/* A block whose boundary is its HOST's frame keeps the bleed a framed one has: its rails end ON
-   that frame, so the caps must be able to reach it. Only a block floating inside bare workspace
-   chrome clips (see the rule above it). */
-.chrome-divided-grid[data-chrome-grid-framed="false"][data-chrome-grid-host-frame] {
-  overflow: visible;
 }
 
 /* The name spans the whole block and carries no compartment of its own, so its row contributes no
@@ -6122,6 +6082,34 @@ body.loading-bootstrap .app-startup-status {
   margin-block-end: 0;
 }
 
+/* The strip is one seat tall plus what the rails above and below take back: each is drawn ON its
+   boundary and covers half its width from the row. The same half comes off the seats as padding,
+   so a mark centres in the opening rather than in the cell — the inline halves are declared here
+   for the same reason, matching the tracks ShellControlsHead lays (ADR-0569). */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-strip {
+  block-size: calc(var(--shell-controls-head-seat) + var(--le-chrome-inner-rail-w, 7px));
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-strip > * {
+  padding-block: var(--shell-controls-head-rail-half);
+}
+
+/* A single undivided compartment holds other people's controls rather than being one. It has a
+   rail above it and nothing below, and it keeps the content boundary every other control in the
+   panel sits on. */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-single > .shell-controls-head-section {
+  block-size: auto;
+  padding-block: var(--shell-controls-head-rail-half) 0;
+  padding-inline: var(--le-control-content-inset);
+}
+
+/* The head's foot: a boundary, not a row. Its rail is the block's bottom edge and the caps on it
+   are where the strip's verticals end. */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-foot {
+  block-size: 0;
+  min-inline-size: 0;
+}
+
 /* One compartment of the Controls head's block. It IS the control — the rails on either side are
    already its edges — so it paints no frame, fills its cell, and wears the leaf oak the panel
    gives every trigger. Its native-button reset is the same one .chrome-seat and
@@ -6130,13 +6118,12 @@ body.loading-bootstrap .app-startup-status {
    comment directly above it, and why the reset is split out from the layout at all. */
 :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-section {
   align-items: center;
-  block-size: var(--shell-controls-head-strip-h, 56px);
+  block-size: 100%;
   box-sizing: border-box;
   color: var(--skirmish-muted);
   display: flex;
   justify-content: center;
   min-inline-size: 0;
-  padding: 0;
   position: relative;
 }
 
@@ -6180,12 +6167,6 @@ body.loading-bootstrap .app-startup-status {
 :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head-section:focus-visible {
   outline: 2px solid rgba(101, 184, 255, .72);
   outline-offset: -4px;
-}
-
-/* The rail that closes the name when the head carries no strip. It is the panel's ordinary
-   section break, so it needs only the seat: hard against the name above it. */
-:is(.level-editor-screen, .skirmish-screen) .le-control-divider-host.shell-controls-head-break {
-  margin-block: calc(var(--ds-gutter) * -1) calc(var(--ds-gutter) * -0.5);
 }
 
 /* No scrollbar-gutter here: this HUD is overflow:hidden (never scrolls), so a stable

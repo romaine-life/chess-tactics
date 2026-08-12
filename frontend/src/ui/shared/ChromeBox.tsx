@@ -9,10 +9,12 @@ import {
 // and the Controls panel's head IS a divided block. Every reference on both sides is inside a
 // component body, so neither module touches the other while it is still evaluating.
 import {
-  ChromeDividedGridCell,
+  CHROME_DIVIDED_GRID_RAIL_HALF,
   ChromeDividedGridRow,
   DividedInnerChromeBox,
+  chromeDividedSeatAxis,
 } from './ChromeDividedGrid';
+import { CHROME_LEAF_FILL_SURFACE } from './chromeSurfacePolicy';
 
 export function ChromeSurfaceFill({
   role,
@@ -203,11 +205,15 @@ export type ShellControlsHeadSection = {
  * class, and shell-divider seam marker are invariants supplied here rather than
  * facts each workflow must redeclare.
  *
- * The head — the name and whatever strip sits under it — is ONE divided block, laid here.
- * Its inline edges are the panel's own outer rails, so its rails tee into them exactly as the
- * break under a fixed section does; both are section rails of this panel and neither is a caller's
- * to place. The name spans the whole block, so the strip's verticals begin at that break rather
- * than ruling a line through the title.
+ * The head — the name and whatever strip sits under it — is ONE divided block, laid here, built
+ * exactly like the title bar's invariant cluster (ADR-0569): the inner-box frame is the block's,
+ * every separation is the block's own rail, and each member is a COMPARTMENT rather than a control
+ * standing inside one. The name spans the whole block, so the strip's verticals begin at the rail
+ * under it rather than ruling a line through the title.
+ *
+ * The block is unframed on its inline axis because it reaches the panel's own side rails: those are
+ * its left and right edges, and drawing a second pair a rail-width inside them would put a strip of
+ * marble between two frames.
  */
 export function ShellControlsPanel({
   className = '',
@@ -288,65 +294,82 @@ function ShellControlsHead({
       className={`shell-controls-head-name ${className}`.trim()}
     />
   );
-  // No strip of sections: the name simply closes with the panel's own section rail, the same one
-  // that closes a fixed dock. A single control under the head is a control, not a compartment —
-  // ruling a second line under it would divide a strip with nothing on the other side of it.
-  if (!sections.length) {
-    return (
-      <>
-        {name}
-        <div className="le-control-divider-host shell-controls-break shell-controls-head-break" aria-hidden="true">
-          <ChromeDivider role="outer" />
-        </div>
-        {content}
-      </>
-    );
-  }
+  // One undivided row of ordinary controls is the same block with a single column: the rule under
+  // the name is still the block's own row boundary, so both heads draw the same line. It closes
+  // there rather than at a foot, because a foot rail exists to terminate the verticals BETWEEN
+  // compartments and a single column has none — a second line under one control would divide a
+  // strip with nothing on the other side of it.
+  const members: readonly ShellControlsHeadSection[] = sections.length
+    ? sections
+    : content
+      ? [{ id: 'head-content', content, className: 'shell-controls-head-row' }]
+      : [];
+  if (!members.length) return name;
+  const divided = members.length > 1;
+  // Equal tracks do not give equal compartments: a rail is drawn ON a grid line and covers half its
+  // width from the cell on each side, so a middle compartment pays that twice and an outer one once
+  // — its other edge is the panel's own rail, which takes nothing from this block. The openings are
+  // therefore stated as the share of the strip left over once the rails have had their width, and
+  // the axis adds each cell's half-rails back on top (ADR-0569).
+  const opening = `calc((100% - ${members.length - 1} * var(--le-chrome-inner-rail-w, 7px)) / ${members.length})`;
+  const axis = chromeDividedSeatAxis(members.length, opening, CHROME_DIVIDED_GRID_RAIL_HALF);
   return (
     <DividedInnerChromeBox
       className="shell-controls-head"
-      columns={sections.map(() => 'minmax(0, 1fr)')}
+      columns={axis.tracks}
       framed={false}
-      hostFrame="outer"
     >
       <ChromeDividedGridRow spans="all" className="shell-controls-head-title-row">
         {name}
       </ChromeDividedGridRow>
       <ChromeDividedGridRow
-        className="shell-controls-head-strip"
+        className={divided ? 'shell-controls-head-strip' : 'shell-controls-head-single'}
         role={strip?.role}
         aria-label={strip?.ariaLabel}
       >
-        {sections.map((section) => section.press ? (
-          <ChromeDividedGridCell
-            key={section.id}
-            as="button"
-            {...section.attrs}
-            aria-label={section.press.ariaLabel}
-            title={section.press.title}
-            style={section.style}
-            onClick={section.press.onPress}
-            className={`shell-controls-head-section${section.press.active ? ' active' : ''} ${section.className ?? ''}`.trim()}
-          >
-            {section.content}
-          </ChromeDividedGridCell>
-        ) : (
-          <ChromeDividedGridCell
-            key={section.id}
-            {...section.attrs}
-            style={section.style}
-            className={`shell-controls-head-section ${section.className ?? ''}`.trim()}
-          >
-            {section.content}
-          </ChromeDividedGridCell>
-        ))}
+        {members.map((section, index) => {
+          // A compartment is deliberately NOT a registered chrome unit: the unit is what brings the
+          // frame, and the block has already drawn every edge this thing has. A PRESSABLE one wears
+          // the leaf oak, because a trigger wears the oak wherever it sits (ADR-0433); one that
+          // merely holds other people's controls stays the block's own field, so those controls
+          // read against marble like every other framed control in the panel.
+          //
+          // The inline inset comes from the SAME axis that laid the tracks, not from a positional
+          // CSS rule beside it: the row's last child is the grid's own rail layer, so `:last-child`
+          // is not the last seat, and a rule stated twice is a rule that can drift.
+          const inset = axis.insets[index];
+          const seat = {
+            className: `shell-controls-head-section${section.press?.active ? ' active' : ''} ${section.className ?? ''}`.trim(),
+            'data-chrome-fill-surface': section.press ? CHROME_LEAF_FILL_SURFACE : undefined,
+            style: {
+              paddingInlineStart: inset.start,
+              paddingInlineEnd: inset.end,
+              ...section.style,
+            },
+            ...section.attrs,
+          };
+          return section.press ? (
+            <button
+              key={section.id}
+              type="button"
+              {...seat}
+              aria-label={section.press.ariaLabel}
+              title={section.press.title}
+              onClick={section.press.onPress}
+            >
+              {section.content}
+            </button>
+          ) : (
+            <div key={section.id} {...seat}>{section.content}</div>
+          );
+        })}
       </ChromeDividedGridRow>
       {/* The block's foot. It carries nothing and takes no height; what it is for is the row
           BOUNDARY above it, which is the head's rail against the panel body and the thing that
           closes the strip's verticals. Left off, four rails ended in mid-air at the last
           compartment — the exact failure this module exists to prevent — and the strip read as
           an open-bottomed comb rather than a block of sections. */}
-      <ChromeDividedGridRow spans="all" className="shell-controls-head-foot" />
+      {divided ? <ChromeDividedGridRow spans="all" className="shell-controls-head-foot" /> : null}
     </DividedInnerChromeBox>
   );
 }
