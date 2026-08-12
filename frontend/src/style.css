@@ -24076,26 +24076,46 @@ button.tileset-relationship-cell {
   min-block-size: 40px;
 }
 
-/* The two answers are ONE question, so they share a row and split it evenly — a stacked pair
-   reads as two separate things to do. Neither wears a mark: the mark belongs to the control that
-   asked, and at half a rail's width there is no room for one beside the word anyway. */
-.run-abandon-answers {
-  display: grid;
-  gap: var(--ds-inline-tight);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+/* Armed, the question is ONE box: the stakes and the two answers are cells of it, so the line
+   between Keep Run and Abandon Run is the box's own column line and the line above them is its row
+   boundary — both laid and capped from its topology (ADR-0242). Two framed buttons in a row with a
+   gap is what this kit puts between things that are NOT related; this is one question and its two
+   answers, and the same treatment Start New Run's armed replacement wears. */
+.run-abandon-box {
+  /* The plate a CELL paints when it IS the control. A framed rail button is a 40px box whose
+     9-slice eats a rail's width a side, so about 26px of it is oak; a cell has no frame — the
+     box's rails are its edges — so painting the neighbour's whole box would read heavier than
+     every framed control beside it. Same trade `.run-prep-box` records. */
+  --run-abandon-plate-h: 30px;
+  /* NO padding: a rail has to reach the frame on both sides, and box padding would hold every one
+     of them short of it. The cell that carries a sentence takes the inset instead. */
+  padding: 0;
 }
 
-.run-abandon-answers .app-header-button {
-  min-inline-size: 0;
-  padding-inline: var(--ds-space-1);
-}
-
-/* What the dialog's body said, in the same dimmed ink Start New Run's replacement warning uses —
-   the two confirmations in this game state their stakes in one voice. */
+/* A cell that CARRIES something takes the inset and wears the box's marble — bare marble is what
+   says it cannot be pressed, between a frame and a row of solid wood. The dimmed ink is Start New
+   Run's replacement warning's: the two confirmations state their stakes in one voice. */
 .run-abandon-stakes {
   color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
   font-size: var(--ds-text-xs);
-  margin: 0;
+  padding: var(--ds-inset);
+}
+
+/* A cell that IS something takes no inset at all: the verb fills the whole area between the rails
+   and the wood reaches them. */
+.run-abandon-verbs {
+  min-block-size: var(--run-abandon-plate-h);
+  padding: 0;
+}
+
+/* section-box-member-verb owns the frameless reset; this sizes the plate and gives the label the
+   display treatment every other verb cell in the app wears. */
+.run-abandon-verb {
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xs);
+  min-block-size: var(--run-abandon-plate-h);
+  padding: 0 var(--ds-inset);
+  text-transform: uppercase;
 }
 
 .run-expunctio-workspace {

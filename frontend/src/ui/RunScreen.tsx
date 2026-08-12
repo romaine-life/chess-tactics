@@ -300,12 +300,18 @@ function RunTitleBarStatus({ run, path, search, view, battlefieldMounted }: {
 /**
  * Abandon Run — the control and its confirmation in ONE seat, with nothing opened over the screen.
  *
- * Pressing it ARMS the question: the seat states what abandoning costs and the verb SPLITS into
- * Keep Run / Abandon Run, which is how Start New Run already confirms replacing an active Run
- * (ADR-0571). A dialog asked that question somewhere other than where it was raised — it dimmed
- * the Run under discussion, drew its two answers in a chrome no other control on the screen wears,
- * and spent a heading restating the button that had just been pressed. Nothing about the stakes
- * needed a layer of its own; they are one sentence, and the seat has room for it.
+ * Pressing it ARMS the question, and the armed question is ONE BOX: the stakes and the two answers
+ * are cells of it, the line between Keep Run and Abandon Run is the box's own column line, and the
+ * line above them is its row boundary — laid and capped from the box's topology, so nothing here
+ * draws a rule and no page shows through between the parts (ADR-0242/ADR-0571). Two framed buttons
+ * in a row with a gap is what this kit puts between things that are NOT related; these are one
+ * question and its two answers.
+ *
+ * That is the same shape Start New Run uses to confirm replacing an active Run. A dialog asked the
+ * question somewhere other than where it was raised — it dimmed the Run under discussion, drew its
+ * two answers in a chrome no other control on the screen wears, and spent a heading restating the
+ * button that had just been pressed. Nothing about the stakes needed a layer of its own; they are
+ * one sentence, and the seat has room for it.
  *
  * The dialog's safety is kept rather than dropped: arming moves focus to the safe answer and
  * Escape keeps the Run.
@@ -321,24 +327,28 @@ export function RunAbandonControl({
   fillSurface = CHROME_LEAF_FILL_SURFACE,
 }: {
   disabled?: boolean;
-  /** The seat's place in its own rail, so the answers' oak is cut from the plank run around them. */
+  /** The seat's place in its own rail, so the resting verb's oak is cut from the plank run around it. */
   surfaceIndex?: number;
   /**
-   * The material is the SEAT's, not the control's (ADR-0433): the Run's own rails have adopted
-   * the oak, and the Battle HUD's Controls panel has not, so it passes `null` and its Abandon
-   * keeps the field every button beside it wears. The behaviour is what is shared here.
+   * The RESTING verb's material is the SEAT's, not the control's (ADR-0433): the Run's own rails
+   * have adopted the oak, and the Battle HUD's Controls panel has not, so it passes `null` and its
+   * Abandon keeps the field every button beside it wears. Armed, the question is a box of its own,
+   * and a box establishes its own containment level — marble field, oak on every cell that is a
+   * control — so the seat has no say in it.
    */
   fillSurface?: string | null;
 }): ReactElement {
-  const fill = fillSurface ?? undefined;
   const abandon = useActiveRun((state) => state.abandon);
   const [armed, setArmed] = useState(false);
   const [abandoning, setAbandoning] = useState(false);
-  const keepRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!armed) return;
-    keepRef.current?.focus();
+    // Mirror the danger-dialog convention this replaces: focus lands on the safe choice, Escape
+    // keeps the Run. Found by its test id rather than a ref, because an answer is DECLARED to
+    // ChromeVerbRow rather than rendered here — the whole point of that primitive, and not worth
+    // threading a ref through for one focus call.
+    document.querySelector<HTMLElement>('[data-testid="run-abandon-keep"]')?.focus();
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') { event.preventDefault(); setArmed(false); }
     };
@@ -364,7 +374,7 @@ export function RunAbandonControl({
     return (
       <div className="run-abandon-control">
         <ChromeButton unit="inner-text-button"
-          data-chrome-fill-surface={fill}
+          data-chrome-fill-surface={fillSurface ?? undefined}
           className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
           style={{ ['--chrome-leaf-surface-index' as string]: surfaceIndex } as CSSProperties}
           data-testid="abandon-run"
@@ -379,39 +389,48 @@ export function RunAbandonControl({
       </div>
     );
   }
+  // The safe answer leads, and neither wears a mark: these are answers to a question, and the mark
+  // belongs to the control that ASKED it. Declared as data, so the row seats each one in a
+  // compartment the box's own column line divides and nothing here can author the space between
+  // them — the reason ChromeVerbRow takes verbs rather than markup.
+  const answers: readonly ChromeVerb[] = [
+    {
+      id: 'keep',
+      label: 'Keep Run',
+      testId: 'run-abandon-keep',
+      disabled: abandoning,
+      onPress: () => setArmed(false),
+    },
+    {
+      id: 'abandon',
+      label: abandoning ? 'Abandoning…' : 'Abandon Run',
+      testId: 'run-abandon-confirm',
+      disabled: disabled || abandoning,
+      onPress: () => { void confirmAbandon(); },
+    },
+  ];
   return (
-    <div className="run-abandon-control" data-testid="run-abandon-armed">
-      {/* What the dialog's body said, in the seat that raised the question. The Run names itself
-          all over this screen already, so the sentence spends its words on what is lost. */}
-      <p className="run-abandon-stakes" role="note">
+    <DividedInnerChromeBox
+      /* Not the resting seat's wrapper class: that one owns the layout and measure of a FRAMED
+         button standing in a rail, and this element is the grid the primitive lays its own rails
+         on. */
+      className="run-abandon-box"
+      /* The answers decide the box's tracks, so the count is never restated here. */
+      columns={verbColumns(answers)}
+      fillRole={CHROME_STRUCTURAL_FILL_ROLE}
+      data-testid="run-abandon-armed"
+      role="group"
+      aria-label="Abandon this Run?"
+    >
+      {/* Bare marble — nothing in this cell can be pressed, and the oak is what tells you a surface
+          takes a click (ADR-0433). It is what the dialog's body said, in the seat that raised the
+          question; the Run names itself all over this screen already, so the sentence spends its
+          words on what is lost. */}
+      <ChromeDividedGridRow spans="all" className="run-abandon-stakes" role="note">
         Your army, gold, lipsana and Battle progress are permanently removed. This cannot be undone.
-      </p>
-      {/* The verb SPLIT into its two answers — the safe one first, wearing no mark: these are
-          answers to a question, and the mark belongs to the control that asked it. */}
-      <div className="run-abandon-answers">
-        <ChromeButton unit="inner-text-button"
-          ref={keepRef}
-          data-chrome-fill-surface={fill}
-          className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-          style={{ ['--chrome-leaf-surface-index' as string]: surfaceIndex } as CSSProperties}
-          data-testid="run-abandon-keep"
-          disabled={abandoning}
-          onClick={() => setArmed(false)}
-        >
-          Keep Run
-        </ChromeButton>
-        <ChromeButton unit="inner-text-button"
-          data-chrome-fill-surface={fill}
-          className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
-          style={{ ['--chrome-leaf-surface-index' as string]: surfaceIndex + 1 } as CSSProperties}
-          data-testid="run-abandon-confirm"
-          disabled={disabled || abandoning}
-          onClick={() => { void confirmAbandon(); }}
-        >
-          {abandoning ? 'Abandoning…' : 'Abandon Run'}
-        </ChromeButton>
-      </div>
-    </div>
+      </ChromeDividedGridRow>
+      <ChromeVerbRow verbs={answers} className="run-abandon-verbs" cellClassName="run-abandon-verb" />
+    </DividedInnerChromeBox>
   );
 }
 

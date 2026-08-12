@@ -278,12 +278,14 @@ describe('Run chrome hierarchy', () => {
   it('confirms Abandon Run in its own seat instead of a popup', () => {
     expect(runScreen).not.toContain('useConfirm');
     expect(runScreen).not.toContain("title: 'Abandon this Run?'");
-    expect(runScreen).toContain('data-testid="run-abandon-keep"');
-    expect(runScreen).toContain('data-testid="run-abandon-confirm"');
+    expect(runScreen).toContain("testId: 'run-abandon-keep',");
+    expect(runScreen).toContain("testId: 'run-abandon-confirm',");
     // The safe answer leads, as it did in the dialog it replaces.
-    expect(runScreen).toMatch(/data-testid="run-abandon-keep"[\s\S]{0,700}?data-testid="run-abandon-confirm"/);
-    // ...and the dialog's two safeties are kept: focus lands on it, Escape keeps the Run.
-    expect(runScreen).toContain('keepRef.current?.focus();');
+    expect(runScreen).toMatch(/testId: 'run-abandon-keep',[\s\S]{0,400}?testId: 'run-abandon-confirm',/);
+    // ...and the dialog's two safeties are kept: focus lands on it, Escape keeps the Run. Found by
+    // its test id rather than a ref, because an answer is DECLARED to ChromeVerbRow rather than
+    // rendered here — the point of that primitive, and not worth a ref for one focus call.
+    expect(runScreen).toMatch(/document\.querySelector<HTMLElement>\('\[data-testid="run-abandon-keep"\]'\)\?\.focus\(\);/);
     expect(runScreen).toMatch(/event\.key === 'Escape'[\s\S]{0,90}?setArmed\(false\);/);
     // ONE control in three seats — the Sectio rail, the Deployment panel, and the Battle HUD,
     // which is handed the CONTROL rather than a callback that would open something over the
@@ -291,12 +293,35 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen.match(/<RunAbandonControl\b/g) ?? []).toHaveLength(3);
     expect(skirmishHud).not.toContain('data-testid="abandon-run"');
     expect(skirmishHud).toContain('{abandonRun}');
-    // The material stays the SEAT's: the Run's rails wear the oak, the HUD's Controls panel does
-    // not, so the HUD's copy names no fill and keeps the field its neighbours wear (ADR-0433).
+    // The RESTING verb's material stays the SEAT's: the Run's rails wear the oak, the HUD's
+    // Controls panel does not, so the HUD's copy names no fill and keeps the field its neighbours
+    // wear (ADR-0433). Armed, the question is a box and the box settles its own materials.
     expect(runScreen).toContain('<RunAbandonControl fillSurface={null} />');
-    // The two answers are one question, so they share a row rather than stacking.
-    expect(styleCss).toMatch(/\.run-abandon-answers \{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
-    expect(styleCss).toContain('.run-abandon-stakes');
+  });
+
+  // The armed question is ONE box. Two framed buttons in a row with a gap is what this kit puts
+  // between things that are NOT related; the line between Keep Run and Abandon Run is the box's
+  // own column line and the line above them is its row boundary, both laid and capped from the
+  // box's topology (ADR-0242/0571/0578).
+  it('draws the armed answers as cells of one box rather than framed buttons in a row', () => {
+    expect(runScreen).toMatch(
+      /<DividedInnerChromeBox\b[\s\S]{0,400}?className="run-abandon-box"[\s\S]{0,400}?columns=\{verbColumns\(answers\)\}[\s\S]{0,200}?fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/,
+    );
+    // The stakes are a CELL of the same box, spanning it — bare marble, so nothing about it reads
+    // as pressable between a frame and a row of solid wood.
+    expect(runScreen).toMatch(/<ChromeDividedGridRow spans="all" className="run-abandon-stakes" role="note"/);
+    // The answers are ChromeVerbRow's cells, not a private copy of one (ADR-0059).
+    expect(runScreen).toContain('<ChromeVerbRow verbs={answers} className="run-abandon-verbs" cellClassName="run-abandon-verb" />');
+    expect(runScreen).toMatch(/const answers: readonly ChromeVerb\[\] = \[/);
+    expect(runScreen).not.toContain('run-abandon-answers');
+    expect(runScreen).not.toMatch(/<ChromeButton[^>]*data-testid="run-abandon-confirm"/);
+    // The box takes no padding, or every rail would stop short of the frame it has to reach; the
+    // cell that carries a sentence takes the inset instead, and the cells that ARE controls take
+    // none at all.
+    expect(styleCss).toMatch(/\.run-abandon-box \{[\s\S]*?padding: 0;/);
+    expect(styleCss).toMatch(/\.run-abandon-stakes \{[\s\S]*?padding: var\(--ds-inset\);/);
+    expect(styleCss).toMatch(/\.run-abandon-verbs \{[\s\S]*?padding: 0;/);
+    expect(styleCss).not.toContain('.run-abandon-answers');
   });
 
   it('uses the gold transaction cue and transfers adlected cards into the Chartulary', () => {
