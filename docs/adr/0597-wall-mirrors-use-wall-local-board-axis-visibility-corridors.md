@@ -4,7 +4,7 @@ date: 2026-07-11
 deciders: Nelson, Codex
 ---
 
-# ADR-0079: Wall mirrors use wall-local board-axis visibility corridors
+# ADR-0597: Wall mirrors use wall-local board-axis visibility corridors
 
 > **Superseded by [ADR-0080](0080-wall-mirrors-reflect-along-the-board-grid-wall-normal.md)
 > (2026-07-11).** Corridor admission, continuous movement, half-open boundary
@@ -177,7 +177,7 @@ eligible.
 ## More Information
 
 - Superseded decision:
-  [ADR-0078](0078-wall-mirrors-reflect-pieces-horizontally-in-screen-space.md)
+  [ADR-0596](0596-wall-mirrors-reflect-pieces-horizontally-in-screen-space.md)
 - Original live-mirror decision:
   [ADR-0077](0077-wall-mirrors-are-live-piece-reflective-surfaces.md)
 - Derived current-state contract: [Board render contract](../board-render-contract.md)

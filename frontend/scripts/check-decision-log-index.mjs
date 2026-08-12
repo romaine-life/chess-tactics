@@ -15,8 +15,11 @@
 // ADRs. Separately, a terminology pass rewrote ten "relic" ADR links to "lipsanon" without
 // renaming the files, so ten rows pointed at nothing while their ADRs sat there rowless.
 //
-// Keyed by FILENAME, not by number: two ADRs may legitimately share a number after a collision
-// (0063, 0064, 0077-0087, 0516 all do), and the filename is the only unambiguous identity.
+// Keyed by FILENAME, not by number, because a number is not reliably unique yet: collisions from
+// that same stale-`main` cause are still being drained. This check is deliberately indifferent to
+// that — a row's job is to index a FILE. Whether the number itself identifies one decision is
+// `check-adr-numbers.mjs`, which holds the remaining collisions as a shrinking worklist; sharing a
+// number is no longer treated as legitimate, only as debt that has not been paid off.
 //
 // Deliberately NOT checked: numeric ordering. The 0050-0064 stretch has been out of order since
 // long before this guard, and reordering accepted rows is a separate decision.

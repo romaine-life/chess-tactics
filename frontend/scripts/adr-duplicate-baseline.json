@@ -1,0 +1,23 @@
+{
+  "comment": "Collisions that already existed when check-adr-numbers.mjs was added. A WORKLIST, not an allowance: renumbering one removes it from here, and the guard fails if a number left on this list is no longer shared. Each entry needs its citations attributed to the right decision before its number can move -- see the guard header.",
+  "duplicates": [
+    "0063",
+    "0064",
+    "0077",
+    "0080",
+    "0081",
+    "0082",
+    "0083",
+    "0084",
+    "0085",
+    "0086",
+    "0087",
+    "0516",
+    "0556",
+    "0557",
+    "0558",
+    "0570",
+    "0586",
+    "0589"
+  ]
+}
