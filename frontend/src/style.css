@@ -5713,6 +5713,28 @@ body.loading-bootstrap .app-startup-status {
   line-height: 1;
 }
 
+/* One command's mark, between its key cap and its label. The seat is a fixed SQUARE
+   rather than a share of the button, because the ten marks sit in a 3x5 card where every
+   neighbour is a size reference — a seat that tracked each button's own height would
+   redraw the set at three sizes down the card. The whole 64x64 canvas is drawn and the
+   asset's own transparent margin decides the mark's size inside it (ADR-0026), so the
+   seat carries no per-icon nudge. */
+.skirmish-shortcut-icon {
+  align-items: center;
+  block-size: var(--skirmish-shortcut-icon-size, 26px);
+  display: inline-flex;
+  flex: none;
+  inline-size: var(--skirmish-shortcut-icon-size, 26px);
+  justify-content: center;
+}
+
+.skirmish-shortcut-icon img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: contain;
+}
+
 .skirmish-grid-label {
   font-size: var(--ds-text-xs);
   letter-spacing: .01em;
@@ -22808,6 +22830,108 @@ button.tileset-relationship-cell {
 .menu-icon-review-missing {
   color: var(--skirmish-muted);
   margin: 0;
+}
+
+/* Studio > Battle Command Card Marks. Same rule as the mark review above: layout only,
+   because the thing being judged is the card the Controls tab paints and a review that
+   restyles it proves nothing about it. The card keeps the rail's own 245px measure so its
+   buttons are the size they will be in a match, not the size this wider panel allows. */
+.command-card-review-screen {
+  block-size: 100%;
+  box-sizing: border-box;
+  grid-template-columns: minmax(0, 1fr);
+  overflow: auto;
+  padding: var(--ds-inset);
+}
+
+.command-card-review-panel {
+  grid-column: 1;
+  grid-row: 2;
+  inline-size: 100%;
+  margin-inline: auto;
+  max-inline-size: 1180px;
+  overflow: auto;
+}
+
+.command-card-review-panel > .le-outer-panel-content {
+  display: grid;
+  gap: var(--ds-inline);
+}
+
+.command-card-review-body {
+  display: grid;
+  gap: var(--ds-block);
+}
+
+.command-card-review-cards {
+  align-items: start;
+  display: flex;
+  gap: var(--ds-inline);
+  /* One row, always: the installed card and the composed one exist to be read against
+     each other, and a wrapped pair cannot be. */
+  overflow-x: auto;
+}
+
+.command-card-review-column {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  justify-items: start;
+}
+
+.command-card-review-column > h2,
+.command-card-review-column > p {
+  margin: 0;
+}
+
+.command-card-review-column > p {
+  color: var(--skirmish-muted);
+}
+
+/* The match rail's own width, so the card's buttons are the width they will really be. */
+.command-card-review-card {
+  inline-size: 245px;
+}
+
+.command-card-review-install {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  justify-items: start;
+}
+
+.command-card-review-install p {
+  color: var(--skirmish-muted);
+  margin: 0;
+}
+
+.command-card-review-picks {
+  display: grid;
+  gap: var(--ds-inline);
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.command-card-review-pick {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.command-card-review-pick > h3 {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline-tight);
+  margin: 0;
+}
+
+.command-card-review-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-inline-tight);
+}
+
+/* A candidate is judged in the control it will live in, so an option IS a command-card
+   key — it wears `.skirmish-grid-key` rather than restating its metrics, and the seat it
+   draws is therefore the match seat with no size of its own to drift. */
+.command-card-review-option {
+  inline-size: 5.2em;
 }
 
 /* Studio > Action Marks: each catalog card carries the candidate in the SAME button the

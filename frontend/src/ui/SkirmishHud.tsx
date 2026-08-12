@@ -28,6 +28,7 @@ import { InnerChromeBox, ShellControlsPanel } from './shared/ChromeBox';
 import { useAuthSession } from '../net/authSession';
 import { AdminControls } from './AdminControls';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
+import { SkirmishShortcutIcon, type SkirmishShortcutIconVariant } from './shared/SkirmishShortcutIcon';
 import { CHROME_LEAF_FILL_SURFACE, leafSurfacePhase } from './shared/chromeSurfacePolicy';
 import { StrategikonTitleNavigation } from './StrategikonTitleNavigation';
 import { RunBattleUndoButton } from './RunBattleUndoButton';
@@ -73,11 +74,15 @@ const HUD_TABS: { id: HudTab; label: string }[] = [
 
 type OverlayFlag = 'showEnemyAttacks' | 'showEnemyMoves' | 'showPlayerAttacks' | 'showPlayerMoves' | 'showPromotionZones' | 'showGrid';
 
+/** Every command wears its own mark, so `icon` is required rather than optional: a new
+ *  binding cannot be added without deciding what it looks like on the card. */
+type GridActionBase = { label: string; hint: string; icon: SkirmishShortcutIconVariant };
+
 type GridAction =
-  | { kind: 'toggle'; flag: OverlayFlag; label: string; hint: string }
-  | { kind: 'zoom'; dir: 1 | -1; label: string; hint: string }
-  | { kind: 'deselect'; label: string; hint: string }
-  | { kind: 'clear-overlays'; label: string; hint: string };
+  | (GridActionBase & { kind: 'toggle'; flag: OverlayFlag })
+  | (GridActionBase & { kind: 'zoom'; dir: 1 | -1 })
+  | (GridActionBase & { kind: 'deselect' })
+  | (GridActionBase & { kind: 'clear-overlays' });
 
 const SHORTCUT_KEY_ROWS: string[][] = [
   ['q', 'w', 'e', 'r', 't'],
@@ -86,16 +91,16 @@ const SHORTCUT_KEY_ROWS: string[][] = [
 ];
 
 export const SHORTCUT_BINDINGS: Record<string, GridAction> = {
-  q: { kind: 'toggle', flag: 'showEnemyAttacks', label: 'Opp. attacks', hint: 'Show all opponent attack squares (danger zone)' },
-  w: { kind: 'toggle', flag: 'showEnemyMoves', label: 'Opp. moves', hint: 'Show all opponent legal-move squares' },
-  e: { kind: 'toggle', flag: 'showGrid', label: 'Grid', hint: 'Show the board grid overlay' },
-  r: { kind: 'deselect', label: 'Deselect all', hint: 'Clear the selected and focused units' },
-  t: { kind: 'clear-overlays', label: 'Clear all', hint: 'Turn off all board overlays' },
-  a: { kind: 'toggle', flag: 'showPlayerAttacks', label: 'Your attacks', hint: 'Show all friendly attack squares' },
-  s: { kind: 'toggle', flag: 'showPlayerMoves', label: 'Your moves', hint: 'Show all friendly legal-move squares' },
-  d: { kind: 'toggle', flag: 'showPromotionZones', label: 'Promotion zones', hint: 'View pawn promotion zones' },
-  z: { kind: 'zoom', dir: 1, label: 'Zoom in', hint: 'Zoom the board in' },
-  x: { kind: 'zoom', dir: -1, label: 'Zoom out', hint: 'Zoom the board out' },
+  q: { kind: 'toggle', flag: 'showEnemyAttacks', icon: 'enemy-attacks', label: 'Opp. attacks', hint: 'Show all opponent attack squares (danger zone)' },
+  w: { kind: 'toggle', flag: 'showEnemyMoves', icon: 'enemy-moves', label: 'Opp. moves', hint: 'Show all opponent legal-move squares' },
+  e: { kind: 'toggle', flag: 'showGrid', icon: 'grid', label: 'Grid', hint: 'Show the board grid overlay' },
+  r: { kind: 'deselect', icon: 'deselect', label: 'Deselect all', hint: 'Clear the selected and focused units' },
+  t: { kind: 'clear-overlays', icon: 'clear-overlays', label: 'Clear all', hint: 'Turn off all board overlays' },
+  a: { kind: 'toggle', flag: 'showPlayerAttacks', icon: 'player-attacks', label: 'Your attacks', hint: 'Show all friendly attack squares' },
+  s: { kind: 'toggle', flag: 'showPlayerMoves', icon: 'player-moves', label: 'Your moves', hint: 'Show all friendly legal-move squares' },
+  d: { kind: 'toggle', flag: 'showPromotionZones', icon: 'promotion-zones', label: 'Promotion zones', hint: 'View pawn promotion zones' },
+  z: { kind: 'zoom', dir: 1, icon: 'zoom-in', label: 'Zoom in', hint: 'Zoom the board in' },
+  x: { kind: 'zoom', dir: -1, icon: 'zoom-out', label: 'Zoom out', hint: 'Zoom the board out' },
 };
 
 const ZOOM_STEP = 0.1;
@@ -641,6 +646,7 @@ export function SkirmishHud({
                       onClick={() => { runSkirmishShortcut(key, false, skirmishViewStore, skirmishStore); }}
                     >
                       <kbd className="skirmish-grid-cap">{key.toUpperCase()}</kbd>
+                      <SkirmishShortcutIcon variant={action.icon} />
                       <span className="skirmish-grid-label">{action.label}</span>
                     </ChromeButton>
                   );
