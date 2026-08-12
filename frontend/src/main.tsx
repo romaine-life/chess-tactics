@@ -23,7 +23,7 @@ import { applyGroundCoverCatalog, applyWallArtCatalog, applyWallDecorCatalog, as
 import { installLoadingResourceObserver, loadingError, loadingMark, loadingMeasure } from './diagnostics/loadingTimeline';
 import { composeInstalledChromeCss } from './ui/useInstalledChromeCss';
 import { decodeShellChromeArt } from './ui/shell/shellChromeArt';
-import { startAuthSession } from './net/authSession';
+import { startAuthSession, watchAuthSession } from './net/authSession';
 import { initBoardGridStyle } from './settings/boardGridStyle';
 import { initPlayerPalette } from './settings/playerPalette';
 
@@ -32,6 +32,10 @@ loadingMark('app', 'entry-module');
 // Authentication is application state, not screen state. Start the sole client
 // session owner once; every account-gated consumer observes or awaits this owner.
 void startAuthSession();
+// A settled identity is not a permanent one. The owner keeps re-reading for as long as the app is
+// open, so an expired session shows as expired instead of being presented as live until some
+// account-gated call happens to fail. Never unwatched: it lives as long as the application does.
+watchAuthSession();
 // The board grid is drawn on battlefields the player reaches without passing through Settings, so
 // the chosen style is published for the whole session rather than by the Settings screen.
 initBoardGridStyle();
