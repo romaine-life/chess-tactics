@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:1b493ee603b8f5e3622dbe750f65d753c8027cdbc3c6d1b20f55337aeb99ed2a"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:626251c4b44af348ed5cf279f6526837e274e54a5e1c513ce1f80fb2e539f5fc"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Observing captures cannot create an editor document (ADR-0585)"
-  prNumber: "938"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/938"
-  commit: "56da0cf5"
+  prTitle: "Stop the no-committed-media guard test flaking under a full check"
+  prNumber: "940"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/940"
+  commit: "9cf9f8a9"
 
 name: chess-tactics
 namespace: chess-tactics
