@@ -1,4 +1,4 @@
-import { useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { requiredDrawableRole } from '@chess-tactics/board-render';
 import { goSignIn, updateDisplayName, type AuthUser } from '../../net/auth';
 import { reportAuthSessionFailure, updateAuthSessionUser, useAuthSession } from '../../net/authSession';
@@ -7,6 +7,7 @@ import { TITLE_BAR_CLUSTER_LEAF_PHASE, TitleBarIconButtonPrimitive } from '../sh
 import { AccountMenu } from './AccountMenu';
 import { ChromeDividedGridRow, DividedInnerChromeBox, chromeDividedSeatAxis } from './ChromeDividedGrid';
 import { installedUiMedia } from '../installedUiMedia';
+import { subscribeWatcherCount } from '../../net/runObservation';
 
 // The shared trailing-edge "settings + user" cluster for the standard app title
 // bar (ADR-0023/0036): an icon-only Settings gear next to the account control —
@@ -46,16 +47,22 @@ function settingsHref(): string {
   return `/settings?returnTo=${encodeURIComponent(pathname + search)}`;
 }
 
-// Dev-only signed-in stub (import.meta.env.DEV, stripped from prod) so the account
-// chrome can be previewed/screenshotted on any screen without a backend: ?demo=1
-// stubs this user, ?menu=open renders the account menu open, ?edit=open opens the
-// rename field. In demo mode the rename is local-only (it never hits the backend).
-const DEMO_USER: AuthUser = {
-  signed_in: true,
-  name: 'Nelson',
-  email: 'nelson@romaine.life',
-  avatar_url: 'https://www.gravatar.com/avatar/6b1b9282bc036370f9a6998fe9296233?d=retro&s=80&f=y',
-};
+// Dev-only signed-in stub so the account chrome can be previewed/screenshotted on any screen
+// without a backend: ?demo=1 stubs this user, ?menu=open renders the account menu open,
+// ?edit=open opens the rename field. In demo mode the rename is local-only.
+//
+// The TERNARY is what keeps this out of production, and it is not decoration. Gating only the
+// READS leaves the object itself referenced from useState, where nothing can eliminate it -- the
+// owner's real address and gravatar shipped inside the production bundle that way. Written as a
+// dead branch, the constant folds to null and the literal is dropped.
+const DEMO_USER: AuthUser | null = import.meta.env.DEV
+  ? {
+      signed_in: true,
+      name: 'Nelson',
+      email: 'nelson@romaine.life',
+      avatar_url: 'https://www.gravatar.com/avatar/6b1b9282bc036370f9a6998fe9296233?d=retro&s=80&f=y',
+    }
+  : null;
 
 interface HeaderAccountClusterProps {
   /** Where to return after sign-in (defaults to the current path+query). */
@@ -73,9 +80,19 @@ export function HeaderAccountCluster({
   const demo = import.meta.env.DEV && params.get('demo') === '1';
   const menuOpen = import.meta.env.DEV && params.get('menu') === 'open';
   const editOpen = import.meta.env.DEV && params.get('edit') === 'open';
+  // Observers ride the ACCOUNT seat rather than a fourth compartment: the cluster's seats are
+  // permanent by design (the music seat stays dimmed with no soundtrack rather than vanishing),
+  // so a seat for "nobody is watching" would spend bar width on nothing almost always. Being
+  // watched is a property of the account, and the account already has a seat.
+  //
+  // The player is told. This is a live count from their own stream, not something derived from a
+  // poll, so the seat lights the moment someone opens an observation and goes dark when the last
+  // one closes it.
+  const [watchers, setWatchers] = useState(0);
+  useEffect(() => subscribeWatcherCount(setWatchers), []);
 
   const sharedAuth = useAuthSession((session) => session.status);
-  const [demoUser, setDemoUser] = useState<AuthUser>(DEMO_USER);
+  const [demoUser, setDemoUser] = useState<AuthUser | null>(DEMO_USER);
   const me = demo ? demoUser : sharedAuth?.user ?? null;
   const authResolved = demo || sharedAuth?.reachable === true;
 
@@ -85,7 +102,7 @@ export function HeaderAccountCluster({
 
   const renameAccount = async (next: string): Promise<void> => {
     if (demo) {
-      setDemoUser((prev) => ({ ...prev, name: next || prev.email || 'Player' }));
+      setDemoUser((prev) => (prev ? { ...prev, name: next || prev.email || 'Player' } : prev));
       return;
     }
     try {
@@ -139,6 +156,7 @@ export function HeaderAccountCluster({
         email={accountEmail}
         avatarUrl={me!.avatar_url ?? null}
         surfacePhase={TITLE_BAR_CLUSTER_LEAF_PHASE.account}
+        watcherCount={watchers}
         onRename={renameAccount}
         onSignOut={signOut}
         // Only an admin can publish, so only an admin is ever asked to re-authenticate for it.

@@ -32,6 +32,8 @@ interface AccountMenuProps {
   onReauthenticate?: () => void;
   /** This seat's place in the trailing cluster, for the leaf wood's phase (ADR-0433). */
   surfacePhase: number;
+  /** How many people are observing this account's run right now; 0 shows nothing. */
+  watcherCount?: number;
   /** Render the menu open on mount (screenshot / demo harness only). */
   defaultOpen?: boolean;
   /** Render the name field in edit mode on mount (screenshot / demo harness only). */
@@ -47,6 +49,7 @@ export function AccountMenu({
   email,
   avatarUrl,
   surfacePhase,
+  watcherCount = 0,
   onRename,
   onSignOut,
   needsReauthentication,
@@ -54,6 +57,7 @@ export function AccountMenu({
   defaultOpen,
   defaultEditing,
 }: AccountMenuProps): ReactElement {
+  const watched = watcherCount > 0;
   const [open, setOpen] = useState(Boolean(defaultOpen));
   const [editing, setEditing] = useState(Boolean(defaultEditing));
   const [draft, setDraft] = useState(name);
@@ -106,10 +110,21 @@ export function AccountMenu({
         surfacePhase={surfacePhase}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`${name} — account menu`}
+        aria-label={watched ? `${name} — account menu, ${watcherCount} watching` : `${name} — account menu`}
         onClick={() => setOpen((v) => !v)}
       >
         {avatar('account-avatar-img')}
+        {/* Rides the avatar's own opening rather than taking a compartment: .cluster-icon-button
+            is already the positioned ancestor, so this costs the cluster's divided grid no track
+            and the title-bar geometry gate sees the same seat count either way. */}
+        {watched ? (
+          <img
+            className="account-watched-mark"
+            src={installedUiMedia('ui-kit-icons-players-png')}
+            alt=""
+            aria-hidden="true"
+          />
+        ) : null}
       </TitleBarButtonPrimitive>
 
       {open && (
@@ -154,6 +169,12 @@ export function AccountMenu({
               </button>
             )}
           </div>
+          {watched ? (
+            <p className="account-menu-watched" role="status">
+              <img className="account-menu-glyph-sm" src={installedUiMedia('ui-kit-icons-players-png')} alt="" aria-hidden="true" />
+              <span>{watcherCount === 1 ? '1 watching' : `${watcherCount} watching`}</span>
+            </p>
+          ) : null}
           <button
             type="button"
             className="account-menu-exit"

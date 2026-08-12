@@ -6377,6 +6377,19 @@ const REQUIRED_SCHEMA_REPAIR_MIGRATIONS = new Map([
   ['active_runs', [44, 79]],
 ]);
 
+// How many Postgres connections one backend may hold.
+//
+// The deployed pod serves everybody and gets the full pool. A LOCAL dev backend serves exactly
+// one person, and there is no dev database — every `npm run dev` in every worktree is a client of
+// production Postgres. Twelve worktrees at the old flat 8 asked for 96 connections against a
+// server that allows 50, so a page load could not get a connection for its media bytes and the
+// live site answered 503 on blob reads while its API stayed green.
+//
+// KUBERNETES_SERVICE_HOST is set by the cluster and by nothing else, so it distinguishes the pod
+// from a laptop without a flag anyone has to remember to pass.
+const IN_CLUSTER = Boolean(process.env.KUBERNETES_SERVICE_HOST);
+const POOL_MAX = Number(process.env.PG_POOL_MAX) > 0 ? Number(process.env.PG_POOL_MAX) : (IN_CLUSTER ? 8 : 2);
+
 function buildPool() {
   if (databaseUrl) {
     // Azure managed Postgres requires TLS. Prod connects through the POSTGRES_HOST
@@ -6387,7 +6400,7 @@ function buildPool() {
     return new Pool({
       connectionString: databaseUrl,
       ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
-      max: 8,
+      max: POOL_MAX,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
     });
@@ -6411,7 +6424,7 @@ function buildPool() {
       // sslmode=require equivalent: encrypt in transit. The server is reachable
       // only through the Azure-internal firewall rule, never the public internet.
       ssl: { rejectUnauthorized: false },
-      max: 8,
+      max: POOL_MAX,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
       // Recycle connections before the AAD token TTL so reconnects fetch a fresh
@@ -23875,6 +23888,185 @@ async function resolveRunOwner(req, res) {
   return null;
 }
 
+
+// --- Run observation -------------------------------------------------------
+// Watching someone play is two live sets, both in process alongside the lobby relay above and
+// for the same reason: the whole thing is per-connection state that dies with the connection.
+//
+// Observation is DEMAND-DRIVEN. Nothing is published, snapshotted, or streamed because a Run
+// exists; it starts when a watcher arrives and stops when the last one leaves. That is why the
+// player pays nothing for a feature nobody is using, and why a Run that ends mid-watch simply
+// stops producing frames rather than needing to be torn down.
+//
+// The watched player is TOLD. Their own stream carries the count, so "someone is watching" is
+// not something the app knows and withholds.
+const runObservers = new Map(); // Map<ownerEmail, Set<res>>
+const runWatchedSubscribers = new Map(); // Map<ownerEmail, Set<res>> — the player's own count
+
+function sseSetAdd(map, key, res) {
+  const set = map.get(key) ?? new Set();
+  set.add(res);
+  map.set(key, set);
+}
+
+function sseSetDelete(map, key, res) {
+  const set = map.get(key);
+  if (!set) return;
+  set.delete(res);
+  if (set.size === 0) map.delete(key);
+}
+
+function sseBroadcast(map, key, payload) {
+  const set = map.get(key);
+  if (!set) return;
+  // The blank line is the frame terminator, so it is written as an escape: a literal one is
+  // indistinguishable from formatting and would not survive a whitespace cleanup.
+  const frame = `data: ${JSON.stringify(payload)}\n\n`;
+  for (const res of set) sseWrite(res, frame);
+}
+
+/** Tell a player how many people are watching them, whenever that number moves. */
+function publishObserverCount(ownerEmail) {
+  const count = runObservers.get(ownerEmail)?.size ?? 0;
+  sseBroadcast(runWatchedSubscribers, ownerEmail, { type: 'observers', count });
+}
+
+/** Push the Run to everyone observing it. Called on every acknowledged mutation; a Run with no
+ * observers costs one Map lookup and returns. */
+function publishRunToObservers(owner, body, revision) {
+  const handle = runWatchHandle(owner);
+  if (!runObservers.has(handle)) return;
+  sseBroadcast(runObservers, handle, { type: 'run', run: body, revision });
+}
+
+// A Run's watch HANDLE. The observation address must not carry the player's email: a route ends
+// up in browser history, in referrers, in screenshots and in pasted links, and an address is the
+// one part of this feature that travels. The handle is derived rather than stored, so it needs no
+// table -- and because it is derived it is also NOT a capability: it identifies, it does not
+// authorize. Admin authorization still gates the stream. The revocable share token the friends
+// tier needs is a different object, and it will resolve through this same lookup.
+const RUN_WATCH_HANDLE_SECRET = process.env.RUN_WATCH_HANDLE_SECRET
+  || process.env.SESSION_SECRET
+  || 'chess-tactics-run-watch-handle';
+
+function runWatchHandle(ownerEmail) {
+  return crypto.createHmac('sha256', RUN_WATCH_HANDLE_SECRET)
+    .update(String(ownerEmail || '').toLowerCase())
+    .digest('base64url')
+    .slice(0, 22);
+}
+
+/** The owner a handle names, or null. Compared against the accounts that actually hold a Run, so
+ * an unknown handle is indistinguishable from an account with nothing to watch. */
+async function ownerForRunWatchHandle(handle) {
+  const { rows } = await pool.query('SELECT owner_email FROM active_runs');
+  for (const row of rows) {
+    if (runWatchHandle(row.owner_email) === handle) return row.owner_email;
+  }
+  return null;
+}
+
+// GET /api/admin/runs/:owner/observe — ADMIN: watch one player's Run, live.
+// Opening this IS the act that starts observation, so the player's indicator lights up here and
+// goes out when the connection closes.
+app.get('/api/admin/runs/:owner/observe', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const handle = String(req.params.owner || '');
+  if (!handle) { res.status(400).json({ error: 'invalid_run_handle' }); return; }
+  let owner = null;
+  try {
+    await ensureDbReady();
+    owner = await ownerForRunWatchHandle(handle);
+  } catch { /* fall through to the unavailable frame below */ }
+  if (!owner) { res.status(404).json({ error: 'run_not_found' }); return; }
+  const heartbeat = startSse(res);
+  sseSetAdd(runObservers, owner, res);
+  publishObserverCount(owner);
+  try {
+    await ensureDbReady();
+    const { rows } = await pool.query(
+      'SELECT body, revision FROM active_runs WHERE owner_email = $1',
+      [owner],
+    );
+    // Observation begins from NOW, so the opening frame is the Run as it currently stands
+    // rather than a history the watcher missed.
+    sseWrite(res, `data: ${JSON.stringify(rows[0]
+      ? {
+        type: 'run',
+        run: rows[0].body,
+        revision: Number(rows[0].revision),
+        owner: owner.kind === 'account' ? owner.value : `Guest ${handle.slice(0, 6)}`,
+      }
+      : { type: 'gone' })}\n\n`);
+  } catch {
+    sseWrite(res, 'data: {"type":"unavailable"}\n\n');
+  }
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    sseSetDelete(runObservers, owner, res);
+    publishObserverCount(owner);
+  });
+});
+
+// GET /api/active-run/watchers — the player's own stream: how many people are watching me.
+app.get('/api/active-run/watchers', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const owner = String(user.email || '').toLowerCase();
+  const heartbeat = startSse(res);
+  sseSetAdd(runWatchedSubscribers, owner, res);
+  sseWrite(res, `data: ${JSON.stringify({ type: 'observers', count: runObservers.get(owner)?.size ?? 0 })}\n\n`);
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    sseSetDelete(runWatchedSubscribers, owner, res);
+  });
+});
+
+// GET /api/admin/live-runs — ADMIN: who is playing right now and roughly where they are.
+//
+// The presence tier costs nothing to build because the Run document is already written on every
+// acknowledged mutation: phase, battle index and War name are in the row, and updated_at is the
+// last time the player did anything. Nothing here streams, nothing here is a share, and no
+// player-side work starts because this was read — observation begins when a watcher arrives.
+//
+// Deliberately narrow: a caption, not a Run. It answers "is anyone playing, and where", which is
+// what an admin needs before deciding to watch. The Run itself is not exposed.
+app.get('/api/admin/live-runs', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  try {
+    await ensureDbReady();
+    const { rows } = await pool.query(
+      `SELECT owner_email, body, updated_at
+         FROM active_runs
+        ORDER BY updated_at DESC
+        LIMIT 200`,
+    );
+    const runs = rows.map((row) => {
+      const run = row.body && typeof row.body === 'object' ? row.body : {};
+      const war = run.war && typeof run.war === 'object' ? run.war : {};
+      const battles = Array.isArray(war.battles) ? war.battles.length : null;
+      const battleIndex = Number.isInteger(run.battleIndex) ? run.battleIndex : null;
+      return {
+        owner_email: row.owner_email,
+        // The link is built from this; the email above is for the admin's eyes, not the address.
+        handle: runWatchHandle(row.owner_email),
+        run_id: typeof run.id === 'string' ? run.id : null,
+        phase: typeof run.phase === 'string' ? run.phase : null,
+        // battleIndex is 0-based on the document; players and the Run screen count from one.
+        battle: battleIndex === null ? null : battleIndex + 1,
+        battle_count: battles,
+        war_name: typeof war.name === 'string' ? war.name : null,
+        updated_at: row.updated_at,
+      };
+    });
+    res.status(200).json({ runs });
+  } catch (error) {
+    dbUnavailable(res, 'live Run presence read failed', error, 'active_run_store_unavailable');
+  }
+});
+
 app.get('/api/active-run', async (req, res) => {
   const owner = await resolveRunOwner(req, res);
   if (!owner) return;
@@ -23967,6 +24159,9 @@ app.put('/api/active-run', async (req, res) => {
       res.status(409).json({ error: 'active_run_revision_conflict', ...publicActiveRun(result.row) });
       return;
     }
+    // Every acknowledged mutation reaches anyone watching. Nothing is stored for them: this is
+    // the same row that was just written, handed to the connections that asked for it.
+    publishRunToObservers(owner, result.row.body, Number(result.row.revision));
     res.status(200).json(publicActiveRun(result.row));
   } catch (error) {
     dbUnavailable(res, 'active Run write failed', error, 'active_run_store_unavailable');
