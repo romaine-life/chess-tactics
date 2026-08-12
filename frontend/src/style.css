@@ -29291,3 +29291,75 @@ button.section-box-head {
   gap: var(--ds-inline-tight);
   padding: 0 var(--ds-inset) var(--ds-inset);
 }
+
+/* Studio → Kit Icon Candidates. A mark is judged in its seat, so each candidate is drawn at
+   the sizes it actually has to survive rather than at its source resolution. */
+.kit-icon-candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* No surface of its own: a row here is a list item on the Studio's own page, and painting it
+   would be a second unregistered surface behind the one already there. */
+.kit-icon-candidate {
+  align-items: center;
+  display: flex;
+  gap: 18px;
+  padding: 12px 14px;
+}
+
+.kit-icon-candidate-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.kit-icon-candidate-slot {
+  color: #d7e6f5;
+  font-family: monospace;
+  font-size: var(--ds-text-sm);
+}
+
+.kit-icon-candidate-label,
+.kit-icon-candidate-meta {
+  color: #8fb6d6;
+  font-size: var(--ds-text-xs);
+}
+
+.kit-icon-candidate-seats {
+  align-items: flex-end;
+  display: flex;
+  gap: 14px;
+  margin-inline-start: auto;
+}
+
+.kit-icon-candidate-seat {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kit-icon-candidate-seat-box {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+}
+
+.kit-icon-candidate-seat-box img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: contain;
+}
+
+.kit-icon-candidate-seat-size {
+  color: #5c7f9e;
+  font-family: monospace;
+  font-size: var(--ds-text-2xs, 10px);
+}
