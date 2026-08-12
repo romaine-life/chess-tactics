@@ -18,6 +18,7 @@ const {
   normalizePredrawnVersionSurface,
   normalizeWorldBounds,
   parseBackgroundVersionUploadPath,
+  predrawnRegistrationSupportIssue,
   rawBackgroundVersionContractIssue,
   rawBackgroundVersionContractBindingIssue,
   sourceArtworkVersionContractIssue,
@@ -197,6 +198,25 @@ function meshWarpMetadata() {
     },
   };
 }
+
+// Runs first, and on purpose. Every warp assertion below is only meaningful if
+// the shared renderer's registration grammar actually loaded: this policy reaches
+// it through the package's `require` condition, which is the gitignored build
+// artifact `packages/board-render/dist/index.cjs`. A checkout that has never run
+// that build once failed five tests here with "must be a valid canonical
+// serialized registration" — a message about the DATA, for a missing ARTIFACT —
+// which reads as a canonical-serializer divergence and is not one.
+//
+// So state the dependency as its own assertion. One honest failure naming the
+// build command beats five that send the reader after a phantom bug.
+test('the shared renderer registration grammar is built and loaded', () => {
+  assert.equal(
+    predrawnRegistrationSupportIssue(),
+    null,
+    'the shared board renderer is not loaded, so no warp registration below is genuinely exercised. '
+      + 'Build it from backend/ with `npm run build:board-render`.',
+  );
+});
 
 test('accepts the bounded client idempotency key contract and rejects the former raw key shape', () => {
   assert.equal(normalizeBackgroundVersionIdempotencyKey(CLIENT_RAW_IDEMPOTENCY_KEY), CLIENT_RAW_IDEMPOTENCY_KEY);

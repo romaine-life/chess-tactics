@@ -1,11 +1,11 @@
 {
   "schemaVersion": 3,
   "cardType": "King",
-  "status": "proposed",
+  "status": "accepted",
   "governedBy": "docs/adr/0579-card-art-is-briefed-from-a-king-rooted-event.md",
   "contract": "docs/art/card-art-brief-contract.md",
   "supersedes": "docs/art/run-king-prompts-v2.json (left intact as the record of what shipped)",
-  "note": "The fifteen King slots with their fixed casts. Nine acts are kept from v2 because they are already strong and singular; six are re-anchored, taking the slate from two realms to nine. Casts are fixed by each card formation and are not negotiable; everything else here is. Awaiting owner sign-off before briefs are written against it.",
+  "note": "The fifteen King slots with their fixed casts. Nine acts are kept from v2 because they are already strong and singular; six are re-anchored, taking the slate from two realms to nine. Casts are fixed by each card formation and are not negotiable; everything else here is. Signed off by the owner; briefs are written against it.",
   "rules": {
     "castIsFixed": "The cast comes from the card formation in packages/board-render/src/run/model.ts and cannot change.",
     "actNeverPrinted": "The act, its realm and its date drive period, setting and what is being done. They never reach the card face.",
@@ -576,5 +576,10 @@
       "cards": 3,
       "carries": "Riverbank meetings, ships drawn up, oaths given badly. Carries the mounted and the maritime together."
     }
-  ]
+  ],
+  "signedOff": {
+    "by": "owner (Nelson)",
+    "date": "2026-08-11",
+    "note": "Slate signed off. Casts fixed, six anchors re-anchored, two realms to nine."
+  }
 }

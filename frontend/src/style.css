@@ -28846,7 +28846,7 @@ button.run-card-formation-cell {
   text-align: end;
 }
 
-/* ── Start New Run is ONE box ─────────────────────────────────────────────────────────────────
+/* ── The New tab's column is ONE box (ADR-0571, when the tab still said "Start New Run") ──────
    Ataraxia, the replacement warning, the verb and Options were four separate slabs with the live
    vista showing through the gaps, which drew one control as four unrelated things. They are cells
    of a single box now and the gaps are that box's own rails — laid and capped by its topology, so
@@ -29441,7 +29441,7 @@ button.run-card-formation-cell {
    side), strips the shell's native button paint, and paints nothing of its own.
    check-ui-surface-contract.mjs registers exactly that reset. A section without a disclosure
    renders the same row as a div, which needs the layout and inherits the reset harmlessly.
-   Start New Run is NOT one of these: it is a single box of cells, and the one disclosure in it is
+   The New tab's column is NOT one of these: it is a single box of cells, and its one disclosure is
    a square key rather than a pressable slab — a cell has no frame to be the button. See
    `.run-prep-box`. */
 .run-rules-cell h4 {
