@@ -242,7 +242,10 @@ export function useBattleLogMark(): BattleLogMarkState {
   const refresh = useCallback(() => setNonce((value) => value + 1), []);
   useEffect(() => {
     let active = true;
-    void fetchAdminLiveMediaCatalog()
+    // Ask for THIS page's slots only. Unfiltered, the response is the catalog's whole version
+    // history — the page spent about five seconds on "Loading candidates…" downloading and
+    // parsing 15 MB to show sixteen cards, which reads as a broken page rather than a slow one.
+    void fetchAdminLiveMediaCatalog(BATTLE_LOG_FORGED_MARKS.map((mark) => BATTLE_LOG_MARK_SLOT[mark]))
       .then((next) => { if (active) setCatalog(next); })
       .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : String(reason)); });
     return () => { active = false; };
