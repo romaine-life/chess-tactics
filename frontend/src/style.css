@@ -25319,7 +25319,7 @@ button.tileset-relationship-cell {
 
 /* The grouped case shows the relics themselves, so the RELIC is the control: its trigger paints
    nothing at all — no seat, no frame, no material — and the press is answered by the art lighting up
-   (ADR-0254's unframed icon triggers, restated as ADR-0587's one material exception). The reset rule
+   (ADR-0254's unframed icon triggers, restated as ADR-0589's one material exception). The reset rule
    below must keep a comment-free header: the surface-contract gate folds a preceding comment into
    the selector it looks up, and the approved frameless resets are keyed on the bare selector. */
 .enchiridion-lipsanon-group-grid > li,

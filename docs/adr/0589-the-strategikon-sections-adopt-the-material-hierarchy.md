@@ -9,7 +9,7 @@ refines:
   - "[ADR-0557](0557-a-result-screen-wears-the-leaf-material-and-the-field-excludes-it.md)"
 ---
 
-# ADR-0587: The Strategikon's four sections adopt the material hierarchy
+# ADR-0589: The Strategikon's four sections adopt the material hierarchy
 
 ## Context and Problem Statement
 
