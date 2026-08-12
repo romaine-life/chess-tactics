@@ -1,11 +1,27 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 
-const ACCESS_COOKIE = '__Host-chess-tactics-access';
-const REFRESH_COOKIE = '__Host-chess-tactics-refresh';
+// Chess Tactics is a Backend-For-Frontend, and a BFF hands the browser a session cookie while the
+// OAuth tokens stay on the server (draft-ietf-oauth-browser-based-apps-26 §6.1.1). One cookie, and
+// it carries an identifier — not a credential the identity provider would accept.
+const SESSION_COOKIE = '__Host-chess-tactics-session';
 const STATE_COOKIE = '__Host-chess-tactics-oidc-state';
-const DEFAULT_ACCESS_TTL_SECONDS = 60 * 60;
-const DEFAULT_REFRESH_TTL_SECONDS = 60 * 60 * 24 * 7;
+
+// Decision 1 of docs/auth-security-audit.md. A player who stops playing for a month signs in
+// again; anyone still playing re-authenticates quarterly. The absolute deadline is fixed at
+// sign-in and no amount of activity moves it.
+const SESSION_IDLE_MS = 30 * 24 * 60 * 60 * 1000;
+const SESSION_ABSOLUTE_MS = 90 * 24 * 60 * 60 * 1000;
+// Decision 3. Admin capability is not the session: publishing game content requires credentials
+// presented within this window, and the session outliving it is normal.
+const ADMIN_FRESHNESS_MS = 8 * 60 * 60 * 1000;
+// The idle deadline slides, but not on every request — a read-mostly session would otherwise cost
+// a write per call for a deadline measured in weeks.
+const TOUCH_INTERVAL_MS = 5 * 60 * 1000;
+// Refresh before the access token actually lapses, so an ordinary request is never the one that
+// discovers it expired mid-flight.
+const REFRESH_SKEW_MS = 60 * 1000;
+
 const PENDING_LOGIN_TTL_MS = 10 * 60 * 1000;
 const DISCOVERY_TTL_MS = 60 * 60 * 1000;
 const JWKS_TTL_MS = 5 * 60 * 1000;
@@ -34,13 +50,25 @@ function parseCookieHeader(header) {
   return cookies;
 }
 
-function cookieValue(name, value, maxAge) {
+/**
+ * `Strict` is the session cookie's policy and its CSRF defence at once
+ * (draft-26 §6.1.3.2 and §6.1.3.3.1) — it is not sent on any cross-site request, so a
+ * cross-site write cannot carry it. Nothing user-specific is server-rendered here, so the
+ * only cost is that a visit arriving from an external link reads identity a round trip later,
+ * through the same-site fetch that follows the document.
+ *
+ * The 10-minute login-state cookie is the deliberate exception and MUST stay `Lax`: the callback
+ * from the identity provider is a cross-site top-level navigation, and a `Strict` cookie there
+ * would fail every sign-in with `oidc_login_state_invalid`. It authorises nothing on its own — it
+ * names an attempt row and is spent on arrival.
+ */
+function cookieValue(name, value, maxAge, sameSite = 'Strict') {
   return [
     `${name}=${encodeURIComponent(value)}`,
     'Path=/',
     'HttpOnly',
     'Secure',
-    'SameSite=Lax',
+    `SameSite=${sameSite}`,
     `Max-Age=${Math.max(0, Math.floor(maxAge))}`,
   ].join('; ');
 }
@@ -53,23 +81,35 @@ function randomToken(bytes) {
   return crypto.randomBytes(bytes).toString('base64url');
 }
 
+/**
+ * Only the hash of a session token is stored, so a database read yields nothing that can be
+ * replayed as a session. The same holds for the login state, whose row would otherwise let a
+ * reader complete somebody else's sign-in.
+ */
+function hashToken(value) {
+  return crypto.createHash('sha256').update(String(value)).digest('hex');
+}
+
 function createOIDCSessionManager({
   issuer,
   clientId,
+  clientSecret = '',
   publicOrigin,
+  store,
   fetchImpl = globalThis.fetch,
   now = () => Date.now(),
 }) {
   const normalizedIssuer = String(issuer || '').replace(/\/+$/, '');
   const normalizedOrigin = String(publicOrigin || '').replace(/\/+$/, '');
   const normalizedClientId = String(clientId || '').trim();
+  const normalizedClientSecret = String(clientSecret || '').trim();
   if (!normalizedIssuer || !normalizedOrigin || !normalizedClientId) {
     throw new Error('issuer, clientId, and publicOrigin are required');
   }
+  if (!store) throw new Error('a session store is required');
 
   const issuerOrigin = new URL(normalizedIssuer).origin;
   const callbackURL = `${normalizedOrigin}/api/auth/callback`;
-  const pending = new Map();
   let discoveryCache = null;
   let discoveryExpiresAt = 0;
   let jwksCache = new Map();
@@ -118,6 +158,13 @@ function createOIDCSessionManager({
       token_endpoint: sameIssuerOrigin(body.token_endpoint, 'token_endpoint'),
       userinfo_endpoint: sameIssuerOrigin(body.userinfo_endpoint, 'userinfo_endpoint'),
       jwks_uri: sameIssuerOrigin(body.jwks_uri, 'jwks_uri'),
+      // Optional in the discovery document; sign-out degrades rather than failing without them.
+      revocation_endpoint: body.revocation_endpoint
+        ? sameIssuerOrigin(body.revocation_endpoint, 'revocation_endpoint')
+        : '',
+      end_session_endpoint: body.end_session_endpoint
+        ? sameIssuerOrigin(body.end_session_endpoint, 'end_session_endpoint')
+        : '',
     };
     discoveryExpiresAt = now() + DISCOVERY_TTL_MS;
     return discoveryCache;
@@ -176,6 +223,17 @@ function createOIDCSessionManager({
     return claims;
   }
 
+  /**
+   * A confidential client authenticates on every token request (draft-26 §6.1.3.1). The secret is
+   * sent in the body rather than as Basic auth because that is what this provider accepts;
+   * `client_secret_post` is one of its advertised methods.
+   */
+  function clientCredentials() {
+    return normalizedClientSecret
+      ? { client_id: normalizedClientId, client_secret: normalizedClientSecret }
+      : { client_id: normalizedClientId };
+  }
+
   async function tokenRequest(parameters) {
     const config = await discovery();
     let response;
@@ -194,24 +252,6 @@ function createOIDCSessionManager({
     }
     const body = await responseJson(response, 'oidc_token');
     return { ok: response.ok, status: response.status, body };
-  }
-
-  function applyTokenCookies(res, tokens, fallbackRefreshToken = '') {
-    const accessToken = String(tokens.access_token || '');
-    if (!accessToken) throw new OIDCAuthError('oidc_token_missing_access_token', 401);
-    const accessTtl = Number(tokens.expires_in) > 0
-      ? Number(tokens.expires_in)
-      : DEFAULT_ACCESS_TTL_SECONDS;
-    appendCookie(res, cookieValue(ACCESS_COOKIE, accessToken, accessTtl));
-    const refreshToken = String(tokens.refresh_token || fallbackRefreshToken || '');
-    if (refreshToken) {
-      appendCookie(res, cookieValue(REFRESH_COOKIE, refreshToken, DEFAULT_REFRESH_TTL_SECONDS));
-    }
-  }
-
-  function clearSession(res) {
-    appendCookie(res, cookieValue(ACCESS_COOKIE, '', 0));
-    appendCookie(res, cookieValue(REFRESH_COOKIE, '', 0));
   }
 
   async function userInfo(accessToken) {
@@ -233,115 +273,291 @@ function createOIDCSessionManager({
     const user = await responseJson(response, 'oidc_userinfo');
     if (!user || typeof user.email !== 'string' || !user.email) return null;
     return {
-      user: {
-        id: user.sub,
-        email: user.email,
-        name: user.name || user.email,
-        image: user.picture || null,
-        role: user.role || 'pending',
-        apps: user.apps || {},
-      },
+      id: user.sub,
+      email: user.email,
+      name: user.name || user.email,
+      image: user.picture || null,
+      role: user.role || 'pending',
+      apps: user.apps || {},
     };
   }
 
-  async function refreshSession(refreshToken, res) {
+  function accessExpiryFrom(tokens) {
+    const seconds = Number(tokens.expires_in);
+    const lifetime = Number.isFinite(seconds) && seconds > 0 ? seconds : 3600;
+    return new Date(now() + lifetime * 1000);
+  }
+
+  function setSessionCookie(res, token, expiresAt) {
+    const maxAge = Math.max(0, Math.floor((expiresAt.getTime() - now()) / 1000));
+    appendCookie(res, cookieValue(SESSION_COOKIE, token, maxAge));
+  }
+
+  function clearSessionCookie(res) {
+    appendCookie(res, cookieValue(SESSION_COOKIE, '', 0));
+  }
+
+  /**
+   * Renew the access token from the stored refresh token.
+   *
+   * This is also how a revocation at the identity provider reaches us: a session whose refresh is
+   * refused with a 4xx is one the provider no longer stands behind, and it ends here too. Anything
+   * else — a timeout, a 5xx — is the provider being unreachable, which is not a sign-out, so the
+   * session is left exactly as it was.
+   */
+  async function refreshSession(record) {
+    if (!record.refreshToken) return record;
     const result = await tokenRequest({
       grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: normalizedClientId,
+      refresh_token: record.refreshToken,
+      ...clientCredentials(),
     });
     if (!result.ok) {
       if (result.status >= 400 && result.status < 500) {
-        clearSession(res);
+        await store.deleteSession(record.id);
         return null;
       }
       throw new OIDCAuthError(`oidc_refresh_http_${result.status}`);
     }
+    const accessToken = String(result.body.access_token || '');
+    if (!accessToken) throw new OIDCAuthError('oidc_token_missing_access_token', 401);
     if (result.body.id_token) await verifyIDToken(result.body.id_token);
-    applyTokenCookies(res, result.body, refreshToken);
-    const session = await userInfo(result.body.access_token);
-    if (!session) clearSession(res);
-    return session;
+    // Claims are re-read here and only here. A role or display name changed upstream lands on the
+    // next renewal rather than on the next request, which is the trade that took the identity
+    // provider off the hot path of every authenticated call.
+    const claims = (await userInfo(accessToken)) || record.claims;
+    const next = {
+      ...record,
+      accessToken,
+      accessExpiresAt: accessExpiryFrom(result.body),
+      refreshToken: String(result.body.refresh_token || record.refreshToken),
+      claims,
+    };
+    await store.updateSessionTokens(record.id, {
+      accessToken: next.accessToken,
+      accessExpiresAt: next.accessExpiresAt,
+      refreshToken: next.refreshToken,
+      claims: next.claims,
+    });
+    return next;
   }
 
+  /**
+   * Resolve the session behind a cookie header.
+   *
+   * The ordinary path is one local read: claims are cached on the row, so an authenticated request
+   * no longer costs a round trip to the identity provider. Renewal happens only when the access
+   * token is near its end, and expiry is judged against deadlines we own rather than against a
+   * cookie's `Max-Age`.
+   */
   async function readSession(cookieHeader, res) {
-    const cookies = parseCookieHeader(cookieHeader);
-    const accessToken = cookies.get(ACCESS_COOKIE) || '';
-    const refreshToken = cookies.get(REFRESH_COOKIE) || '';
-    if (accessToken) {
-      const session = await userInfo(accessToken);
-      if (session) return session;
+    const token = parseCookieHeader(cookieHeader).get(SESSION_COOKIE) || '';
+    if (!token) return null;
+    let record = await store.readSessionByTokenHash(hashToken(token));
+    if (!record) {
+      // The cookie names a session that no longer exists — signed out elsewhere, expired, or
+      // revoked. Take it off the browser so it stops being presented.
+      if (res) clearSessionCookie(res);
+      return null;
     }
-    if (refreshToken) return refreshSession(refreshToken, res);
-    if (accessToken) clearSession(res);
-    return null;
+
+    const at = now();
+    const deadline = Math.min(record.idleExpiresAt.getTime(), record.absoluteExpiresAt.getTime());
+    if (deadline <= at) {
+      await store.deleteSession(record.id);
+      if (res) clearSessionCookie(res);
+      return null;
+    }
+
+    if (record.accessExpiresAt && record.accessExpiresAt.getTime() - REFRESH_SKEW_MS <= at) {
+      record = await refreshSession(record);
+      if (!record) {
+        if (res) clearSessionCookie(res);
+        return null;
+      }
+    }
+
+    // Slide the idle deadline, lazily. A session used constantly writes once every few minutes
+    // rather than once per request, and the deadline it is measured against is weeks away.
+    if (at - record.lastSeenAt.getTime() >= TOUCH_INTERVAL_MS) {
+      const idleExpiresAt = new Date(at + SESSION_IDLE_MS);
+      await store.touchSession(record.id, { lastSeenAt: new Date(at), idleExpiresAt });
+      record = { ...record, lastSeenAt: new Date(at), idleExpiresAt };
+    }
+
+    return {
+      user: record.claims,
+      sessionId: record.id,
+      authenticatedAt: record.authenticatedAt,
+      // Decision 3: the session may be months old and still perfectly valid; publishing game
+      // content asks a different question, and asks it of our own record rather than of the
+      // provider's `auth_time` claim, which it reports in the wrong unit (F11).
+      adminFresh: at - record.authenticatedAt.getTime() < ADMIN_FRESHNESS_MS,
+    };
   }
 
-  async function startLogin(returnTo, res) {
+  async function startLogin(returnTo, res, { forceLogin = false } = {}) {
     const config = await discovery();
-    for (const [state, login] of pending) {
-      if (login.expiresAt <= now()) pending.delete(state);
-    }
+    await store.deleteExpiredLoginAttempts(new Date(now()));
     const state = randomToken(24);
     const verifier = randomToken(32);
     const nonce = randomToken(24);
     const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
-    pending.set(state, {
-      verifier,
+    await store.createLoginAttempt({
+      stateHash: hashToken(state),
+      codeVerifier: verifier,
       nonce,
       returnTo,
-      expiresAt: now() + PENDING_LOGIN_TTL_MS,
+      expiresAt: new Date(now() + PENDING_LOGIN_TTL_MS),
     });
-    appendCookie(res, cookieValue(STATE_COOKIE, state, PENDING_LOGIN_TTL_MS / 1000));
+    appendCookie(res, cookieValue(STATE_COOKIE, state, PENDING_LOGIN_TTL_MS / 1000, 'Lax'));
     const url = new URL(config.authorization_endpoint);
     url.searchParams.set('client_id', normalizedClientId);
     url.searchParams.set('response_type', 'code');
     url.searchParams.set('redirect_uri', callbackURL);
-    url.searchParams.set('scope', 'openid profile email');
+    // `offline_access` is what makes the provider return a refresh token at all. Without it the
+    // session could never be renewed, which is the whole of F1.
+    url.searchParams.set('scope', 'openid profile email offline_access');
     url.searchParams.set('state', state);
     url.searchParams.set('nonce', nonce);
     url.searchParams.set('code_challenge', challenge);
     url.searchParams.set('code_challenge_method', 'S256');
+    // Re-arming the admin window (decision 3) asks for credentials again without disturbing the
+    // session that is already in hand.
+    if (forceLogin) url.searchParams.set('prompt', 'login');
     return url.toString();
   }
 
   async function completeLogin({ code, state, cookieHeader }, res) {
     const callbackState = String(state || '');
     const browserState = parseCookieHeader(cookieHeader).get(STATE_COOKIE) || '';
-    const login = pending.get(callbackState);
-    if (login) pending.delete(callbackState);
-    appendCookie(res, cookieValue(STATE_COOKIE, '', 0));
-    if (!callbackState || browserState !== callbackState || !login || login.expiresAt <= now() || !code) {
+    const attempt = callbackState ? await store.consumeLoginAttempt(hashToken(callbackState)) : null;
+    appendCookie(res, cookieValue(STATE_COOKIE, '', 0, 'Lax'));
+    if (
+      !callbackState
+      || browserState !== callbackState
+      || !attempt
+      || attempt.expiresAt.getTime() <= now()
+      || !code
+    ) {
       throw new OIDCAuthError('oidc_login_state_invalid', 400);
     }
     const result = await tokenRequest({
       grant_type: 'authorization_code',
       code: String(code),
       redirect_uri: callbackURL,
-      client_id: normalizedClientId,
-      code_verifier: login.verifier,
+      code_verifier: attempt.codeVerifier,
+      ...clientCredentials(),
     });
     if (!result.ok) throw new OIDCAuthError(`oidc_code_exchange_http_${result.status}`, 401);
     if (!result.body.id_token) throw new OIDCAuthError('oidc_token_missing_id_token', 401);
-    await verifyIDToken(result.body.id_token, login.nonce);
-    applyTokenCookies(res, result.body);
-    return login.returnTo;
+    await verifyIDToken(result.body.id_token, attempt.nonce);
+    const accessToken = String(result.body.access_token || '');
+    if (!accessToken) throw new OIDCAuthError('oidc_token_missing_access_token', 401);
+    const claims = await userInfo(accessToken);
+    if (!claims) throw new OIDCAuthError('oidc_userinfo_rejected_fresh_token', 401);
+
+    const at = now();
+    const token = randomToken(32);
+    const absoluteExpiresAt = new Date(at + SESSION_ABSOLUTE_MS);
+    await store.createSession({
+      id: randomToken(16),
+      tokenHash: hashToken(token),
+      userEmail: claims.email,
+      claims,
+      accessToken,
+      accessExpiresAt: accessExpiryFrom(result.body),
+      refreshToken: String(result.body.refresh_token || ''),
+      authenticatedAt: new Date(at),
+      createdAt: new Date(at),
+      lastSeenAt: new Date(at),
+      idleExpiresAt: new Date(at + SESSION_IDLE_MS),
+      absoluteExpiresAt,
+    });
+    // The cookie outlives neither deadline: the browser stops presenting it exactly when the
+    // server would stop honouring it.
+    setSessionCookie(res, token, absoluteExpiresAt);
+    return attempt.returnTo;
+  }
+
+  /**
+   * Re-arm the admin window on the session already in hand.
+   *
+   * The row is found by its own id rather than by cookie, so this cannot be aimed at another
+   * session, and `authenticated_at` is the only thing that moves — the player session keeps its
+   * identifier, its deadlines, and its tokens.
+   */
+  async function recordReauthentication(sessionId) {
+    await store.markAuthenticated(sessionId, new Date(now()));
+  }
+
+  /**
+   * End the session here and at the identity provider.
+   *
+   * Deleting the row is what makes the session dead everywhere at once; revocation is what stops
+   * the tokens it held from being usable on their own. A provider that cannot be reached does not
+   * keep the session alive — the local delete has already happened, and revocation failing is
+   * logged rather than retried into a sign-out that does not complete.
+   */
+  async function signOut(cookieHeader, res) {
+    const token = parseCookieHeader(cookieHeader).get(SESSION_COOKIE) || '';
+    clearSessionCookie(res);
+    if (!token) return { revoked: false, reason: 'no_session' };
+    const record = await store.readSessionByTokenHash(hashToken(token));
+    if (!record) return { revoked: false, reason: 'no_session' };
+    await store.deleteSession(record.id);
+
+    let config;
+    try {
+      config = await discovery();
+    } catch {
+      return { revoked: false, reason: 'discovery_unavailable' };
+    }
+    if (!config.revocation_endpoint) return { revoked: false, reason: 'unsupported' };
+    const revoke = async (value, hint) => {
+      if (!value) return;
+      try {
+        await fetchImpl(config.revocation_endpoint, {
+          method: 'POST',
+          headers: {
+            accept: 'application/json',
+            'content-type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            token: value,
+            token_type_hint: hint,
+            ...clientCredentials(),
+          }).toString(),
+          signal: AbortSignal.timeout(8000),
+        });
+      } catch {
+        // The row is already gone; a failed revocation narrows nothing further here.
+      }
+    };
+    // Refresh first: it is the credential with the longer reach.
+    await revoke(record.refreshToken, 'refresh_token');
+    await revoke(record.accessToken, 'access_token');
+    return { revoked: true };
   }
 
   return {
     callbackURL,
-    clearSession,
     completeLogin,
     readSession,
+    recordReauthentication,
+    signOut,
     startLogin,
   };
 }
 
 module.exports = {
-  ACCESS_COOKIE,
-  REFRESH_COOKIE,
+  ADMIN_FRESHNESS_MS,
+  SESSION_ABSOLUTE_MS,
+  SESSION_COOKIE,
+  SESSION_IDLE_MS,
   STATE_COOKIE,
   OIDCAuthError,
   createOIDCSessionManager,
+  hashToken,
   parseCookieHeader,
 };
