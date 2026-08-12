@@ -23617,6 +23617,48 @@ function publicActiveRun(row) {
   };
 }
 
+// GET /api/admin/live-runs — ADMIN: who is playing right now and roughly where they are.
+//
+// The presence tier costs nothing to build because the Run document is already written on every
+// acknowledged mutation: phase, battle index and War name are in the row, and updated_at is the
+// last time the player did anything. Nothing here streams, nothing here is a share, and no
+// player-side work starts because this was read — observation begins when a watcher arrives.
+//
+// Deliberately narrow: a caption, not a Run. It answers "is anyone playing, and where", which is
+// what an admin needs before deciding to watch. The Run itself is not exposed.
+app.get('/api/admin/live-runs', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  try {
+    await ensureDbReady();
+    const { rows } = await pool.query(
+      `SELECT owner_email, body, updated_at
+         FROM active_runs
+        ORDER BY updated_at DESC
+        LIMIT 200`,
+    );
+    const runs = rows.map((row) => {
+      const run = row.body && typeof row.body === 'object' ? row.body : {};
+      const war = run.war && typeof run.war === 'object' ? run.war : {};
+      const battles = Array.isArray(war.battles) ? war.battles.length : null;
+      const battleIndex = Number.isInteger(run.battleIndex) ? run.battleIndex : null;
+      return {
+        owner_email: row.owner_email,
+        run_id: typeof run.id === 'string' ? run.id : null,
+        phase: typeof run.phase === 'string' ? run.phase : null,
+        // battleIndex is 0-based on the document; players and the Run screen count from one.
+        battle: battleIndex === null ? null : battleIndex + 1,
+        battle_count: battles,
+        war_name: typeof war.name === 'string' ? war.name : null,
+        updated_at: row.updated_at,
+      };
+    });
+    res.status(200).json({ runs });
+  } catch (error) {
+    dbUnavailable(res, 'live Run presence read failed', error, 'active_run_store_unavailable');
+  }
+});
+
 app.get('/api/active-run', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;

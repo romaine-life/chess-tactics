@@ -29363,3 +29363,37 @@ button.section-box-head {
   font-family: monospace;
   font-size: var(--ds-text-2xs, 10px);
 }
+
+/* Studio → Live Runs. Presence rows: player, where they are, when they last moved. */
+.live-run-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.live-run {
+  align-items: baseline;
+  display: flex;
+  gap: 16px;
+  padding: 8px 14px;
+}
+
+.live-run-player {
+  color: #d7e6f5;
+  font-family: monospace;
+  font-size: var(--ds-text-sm);
+}
+
+.live-run-caption {
+  color: #8fb6d6;
+  font-size: var(--ds-text-xs);
+}
+
+.live-run-seen {
+  color: #5c7f9e;
+  font-size: var(--ds-text-xs);
+  margin-inline-start: auto;
+}
