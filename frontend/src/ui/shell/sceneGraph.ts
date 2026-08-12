@@ -77,6 +77,7 @@ export type SceneViewId =
   | 'studio'
   | 'predrawn-reference'
   | 'portrait-editor'
+  | 'mobile-lab'
   | 'party';
 export type ScenePaintOwner =
   | 'dom'
@@ -87,6 +88,7 @@ export type ScenePaintOwner =
   | 'studio'
   | 'predrawn-reference'
   | 'portrait-editor'
+  | 'mobile-lab'
   | 'lobbies';
 export type SceneWaitPresentation = 'loading' | 'transition-only';
 
@@ -205,6 +207,7 @@ export const SCENE_DEFINITIONS = Object.freeze({
   studio: defineScene({ id: 'studio', parent: null, slot: 'root', view: 'studio' }),
   predrawnReference: defineScene({ id: 'predrawn-reference', parent: null, slot: 'root', view: 'predrawn-reference' }),
   portraitEditor: defineScene({ id: 'portrait-editor', parent: null, slot: 'root', view: 'portrait-editor' }),
+  mobileLab: defineScene({ id: 'mobile-lab', parent: null, slot: 'root', view: 'mobile-lab' }),
   party: defineScene({ id: 'party', parent: 'main-menu', slot: 'menu-destination', view: 'party' }),
 });
 

@@ -74,6 +74,7 @@ const TilesetStudio = lazy(() => importTilePreview().then((module) => ({ default
 const LevelEditor = lazy(() => importLevelEditor().then((module) => ({ default: module.LevelEditor })));
 const PortraitEditor = lazy(() => importPortraitEditor().then((module) => ({ default: module.PortraitEditor })));
 const PredrawnReference = lazy(() => import('./PredrawnReference').then((module) => ({ default: module.PredrawnReference })));
+const MobileLab = lazy(() => import('./MobileLab'));
 const DrawableCatalogLab = lazy(() => import('./DrawableCatalogLab').then((module) => ({ default: module.DrawableCatalogLab })));
 const LipsanonReview = lazy(() => import('./LipsanonReview').then((module) => ({ default: module.LipsanonReview })));
 const RunSectioArtReview = lazy(() => import('./RunSectioArtReview').then((module) => ({ default: module.RunSectioArtReview })));
@@ -810,6 +811,10 @@ function renderScene(scene: ScenePath, search: string): ReactElement {
     return <RunScreen routePath={path} routeSearch={search} sceneSnapshot={scene.snapshot as RunSceneSnapshot} />;
   }
   if (path === '/predrawn-reference') return <PredrawnReference />;
+  // Mobile review lab: the real routes in same-origin iframes at exact device viewports.
+  // The dev server is loopback-only, so this is the only way to look at a phone layout on
+  // the machine the work is done on.
+  if (path === '/mobile-lab') return <MobileLab />;
   if (path === '/studio' && new URLSearchParams(search).get('runSectioReview') === '1') return <RunSectioArtReview />;
   if (path === '/studio' && new URLSearchParams(search).get('lipsanonReview') === '1') return <LipsanonReview />;
   if (path === '/studio' && new URLSearchParams(search).get('brushIconReview') === '1') return <BrushIconReview />;

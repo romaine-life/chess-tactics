@@ -12,6 +12,7 @@
 //
 // What it measures, per route per device profile:
 //   page-overflow-x   the page scrolls sideways (the classic desktop-layout-on-a-phone tell)
+//   control-obscured  a control's own centre hit-tests to something else — it cannot be tapped
 //   control-cut-off   a control is clipped to under 60% of itself by an ancestor or the viewport
 //   control-offscreen a control's centre lies outside the viewport — unreachable at any scroll
 //   touch-target      a visible control's hit box is under 44x44 CSS px (WCAG 2.5.5)
@@ -220,6 +221,26 @@ function measure() {
       }
     }
   }
+  // A control that something else is sitting on top of. Reachability alone does not catch
+  // this: when the narrow shell squeezed its tracks, Settings' "General" tab sat ON the
+  // menu's own "Settings" button — both scrollable to, both plainly broken on screen.
+  //
+  // The question is not whether two boxes intersect — plenty of chrome legitimately
+  // underlaps a control and loses the stacking order — but who actually RECEIVES the tap.
+  // So ask the browser: hit-test the control's own centre and see what comes back. That
+  // reports exactly the defect a player would hit and stays quiet about decoration that
+  // merely shares the same pixels from below. Measured BEFORE anything is scrolled, so
+  // every hit test shares one resting layout.
+  for (const el of controls) {
+    const rect = el.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    if (cx < 0 || cx > vw || cy < 0 || cy > vh) continue; // reported as offscreen above
+    const hit = document.elementFromPoint(cx, cy);
+    if (!hit || hit === el || el.contains(hit) || hit.contains(el)) continue;
+    push('control-obscured', `its centre taps ${describe(hit)} instead`, el);
+  }
+
   const stillUnreachable = new Set();
   for (const el of unreachable) {
     el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
@@ -335,7 +356,7 @@ if (has('json')) {
 }
 
 // ── Report ──────────────────────────────────────────────────────────────────────────────
-const KIND_ORDER = ['page-overflow-x', 'control-offscreen', 'control-cut-off', 'stranded-overflow', 'touch-target'];
+const KIND_ORDER = ['page-overflow-x', 'control-offscreen', 'control-cut-off', 'control-obscured', 'stranded-overflow', 'touch-target'];
 const totals = new Map();
 for (const r of results) for (const f of r.findings ?? []) totals.set(f.kind, (totals.get(f.kind) ?? 0) + 1);
 

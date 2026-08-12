@@ -26581,6 +26581,53 @@ button.tileset-relationship-cell {
 }
 .campaign-result-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 4px; }
 
+/* ── Mobile review lab (/mobile-lab) ────────────────────────────────────────────────────────
+   A tool surface, not a player screen, so it follows the Studio's "just a web page" licence
+   (it reuses .tileset-view-action for its controls). It paints NO surface of its own — the
+   device frames are outlines — so it introduces nothing the UI surface contract owns. */
+.mobile-lab {
+  block-size: 100%;
+  box-sizing: border-box;
+  color: var(--ds-ink-2, #dbe7ea);
+  display: flex;
+  flex-direction: column;
+  font-family: var(--ds-font-display, ui-monospace, monospace);
+  gap: 10px;
+  overflow: auto;
+  padding: calc(var(--app-header-h, 84px) + 12px) 16px 16px;
+}
+.mobile-lab-bar { display: grid; gap: 4px; }
+.mobile-lab-title { font-size: var(--ds-text-lg, 1.25rem); letter-spacing: .04em; margin: 0; text-transform: uppercase; }
+.mobile-lab-note { color: var(--ds-ink-3, #9eb1c5); font-size: var(--ds-text-sm, .85rem); line-height: 1.45; margin: 0; max-inline-size: 92ch; }
+.mobile-lab-controls { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; }
+.mobile-lab-legend {
+  color: var(--ds-ink-3, #9eb1c5);
+  font-size: var(--ds-text-sm, .85rem);
+  letter-spacing: .06em;
+  min-inline-size: 62px;
+  text-transform: uppercase;
+}
+.mobile-lab-dim { color: var(--ds-ink-3, #9eb1c5); font-size: var(--ds-text-sm, .8rem); }
+.mobile-lab-address {
+  color: inherit;
+  flex: 1 1 320px;
+  font: inherit;
+  min-inline-size: 0;
+  outline: 1px solid rgba(125, 224, 255, .28);
+  padding: 6px 8px;
+}
+/* aria-pressed is the selected state — no new painted surface, just the outline. */
+.mobile-lab .tileset-view-action[aria-pressed="true"] { outline: 2px solid rgba(125, 224, 255, .85); }
+.mobile-lab-stage { align-items: start; display: flex; flex-wrap: wrap; gap: 18px; padding-block-start: 4px; }
+.mobile-lab-device { display: grid; gap: 6px; margin: 0; }
+.mobile-lab-caption { color: var(--ds-ink-3, #9eb1c5); font-size: var(--ds-text-sm, .85rem); letter-spacing: .04em; }
+/* Reserves the SCALED footprint; the iframe inside keeps its true pixel size so its own
+   layout viewport — and every width media query in the app — stays honest. */
+.mobile-lab-viewport { outline: 1px solid rgba(125, 224, 255, .38); overflow: hidden; position: relative; }
+/* Size comes from the element's own inline style in real px — an iframe left at `auto`
+   falls back to the CSS default 300x150 and silently ignores its width/height attributes. */
+.mobile-lab-frame { display: block; }
+
 /* ============================================================================
    MOBILE SUPPORT — landscape-only phones (added 2026-07-01)
    ----------------------------------------------------------------------------

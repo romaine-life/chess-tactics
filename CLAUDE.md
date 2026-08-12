@@ -401,6 +401,23 @@ canonical `layer=rules` URL. Append `eventsTab=deployment` for Deployment or
 `eventsTab=other` for Other Events; Victory Rules is the default and omits that
 parameter.
 
+**Mobile is reviewed at `/mobile-lab`, never by describing it.** The dev server is
+loopback-only so it cannot be opened on a phone, and a desktop window shows the desktop
+layout of the very screens under test — so a plain route link is worthless as a mobile
+handoff. The lab mounts the REAL routes in same-origin iframes at exact device viewports,
+with all state in the address:
+
+- `/mobile-lab?device=<id>&route=<url-encoded address>` — `device` is `phone-portrait`,
+  `phone-landscape`, `phone-landscape-max`, `tablet-portrait`, `tablet-landscape`, or `all`
+  for every frame side by side. `route` takes ANY address, including a `?craft=` Run spec.
+- `&zoom=0.75|0.5` scales the frame to fit the window. The iframe keeps its true pixel size
+  and is scaled visually, so its layout viewport — and every width media query — stays honest.
+
+Hand over a `/mobile-lab` link for any mobile change; hand over the plain route only when the
+desktop layout is the thing to judge. An iframe reports a FINE pointer, so the portrait rotate
+gate does not appear there — `npm run verify:mobile` is what exercises a real coarse-pointer
+device.
+
 The Studio encodes its state in the URL, so deep-link instead of clicking:
 - `mode=catalog|lab|viewer`
 - `cat=<category>` (for example `gym`, `gamelab`, `assets`, `props`)
