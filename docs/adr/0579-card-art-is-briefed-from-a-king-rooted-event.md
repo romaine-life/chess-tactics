@@ -129,9 +129,16 @@ wars, it's a function of card concept quality."*
   than being stretched.
 
 The slate itself is carried as data in
-[`docs/art/run-king-slate-v3.json`](../art/run-king-slate-v3.json) with a `status` field, and the
-formation roll-up in [`docs/art/run-card-worlds-v3.json`](../art/run-card-worlds-v3.json). Both are
-`proposed` until the owner signs the slate off; this ADR governs the contract, not the casting.
+[`docs/art/run-king-slate-v3.json`](../art/run-king-slate-v3.json), and the per-card assignment in
+[`docs/art/run-card-worlds-v3.json`](../art/run-card-worlds-v3.json). The owner signed the slate off
+on 2026-08-11 and both are `accepted`; this ADR governs the contract, and those two files carry the
+casting.
+
+**Cards sharing a footprint and roster stay in one world.** The three six-card families and the eight
+three-card families are each whole inside a single King, so a set that differs only by seating reads
+as that many moments of one situation rather than that many unrelated scenes. It is the constraint
+that makes "seating selects the moment" mean anything, and it is what sized the worlds: 12 for the
+siege, 6, 5, 5, 5, 5, 5, then 4, 4, and six worlds of 3.
 
 ### Art is keyed per card
 
