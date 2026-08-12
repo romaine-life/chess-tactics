@@ -5,6 +5,12 @@ WORKDIR /app
 
 COPY packages/board-render/ packages/board-render/
 COPY frontend/package*.json frontend/
+# The image build does not inherit the workflow's environment, so it states this itself: skip
+# onnxruntime-node's CUDA execution-provider download, a ~200MB fetch from a GitHub release that
+# `npm ci` triggers on any Linux/x64 host and that has failed builds outright. Nothing here imports
+# onnxruntime-node — it is a required dependency of @huggingface/transformers, whose only consumer
+# is a browser worker on onnxruntime-web — and the CPU binaries stay bundled either way.
+ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip
 RUN cd frontend && npm ci
 
 COPY frontend/ frontend/
