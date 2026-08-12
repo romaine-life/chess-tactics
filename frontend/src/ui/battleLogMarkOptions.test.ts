@@ -8,7 +8,7 @@ import {
 import { BATTLE_LOG_MARK_SLOT } from './shared/BattleLogMark';
 import type { AdminLiveMediaCatalog, AdminLiveMediaVersion } from '../net/liveMediaAdmin';
 
-const BATCH = BATTLE_LOG_MARK_BATCH_IDS[0];
+const BATCH = BATTLE_LOG_MARK_BATCH_IDS.defeat[0];
 
 function version(overrides: Partial<AdminLiveMediaVersion> = {}): AdminLiveMediaVersion {
   return {
@@ -84,11 +84,15 @@ describe('battleLogMarkOptions', () => {
     expect(options.map((entry) => entry.id).sort()).toEqual(['accepted', 'candidate']);
   });
 
-  it('ignores versions from batches this page does not offer', () => {
+  it('ignores a family this seat no longer offers, without touching its siblings', () => {
     const options = battleLogMarkOptions(catalog([
       version({ id: 'retired-family', provenance: { liveMediaBatch: { batchId: 'battle-log-defeat-mark-2026-08-11-v1' } } }),
     ]), 'defeat');
     expect(options).toEqual([]);
+    // Per-seat, so retiring the wreaths for Victory could not take Draw and Check down with
+    // them — the three were generated into one batch.
+    expect(BATTLE_LOG_MARK_BATCH_IDS.draw).not.toEqual(BATTLE_LOG_MARK_BATCH_IDS.victory);
+    expect(BATTLE_LOG_MARK_BATCH_IDS.check).toEqual(BATTLE_LOG_MARK_BATCH_IDS.draw);
   });
 });
 

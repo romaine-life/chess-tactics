@@ -32,21 +32,31 @@ import { StudioCatalogCard } from './studio/StudioCatalogCard';
  * ever follow acceptance (ADR-0316 review shape, ADR-0318 roles).
  */
 /**
- * Which batches this page offers. A batch that has been ruled out comes OFF the list rather
- * than staying up beside its replacement — a review page that keeps showing a rejected family
- * asks the same question twice. The bytes stay uploaded and unaccepted either way.
+ * Which batch each seat offers, PER SEAT rather than one flat list.
  *
- * `battle-log-defeat-mark-2026-08-11-v1` is the first headstone family. Every one of its
- * sixteen carried a cross on its face; the owner ruled the cross out, so the whole batch is
- * retired and `-v2` replaces it with plain stone.
+ * A ruled-out family comes off the page rather than staying up beside its replacement, because
+ * a review that keeps showing a rejected family asks the same question twice. Per-seat is what
+ * makes that possible: several seats were generated together into one batch, so a flat list
+ * could only retire a family by taking its unrelated siblings with it. The bytes stay uploaded
+ * and unaccepted either way; nothing here deletes anything.
+ *
+ * Two families have been ruled out so far, and both are recorded rather than merely dropped:
+ * - `battle-log-defeat-mark-2026-08-11-v1` — every headstone carried a cross on its face.
+ * - the laurel wreaths in `battle-log-marks-2026-08-12-v1` — a wreath is already the Ataraxia
+ *   mark, so the Battle's victory would have worn the Run's ladder emblem.
  */
-export const BATTLE_LOG_MARK_BATCH_IDS: readonly string[] = Object.freeze([
-  'battle-log-defeat-mark-2026-08-12-v2',
-  'battle-log-marks-2026-08-12-v1',
-  'battle-log-cause-marks-2026-08-12-v1',
-  'battle-log-gold-mark-2026-08-12-v1',
-  'battle-log-gold-loss-mark-2026-08-12-v1',
-]);
+export const BATTLE_LOG_MARK_BATCH_IDS: Readonly<Record<BattleLogForgedMark, readonly string[]>> =
+  Object.freeze({
+    victory: ['battle-log-victory-mark-2026-08-12-v2'],
+    defeat: ['battle-log-defeat-mark-2026-08-12-v2'],
+    draw: ['battle-log-marks-2026-08-12-v1'],
+    checkmate: ['battle-log-cause-marks-2026-08-12-v1'],
+    stalemate: ['battle-log-cause-marks-2026-08-12-v1'],
+    resign: ['battle-log-cause-marks-2026-08-12-v1'],
+    check: ['battle-log-marks-2026-08-12-v1'],
+    gold: ['battle-log-gold-mark-2026-08-12-v1'],
+    'gold-loss': ['battle-log-gold-loss-mark-2026-08-12-v1'],
+  });
 
 const SEAT_LABEL: Readonly<Record<BattleLogForgedMark, string>> = Object.freeze({
   victory: 'Victory (outcome)',
@@ -138,7 +148,7 @@ export function battleLogMarkOptions(
     .filter((version) => version.slot === slot
       && Boolean(version.media)
       && (version.id === activeVersionId
-        || (version.status === 'candidate' && BATTLE_LOG_MARK_BATCH_IDS.includes(batchId(version) ?? ''))));
+        || (version.status === 'candidate' && BATTLE_LOG_MARK_BATCH_IDS[seat].includes(batchId(version) ?? ''))));
   const installable = (version: AdminLiveMediaVersion): boolean =>
     version.id === activeVersionId || Object.keys(version.nativeEvidence).length > 0;
   const byIndex = new Map<number, AdminLiveMediaVersion>();
