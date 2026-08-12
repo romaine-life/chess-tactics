@@ -175,6 +175,11 @@ should be judged by sight rather than described.
   directly above the row already ends in; the threatened crown is the fact rather than its
   notation. Both read at 18px, and which one belongs in a log that is already full of `+` is a
   judgement about the whole surface, not about the art.
+- The first VICTORY family was laurel wreaths, and a wreath is already the Ataraxia mark — the
+  Battle’s win would have worn the Run’s ladder emblem. Retired for a gold trophy and a King
+  still standing (the grave’s opposite), offered together. Retiring it is also why the page’s
+  batch list is PER SEAT: the wreaths shared a batch with Draw and Check, so a flat list could
+  only have dropped the wreaths by taking two unrelated families with them.
 - The first headstone family carried a gold cross on every stone. The owner ruled the cross
   out, so that whole batch is retired from the review list rather than left up beside its
   replacement — a page that keeps showing a rejected family asks the same question twice. The
