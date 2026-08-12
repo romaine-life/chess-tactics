@@ -1,4 +1,4 @@
-import { useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { requiredDrawableRole } from '@chess-tactics/board-render';
 import { goSignIn, updateDisplayName, type AuthUser } from '../../net/auth';
 import { reportAuthSessionFailure, updateAuthSessionUser, useAuthSession } from '../../net/authSession';
@@ -7,6 +7,7 @@ import { TITLE_BAR_CLUSTER_LEAF_PHASE, TitleBarIconButtonPrimitive } from '../sh
 import { AccountMenu } from './AccountMenu';
 import { ChromeDividedGridRow, DividedInnerChromeBox, chromeDividedSeatAxis } from './ChromeDividedGrid';
 import { installedUiMedia } from '../installedUiMedia';
+import { subscribeWatcherCount } from '../../net/runObservation';
 
 // The shared trailing-edge "settings + user" cluster for the standard app title
 // bar (ADR-0023/0036): an icon-only Settings gear next to the account control —
@@ -84,10 +85,11 @@ export function HeaderAccountCluster({
   // so a seat for "nobody is watching" would spend bar width on nothing almost always. Being
   // watched is a property of the account, and the account already has a seat.
   //
-  // Fed by the observation feature when it lands. There is deliberately no query parameter for
-  // it: a hidden dev param on a player route is not a review surface, and chrome states are
-  // reviewed in the Studio.
-  const watchers = 0;
+  // The player is told. This is a live count from their own stream, not something derived from a
+  // poll, so the seat lights the moment someone opens an observation and goes dark when the last
+  // one closes it.
+  const [watchers, setWatchers] = useState(0);
+  useEffect(() => subscribeWatcherCount(setWatchers), []);
 
   const sharedAuth = useAuthSession((session) => session.status);
   const [demoUser, setDemoUser] = useState<AuthUser | null>(DEMO_USER);

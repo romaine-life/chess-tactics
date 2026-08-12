@@ -23728,6 +23728,101 @@ function publicActiveRun(row) {
   };
 }
 
+// --- Run observation -------------------------------------------------------
+// Watching someone play is two live sets, both in process alongside the lobby relay above and
+// for the same reason: the whole thing is per-connection state that dies with the connection.
+//
+// Observation is DEMAND-DRIVEN. Nothing is published, snapshotted, or streamed because a Run
+// exists; it starts when a watcher arrives and stops when the last one leaves. That is why the
+// player pays nothing for a feature nobody is using, and why a Run that ends mid-watch simply
+// stops producing frames rather than needing to be torn down.
+//
+// The watched player is TOLD. Their own stream carries the count, so "someone is watching" is
+// not something the app knows and withholds.
+const runObservers = new Map(); // Map<ownerEmail, Set<res>>
+const runWatchedSubscribers = new Map(); // Map<ownerEmail, Set<res>> — the player's own count
+
+function sseSetAdd(map, key, res) {
+  const set = map.get(key) ?? new Set();
+  set.add(res);
+  map.set(key, set);
+}
+
+function sseSetDelete(map, key, res) {
+  const set = map.get(key);
+  if (!set) return;
+  set.delete(res);
+  if (set.size === 0) map.delete(key);
+}
+
+function sseBroadcast(map, key, payload) {
+  const set = map.get(key);
+  if (!set) return;
+  // The blank line is the frame terminator, so it is written as an escape: a literal one is
+  // indistinguishable from formatting and would not survive a whitespace cleanup.
+  const frame = `data: ${JSON.stringify(payload)}\n\n`;
+  for (const res of set) sseWrite(res, frame);
+}
+
+/** Tell a player how many people are watching them, whenever that number moves. */
+function publishObserverCount(ownerEmail) {
+  const count = runObservers.get(ownerEmail)?.size ?? 0;
+  sseBroadcast(runWatchedSubscribers, ownerEmail, { type: 'observers', count });
+}
+
+/** Push the Run to everyone observing it. Called on every acknowledged mutation; a Run with no
+ * observers costs one Map lookup and returns. */
+function publishRunToObservers(ownerEmail, body, revision) {
+  if (!runObservers.has(ownerEmail)) return;
+  sseBroadcast(runObservers, ownerEmail, { type: 'run', run: body, revision });
+}
+
+// GET /api/admin/runs/:owner/observe — ADMIN: watch one player's Run, live.
+// Opening this IS the act that starts observation, so the player's indicator lights up here and
+// goes out when the connection closes.
+app.get('/api/admin/runs/:owner/observe', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const owner = String(req.params.owner || '').toLowerCase();
+  if (!owner) { res.status(400).json({ error: 'invalid_owner' }); return; }
+  const heartbeat = startSse(res);
+  sseSetAdd(runObservers, owner, res);
+  publishObserverCount(owner);
+  try {
+    await ensureDbReady();
+    const { rows } = await pool.query(
+      'SELECT body, revision FROM active_runs WHERE owner_email = $1',
+      [owner],
+    );
+    // Observation begins from NOW, so the opening frame is the Run as it currently stands
+    // rather than a history the watcher missed.
+    sseWrite(res, `data: ${JSON.stringify(rows[0]
+      ? { type: 'run', run: rows[0].body, revision: Number(rows[0].revision) }
+      : { type: 'gone' })}\n\n`);
+  } catch {
+    sseWrite(res, 'data: {"type":"unavailable"}\n\n');
+  }
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    sseSetDelete(runObservers, owner, res);
+    publishObserverCount(owner);
+  });
+});
+
+// GET /api/active-run/watchers — the player's own stream: how many people are watching me.
+app.get('/api/active-run/watchers', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const owner = String(user.email || '').toLowerCase();
+  const heartbeat = startSse(res);
+  sseSetAdd(runWatchedSubscribers, owner, res);
+  sseWrite(res, `data: ${JSON.stringify({ type: 'observers', count: runObservers.get(owner)?.size ?? 0 })}\n\n`);
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    sseSetDelete(runWatchedSubscribers, owner, res);
+  });
+});
+
 // GET /api/admin/live-runs — ADMIN: who is playing right now and roughly where they are.
 //
 // The presence tier costs nothing to build because the Run document is already written on every
@@ -23862,6 +23957,13 @@ app.put('/api/active-run', async (req, res) => {
       res.status(409).json({ error: 'active_run_revision_conflict', ...publicActiveRun(result.row) });
       return;
     }
+    // Every acknowledged mutation reaches anyone watching. Nothing is stored for them: this is
+    // the same row that was just written, handed to the connections that asked for it.
+    publishRunToObservers(
+      String(user.email || '').toLowerCase(),
+      result.row.body,
+      Number(result.row.revision),
+    );
     res.status(200).json(publicActiveRun(result.row));
   } catch (error) {
     dbUnavailable(res, 'active Run write failed', error, 'active_run_store_unavailable');

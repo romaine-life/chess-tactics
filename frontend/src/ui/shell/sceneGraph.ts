@@ -35,6 +35,7 @@ export type SceneSlotId =
   | 'run-phase'
   | 'run-workspace';
 export type SceneViewId =
+  | 'run-watch'
   | 'main-menu'
   | 'play'
   | 'play-continue'
@@ -79,6 +80,7 @@ export type SceneViewId =
   | 'portrait-editor'
   | 'party';
 export type ScenePaintOwner =
+  | 'run-watch'
   | 'dom'
   | 'play-selector'
   | 'gameplay-hud'
@@ -204,6 +206,9 @@ export const SCENE_DEFINITIONS = Object.freeze({
   lobbies: defineScene({ id: 'lobbies', parent: 'main-menu', slot: 'menu-destination', view: 'lobbies' }),
   studio: defineScene({ id: 'studio', parent: null, slot: 'root', view: 'studio' }),
   predrawnReference: defineScene({ id: 'predrawn-reference', parent: null, slot: 'root', view: 'predrawn-reference' }),
+  // Observation is its own root scene, not a mode of the Run: it presents a DIFFERENT player's
+  // Run to someone who cannot act on it, so it shares no state with the Run scene tree.
+  runWatch: defineScene({ id: 'run-watch', parent: null, slot: 'root', view: 'run-watch' }),
   portraitEditor: defineScene({ id: 'portrait-editor', parent: null, slot: 'root', view: 'portrait-editor' }),
   party: defineScene({ id: 'party', parent: 'main-menu', slot: 'menu-destination', view: 'party' }),
 });

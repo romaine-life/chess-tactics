@@ -78,6 +78,7 @@ const DrawableCatalogLab = lazy(() => import('./DrawableCatalogLab').then((modul
 const LipsanonReview = lazy(() => import('./LipsanonReview').then((module) => ({ default: module.LipsanonReview })));
 const RunSectioArtReview = lazy(() => import('./RunSectioArtReview').then((module) => ({ default: module.RunSectioArtReview })));
 const RunProgressIconReview = lazy(() => import('./RunProgressIconReview').then((module) => ({ default: module.RunProgressIconReview })));
+const RunWatch = lazy(() => import('./RunWatch').then((module) => ({ default: module.RunWatch })));
 const BrushIconReview = lazy(() => import('./BrushIconReview').then((module) => ({ default: module.BrushIconReview })));
 const MenuIconReview = lazy(() => import('./MenuIconReview').then((module) => ({ default: module.MenuIconReview })));
 
@@ -808,6 +809,13 @@ function renderScene(scene: ScenePath, search: string): ReactElement {
   }
   if (isRunRoutePath(path)) {
     return <RunScreen routePath={path} routeSearch={search} sceneSnapshot={scene.snapshot as RunSceneSnapshot} />;
+  }
+  // /run/watch/<player> — read-only observation of someone else's Run. It is its own address
+  // rather than a mode of /run because it shows a DIFFERENT Run to a different person: /run is
+  // "mine, continue it", and nothing about that sentence is true here.
+  if (path.startsWith('/run/watch/')) {
+    const owner = decodeURIComponent(path.slice('/run/watch/'.length));
+    return owner ? <RunWatch owner={owner} /> : <PredrawnReference />;
   }
   if (path === '/predrawn-reference') return <PredrawnReference />;
   if (path === '/studio' && new URLSearchParams(search).get('runSectioReview') === '1') return <RunSectioArtReview />;

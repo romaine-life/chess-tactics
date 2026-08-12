@@ -6,8 +6,8 @@ import { relativeTimeLabel } from './relativeTime';
 //
 // This is deliberately the cheap tier. Every row here is read straight off the Run document that
 // was already being written on each acknowledged mutation, so showing this page costs the players
-// on it nothing at all — no stream, no share, no work started on their side. Watch is what begins
-// an observation, and until that exists this page is the honest half that already works.
+// on it nothing at all — no stream and no work started on their side. Pressing Watch is what
+// begins an observation, and only then does the player's seat light up.
 
 export function LiveRunsCatalog(): ReactElement {
   const [runs, setRuns] = useState<LiveRunPresence[] | null>(null);
@@ -37,9 +37,13 @@ export function LiveRunsCatalog(): ReactElement {
             <span className="live-run-player">{run.owner_email}</span>
             <span className="live-run-caption">{liveRunCaption(run)}</span>
             <span className="live-run-seen">{relativeTimeLabel(run.updated_at)}</span>
-            <button type="button" className="tileset-view-action" disabled title="Observation is not wired yet">
+            <a
+              className="tileset-view-action"
+              href={`/run/watch/${encodeURIComponent(run.owner_email)}`}
+              data-nav={`/run/watch/${encodeURIComponent(run.owner_email)}`}
+            >
               Watch
-            </button>
+            </a>
           </li>
         ))}
       </ul>

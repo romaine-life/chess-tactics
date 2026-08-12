@@ -189,6 +189,11 @@ export function sceneManifest(
       'studio',
     ], ['below-fold-catalog']), [instance(SCENE_DEFINITIONS.studio, { path })]);
   }
+  if (path.startsWith('/run/watch/')) {
+    return scene(path, manifest(`run-watch:${path}`, 'tool', 'run-watch', ['run-watch']), [
+      instance(SCENE_DEFINITIONS.runWatch, { path }),
+    ]);
+  }
   if (path === '/predrawn-reference') {
     return scene(path, manifest('predrawn-reference', 'tool', 'predrawn-reference', ['predrawn-reference']), [
       instance(SCENE_DEFINITIONS.predrawnReference),
