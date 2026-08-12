@@ -79,7 +79,7 @@ describe('what the board reports as still standing', () => {
     expect(levelEnemyForceValue(battleLevel('b'))).toBe(15);
   });
 
-  // The title bar's material readout asks the same question about BOTH forces (ADR-0578), so the
+  // The title bar's material readout asks the same question about BOTH forces (ADR-0579), so the
   // side is an argument rather than a second reduce written beside this one. The point of one
   // reader is that the number a player watches during the Battle is the number the mate is
   // priced on: `standingEnemyForceValue` is now this function with the enemy filled in.

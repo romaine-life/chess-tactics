@@ -3,6 +3,7 @@ export const STUDIO_VIEWER_KIND_LABELS = {
   artwork: 'Artwork',
   sourceart: 'Source Art',
   unitart: 'Unit Art',
+  unitroster: 'Unit Roster',
   portrait: 'Portrait',
   nineslice: '9-Slice',
   divider: 'Divider',
