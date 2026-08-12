@@ -75,12 +75,6 @@ const LevelEditor = lazy(() => importLevelEditor().then((module) => ({ default: 
 const PortraitEditor = lazy(() => importPortraitEditor().then((module) => ({ default: module.PortraitEditor })));
 const PredrawnReference = lazy(() => import('./PredrawnReference').then((module) => ({ default: module.PredrawnReference })));
 const DrawableCatalogLab = lazy(() => import('./DrawableCatalogLab').then((module) => ({ default: module.DrawableCatalogLab })));
-const LipsanonReview = lazy(() => import('./LipsanonReview').then((module) => ({ default: module.LipsanonReview })));
-const RunSectioArtReview = lazy(() => import('./RunSectioArtReview').then((module) => ({ default: module.RunSectioArtReview })));
-const RunProgressIconReview = lazy(() => import('./RunProgressIconReview').then((module) => ({ default: module.RunProgressIconReview })));
-const BrushIconReview = lazy(() => import('./BrushIconReview').then((module) => ({ default: module.BrushIconReview })));
-const MenuIconReview = lazy(() => import('./MenuIconReview').then((module) => ({ default: module.MenuIconReview })));
-const TerrainMarkReview = lazy(() => import('./TerrainMarkReview').then((module) => ({ default: module.TerrainMarkReview })));
 
 const SCENE_LOADING_MIN_MS = 350;
 const STARTUP_STAGE_BEAT_MS = 140;
@@ -811,12 +805,6 @@ function renderScene(scene: ScenePath, search: string): ReactElement {
     return <RunScreen routePath={path} routeSearch={search} sceneSnapshot={scene.snapshot as RunSceneSnapshot} />;
   }
   if (path === '/predrawn-reference') return <PredrawnReference />;
-  if (path === '/studio' && new URLSearchParams(search).get('runSectioReview') === '1') return <RunSectioArtReview />;
-  if (path === '/studio' && new URLSearchParams(search).get('lipsanonReview') === '1') return <LipsanonReview />;
-  if (path === '/studio' && new URLSearchParams(search).get('brushIconReview') === '1') return <BrushIconReview />;
-  if (path === '/studio' && new URLSearchParams(search).get('runProgressIconReview') === '1') return <RunProgressIconReview />;
-  if (path === '/studio' && new URLSearchParams(search).get('menuIconReview') === '1') return <MenuIconReview />;
-  if (path === '/studio' && new URLSearchParams(search).get('terrainMarkReview') === '1') return <TerrainMarkReview />;
   if (path === '/studio' || path === '/tileset-studio') return <TilesetStudio />;
   // Wall review lives in the Studio proper: an owner proof only counts from a game-owned
   // surface, and this bespoke path is not one. The studio's route writer canonicalises this

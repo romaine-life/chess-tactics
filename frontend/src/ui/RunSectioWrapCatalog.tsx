@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactElement } from 'react';
-import { defaultBackgroundSet } from '../art/backgroundSets';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactElement } from 'react';
 import {
   acceptLiveMediaVersions,
-  fetchAdminLiveMediaCatalog,
   reviewLiveMediaVersion,
   type AdminLiveMediaCatalog,
 } from '../net/liveMediaAdmin';
+import { useAdminLiveMediaCatalog } from './studio/useAdminLiveMediaCatalog';
 import type { RunCoreCard } from '../run/model';
 import { RunCard } from './RunCard';
 import {
@@ -18,9 +17,15 @@ import {
   type RunSectioWrapCandidate,
 } from './runSectioWrapCandidates';
 import { ChromeButton } from './shared/ChromeButton';
-import { OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
-import { useSceneParticipant } from './shell/SceneBoundary';
 
+/**
+ * Run Sectio card and wrap candidates, as a Studio CATEGORY.
+ *
+ * Each wrap is mounted around LIVE card faces, at the geometry the Sectio would give it, so the
+ * thing on screen is the arrangement rather than a picture of the artwork. It was its own screen
+ * at `/studio?runSectioReview=1` until ADR-0587, which is why it had no category rail and no way
+ * in but a hand-passed URL.
+ */
 const REVIEW_CARDS: readonly RunCoreCard[] = [
   { id: 'review-three-pawns', artId: 'ppp', pieces: ['pawn', 'pawn', 'pawn'], value: 3, rarity: 'common' },
   { id: 'review-pawn-rook', artId: 'pr', pieces: ['pawn', 'rook'], value: 6, rarity: 'uncommon' },
@@ -225,46 +230,50 @@ function WrapInstallControl({
   );
 }
 
-export function RunSectioArtReview(): ReactElement {
-  const [catalog, setCatalog] = useState<AdminLiveMediaCatalog | null>(null);
-  const [error, setError] = useState('');
-  const [reloadToken, setReloadToken] = useState(0);
-  useEffect(() => {
-    let active = true;
-    void fetchAdminLiveMediaCatalog()
-      .then((next) => { if (active) setCatalog(next); })
-      .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : String(reason)); });
-    return () => { active = false; };
-  }, [reloadToken]);
-  const wraps = useMemo(() => catalog ? runSectioWrapCandidates(catalog) : [], [catalog]);
-  const sceneError = useMemo(() => error ? new Error(error) : null, [error]);
-  useSceneParticipant('studio', sceneError ? 'error' : catalog ? 'painted' : 'loading', sceneError);
+export interface RunSectioWrapState {
+  catalog: AdminLiveMediaCatalog | null;
+  error: string;
+  refresh: () => void;
+}
 
+export function useRunSectioWraps(): RunSectioWrapState {
+  const { catalog, error, refresh } = useAdminLiveMediaCatalog();
+  return { catalog, error, refresh };
+}
+
+export function RunSectioWrapCatalog({ state }: { state: RunSectioWrapState }): ReactElement {
+  const { catalog, error } = state;
+  const wraps = useMemo(() => catalog ? runSectioWrapCandidates(catalog) : [], [catalog]);
+  if (error) return <p role="alert">{error}</p>;
+  if (!catalog) return <p role="status">Loading candidates…</p>;
   return (
-    <main
-      className="run-lipsanon-review-screen skirmish-screen"
-      style={{ ['--skirmish-world-bg' as string]: `url("${defaultBackgroundSet().world}")` }}
-    >
-      <OuterChromeBox chromeConsumer="run-sectio-art-review" titled className="run-lipsanon-review-panel">
-        <OuterChromeHeader title="Run Card Review" />
-        <p>Accepted frame and illustration pixels mounted in the shared live card face.</p>
-        <div className="run-card-grid" aria-label="Trading-card examples">
+    <div data-testid="run-sectio-wrap-catalog">
+      <section aria-label="Trading-card examples">
+        <h3>Live card face</h3>
+        <p className="tileset-catalog-note">Accepted frame and illustration pixels mounted in the shared live card face.</p>
+        <div className="run-card-grid">
           {REVIEW_CARDS.map((card) => (
-            <RunCard
-              key={card.id}
-              card={card}
-              mode="sectio"
-              onSelect={() => undefined}
-            />
+            <RunCard key={card.id} card={card} mode="sectio" onSelect={() => undefined} />
           ))}
         </div>
-        {catalog ? (
-          <WrapInstallControl catalog={catalog} onInstalled={() => setReloadToken((token) => token + 1)} />
-        ) : null}
-        {wraps.map((candidate) => (
-          <WrapCandidateRow key={candidate.id} candidate={candidate} />
-        ))}
-      </OuterChromeBox>
-    </main>
+      </section>
+      {wraps.map((candidate) => (
+        <WrapCandidateRow key={candidate.id} candidate={candidate} />
+      ))}
+      {!wraps.length ? <p>No wrap candidates are uploaded.</p> : null}
+    </div>
+  );
+}
+
+export function RunSectioWrapControls({ state }: { state: RunSectioWrapState }): ReactElement {
+  const { catalog, refresh } = state;
+  return (
+    <>
+      <p className="tileset-catalog-note">
+        Each wrap is mounted around live card faces at the geometry the Sectio would give it, so
+        what is on screen is the arrangement and not a picture of the artwork.
+      </p>
+      {catalog ? <WrapInstallControl catalog={catalog} onInstalled={refresh} /> : null}
+    </>
   );
 }

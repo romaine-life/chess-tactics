@@ -6,7 +6,7 @@ import {
   TERRAIN_MARK_SLOT,
   terrainMarkCandidates,
   terrainMarkCode,
-} from './TerrainMarkReview';
+} from './TerrainMarkCatalog';
 
 const media = {
   url: '/api/admin/media/terrain',

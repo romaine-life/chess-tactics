@@ -14885,7 +14885,6 @@ button.tileset-relationship-cell {
   overflow-wrap: anywhere;
 }
 
-
 /* Per-focus layer-visibility toggle (the "vision" eye). Amber when the layer is hidden,
    so it's obvious the board is concealing something rather than empty. */
 .tileset-vision-toggle {
@@ -16314,7 +16313,6 @@ button.tileset-relationship-cell {
   inline-size: 100%;
   object-fit: cover;
 }
-
 
 /* Persisted player-camera coverage boundary. Unlike a viewport snapshot, this world-space box is
    stable while zoom and pan vary; Play keeps every possible view inside it. */
@@ -18637,7 +18635,6 @@ button.tileset-relationship-cell {
   padding-inline-start: var(--tab-label-stroke-apron);
 }
 
-
 .apparatus-tab-copy > small {
   color: var(--ds-color-ink-dim, rgba(230, 225, 215, .55));
   font-size: var(--ds-text-2xs);
@@ -19177,7 +19174,6 @@ button.tileset-relationship-cell {
   align-content: start;
   padding-block-end: var(--ds-gutter);
 }
-
 
 /* A selected campaign level adds the authored preview as the next destination column.
    On narrower desktop viewports, fit that master/detail pair inside the action column's
@@ -21682,7 +21678,6 @@ button.tileset-relationship-cell {
   object-fit: contain;
 }
 
-
 .run-victory-summary > span + span::before {
   content: "·";
   margin-inline-end: var(--ds-inline-tight);
@@ -21980,28 +21975,6 @@ button.tileset-relationship-cell {
    strip remains an overlay there; reserving its height would distort that focal line. */
 .run-screen.has-lipsana .run-aftermath-workspace-content {
   padding-block-start: 0;
-}
-
-.run-lipsanon-review-screen {
-  block-size: 100%;
-  box-sizing: border-box;
-  grid-template-columns: minmax(0, 1fr);
-  overflow: auto;
-  padding: var(--ds-inset);
-}
-
-.run-lipsanon-review-panel {
-  grid-column: 1;
-  grid-row: 2;
-  margin-inline: auto;
-  max-inline-size: 1040px;
-  overflow: auto;
-  inline-size: 100%;
-}
-
-.run-lipsanon-review-panel > .le-outer-panel-content {
-  display: grid;
-  gap: var(--ds-inline);
 }
 
 /* Screen-art candidates are wide 640x360 plates meant to be read at 4x, so they get a
@@ -22662,212 +22635,22 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
-.run-lipsanon-review-grid {
-  display: grid;
-  gap: var(--ds-inline-tight);
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.run-lipsanon-review-grid figure {
-  align-items: center;
-  display: grid;
-  gap: var(--ds-inline-tight);
-  grid-template-columns: 64px minmax(0, 1fr);
-  margin: 0;
-  min-block-size: 88px;
-  padding: var(--ds-inset);
-}
-
-.run-lipsanon-review-grid img {
-  block-size: 64px;
-  image-rendering: pixelated;
-  inline-size: 64px;
-}
-
-.run-lipsanon-review-grid figcaption {
-  display: grid;
-  gap: var(--ds-space-1);
-}
-
-.run-lipsanon-review-grid small {
-  color: var(--skirmish-muted);
-}
-
 /* Run title-bar icon review: every candidate is mounted in the SAME chip the live
    title bar paints, with its native 64x64 beside it. Layout only — the chip brings
    its own kit frame, and the review never restyles the seat it is judging. */
-.run-progress-icon-review-section {
+.run-progress-mark-seat {
   display: grid;
   gap: var(--ds-inline-tight);
 }
 
-.run-progress-icon-review-section > h2,
-.run-progress-icon-review-section > p {
+.run-progress-mark-seat > h3,
+.run-progress-mark-seat > p {
   margin: 0;
 }
 
-.run-progress-icon-review-grid {
-  display: grid;
-  gap: var(--ds-inline);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.run-progress-icon-review-grid figure {
-  align-items: start;
-  display: grid;
-  gap: var(--ds-inline);
-  grid-template-columns: 64px minmax(0, 1fr);
-  margin: 0;
-  padding: var(--ds-inset);
-}
-
-.run-progress-icon-review-detail {
-  display: grid;
-  gap: var(--ds-inline-tight);
-  justify-items: start;
-  min-width: 0;
-}
-
-.run-progress-icon-review-native {
-  block-size: 64px;
-  image-rendering: pixelated;
-  inline-size: 64px;
-  object-fit: contain;
-}
-
-.run-progress-icon-review-grid figcaption {
-  display: grid;
-  gap: var(--ds-space-1);
-}
-
-.run-progress-icon-review-grid small {
-  color: var(--skirmish-muted);
-}
-
-/* Main-menu mark review: each candidate SET is mounted as a whole rail through the same
-   primitive the menu paints, laid out side by side so the sets can be read against each
-   other and against what is installed. Layout only — the rail brings its own column
-   width, gap, surface and seat, and the review never restyles the thing it is judging
-   (a review that re-sizes the seat proves nothing about the seat). */
-.menu-icon-review-screen {
-  block-size: 100%;
-  box-sizing: border-box;
-  grid-template-columns: minmax(0, 1fr);
-  overflow: auto;
-  padding: var(--ds-inset);
-}
-
-.menu-icon-review-panel {
-  grid-column: 1;
-  grid-row: 2;
-  margin-inline: auto;
-  /* Four 322px rails plus their gaps. The panel is sized to hold the comparison, not
-     to a house width — a panel that clips the fourth set hides the set. */
-  max-inline-size: 1480px;
-  overflow: auto;
-  inline-size: 100%;
-}
-
-.menu-icon-review-panel > .le-outer-panel-content {
-  display: grid;
-  gap: var(--ds-inline);
-}
-
-.menu-icon-review-sets {
-  align-items: start;
-  display: flex;
-  gap: var(--ds-inline);
-  /* One row, always. A wrapped set is a set that can no longer be compared against the
-     one it wrapped away from, which is the entire job of this page; a narrow window
-     scrolls the row instead of breaking it. */
-  overflow-x: auto;
-}
-
-.menu-icon-review-set {
-  display: grid;
-  gap: var(--ds-inline-tight);
-  justify-items: start;
-}
-
-.menu-icon-review-set > h2,
-.menu-icon-review-set > p {
-  margin: 0;
-}
-
-/* Reserve two lines for the set name whether or not it needs them. A one-line title next
-   to a wrapped one starts its rail a line higher, and two rails at different heights
-   cannot be read against each other — which is the only thing this page does. */
-.menu-icon-review-set > h2 {
-  align-content: end;
-  min-block-size: 2.4em;
-}
-
-.menu-icon-review-set > p {
-  color: var(--skirmish-muted);
-}
-
-.menu-icon-review-missing {
+.menu-mark-missing {
   color: var(--skirmish-muted);
   margin: 0;
-}
-
-/* Terrain-mark review. One seat changes here rather than a whole set, so the page reuses the
-   mark-review layout above and adds only what a single-seat comparison needs: the pair of real
-   Enchiridion rails at the top, and four columns of specimens below it. Every specimen is a real
-   rail tab, so this file must not touch the seat, the mark or the label — only where the columns
-   sit on the page. */
-.terrain-mark-review-panel {
-  /* Content-sized, and the SCREEN scrolls. Stretched to the screen row (the default) the panel is
-     pinned to the viewport height, its two bands then split that height between them, and both
-     clip mid-rail — six seats and sixteen seats each showing two or three. This page is long by
-     nature: sixteen candidates in a column is longer than any real rail. */
-  align-self: start;
-  grid-column: 1;
-  grid-row: 2;
-  margin-inline: auto;
-  /* Four 322px specimen columns plus their gaps, same measure as the menu review. */
-  max-inline-size: 1480px;
-  inline-size: 100%;
-}
-
-/* Each band takes the height its rails actually need, and the SCREEN scrolls. Left to the
-   default `1fr` rows this panel splits its height between the comparison band and the specimen
-   band, and both clip mid-rail — six seats and sixteen seats each showing three. The page is
-   long by nature: sixteen candidates in a column is longer than any real rail. */
-.terrain-mark-review-panel > .le-outer-panel-content {
-  align-content: start;
-  display: grid;
-  gap: var(--ds-inline);
-}
-
-/* The two comparison rails stand apart from the specimen columns below them, so the eye reads
-   "installed vs chosen" as one thing and the candidate grid as another. */
-.terrain-mark-review-rails {
-  padding-block-end: var(--ds-inline);
-}
-
-/* A specimen tab carries the candidate's code as a trailing badge, so the seat keeps the exact
-   mark and the exact word the live rail draws and still says which candidate it is. The tab is a
-   two-column grid (mark slot, label); a trailing child needs a third column declared by the
-   consumer's own tab class, the same way `.ce-campaign-tab` declares one for its lock — without
-   it the badge starts a new ROW under the mark and is clipped by the tab's own height. */
-.terrain-mark-review-tab {
-  grid-template-columns: var(--settings-tab-icon-slot) minmax(0, 1fr) auto;
-}
-
-/* Neutralise the shared label nudge for the badge so it stays in its own grid cell. */
-.terrain-mark-review-tab > span.terrain-mark-review-code {
-  transform: none;
-}
-
-.terrain-mark-review-code {
-  align-items: center;
-  color: #f0e4c4;
-  display: inline-flex;
-  font-size: 0.8rem;
-  justify-content: center;
-  letter-spacing: 0.08em;
-  text-shadow: 0 2px 0 #02070b;
 }
 
 /* Studio > Action Marks: each catalog card carries the candidate in the SAME button the
@@ -23123,66 +22906,94 @@ button.tileset-relationship-cell {
   color: var(--skirmish-muted);
 }
 
-.brush-icon-review-section {
+.brush-mark-section {
   display: grid;
   gap: var(--ds-inline-tight);
 }
 
-.brush-icon-review-section > h2 {
+.brush-mark-section > h3 {
   margin: 0;
 }
 
-.brush-icon-review-toolbar-comparison {
+/* One seat per concept in the Terrain Mark category: a heading, its note, then the grid of
+   candidate rails. Same shape as the Run seats above it — layout only, because the cards mount
+   the real rail and a review that re-sizes the thing it is judging proves nothing about it. */
+.terrain-mark-seat {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.terrain-mark-seat > h3,
+.terrain-mark-seat > p {
+  margin: 0;
+}
+
+/* Menu mark sets are whole five-tab rails rather than single glyphs, so their cards need a track
+   wide enough for the rail's own fixed column instead of the shared thumbnail measure. */
+.menu-mark-grid {
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+}
+
+/* The two comparison rails at the top of the Terrain Mark category — installed beside the
+   selected candidate. This is the ONLY place the whole rail is drawn: the neighbours are the
+   same five on every candidate, so a card repeating them says nothing the card can be read for.
+   The cards below hold the Terrain SEAT alone. */
+.terrain-mark-rails {
+  align-items: start;
+  display: flex;
+  gap: var(--ds-inline);
+  overflow-x: auto;
+}
+
+/* A card that mounts a real CONTROL rather than a cut-out asset.
+   Two things are wrong with the asset card for this. The checkerboard says "transparent art"
+   and chrome is opaque — it brings its own material. And the 170px asset track is narrower than
+   the control: a rail tab is a 322px column, so it was being CLIPPED (the Run Rail Marks
+   category has shown "CON…" for its Continue tab since it shipped). Scaling it down instead
+   would be worse — a review that resizes the thing it is judging proves nothing about the seat.
+   So the track widens to the control's own measure and the card draws no stage behind it. */
+.tileset-studio-grid.studio-seat-grid {
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+}
+
+.studio-seat-card .tileset-studio-card-image {
+  /* Drops the checkerboard LAYERS and keeps the base card colour underneath them — a seat card
+     paints no surface of its own, it just stops claiming the art behind it is transparent. */
+  background-image: none;
+  min-height: 0;
+  padding: var(--ds-inset);
+}
+
+/* A one-tab rail is still a rail, so it brings the column's own fixed width. In a seat card the
+   card owns the track, so the rail fills it rather than setting it. */
+.terrain-mark-seat-preview,
+.run-rail-mark-preview {
+  inline-size: 100%;
+}
+
+.brush-mark-toolbar-comparison {
   align-items: start;
   display: grid;
   gap: var(--ds-inline-tight);
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.brush-icon-review-toolbar-card {
+.brush-mark-toolbar-card {
   min-block-size: 88px;
 }
 
-.brush-icon-review-choice-grid {
-  display: grid;
-  gap: var(--ds-inline-tight);
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.brush-icon-review-choice {
-  align-items: center;
-  display: grid;
-  gap: var(--ds-inline-tight);
-  grid-template-columns: var(--le-inner-square) minmax(0, 1fr);
-  min-block-size: 72px;
-  padding: var(--ds-inset);
-}
-
-.brush-icon-review-choice > span {
-  display: grid;
-  gap: var(--ds-space-1);
-  min-inline-size: 0;
-}
-
-.brush-icon-review-choice small {
-  color: var(--skirmish-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.brush-icon-review-glyph {
+.brush-mark-glyph {
   image-rendering: pixelated;
 }
 
-.brush-icon-review-production-actions {
+.brush-mark-production-actions {
   align-items: center;
   display: grid;
   gap: var(--ds-inline);
   grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
 }
 
-.brush-icon-review-production-actions figure {
+.brush-mark-production-actions figure {
   align-items: center;
   display: grid;
   gap: var(--ds-inline-tight);
@@ -23190,18 +23001,18 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
-.brush-icon-review-production-actions img {
+.brush-mark-production-actions img {
   block-size: 144px;
   image-rendering: pixelated;
   inline-size: 144px;
 }
 
-.brush-icon-review-production-actions figcaption {
+.brush-mark-production-actions figcaption {
   display: grid;
   gap: var(--ds-space-1);
 }
 
-.brush-icon-review-production-actions small {
+.brush-mark-production-actions small {
   color: var(--skirmish-muted);
 }
 
@@ -23425,18 +23236,16 @@ button.tileset-relationship-cell {
 }
 
 @media (max-width: 900px) {
-  .run-lipsanon-review-grid,
   .plagued-icon-review-ability-grid,
-  .brush-icon-review-choice-grid,
   .run-icon-pair-options {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .brush-icon-review-toolbar-comparison {
+  .brush-mark-toolbar-comparison {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .brush-icon-review-production-actions {
+  .brush-mark-production-actions {
     grid-template-columns: minmax(0, 1fr);
   }
 

@@ -1,34 +1,33 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import {
   acceptLiveMediaVersions,
-  fetchAdminLiveMediaCatalog,
   reviewLiveMediaVersion,
   type AdminLiveMediaCatalog,
   type AdminLiveMediaVersion,
 } from '../net/liveMediaAdmin';
+import { useAdminLiveMediaCatalog } from './studio/useAdminLiveMediaCatalog';
 import { fetchAdminDrawableCatalog, saveDrawableAsset } from '../net/drawableCatalogAdmin';
-import { defaultBackgroundSet } from '../art/backgroundSets';
-import { ChromeButton } from './shared/ChromeButton';
-import { OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { menuModeIcon } from './menuModeIcon';
-import { useSceneParticipant } from './shell/SceneBoundary';
+import { StudioCatalogCard } from './studio/StudioCatalogCard';
 
 /**
- * Owner review for a whole main-menu mark SET.
+ * Owner review for a whole main-menu mark SET, as a Studio CATEGORY.
  *
- * The unit of decision here is the set, not the icon: these five marks stack in one
- * column where every neighbour is a size and material reference, so a mark can only be
- * judged against the other four it will stand beside. Each treatment is therefore
- * mounted as a complete rail through the SAME `ApparatusRailColumn` / `ApparatusRailTab`
- * the live menu paints — same oak leaf surface, same 40px seat, same 44px draw of the
- * 64px canvas — so what is on screen here is what the menu will look like, not a
- * contact sheet standing in for it.
+ * The unit of decision here is the set, not the icon: these five marks stack in one column
+ * where every neighbour is a size and material reference, so a mark can only be judged against
+ * the other four it will stand beside. Each treatment is therefore mounted as a complete rail
+ * through the SAME `ApparatusRailColumn` / `ApparatusRailTab` the live menu paints — same oak
+ * leaf surface, same 40px seat, same 44px draw of the 64px canvas — so what is on screen is
+ * what the menu will look like, not a contact sheet standing in for it.
  *
- * Nothing is installed until the owner installs a set, and installing is one act per
- * set: approval of those exact bytes, acceptance into the five slots, and the one
- * drawable re-point the Enchiridion mark needs (it currently borrows a shared kit
- * glyph and gains a mark of its own family here).
+ * Nothing is installed until the owner installs a set, and installing is one act per set:
+ * approval of those exact bytes, acceptance into the five slots, and the one drawable re-point
+ * the Enchiridion mark needs.
+ *
+ * This was its own screen at `/studio?menuIconReview=1` until ADR-0587 — an address that
+ * borrowed the Studio's path and returned before the Studio rendered, so it had no category
+ * rail and no way in but a hand-passed URL.
  */
 export const MENU_ICON_BATCH_ID = 'main-menu-icons-2026-08-10-natural';
 
@@ -81,7 +80,7 @@ export interface MenuIconTreatment {
   index: number;
   /** Candidate per destination slug. A treatment missing a destination is still shown,
    *  with that seat empty, rather than silently dropped — a five-mark set with four
-   *  marks is exactly the kind of thing this page exists to make visible. */
+   *  marks is exactly the kind of thing this category exists to make visible. */
   marks: Map<string, AdminLiveMediaVersion>;
 }
 
@@ -109,11 +108,11 @@ export function menuIconTreatments(catalog: AdminLiveMediaCatalog): MenuIconTrea
 }
 
 /**
- * The mark each destination draws TODAY — resolved through `menuModeIcon`, the same
- * lookup the live rail uses, NOT through this page's slot table. Those two disagree on
- * purpose: Enchiridion's installed mark is a shared kit glyph outside the carved family,
- * which is one of the things being judged here. Reading the slot table would report it as
- * "no candidate" and hide the very mark the review is asking about.
+ * The mark each destination draws TODAY — resolved through `menuModeIcon`, the same lookup the
+ * live rail uses, NOT through this category's slot table. Those two disagree on purpose:
+ * Enchiridion's installed mark is a shared kit glyph outside the carved family, which is one of
+ * the things being judged here. Reading the slot table would report it as "no candidate" and
+ * hide the very mark the review is asking about.
  */
 export function installedIconUrls(): Map<string, string> {
   const marks = new Map<string, string>();
@@ -121,8 +120,8 @@ export function installedIconUrls(): Map<string, string> {
     try {
       marks.set(destination.slug, menuModeIcon(destination.slug));
     } catch {
-      // A destination with no installed mark leaves its seat empty rather than failing
-      // the whole review; the rail below labels the gap.
+      // A destination with no installed mark leaves its seat empty rather than failing the
+      // whole category; the rail below labels the gap.
     }
   }
   return marks;
@@ -149,31 +148,25 @@ async function repointMenuModeIcon(assetId: string, slot: string): Promise<void>
 }
 
 /**
- * The rail exactly as the menu paints it. `to` is this page's own address on every tab:
- * the primitive is a NavButton and a review must not navigate away, but swapping in a
- * lookalike button would defeat the whole point of mounting the real one.
+ * The rail exactly as the menu paints it. The tabs select in place rather than navigating:
+ * a review must not navigate away, and swapping in a lookalike button would defeat the whole
+ * point of mounting the real one.
  */
-function RailPreview({
-  marks,
-  reviewHref,
-}: {
-  marks: Map<string, string>;
-  reviewHref: string;
-}): ReactElement {
+function RailPreview({ marks }: { marks: Map<string, string> }): ReactElement {
   return (
-    <ApparatusRailColumn opens="no-panel" className="menu-icon-review-rail">
+    <ApparatusRailColumn opens="no-panel" className="menu-mark-rail">
       {MENU_ICON_DESTINATIONS.map((destination, index) => {
         const mark = marks.get(destination.slug);
         return mark ? (
           <ApparatusRailTab
             key={destination.slug}
             label={destination.label}
-            to={reviewHref}
             index={index}
             iconSrc={mark}
+            onSelect={() => undefined}
           />
         ) : (
-          <p className="menu-icon-review-missing" key={destination.slug} role="status">
+          <p className="menu-mark-missing" key={destination.slug} role="status">
             {destination.label}: no candidate
           </p>
         );
@@ -182,21 +175,69 @@ function RailPreview({
   );
 }
 
-function InstallSetControl({
-  treatment,
-  catalog,
-  onInstalled,
-}: {
-  treatment: MenuIconTreatment;
-  catalog: AdminLiveMediaCatalog;
-  onInstalled: () => void;
-}): ReactElement {
+export interface MenuMarkState {
+  catalog: AdminLiveMediaCatalog | null;
+  selectedTreatment: string;
+  select: (treatment: string) => void;
+  error: string;
+  refresh: () => void;
+}
+
+export function useMenuMarks(): MenuMarkState {
+  const { catalog, error, refresh } = useAdminLiveMediaCatalog();
+  const [selectedTreatment, setSelectedTreatment] = useState('');
+  const select = useCallback((treatment: string) => setSelectedTreatment(treatment), []);
+  return { catalog, selectedTreatment, select, error, refresh };
+}
+
+export function MenuMarkCatalog({ state }: { state: MenuMarkState }): ReactElement {
+  const { catalog, selectedTreatment, select, error } = state;
+  const treatments = useMemo(() => catalog ? menuIconTreatments(catalog) : [], [catalog]);
+  const installed = useMemo(() => installedIconUrls(), []);
+  if (error) return <p role="alert">{error}</p>;
+  if (!catalog) return <p role="status">Loading candidates…</p>;
+  return (
+    <div className="tileset-studio-grid studio-seat-grid menu-mark-grid" data-testid="menu-mark-catalog">
+      <StudioCatalogCard
+        className="studio-seat-card"
+        title="Installed"
+        badge="in the menu now"
+        selected={selectedTreatment === ''}
+        onSelect={() => select('')}
+        media={<RailPreview marks={installed} />}
+      />
+      {treatments.map((treatment) => (
+        <StudioCatalogCard
+          key={treatment.treatment}
+          className="studio-seat-card"
+          title={treatment.label}
+          badge={`${treatment.marks.size}/${MENU_ICON_DESTINATIONS.length} marks`}
+          selected={selectedTreatment === treatment.treatment}
+          onSelect={() => select(treatment.treatment)}
+          ariaLabel={`${treatment.label} candidate set`}
+          media={(
+            <RailPreview
+              marks={new Map([...treatment.marks].map(([slug, version]) => [slug, version.media!.url]))}
+            />
+          )}
+        />
+      ))}
+      {!treatments.length ? <p>No candidate sets are uploaded for this batch.</p> : null}
+    </div>
+  );
+}
+
+export function MenuMarkControls({ state }: { state: MenuMarkState }): ReactElement {
+  const { catalog, selectedTreatment, refresh } = state;
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
-  const complete = MENU_ICON_DESTINATIONS.every((destination) => treatment.marks.has(destination.slug));
+  const treatments = useMemo(() => catalog ? menuIconTreatments(catalog) : [], [catalog]);
+  const treatment = treatments.find((entry) => entry.treatment === selectedTreatment) ?? null;
+  const complete = Boolean(treatment)
+    && MENU_ICON_DESTINATIONS.every((destination) => treatment!.marks.has(destination.slug));
 
   const install = async (): Promise<void> => {
-    if (busy) return;
+    if (busy || !catalog || !treatment) return;
     setBusy(true);
     try {
       const versions = MENU_ICON_DESTINATIONS
@@ -242,7 +283,7 @@ function InstallSetControl({
         await repointMenuModeIcon(destination.repointDrawable, destination.slot);
       }
       setStatus('Installed. The main menu paints this set now — reload the menu to see it.');
-      onInstalled();
+      refresh();
     } catch (reason) {
       setStatus(reason instanceof Error ? `Install failed: ${reason.message}` : 'Install failed.');
     } finally {
@@ -252,83 +293,25 @@ function InstallSetControl({
 
   return (
     <>
-      <ChromeButton
-        unit="inner-text-button"
-        disabled={busy || !complete}
-        data-testid={`install-menu-icons-${treatment.treatment}`}
+      <p className="tileset-catalog-note">
+        Each card is the real menu rail — the same button primitive, the same leaf surface, the
+        same 40px seat drawing the 64px canvas at 44px. Every mark is fitted the same way: ink
+        scaled to exactly 52px tall on the 64px canvas, both ink dimensions pinned even, and the
+        mark seated on the button's own centre line. Each mark is drawn in the materials its own
+        object is made of, not in one material shared across the set (ADR-0035, ADR-0560).
+        Nothing is installed until you install a set.
+      </p>
+      <button
+        type="button"
+        className="tileset-view-action"
+        disabled={busy || !treatment || !complete}
+        data-testid="install-menu-marks"
         onClick={() => { void install(); }}
       >
-        {busy ? 'Installing…' : `Use the ${treatment.label} set`}
-      </ChromeButton>
-      {!complete ? <p role="status">This set is incomplete and cannot be installed.</p> : null}
-      {status ? <p role="status">{status}</p> : null}
+        {!treatment ? 'Select a candidate set' : busy ? 'Installing…' : `Use the ${treatment.label} set`}
+      </button>
+      {treatment && !complete ? <p className="tileset-catalog-note" role="status">This set is incomplete and cannot be installed.</p> : null}
+      {status ? <p className="tileset-catalog-note" role="status">{status}</p> : null}
     </>
-  );
-}
-
-export function MenuIconReview(): ReactElement {
-  const [catalog, setCatalog] = useState<AdminLiveMediaCatalog | null>(null);
-  const [error, setError] = useState('');
-  const [nonce, setNonce] = useState(0);
-  const refresh = useCallback(() => setNonce((value) => value + 1), []);
-  useEffect(() => {
-    let active = true;
-    void fetchAdminLiveMediaCatalog()
-      .then((next) => { if (active) setCatalog(next); })
-      .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : String(reason)); });
-    return () => { active = false; };
-  }, [nonce]);
-  const sceneError = useMemo(() => error ? new Error(error) : null, [error]);
-  useSceneParticipant('studio', sceneError ? 'error' : catalog ? 'painted' : 'loading', sceneError);
-  const treatments = useMemo(() => catalog ? menuIconTreatments(catalog) : [], [catalog]);
-  const installed = useMemo(() => installedIconUrls(), []);
-  const reviewHref = `${window.location.pathname}${window.location.search}`;
-
-  return (
-    <main
-      className="menu-icon-review-screen skirmish-screen"
-      style={{ ['--skirmish-world-bg' as string]: `url("${defaultBackgroundSet().world}")` }}
-    >
-      <OuterChromeBox chromeConsumer="menu-icon-review" titled className="menu-icon-review-panel">
-        <OuterChromeHeader title="Main-Menu Mark Review" />
-        <p>
-          Each column is the real menu rail — the same button primitive, the same leaf
-          surface, the same 40px seat drawing the 64px canvas at 44px. Every candidate mark
-          is fitted the same way: ink scaled to exactly 52px tall on the 64px canvas, both
-          ink dimensions pinned even, and the mark seated on the button's own centre line —
-          so every mark in every set carries the same 5.6px above it and below it. Each mark
-          is drawn in the materials its own object is made of, not in one material shared
-          across the set (ADR-0035, ADR-0560). Nothing is installed until you install a set.
-        </p>
-        {error ? <p role="alert">{error}</p> : null}
-        {!catalog && !error ? <p role="status">Loading candidates…</p> : null}
-        {catalog ? (
-          <div className="menu-icon-review-sets">
-            <section className="menu-icon-review-set" aria-labelledby="menu-icon-installed-title">
-              <h2 id="menu-icon-installed-title">Installed</h2>
-              <p>What the menu paints today.</p>
-              <RailPreview marks={installed} reviewHref={reviewHref} />
-            </section>
-            {treatments.map((treatment) => (
-              <section
-                className="menu-icon-review-set"
-                aria-labelledby={`menu-icon-${treatment.treatment}-title`}
-                data-testid={`menu-icon-set-${treatment.treatment}`}
-                key={treatment.treatment}
-              >
-                <h2 id={`menu-icon-${treatment.treatment}-title`}>{treatment.label}</h2>
-                <p>Candidate set — not installed.</p>
-                <RailPreview
-                  marks={new Map([...treatment.marks].map(([slug, version]) => [slug, version.media!.url]))}
-                  reviewHref={reviewHref}
-                />
-                <InstallSetControl treatment={treatment} catalog={catalog} onInstalled={refresh} />
-              </section>
-            ))}
-          </div>
-        ) : null}
-        {catalog && !treatments.length ? <p>No candidate sets are uploaded for this batch.</p> : null}
-      </OuterChromeBox>
-    </main>
   );
 }

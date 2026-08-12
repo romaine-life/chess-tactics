@@ -47,8 +47,23 @@ describe('professional loading architecture guards', () => {
     expect(read('./ui/WallCandidateReview.tsx')).toContain('onFirstFrame');
     expect(read('./ui/WallCandidateReview.tsx')).toContain('onFrameError');
     expect(read('./ui/DrawableCatalogLab.tsx').replace(/\r\n/g, '\n')).toContain("useSceneParticipant(\n    'studio'");
-    expect(read('./ui/RunSectioArtReview.tsx')).toContain("useSceneParticipant('studio'");
-    expect(read('./ui/LipsanonReview.tsx')).toContain("useSceneParticipant('studio'");
+  });
+
+  // A review CATEGORY is not a standalone route and must not enrol separately: the Studio itself
+  // is the 'studio' participant, and a second one inside its own catalog body holds the scene on a
+  // fetch the shell already covers. These six were standalone screens hanging off `/studio?x=1`
+  // until ADR-0587 folded them into categories; each dropped its own participation with its shell.
+  it('leaves scene participation to the Studio for a review category', () => {
+    for (const file of [
+      './ui/BrushMarkCatalog.tsx',
+      './ui/MenuMarkCatalog.tsx',
+      './ui/RunProgressMarkCatalog.tsx',
+      './ui/RunSectioWrapCatalog.tsx',
+      './ui/LipsanonArtCatalog.tsx',
+      './ui/TerrainMarkCatalog.tsx',
+    ]) {
+      expect(read(file), file).not.toContain('useSceneParticipant');
+    }
   });
 
   it('keeps asynchronous deep-linked Studio viewers inside the scene gate', () => {
