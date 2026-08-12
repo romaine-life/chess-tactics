@@ -46,7 +46,7 @@ export interface RunAdoptionConflict {
 }
 
 /**
- * Whose server-held Run document this store is writing to (ADR-0588).
+ * Whose server-held Run document this store is writing to (ADR-0587).
  *
  * `'account'` is the signed-in player's row. `'guest'` is the row a signed-out player's browser
  * owns through the opaque key in `guestIdentity`. `null` is browser-only play — which is what
@@ -130,7 +130,7 @@ function queueRemoteSave(run: RunDocument): void {
 }
 
 /**
- * Hand this browser's guest Run row to the account that just signed in (ADR-0588).
+ * Hand this browser's guest Run row to the account that just signed in (ADR-0587).
  *
  * The guest key is forgotten once the server has answered, because the row it named is gone
  * either way — moved onto the account, or released because the account was already playing
@@ -152,7 +152,7 @@ async function adoptGuestRunForAccount(): Promise<void> {
 }
 
 /**
- * The signed-out hydration (ADR-0588).
+ * The signed-out hydration (ADR-0587).
  *
  * A guest's browser is the authority on their Run, which is the same rule `campaign_progress`
  * already states for guest campaign progress. So the local Run wins whenever there is one, and the

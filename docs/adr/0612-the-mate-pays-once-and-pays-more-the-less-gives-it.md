@@ -5,10 +5,10 @@ deciders: owner (Nelson) + Claude
 refines:
   - "[ADR-0540](0540-the-board-pays-manubiae-for-named-tactics.md)"
   - "[ADR-0543](0543-a-mate-is-paid-for-the-army-it-did-not-have-to-take.md)"
-  - "[ADR-0561](0561-a-pawn-that-mates-by-arriving-is-paid-and-the-underpromotion-more.md)"
+  - "[ADR-0611](0611-a-pawn-that-mates-by-arriving-is-paid-and-the-underpromotion-more.md)"
 ---
 
-# ADR-0562: The mate pays once, and pays more the less that gives it
+# ADR-0612: The mate pays once, and pays more the less that gives it
 
 ## Context
 

@@ -209,9 +209,9 @@ directional-sprite remapping.
 ## More Information
 
 - Superseded decision:
-  [ADR-0079](0079-wall-mirrors-use-wall-local-board-axis-visibility-corridors.md)
+  [ADR-0597](0597-wall-mirrors-use-wall-local-board-axis-visibility-corridors.md)
 - Earlier screen-horizontal decision:
-  [ADR-0078](0078-wall-mirrors-reflect-pieces-horizontally-in-screen-space.md)
+  [ADR-0596](0596-wall-mirrors-reflect-pieces-horizontally-in-screen-space.md)
 - Original live-mirror decision:
   [ADR-0077](0077-wall-mirrors-are-live-piece-reflective-surfaces.md)
 - Derived current-state contract: [Board render contract](../board-render-contract.md)

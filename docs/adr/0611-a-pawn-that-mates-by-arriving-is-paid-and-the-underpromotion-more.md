@@ -7,7 +7,7 @@ refines:
   - "[ADR-0543](0543-a-mate-is-paid-for-the-army-it-did-not-have-to-take.md)"
 ---
 
-# ADR-0561: A Pawn that mates by arriving is paid, and the underpromotion more
+# ADR-0611: A Pawn that mates by arriving is paid, and the underpromotion more
 
 ## Context
 

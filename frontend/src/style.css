@@ -19292,6 +19292,30 @@ button.tileset-relationship-cell {
   object-fit: contain;
 }
 
+/* Observers ride the avatar's own opening. .cluster-icon-button is the positioned ancestor, so
+   this takes no track in the cluster's divided grid — the seat count, the rails and the bar's
+   measured geometry are identical whether or not anyone is watching. */
+.account-watched-mark {
+  block-size: 22px;
+  image-rendering: pixelated;
+  inline-size: 22px;
+  inset-block-end: -2px;
+  inset-inline-end: -2px;
+  object-fit: contain;
+  position: absolute;
+}
+
+/* The count is the menu's business — the seat says THAT you are watched, the menu says by how
+   many. Reads as a status line above the door, not as another action. */
+.account-menu-watched {
+  align-items: center;
+  color: #8fb6d6;
+  display: flex;
+  font-size: var(--ds-text-xs);
+  gap: 6px;
+  margin: 0;
+}
+
 /* The door is the action — a bare icon button (no fabricated surface), labelled
    for screen readers + a hover tooltip, brightening on hover/focus. */
 .account-menu-exit {
@@ -29889,6 +29913,113 @@ button.section-box-head {
   gap: var(--ds-inline-tight);
   padding: 0 var(--ds-inset) var(--ds-inset);
 }
+
+/* Studio → Kit Icon Candidates. A mark is judged in its seat, so each candidate is drawn at
+   the sizes it actually has to survive rather than at its source resolution. */
+.kit-icon-candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* No surface of its own: a row here is a list item on the Studio's own page, and painting it
+   would be a second unregistered surface behind the one already there. */
+.kit-icon-candidate {
+  align-items: center;
+  display: flex;
+  gap: 18px;
+  padding: 12px 14px;
+}
+
+.kit-icon-candidate-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.kit-icon-candidate-slot {
+  color: #d7e6f5;
+  font-family: monospace;
+  font-size: var(--ds-text-sm);
+}
+
+.kit-icon-candidate-label,
+.kit-icon-candidate-meta {
+  color: #8fb6d6;
+  font-size: var(--ds-text-xs);
+}
+
+.kit-icon-candidate-seats {
+  align-items: flex-end;
+  display: flex;
+  gap: 14px;
+  margin-inline-start: auto;
+}
+
+.kit-icon-candidate-seat {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kit-icon-candidate-seat-box {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+}
+
+.kit-icon-candidate-seat-box img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: contain;
+}
+
+.kit-icon-candidate-seat-size {
+  color: #5c7f9e;
+  font-family: monospace;
+  font-size: var(--ds-text-2xs, 10px);
+}
+
+/* Studio → Live Runs. Presence rows: player, where they are, when they last moved. */
+.live-run-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.live-run {
+  align-items: baseline;
+  display: flex;
+  gap: 16px;
+  padding: 8px 14px;
+}
+
+.live-run-player {
+  color: #d7e6f5;
+  font-family: monospace;
+  font-size: var(--ds-text-sm);
+}
+
+.live-run-caption {
+  color: #8fb6d6;
+  font-size: var(--ds-text-xs);
+}
+
+.live-run-seen {
+  color: #5c7f9e;
+  font-size: var(--ds-text-xs);
+  margin-inline-start: auto;
+}
+
 /* Unit Roster — the shipped roster at 1:1, for comparative judgement.
    No zoom control by design: these sprites are authored at their delivery size,
    so magnifying them would hide the thing being inspected. */
@@ -30080,6 +30211,66 @@ button.section-box-head {
   display: block;
   position: static;
   transform: none;
+}
+
+/* /run/watch/<player> — read-only observation. Reads, never writes. */
+.run-watch {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0 auto;
+  max-inline-size: 720px;
+  /* Clears the persistent title bar, which is painted over this scene rather than above it. */
+  padding: calc(var(--app-titlebar-height, 76px) + 24px) 20px 28px;
+}
+
+.run-watch-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+}
+
+.run-watch-player {
+  color: #d7e6f5;
+  font-family: monospace;
+  font-size: var(--ds-text-md);
+}
+
+.run-watch-where,
+.run-watch-note {
+  color: #8fb6d6;
+  font-size: var(--ds-text-xs);
+  margin: 0;
+}
+
+.run-watch-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin: 0;
+}
+
+.run-watch-facts dt {
+  color: #5c7f9e;
+  font-size: var(--ds-text-2xs, 10px);
+}
+
+.run-watch-facts dd {
+  color: #d7e6f5;
+  font-size: var(--ds-text-sm);
+  margin: 0;
+}
+
+.run-watch-army {
+  color: #8fb6d6;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: var(--ds-text-xs);
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
 /* A catalog body that is not the shared .tileset-studio-grid still has to own its own scroll:

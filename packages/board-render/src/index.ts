@@ -221,6 +221,7 @@ export {
   LEGACY_RUN_RULES,
   RUN_CARD_SPANS,
   cardAllowedByRules,
+  cardFamilyArtId,
   runCardCost,
   formationSpan,
   runRules,

@@ -75,6 +75,7 @@ const LevelEditor = lazy(() => importLevelEditor().then((module) => ({ default: 
 const PortraitEditor = lazy(() => importPortraitEditor().then((module) => ({ default: module.PortraitEditor })));
 const PredrawnReference = lazy(() => import('./PredrawnReference').then((module) => ({ default: module.PredrawnReference })));
 const DrawableCatalogLab = lazy(() => import('./DrawableCatalogLab').then((module) => ({ default: module.DrawableCatalogLab })));
+const RunWatch = lazy(() => import('./RunWatch').then((module) => ({ default: module.RunWatch })));
 
 const SCENE_LOADING_MIN_MS = 350;
 const STARTUP_STAGE_BEAT_MS = 140;
@@ -803,6 +804,13 @@ function renderScene(scene: ScenePath, search: string): ReactElement {
   }
   if (isRunRoutePath(path)) {
     return <RunScreen routePath={path} routeSearch={search} sceneSnapshot={scene.snapshot as RunSceneSnapshot} />;
+  }
+  // /run/watch/<player> — read-only observation of someone else's Run. It is its own address
+  // rather than a mode of /run because it shows a DIFFERENT Run to a different person: /run is
+  // "mine, continue it", and nothing about that sentence is true here.
+  if (path.startsWith('/run/watch/')) {
+    const handle = decodeURIComponent(path.slice('/run/watch/'.length));
+    return handle ? <RunWatch handle={handle} /> : <PredrawnReference />;
   }
   if (path === '/predrawn-reference') return <PredrawnReference />;
   if (path === '/studio' || path === '/tileset-studio') return <TilesetStudio />;

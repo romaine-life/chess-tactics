@@ -19,7 +19,8 @@ import { RunCard } from './RunCard';
  * the frame sits over it, and the name and price sit beside it. This is the same `RunCard` the
  * Sectio row draws, so what is judged here is what ships.
  *
- * Review only. Nothing here accepts, activates or re-points a slot.
+ * Read-only. Nothing here accepts, activates or re-points a slot; it shows candidates and
+ * accepted cards alike, because a set is judged against itself long after it ships.
  */
 const SLOT_PREFIX = 'ui/run/card-art/';
 const PROMPT_SCHEMA = 'run-card-art-prompt-v3';
@@ -53,11 +54,13 @@ export function RunCardArtReviewCatalog(): ReactElement {
 
   const mounted = useMemo<Mounted[]>(() => {
     if (!catalog) return [];
-    // The batch is identified by its schema AND by still being a candidate: the ADR-0520 family art
-    // shares the schema name, and an accepted row is not what this page is for.
+    // Candidates AND accepted rows. Filtering to candidates emptied this page the moment the batch
+    // was installed, which is exactly backwards: what a card set looks like TOGETHER is a question
+    // that outlives its promotion, and a set is judged against itself long after every card in it
+    // shipped. The status is shown per card instead of deciding what appears.
     const versions = catalog.versions.filter((version) => (
       version.provenance?.schema === PROMPT_SCHEMA
-      && version.status === 'candidate'
+      && (version.status === 'candidate' || version.status === 'accepted')
       && String(version.slot ?? '').startsWith(SLOT_PREFIX)
       && Boolean(version.media)
     ));
@@ -97,7 +100,7 @@ export function RunCardArtReviewCatalog(): ReactElement {
         <section key={world} className="run-card-art-review-world" aria-label={world}>
           <h2>{world} <span>{entries.length}</span></h2>
           <div className="run-card-art-review-grid">
-            {entries.map(({ card, url, slot }) => (
+            {entries.map(({ card, url, slot, status }) => (
               <figure key={slot} className="run-card-art-review-item" data-card-art-slot={slot}>
                 {/* A King is a starter card and carries no price; it is granted, never bought. */}
                 <RunCard
@@ -110,7 +113,7 @@ export function RunCardArtReviewCatalog(): ReactElement {
                 <figcaption>
                   <strong>{runCardName(card)}</strong>
                   <em>{runCardFlavor(card)}</em>
-                  <code>{card.id}</code>
+                  <code>{card.id} · {status}</code>
                   <img src={url} alt="" loading="lazy" />
                 </figcaption>
               </figure>
@@ -120,7 +123,7 @@ export function RunCardArtReviewCatalog(): ReactElement {
       ))}
       {!mounted.length ? (
         <p className="tileset-studio-empty" role="status">
-          No candidate card art in the live catalog.
+          No card art in the live catalog.
         </p>
       ) : null}
     </div>

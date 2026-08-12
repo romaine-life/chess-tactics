@@ -4,9 +4,9 @@ date: 2026-07-11
 deciders: Nelson, Codex
 ---
 
-# ADR-0078: Wall mirrors reflect pieces horizontally in screen space
+# ADR-0596: Wall mirrors reflect pieces horizontally in screen space
 
-> **Superseded by [ADR-0079](0079-wall-mirrors-use-wall-local-board-axis-visibility-corridors.md)
+> **Superseded by [ADR-0597](0597-wall-mirrors-use-wall-local-board-axis-visibility-corridors.md)
 > (2026-07-11).** Screen-space placement and `flipX` remain downstream presentation
 > for admitted pieces, but mirror visibility is now governed by the wall-local
 > board-axis corridor defined in ADR-0079 rather than catch-all piece submission.

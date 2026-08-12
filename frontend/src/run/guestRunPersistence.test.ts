@@ -3,7 +3,7 @@ import { createBlankLevel } from '../core/level';
 import { createRun, type RunDocument, type RunWarSnapshot } from './model';
 
 /**
- * A signed-out Run reaching the server at all (ADR-0588).
+ * A signed-out Run reaching the server at all (ADR-0587).
  *
  * Before guest identity these assertions could not be written: `queueRemoteSave` returned
  * immediately whenever the store was not joined to an account, so no signed-out mutation ever

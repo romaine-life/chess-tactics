@@ -6,7 +6,7 @@ deciders: Nelson, Codex
 
 # ADR-0077: Wall mirrors are live piece-reflective surfaces
 
-> **Superseded by [ADR-0078](0078-wall-mirrors-reflect-pieces-horizontally-in-screen-space.md)
+> **Superseded by [ADR-0596](0596-wall-mirrors-reflect-pieces-horizontally-in-screen-space.md)
 > (2026-07-11).** The live-mirror requirement remains, but the physical wall-plane
 > reflection and reflected-direction rules below are replaced by the deliberate
 > screen-space reflection model in ADR-0078.
