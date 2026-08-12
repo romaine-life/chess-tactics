@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:4d4590bda0cb49dda552d51438b7c3601251fe5da22f8d7afefe51e5705646c2"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:4713170ab6c90ba3924e94a2df1e740b52afa27d0ea937a2b079b06037398f13"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Show both forces' material in one title-bar box"
-  prNumber: "921"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/921"
-  commit: "b5664307"
+  prTitle: "Encrypt the OAuth tokens the session row holds"
+  prNumber: "924"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/924"
+  commit: "346e677e"
 
 name: chess-tactics
 namespace: chess-tactics
@@ -171,3 +171,22 @@ auth:
 # ADR-0038: comma-separated allowlist of emails allowed to publish the global
 # OFFICIAL campaign tier (backend requireAdmin). Fail-closed when empty; not a secret.
 adminEmails: "nelson@romaine.life"
+
+
+# Kubernetes Secret holding the key that encrypts OAuth tokens at rest in `auth_sessions`
+# (ADR-0576). Unset means the backend stores them plainly and logs a warning on every boot;
+# it does not refuse to start, because that would take sign-in away over a missing variable.
+#
+#   kubectl create secret generic chess-tactics-token-key -n chess-tactics #     --from-literal=key="$(openssl rand -base64 32)"
+#
+tokenEncryptionSecret:
+  name: chess-tactics-token-key
+  key: key
+
+# Kubernetes Secret holding this app's OAuth client secret. The SAME value must exist in the auth
+# namespace under the same name, or the provider cannot verify what this backend sends.
+#
+#   kubectl create secret generic chess-tactics-oidc-client -n <ns> --from-literal=secret="..."
+oidcClientSecret:
+  name: chess-tactics-oidc-client
+  key: secret
