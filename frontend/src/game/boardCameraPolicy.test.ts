@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BOARD_CAMERA_RESOLUTION_PRESETS,
   BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM,
+  boardCameraBoundsAtSize,
   boardCameraBoundsPolygon,
+  boardCameraResolution,
+  centerBoardCameraBoundsOnBoard,
+  centeredPlayableBoardFramingBounds,
   defaultBoardCameraBounds,
   effectiveBoardCameraCoverPolygon,
   largestBoxInsideBoardCameraPolygon,
+  normalizeBoardCameraBounds,
   resolvedBoardCameraBounds,
 } from '@chess-tactics/board-render';
 import { minimumZoomToCoverViewport } from '../ui/shared/ViewPane';
@@ -91,5 +97,77 @@ describe('level camera policy', () => {
     const cover = effectiveBoardCameraCoverPolygon(board);
     expect(cover.length).toBe(4);
     expect(boardCameraBoundsPolygon(resolvedBoardCameraBounds(board))).toEqual(cover);
+  });
+
+  /**
+   * The slack between the board and the box IS the scrolling room, so an off-centre box gives
+   * one side more of it than the other.
+   */
+  describe('centring on the playable grid', () => {
+    const board = { cols: 6, rows: 5 };
+    const playable = centeredPlayableBoardFramingBounds(board, 0);
+    const room = (box: ReturnType<typeof centerBoardCameraBoundsOnBoard>) => ({
+      left: playable.minX - box.minX,
+      right: (box.minX + box.width) - (playable.minX + playable.width),
+      top: playable.minY - box.minY,
+      bottom: (box.minY + box.height) - (playable.minY + playable.height),
+    });
+
+    it('evens the room on both sides of both axes without resizing', () => {
+      const lopsided = { minX: -900, minY: -700, width: 1_600, height: 1_000 };
+      const centered = centerBoardCameraBoundsOnBoard(lopsided, board);
+      expect(centered.width).toBe(lopsided.width);
+      expect(centered.height).toBe(lopsided.height);
+      const slack = room(centered);
+      expect(slack.left).toBeCloseTo(slack.right, 6);
+      expect(slack.top).toBeCloseTo(slack.bottom, 6);
+    });
+
+    it('is already the answer for a box that is centred', () => {
+      const snapped = defaultBoardCameraBounds(board);
+      expect(centerBoardCameraBoundsOnBoard(snapped, board)).toEqual(snapped);
+    });
+
+    /**
+     * The mandatory opening frame shares this centre, so an undersized box grows symmetrically
+     * instead of being shoved back off the centre it was just given.
+     */
+    it('survives normalization still centred when the box is too small to be legal', () => {
+      const tiny = centerBoardCameraBoundsOnBoard({ minX: 0, minY: 0, width: 40, height: 30 }, board);
+      const normalized = normalizeBoardCameraBounds(tiny, board)!;
+      const slack = room(normalized);
+      expect(slack.left).toBeCloseTo(slack.right, 6);
+      expect(slack.top).toBeCloseTo(slack.bottom, 6);
+    });
+  });
+
+  /**
+   * World pixels are screen pixels at zoom 1, so sizing the box to a display resolution states
+   * exactly what a player on that display sees fully zoomed out, art drawn one-to-one.
+   */
+  describe('snapping to a display resolution', () => {
+    it('takes the exact world-pixel size and keeps the centre it had', () => {
+      const authored = { minX: -394, minY: -229, width: 788, height: 437 };
+      const sized = boardCameraBoundsAtSize(authored, { width: 1_920, height: 1_080 });
+      expect(sized.width).toBe(1_920);
+      expect(sized.height).toBe(1_080);
+      expect(sized.minX + sized.width / 2).toBeCloseTo(authored.minX + authored.width / 2, 6);
+      expect(sized.minY + sized.height / 2).toBeCloseTo(authored.minY + authored.height / 2, 6);
+    });
+
+    it('offers real display sizes whose stated aspect is the one they have', () => {
+      const ratios: Record<string, number> = { '16:9': 16 / 9, '16:10': 16 / 10, '4:3': 4 / 3, '21:9': 64 / 27 };
+      expect(BOARD_CAMERA_RESOLUTION_PRESETS.length).toBeGreaterThan(0);
+      for (const preset of BOARD_CAMERA_RESOLUTION_PRESETS) {
+        expect(preset.id).toBe(`${preset.width}x${preset.height}`);
+        expect(boardCameraResolution(preset.id)).toBe(preset);
+        // 21:9 is a marketing name for several near ratios; the rest are exact.
+        expect(preset.width / preset.height).toBeCloseTo(ratios[preset.aspect], preset.aspect === '21:9' ? 0 : 6);
+      }
+    });
+
+    it('has no resolution for an id it does not offer', () => {
+      expect(boardCameraResolution('1920x1081')).toBeUndefined();
+    });
   });
 });

@@ -4,7 +4,7 @@
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
-import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, largestBoxInsideBoardCameraPolygon, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, MAXIMUM_AUTHORED_CAMERA_ZOOM_IN, normalizeBoardCameraBounds, normalizeCameraZoomIn, predrawnEnvironmentGeometryFingerprintInputV2, predrawnRenderSurface, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, worldViewportForCamera, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
+import { BOARD_CAMERA_RESOLUTION_PRESETS, BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, boardCameraBoundsAtSize, boardCameraResolution, cameraToContainBounds, centerBoardCameraBoundsOnBoard, centeredPlayableBoardFramingBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, largestBoxInsideBoardCameraPolygon, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, MAXIMUM_AUTHORED_CAMERA_ZOOM_IN, normalizeBoardCameraBounds, normalizeCameraZoomIn, predrawnEnvironmentGeometryFingerprintInputV2, predrawnRenderSurface, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, worldViewportForCamera, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
 import { boardLabCellPosition, boardLabMetrics, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
 import { projectBoardPoint, unprojectBoardPoint, type BoardForest, type BoardForestSection, type BoardForestTree, type BoardTown, type BoardTownSection } from '@chess-tactics/board-render';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
@@ -3247,6 +3247,7 @@ export function LevelEditor(): ReactElement {
   type CameraBoundaryInteractionMode = 'view' | 'edit';
   const [cameraBoundaryInteractionMode, setCameraBoundaryInteractionMode] = useState<CameraBoundaryInteractionMode>('edit');
   const [cameraSnapMode, setCameraSnapMode] = useState<BoardCameraSnapMode>('balanced');
+  const [cameraResolutionId, setCameraResolutionId] = useState<string>('1920x1080');
   const frameCameraBoundary = (bounds: BoardCameraBounds): void => {
     if (!viewViewportSize) return;
     const revealPadding = Math.max(bounds.width, bounds.height) * 0.025;
@@ -4414,6 +4415,64 @@ export function LevelEditor(): ReactElement {
     commitCameraBoundary(bounds);
     setCameraBoundaryInteractionMode('edit');
     frameCameraBoundary(bounds);
+  };
+  /**
+   * How far the box currently reaches past the playable grid on each side. This is the scrolling
+   * room a player gets in that direction, so stating all four is how an author sees the box is
+   * lopsided before deciding to centre it.
+   */
+  const cameraBoundaryScrollRoom = (() => {
+    const playable = centeredPlayableBoardFramingBounds({ cols: boardCols, rows: boardRows }, 0);
+    const box = resolvedCameraBoundary;
+    return {
+      left: playable.minX - box.minX,
+      right: (box.minX + box.width) - (playable.minX + playable.width),
+      top: playable.minY - box.minY,
+      bottom: (box.minY + box.height) - (playable.minY + playable.height),
+    };
+  })();
+  const cameraBoundaryIsCentered = Math.abs(cameraBoundaryScrollRoom.left - cameraBoundaryScrollRoom.right) < 0.5
+    && Math.abs(cameraBoundaryScrollRoom.top - cameraBoundaryScrollRoom.bottom) < 0.5;
+  /** Keep the composed size, move it so the scrolling room is the same on both sides of each axis. */
+  const centerCameraBoundaryOnBoard = (): void => {
+    const centered = centerBoardCameraBoundsOnBoard(
+      resolvedCameraBoundary,
+      { cols: boardCols, rows: boardRows },
+    );
+    commitCameraBoundary(centered);
+    setCameraBoundaryInteractionMode('edit');
+    frameCameraBoundary(centered);
+    reportStatus(
+      'Camera boundary centred on the playable grid.',
+      'success',
+      'Its size is unchanged; the scrolling room is now even on every side.',
+    );
+  };
+  /**
+   * Size the box to an exact display resolution. World pixels are screen pixels at zoom 1, so
+   * this states the box a player at that resolution sees fully zoomed out, art drawn one-to-one.
+   */
+  const snapCameraBoundaryToResolution = (): void => {
+    const resolution = boardCameraResolution(cameraResolutionId);
+    if (!resolution) return;
+    const current = currentEditorBoardRef.current;
+    const sized = boardCameraBoundsAtSize(resolvedCameraBoundary, resolution);
+    const normalized = normalizeBoardCameraBounds(sized, current);
+    if (!normalized) return;
+    commitCameraBoundary(sized);
+    setCameraBoundaryInteractionMode('edit');
+    frameCameraBoundary(normalized);
+    const grown = Math.round(normalized.width) !== resolution.width
+      || Math.round(normalized.height) !== resolution.height;
+    reportStatus(
+      grown
+        ? `Boundary grew past ${resolution.width} × ${resolution.height} to ${Math.round(normalized.width)} × ${Math.round(normalized.height)}.`
+        : `Camera boundary set to ${resolution.width} × ${resolution.height} world px.`,
+      grown ? 'warning' : 'success',
+      grown
+        ? 'That resolution is smaller than the required opening board frame on this board.'
+        : 'A player at that resolution sees exactly this box at zoom 1, drawn one-to-one.',
+    );
   };
   /**
    * The largest rectangle that stays inside this level's PAINT. Only offered where there is
@@ -11250,6 +11309,61 @@ export function LevelEditor(): ReactElement {
               >Snap</ChromeButton>
             </div>
             <p className="le-board-note">Balanced is the default: ten percent padding with a two projected-tile-step minimum per axis.</p>
+          </section>
+          <section className="skirmish-card skirmish-view-card" aria-label="Centre camera boundary on the playable grid" data-testid="le-camera-center">
+            <h2>Centre on grid</h2>
+            <div className="skirmish-view-row">
+              <ChromeButton
+                unit="inner-text-button"
+                className={chromeUnitClassNames(
+                  'inner-text-button',
+                  'le-seg-btn',
+                  cameraBoundaryIsCentered && 'active',
+                )}
+                onClick={centerCameraBoundaryOnBoard}
+                disabled={!editorSessionCanWrite || cameraBoundaryIsCentered}
+                title="Keep this box's size and move it until the playable grid sits in its middle."
+              >Centre on grid</ChromeButton>
+              <span className="le-board-note" data-testid="le-camera-center-state">
+                {cameraBoundaryIsCentered ? 'Already centred.' : 'Off centre.'}
+              </span>
+            </div>
+            <dl className="le-settings-list">
+              <div>
+                <dt>Room left / right</dt>
+                <dd>{Math.round(cameraBoundaryScrollRoom.left)} / {Math.round(cameraBoundaryScrollRoom.right)} world px</dd>
+              </div>
+              <div>
+                <dt>Room above / below</dt>
+                <dd>{Math.round(cameraBoundaryScrollRoom.top)} / {Math.round(cameraBoundaryScrollRoom.bottom)} world px</dd>
+              </div>
+            </dl>
+            <p className="le-board-note">The slack past the playable grid is the scrolling distance a player gets on that side. Centring keeps the size you composed and evens the two out.</p>
+          </section>
+          <section className="skirmish-card skirmish-view-card" aria-label="Camera boundary resolution" data-testid="le-camera-resolution">
+            <h2>Snap to resolution</h2>
+            <div className="skirmish-view-row">
+              <HouseSelect<string>
+                value={cameraResolutionId}
+                options={BOARD_CAMERA_RESOLUTION_PRESETS.map((resolution) => ({
+                  value: resolution.id,
+                  label: `${resolution.width} × ${resolution.height}`,
+                  group: resolution.aspect,
+                  title: `Size the boundary to exactly ${resolution.width} × ${resolution.height} world pixels.`,
+                }))}
+                onChange={setCameraResolutionId}
+                ariaLabel="Camera boundary resolution"
+                className="le-camera-snap-select"
+              />
+              <ChromeButton
+                unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                onClick={snapCameraBoundaryToResolution}
+                disabled={!editorSessionCanWrite}
+                title="Resize the boundary to that exact world-pixel size, about the centre it already has."
+              >Snap</ChromeButton>
+            </div>
+            <p className="le-board-note">World pixels are screen pixels at zoom 1, so a box sized to a resolution is what a player on that display sees fully zoomed out, art drawn one-to-one. The box keeps its centre; Centre on grid puts that centre on the board.</p>
           </section>
           {cameraBoundaryFitToArtwork ? (
             <section className="skirmish-card skirmish-view-card" aria-label="Camera boundary artwork fit">

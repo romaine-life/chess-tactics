@@ -8,7 +8,7 @@ refines:
   - "[ADR-0026](0026-ui-kit-icon-canvas.md)"
 ---
 
-# ADR-0582: The Battle command card wears a mark on every key
+# ADR-0584: The Battle command card wears a mark on every key
 
 ## Context and Problem Statement
 
