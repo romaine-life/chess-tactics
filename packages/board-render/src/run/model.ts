@@ -1077,7 +1077,7 @@ function cardFootprintId(formation: readonly RunCardFormationCell[]): string {
  * scene. Splitting art by footprint as well as roster is what lets the picture answer the
  * arrangement: the same four people hold a corner, a line, and a column differently.
  */
-function cardCompositionArtId(
+export function cardFamilyArtId(
   pieces: readonly AdlectablePieceType[],
   formation: readonly RunCardFormationCell[],
 ): string {
@@ -1104,7 +1104,7 @@ function cardArtId(
 ): string {
   return formationSpan(formation) <= DEFAULT_RUN_RULES.cardSpan
     ? id
-    : cardCompositionArtId(pieces, formation);
+    : cardFamilyArtId(pieces, formation);
 }
 
 /**

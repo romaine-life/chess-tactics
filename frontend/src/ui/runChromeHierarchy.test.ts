@@ -899,7 +899,11 @@ describe('Run chrome hierarchy', () => {
     expect(runCard).not.toContain('RunCardScene');
     expect(runCard).toContain('const identity = identityCard ?? card');
     expect(runCard).toContain('runCardName(identity)');
-    expect(runCard).toContain('runCardArtSlot(identity)');
+    // ADR-0579: a dealable card owns a slot of its own and the family slot stays installed under
+    // it, so the face resolves the first one the hydrated catalog actually has rather than a single
+    // fixed slot. Still one identity, still one shared face.
+    expect(runCard).toContain('runCardArtSlotInCatalog(identity)');
+    expect(runCard).toContain('runCardArtSlots(card)');
     // Name, flavor, contents and cost all arrive already projected, so RunCard has no
     // reason to reach for the card's authored text itself.
     expect(runCard).not.toContain('runCardFlavor(');

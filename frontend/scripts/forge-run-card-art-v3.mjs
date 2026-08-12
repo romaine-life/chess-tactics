@@ -19,7 +19,7 @@
 //     here name that failure mode directly so it is not the safe default.
 //
 // Generation only. Installation is a separate step and touches no live slot.
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -288,15 +288,23 @@ if (args.includes('--dry')) {
 
 process.stdout.write(`forging ${cards.length} card illustrations (x${CONCURRENCY}) -> ${OUT}\n`);
 const results = await pool(cards, CONCURRENCY);
-results.sort((a, b) => String(a.cardId).localeCompare(String(b.cardId)));
-writeFileSync(join(OUT, 'forge-report.json'), `${JSON.stringify({
+// The report MERGES. A forge is usually a slice — one world, one card, the Kings — and the report
+// is what the install step reads for each card's thread id, prompt and source raster. Overwriting
+// it drops the provenance of every card this run did not touch, and that provenance cannot be
+// recovered from the PNG afterwards: it has to be re-generated.
+const REPORT = join(OUT, 'forge-report.json');
+const previous = existsSync(REPORT) ? JSON.parse(readFileSync(REPORT, 'utf8')).results ?? [] : [];
+const merged = new Map(previous.map((entry) => [entry.cardId, entry]));
+for (const entry of results) merged.set(entry.cardId, entry);
+const allResults = [...merged.values()].sort((a, b) => String(a.cardId).localeCompare(String(b.cardId)));
+writeFileSync(REPORT, `${JSON.stringify({
   contract: 'docs/art/card-art-brief-contract.md',
   decision: 'ADR-0579',
   nativeEvidenceDecision: 'ADR-0581',
   width: WIDTH,
   height: HEIGHT,
   transform: TRANSFORM,
-  results,
+  results: allResults,
 }, null, 2)}\n`, 'utf8');
 process.stdout.write(`${JSON.stringify({
   forged: results.filter((r) => r.ok).length,

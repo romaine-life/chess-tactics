@@ -19241,6 +19241,25 @@ const RUN_CARD_ART_FAMILY_IDS = Object.freeze([...new Set(
     .map((card) => card?.artId)
     .filter((artId) => typeof artId === 'string' && artId),
 )].sort());
+/**
+ * What each art id is actually a picture OF, derived from the same live source as the id set.
+ *
+ * ADR-0579 keys a dealable card's art to its own id, and a card id encodes the SEATING
+ * (`f-011011-bpr`) while the family id encoded the sorted ROSTER (`100111-pbr`). So the old
+ * `cardId.endsWith('-' + roster)` string check refuses every per-card slot, and it refuses the
+ * named cards (`pb-front`) and the singles (`b`) as well. Comparing against the pieces the live
+ * card actually holds is both correct for all three id shapes and strictly stronger than a suffix.
+ */
+const RUN_CARD_ART_PIECES_BY_ID = Object.freeze(Object.fromEntries(
+  [
+    ...(Array.isArray(serverRender?.RUN_CARD_DECK) ? serverRender.RUN_CARD_DECK : []),
+    ...(Array.isArray(serverRender?.RUN_STARTER_CARDS) ? serverRender.RUN_STARTER_CARDS : []),
+  ]
+    .filter((card) => typeof card?.artId === 'string' && card.artId && Array.isArray(card.pieces))
+    // A King's art id names one card; a family id names several, and every card behind it holds
+    // the same roster by construction, so the first one answers for all of them.
+    .map((card) => [card.artId, Object.freeze([...card.pieces])]),
+));
 const RUN_CARD_ART_GENERATION_MODELS = Object.freeze(['pixellab-pixflux', 'codex-image-gen']);
 const RUN_CARD_ART_PIECE_VALUE = Object.freeze({ pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9 });
 const RUN_CARD_ART_PIECE_INITIAL = Object.freeze({ pawn: 'p', knight: 'k', bishop: 'b', rook: 'r', queen: 'q' });
@@ -19530,16 +19549,20 @@ function runCardArtFamilyProjection(row, metadata, provenance) {
     .map((piece) => RUN_CARD_ART_PIECE_INITIAL[piece])
     .join('');
   const baseCost = metadata.pieces.reduce((sum, piece) => sum + RUN_CARD_ART_PIECE_VALUE[piece], 0);
-  // A family id is `<footprint>-<roster>`, so the roster half must agree with the pieces. A King is
-  // keyed to its own card slug instead, because every arrangement is its own King and encodes no
-  // shared roster; its identity is checked against the live starter set above, and the pieces here
-  // are its companions, so only the cost band is left to agree.
-  const kingCard = cardId.startsWith('k-');
+  // The pieces must be the pieces the live card behind this art id actually holds. This replaces a
+  // `cardId.endsWith('-' + roster)` suffix check that only ever worked for family ids: a per-card
+  // id encodes the SEATING (`f-011011-bpr`) rather than the sorted roster, and the named cards
+  // (`pb-front`) and singles (`b`) never carried a roster suffix at all. `roster` is still computed
+  // above and still used to address the prompt manifest.
+  const liveRoster = [...(RUN_CARD_ART_PIECES_BY_ID[cardId] ?? [])]
+    .sort((left, right) => RUN_CARD_ART_PIECE_ORDER.indexOf(left) - RUN_CARD_ART_PIECE_ORDER.indexOf(right))
+    .map((piece) => RUN_CARD_ART_PIECE_INITIAL[piece])
+    .join('');
   if (
-    (!kingCard && !cardId.endsWith(`-${roster}`))
+    !liveRoster || liveRoster !== roster
     || metadata.baseCost !== baseCost || baseCost < 1 || baseCost > 10
   ) {
-    return { claimed: true, issue: 'Units-card art composition does not match its family identity', value: null };
+    return { claimed: true, issue: 'Units-card art composition does not match its card identity', value: null };
   }
   if (row.slot !== `ui/run/card-art/${cardId}/illustration.png`) {
     return { claimed: true, issue: 'Units-card art slot does not match its family identity', value: null };
