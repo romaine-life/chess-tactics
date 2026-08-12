@@ -132,6 +132,60 @@ test('raster native evidence is required to identify the exact uploaded bytes', 
   assert.equal(nativeMediaEvidenceIssue(raster()), null);
 });
 
+test('a downscale of a generated source is native, and recapture of accepted art is not', () => {
+  const sourceSha = 'c'.repeat(64);
+  const supersampled = (evidence = {}) => raster({
+    width: 400,
+    height: 280,
+    native_evidence: {
+      schema: 'supersampled-native-v1',
+      sourceKind: 'generation',
+      native1x: true,
+      spatialResampling: false,
+      sourceWidth: 1536,
+      sourceHeight: 1024,
+      sourceSha256: sourceSha,
+      outputWidth: 400,
+      outputHeight: 280,
+      outputSha256: originalSha,
+      transform: 'lanczos3-cover-fit-400x280',
+      ...evidence,
+    },
+  });
+
+  // The general form: no per-decision branch, no owner-approved-exception ceremony.
+  assert.equal(nativeMediaEvidenceIssue(supersampled()), null);
+  assert.equal(nativeMediaEvidenceIssue(supersampled({ sourceKind: 'render' })), null);
+
+  // Recapture is what ADR-0076 was defending against and it stays unsayable: the source kind is a
+  // closed set, so finished delivery art cannot be declared as the thing that was downscaled.
+  assert.match(
+    nativeMediaEvidenceIssue(supersampled({ sourceKind: 'accepted-asset' })),
+    /never accepted delivery art/,
+  );
+  assert.match(nativeMediaEvidenceIssue(supersampled({ sourceKind: undefined })), /never accepted delivery art/);
+
+  // It has to actually come DOWN from something larger, and say how.
+  assert.match(
+    nativeMediaEvidenceIssue(supersampled({ sourceWidth: 400, sourceHeight: 280 })),
+    /strictly larger source raster/,
+  );
+  assert.match(
+    nativeMediaEvidenceIssue(supersampled({ sourceWidth: 320, sourceHeight: 240 })),
+    /strictly larger source raster/,
+  );
+  assert.match(nativeMediaEvidenceIssue(supersampled({ transform: '   ' })), /exact downscale transform/);
+  assert.match(nativeMediaEvidenceIssue(supersampled({ sourceSha256: 'nope' })), /name the source raster/);
+
+  // And it authorizes these bytes and this geometry, exactly as the strict path does.
+  assert.match(nativeMediaEvidenceIssue(supersampled({ outputSha256: replacementSha })), /authorize these exact bytes/);
+  assert.match(nativeMediaEvidenceIssue(supersampled({ outputWidth: 401 })), /output dimensions must equal/);
+
+  // A downscale is native, so it may not also claim to be a resample.
+  assert.match(nativeMediaEvidenceIssue(supersampled({ native1x: false })), /native1x must be true/);
+  assert.match(nativeMediaEvidenceIssue(supersampled({ spatialResampling: true })), /spatialResampling false/);
+});
+
 test('ADR-0560 main-menu marks carry a typed projection instead of staying bridge-only', () => {
   const row = (overrides = {}, metadata = {}) => ({
     slot: 'ui/main-menu/icons-carved/settings.png',

@@ -19689,7 +19689,8 @@ button.tileset-relationship-cell {
    and the kit's inner rail between members is what tells them apart. */
 /* A row that declared itself one thing across every column IS one cell: its content spans the
    whole width. Stated on the grid's own class, not on the section box, because it is the other
-   half of what `spans="all"` means — the rail breaks there AND the content fills the row. */
+   half of what `spans="all"` means — the rail breaks there AND the content fills the row.
+ */
 .chrome-divided-grid__row--spanning > * {
   grid-column: 1 / -1;
 }
@@ -24236,6 +24237,74 @@ button.tileset-relationship-cell {
 
 .run-meta-abandon {
   margin-block-start: auto;
+}
+
+/* Abandon Run asks its question in its own seat rather than over the screen: at rest one control,
+   armed a Keep Run / Abandon Run pair. The control owns its own layout and its own button measure,
+   because the three seats it stands in (the Sectio rail, the Deployment panel and the Battle HUD)
+   each wrapped it in a different row and sized it differently.
+
+   ONE seat height through BOTH states. Pressing a control must not resize the thing under the
+   cursor, and the two states are different objects — a framed button and a framed box — so the
+   height is stated ONCE here and each derives its own measure from it. Declared on both roots
+   because they are alternatives, not nested: neither can inherit from the other.
+
+   46px is what the rail's buttons already measure, every one of them, in all three seats (read off
+   the live DOM, not chosen). Stating it and pinning BOTH states to it is what stops the two from
+   drifting: the resting height was emergent — a 38px floor plus the mark's line box — so a change
+   to the button's font or its mark would have moved one state and not the other, silently. */
+.run-abandon-control,
+.run-abandon-box {
+  --run-abandon-seat-h: 46px;
+}
+
+.run-abandon-control {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.run-abandon-control .app-header-button {
+  block-size: var(--run-abandon-seat-h);
+  font-size: var(--ds-text-xs);
+  inline-size: 100%;
+}
+
+/* Armed, the question is ONE box holding its two answers, so the line between Keep Run and Abandon
+   Run is the box's own column line — laid and capped from its topology where it meets the frame at
+   either end (ADR-0242). Two framed buttons in a row with a gap is what this kit puts between
+   things that are NOT related; this is one question and its two answers, and the same treatment
+   Start New Run's armed replacement wears. It carries no sentence: Abandon Run already says what
+   it does, and a warning restating that is the dialog's body text outliving its dialog. */
+.run-abandon-box {
+  /* The plate a CELL paints when it IS the control, derived so the BOX comes out at the seat
+     height the resting verb already occupies. A cell has no frame of its own — the box's frame and
+     rail are its edges — so it paints everything the box's own 9-slice does not, which is the seat
+     less a rail a side. That also lands its wood on exactly the wood the framed button painted, so
+     arming changes what the seat says and nothing about its size.
+     Read from the installed rail rather than written out: `--le-chrome-inner-rail-w` is stamped
+     from the live chrome catalog (chromeFamilyRuntime), so a re-tuned frame moves this with it
+     instead of leaving a hardcoded plate a few pixels out. */
+  --run-abandon-plate-h: calc(var(--run-abandon-seat-h) - 2 * var(--le-chrome-inner-rail-w, 7px));
+  /* NO padding: a rail has to reach the frame on both sides, and box padding would hold it short
+     of them. */
+  padding: 0;
+}
+
+/* A cell that IS the control takes no inset at all: the verb fills the whole area between the box's
+   frame and its rail, and the wood reaches them. */
+.run-abandon-verbs {
+  min-block-size: var(--run-abandon-plate-h);
+  padding: 0;
+}
+
+/* section-box-member-verb owns the frameless reset; this sizes the plate and gives the label the
+   display treatment every other verb cell in the app wears. */
+.run-abandon-verb {
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xs);
+  min-block-size: var(--run-abandon-plate-h);
+  padding: 0 var(--ds-inset);
+  text-transform: uppercase;
 }
 
 .run-expunctio-workspace {
@@ -28803,7 +28872,7 @@ button.run-card-formation-cell {
   text-align: end;
 }
 
-/* ── Start New Run is ONE box ─────────────────────────────────────────────────────────────────
+/* ── The New tab's column is ONE box (ADR-0571, when the tab still said "Start New Run") ──────
    Ataraxia, the replacement warning, the verb and Options were four separate slabs with the live
    vista showing through the gaps, which drew one control as four unrelated things. They are cells
    of a single box now and the gaps are that box's own rails — laid and capped by its topology, so
@@ -29398,7 +29467,7 @@ button.run-card-formation-cell {
    side), strips the shell's native button paint, and paints nothing of its own.
    check-ui-surface-contract.mjs registers exactly that reset. A section without a disclosure
    renders the same row as a div, which needs the layout and inherits the reset harmlessly.
-   Start New Run is NOT one of these: it is a single box of cells, and the one disclosure in it is
+   The New tab's column is NOT one of these: it is a single box of cells, and its one disclosure is
    a square key rather than a pressable slab — a cell has no frame to be the button. See
    `.run-prep-box`. */
 .run-rules-cell h4 {

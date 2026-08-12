@@ -8,7 +8,7 @@ refines:
   - "[ADR-0552](0552-athetize-is-a-card-struck-through.md)"
 ---
 
-# ADR-0582: The Event Log marks defeat, the clock, and gold
+# ADR-0586: The Event Log marks defeat, the clock, and gold
 
 ## Context
 

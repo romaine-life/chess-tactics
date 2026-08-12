@@ -868,8 +868,9 @@ function titleBarMarkMediaIssue(row, projectedRuntime = null) {
  * different sizes and a mark accepted for one must not silently satisfy the other.
  */
 /**
- * Run preparation's rail-tab marks: the glyphs the Current Run and Start New Run tabs wear
- * (ADR-0558 made those tabs the shared ApparatusRailTab, and a rail tab carries a mark).
+ * Run preparation's rail-tab marks: the glyphs the Continue and New tabs wear (ADR-0558 made
+ * those tabs the shared ApparatusRailTab, and a rail tab carries a mark; ADR-0582 named them —
+ * the `run/current` and `run/new` slot paths below predate the labels and do not follow them).
  *
  * Their contract is the OPPOSITE of a title-bar mark's, which is why they cannot borrow that
  * validator. A title-bar mark is drawn into a square seat with `contain`, so it must be trimmed
@@ -2014,6 +2015,19 @@ function predrawnBoardOwnerProofIssue(row, proof, surfaceUrl = null) {
 const RUN_CARD_FAMILY_RESAMPLED_EXCEPTION_SCHEMA = 'run-card-family-resampled-v1';
 const RUN_CARD_FAMILY_RESAMPLE_TRANSFORM = 'lanczos3-cover-fit-400x280';
 
+// A downscale of a SOURCE is native generation. Every owner-approved exception above exists
+// because this general form did not, so each new downscale needed its own branch pinning its own
+// bytes; the branches stay for the rows already accepted through them and nothing new needs one.
+//
+// The line is the one ADR-0578 drew, and it is about what the resampler was handed. A raster the
+// generator produced above delivery size, reconstructed down in one named step, has its pixels
+// decided by the generator and the filter and is reproducible from the source. An already-accepted
+// delivery asset resized is RECAPTURE: the input is finished art, authored decisions are destroyed,
+// and the provenance chain is circular. That stays forbidden, which is why the source kind is a
+// closed set rather than a free string.
+const SUPERSAMPLED_NATIVE_SCHEMA = 'supersampled-native-v1';
+const SUPERSAMPLED_NATIVE_SOURCE_KINDS = new Set(['generation', 'render']);
+
 function nativeMediaEvidenceIssue(row) {
   const isRaster = String(row.media_type || '').startsWith('image/') && row.media_type !== 'image/svg+xml';
   if (!isRaster) return null;
@@ -2197,6 +2211,40 @@ function nativeMediaEvidenceIssue(row) {
       || !normalizedSha(evidence.sourceSha256)
       || evidence.transform !== MAIN_MENU_MARK_FITTED_TRANSFORM
     ) return 'ADR-0560 fitted mark evidence must authorize these bytes and name its exact transform';
+    return null;
+  }
+  if (evidence.schema === SUPERSAMPLED_NATIVE_SCHEMA) {
+    if (!SUPERSAMPLED_NATIVE_SOURCE_KINDS.has(evidence.sourceKind)) {
+      return 'supersampled evidence must name a generated or rendered source, never accepted delivery art';
+    }
+    if (evidence.native1x !== true || evidence.spatialResampling !== false) {
+      return 'supersampled evidence is native: native1x must be true and spatialResampling false';
+    }
+    const outputWidth = Number(evidence.outputWidth);
+    const outputHeight = Number(evidence.outputHeight);
+    if (
+      !Number.isFinite(outputWidth) || outputWidth <= 0
+      || !Number.isFinite(outputHeight) || outputHeight <= 0
+      || (row.width !== null && Number(row.width) !== outputWidth)
+      || (row.height !== null && Number(row.height) !== outputHeight)
+    ) return 'supersampled evidence output dimensions must equal the uploaded image dimensions';
+    const sourceWidth = Number(evidence.sourceWidth);
+    const sourceHeight = Number(evidence.sourceHeight);
+    if (
+      !Number.isFinite(sourceWidth) || !Number.isFinite(sourceHeight)
+      || sourceWidth < outputWidth || sourceHeight < outputHeight
+      || (sourceWidth === outputWidth && sourceHeight === outputHeight)
+    ) return 'supersampled evidence must come down from a strictly larger source raster';
+    if (typeof evidence.transform !== 'string' || !evidence.transform.trim()) {
+      return 'supersampled evidence must name its exact downscale transform';
+    }
+    if (!normalizedSha(evidence.sourceSha256)) {
+      return 'supersampled evidence must name the source raster it came down from';
+    }
+    if (
+      !normalizedSha(evidence.outputSha256)
+      || normalizedSha(evidence.outputSha256) !== normalizedSha(row.blob_sha256)
+    ) return 'supersampled evidence must authorize these exact bytes';
     return null;
   }
   if (evidence.native1x !== true) return 'nativeEvidence.native1x must be true';
