@@ -178,6 +178,115 @@ test('a refresh cookie renews an expired access token and rotates cookies', asyn
   assert.match(res.cookies[1], /refresh-new/);
 });
 
+// --- The session must outlive the access token ----------------------------
+//
+// These pin F1 in docs/auth-security-audit.md. The refresh test above hands the
+// manager a refresh cookie by hand; production never had one, and that gap is
+// exactly how the defect survived unnoticed for two weeks.
+//
+// `faithfulProvider` therefore models the real authorization server rather than
+// a cooperative one: it returns a refresh token ONLY when the authorization
+// request asked for `offline_access`, mirroring the provider's own
+// `refresh_token: requestedScopes.includes("offline_access") ? ... : void 0`.
+// A provider mock that always returns a refresh token cannot fail on this bug.
+function faithfulProvider() {
+  const state = { grantedScopes: [], nonce: '', accessTokenLive: true };
+  const fetchImpl = async (url, options = {}) => {
+    if (url === `${ISSUER}/.well-known/openid-configuration`) return json(discovery());
+    if (url === `${ISSUER}/jwks`) return json({ keys: [publicJwk] });
+    if (url === `${ISSUER}/oauth2/token`) {
+      const form = new URLSearchParams(options.body);
+      if (form.get('grant_type') === 'refresh_token') {
+        state.accessTokenLive = true;
+        return json({ access_token: 'access-renewed', refresh_token: 'refresh-rotated', expires_in: 3600 });
+      }
+      const offline = state.grantedScopes.includes('offline_access');
+      return json({
+        access_token: 'access-1',
+        // The single line this whole stage exists to prove.
+        refresh_token: offline ? 'refresh-1' : undefined,
+        id_token: idToken(CLIENT_ID, state.nonce),
+        expires_in: 3600,
+      });
+    }
+    if (url === `${ISSUER}/oauth2/userinfo`) {
+      const bearer = String(options.headers.authorization || '');
+      // An access token past its lifetime is rejected by the provider, exactly
+      // as it is once the 3600s cookie Max-Age lapses and the browser drops it.
+      if (bearer === 'Bearer access-1' && !state.accessTokenLive) {
+        return json({ error: 'invalid_token' }, 401);
+      }
+      return json({ sub: 'user-1', email: 'nelson@example.com', name: 'Nelson', role: 'admin' });
+    }
+    throw new Error(`unexpected URL ${url}`);
+  };
+  return { state, fetchImpl };
+}
+
+async function signIn(manager, provider) {
+  const startResponse = responseRecorder();
+  const authorize = new URL(await manager.startLogin('/', startResponse));
+  provider.state.grantedScopes = (authorize.searchParams.get('scope') || '').split(' ').filter(Boolean);
+  provider.state.nonce = authorize.searchParams.get('nonce');
+  const callbackResponse = responseRecorder();
+  await manager.completeLogin({
+    code: 'authorization-code',
+    state: authorize.searchParams.get('state'),
+    cookieHeader: cookieHeader(startResponse.cookies),
+  }, callbackResponse);
+  return { authorize, cookies: callbackResponse.cookies };
+}
+
+test('the authorization request asks for offline_access', async () => {
+  const provider = faithfulProvider();
+  const manager = createOIDCSessionManager({
+    issuer: ISSUER,
+    clientId: CLIENT_ID,
+    publicOrigin: PUBLIC_ORIGIN,
+    fetchImpl: provider.fetchImpl,
+  });
+  const authorize = new URL(await manager.startLogin('/', responseRecorder()));
+  const scopes = (authorize.searchParams.get('scope') || '').split(' ');
+  assert.ok(
+    scopes.includes('offline_access'),
+    'without offline_access the provider never returns a refresh token, so the session cannot be renewed',
+  );
+});
+
+test('a real sign-in establishes a renewable session', async () => {
+  const provider = faithfulProvider();
+  const manager = createOIDCSessionManager({
+    issuer: ISSUER,
+    clientId: CLIENT_ID,
+    publicOrigin: PUBLIC_ORIGIN,
+    fetchImpl: provider.fetchImpl,
+  });
+  const { cookies } = await signIn(manager, provider);
+  assert.ok(
+    cookies.some((value) => value.startsWith(`${REFRESH_COOKIE}=`) && !value.startsWith(`${REFRESH_COOKIE}=;`)),
+    'sign-in must leave the browser holding something that can renew the session',
+  );
+});
+
+test('the session outlives the access token', async () => {
+  const provider = faithfulProvider();
+  const manager = createOIDCSessionManager({
+    issuer: ISSUER,
+    clientId: CLIENT_ID,
+    publicOrigin: PUBLIC_ORIGIN,
+    fetchImpl: provider.fetchImpl,
+  });
+  const { cookies } = await signIn(manager, provider);
+
+  // One hour passes. The provider stops honouring the access token.
+  provider.state.accessTokenLive = false;
+
+  const renewed = responseRecorder();
+  const session = await manager.readSession(cookieHeader(cookies.filter((c) => !c.startsWith(STATE_COOKIE))), renewed);
+  assert.ok(session, 'an hour of elapsed time must not sign the player out');
+  assert.equal(session.user.email, 'nelson@example.com');
+});
+
 test('the callback rejects an id_token minted for another client', async () => {
   let expectedNonce = '';
   const fetchImpl = async (url) => {
