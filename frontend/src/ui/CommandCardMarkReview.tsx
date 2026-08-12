@@ -11,7 +11,7 @@ import { defaultBackgroundSet } from '../art/backgroundSets';
 import { ChromeButton } from './shared/ChromeButton';
 import { OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
-import { CommandCardKey } from './shared/CommandCardKey';
+import { CommandCard, COMMAND_CARD_KEY_ROWS } from './shared/CommandCard';
 import { SHORTCUT_BINDINGS } from './SkirmishHud';
 import {
   SKIRMISH_SHORTCUT_CARD,
@@ -38,13 +38,6 @@ import { useSceneParticipant } from './shell/SceneBoundary';
  * each slot to the media role the seat resolves.
  */
 export const COMMAND_CARD_BATCH_ID = 'battle-command-card-marks-2026-08-12';
-
-/** The empty cells of the physical 3x5 card, so the review paints the whole thing. */
-const CARD_ROWS: readonly (readonly string[])[] = Object.freeze([
-  ['q', 'w', 'e', 'r', 't'],
-  ['a', 's', 'd', 'f', 'g'],
-  ['z', 'x', 'c', 'v', 'b'],
-]);
 
 const CARD_BY_KEY = new Map(SKIRMISH_SHORTCUT_CARD.map((entry) => [entry.key, entry]));
 
@@ -121,25 +114,30 @@ async function bindShortcutMediaRoles(variants: readonly SkirmishShortcutIconVar
 }
 
 /** The command card exactly as the Controls tab paints it, wearing the armed marks. */
-function CardPreview({ armed }: { armed: Map<SkirmishShortcutIconVariant, string> }): ReactElement {
+function CardPreview({
+  armed,
+  ariaLabel,
+}: {
+  armed: Map<SkirmishShortcutIconVariant, string>;
+  ariaLabel: string;
+}): ReactElement {
   return (
-    <div className="skirmish-grid command-card-review-card" role="group" aria-label="Battle command card preview">
-      {CARD_ROWS.flat().map((key, index) => {
+    <CommandCard
+      className="command-card-review-card"
+      ariaLabel={ariaLabel}
+      commands={COMMAND_CARD_KEY_ROWS.flat().map((key) => {
         const entry = CARD_BY_KEY.get(key);
-        return (
-          <CommandCardKey
-            key={key}
-            cap={key}
-            index={index}
-            label={entry?.label}
-            hint={entry ? SHORTCUT_BINDINGS[entry.key]?.hint : undefined}
-            icon={entry?.variant}
-            iconSrc={entry ? armed.get(entry.variant) : undefined}
-            testId={entry ? `command-card-preview-${key}` : undefined}
-          />
-        );
+        if (!entry) return { key };
+        return {
+          key,
+          label: entry.label,
+          hint: SHORTCUT_BINDINGS[entry.key]?.hint,
+          icon: entry.variant,
+          iconSrc: armed.get(entry.variant),
+          testId: `command-card-preview-${key}`,
+        };
       })}
-    </div>
+    />
   );
 }
 
@@ -300,11 +298,11 @@ export function CommandCardMarkReview(): ReactElement {
       <OuterChromeBox chromeConsumer="command-card-review" titled className="command-card-review-panel">
         <OuterChromeHeader title="Battle Command Card Marks" />
         <p>
-          The card on the left is the real one — the same button, the same leaf surface, the
-          same 26px seat drawing the 64px canvas the Controls tab paints in a match. Press a
-          candidate to arm it there. Every mark is fitted the same way: ink scaled to exactly
-          52px tall on the 64px canvas, both ink dimensions even, seated on the button's own
-          centre line, so ten marks in a 3x5 grid read at one size (ADR-0560). Nothing is
+          The card on the left is the real one — the same divided box, the same leaf surface,
+          the same compartment drawing the 64px canvas the Controls tab paints in a match, at
+          the width the Battle rail gives it. Press a candidate to arm it there. Every mark is
+          fitted the same way: ink scaled to exactly 52px tall on the 64px canvas, both ink
+          dimensions even, so ten marks in a 3x5 pad read at one size (ADR-0560). Nothing is
           installed until you press Install.
         </p>
         {error ? <p role="alert">{error}</p> : null}
@@ -316,6 +314,7 @@ export function CommandCardMarkReview(): ReactElement {
                 <h2>Installed</h2>
                 <p>What a match paints today.</p>
                 <CardPreview
+                  ariaLabel="Installed command card"
                   armed={new Map(SKIRMISH_SHORTCUT_CARD
                     .map((entry) => [entry.variant, skirmishShortcutIconUrl(entry.variant)] as const)
                     .filter((pair): pair is readonly [SkirmishShortcutIconVariant, string] => Boolean(pair[1])))}
@@ -324,7 +323,7 @@ export function CommandCardMarkReview(): ReactElement {
               <div className="command-card-review-column">
                 <h2>Composed</h2>
                 <p>The armed candidates — not installed.</p>
-                <CardPreview armed={armed} />
+                <CardPreview ariaLabel="Composed command card" armed={armed} />
                 <InstallCardControl chosen={chosen} catalog={catalog} onInstalled={refresh} />
               </div>
             </section>
@@ -346,7 +345,7 @@ export function CommandCardMarkReview(): ReactElement {
                               unit="inner-text-button"
                               key={version.id}
                               data-testid={`command-card-option-${entry.variant}-${candidateIndex(version)}`}
-                              className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-grid-key', 'command-card-review-option', active && 'active is-active')}
+                              className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'command-card-review-option', active && 'active is-active')}
                               aria-pressed={active}
                               title={`${entry.label} — ${metadataString(version, 'treatmentLabel') || version.label}`}
                               onClick={() => setPicked((current) => ({ ...current, [entry.variant]: version.id }))}

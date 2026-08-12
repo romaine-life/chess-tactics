@@ -29,7 +29,7 @@ import { useAuthSession } from '../net/authSession';
 import { AdminControls } from './AdminControls';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 import { type SkirmishShortcutIconVariant } from './shared/SkirmishShortcutIcon';
-import { CommandCardKey } from './shared/CommandCardKey';
+import { CommandCard, COMMAND_CARD_KEY_ROWS } from './shared/CommandCard';
 import { CHROME_LEAF_FILL_SURFACE, leafSurfacePhase } from './shared/chromeSurfacePolicy';
 import { StrategikonTitleNavigation } from './StrategikonTitleNavigation';
 import { RunBattleUndoButton } from './RunBattleUndoButton';
@@ -85,11 +85,8 @@ type GridAction =
   | (GridActionBase & { kind: 'deselect' })
   | (GridActionBase & { kind: 'clear-overlays' });
 
-const SHORTCUT_KEY_ROWS: string[][] = [
-  ['q', 'w', 'e', 'r', 't'],
-  ['a', 's', 'd', 'f', 'g'],
-  ['z', 'x', 'c', 'v', 'b'],
-];
+// The 3x5 block itself lives with the card, so the screen that binds the keys and the
+// review that judges their marks lay out the same keyboard.
 
 export const SHORTCUT_BINDINGS: Record<string, GridAction> = {
   q: { kind: 'toggle', flag: 'showEnemyAttacks', icon: 'enemy-attacks', label: 'Opp. attacks', hint: 'Show all opponent attack squares (danger zone)' },
@@ -624,29 +621,26 @@ export function SkirmishHud({
           <section className="skirmish-card skirmish-controls-card" aria-label="Page controls">
             <div className="skirmish-view-group">
               <span className="skirmish-eyebrow">Shortcuts</span>
-              <div className="skirmish-grid" role="group" aria-label="Match shortcut grid">
-                {SHORTCUT_KEY_ROWS.flat().map((key, index) => {
+              <CommandCard
+                ariaLabel="Match shortcut grid"
+                commands={COMMAND_CARD_KEY_ROWS.flat().map((key) => {
                   const action = SHORTCUT_BINDINGS[key];
                   const isToggle = action?.kind === 'toggle';
                   const active = isToggle ? flagValue[action.flag] : false;
-                  return (
-                    <CommandCardKey
-                      key={key}
-                      cap={key}
-                      index={index}
-                      label={action?.label}
-                      hint={action?.hint}
-                      icon={action?.icon}
-                      active={active}
-                      pressed={isToggle ? active : undefined}
-                      testId={`shortcut-${key}`}
-                      onPress={action
-                        ? () => { runSkirmishShortcut(key, false, skirmishViewStore, skirmishStore); }
-                        : undefined}
-                    />
-                  );
+                  return {
+                    key,
+                    label: action?.label,
+                    hint: action?.hint,
+                    icon: action?.icon,
+                    active,
+                    pressed: isToggle ? active : undefined,
+                    testId: `shortcut-${key}`,
+                    onPress: action
+                      ? () => { runSkirmishShortcut(key, false, skirmishViewStore, skirmishStore); }
+                      : undefined,
+                  };
                 })}
-              </div>
+              />
               <p className="skirmish-grid-hint">Keys work any time during the match.</p>
             </div>
             {/* Battle clock: skirmish profiles edit the saved preference; editor/test boards edit

@@ -9,6 +9,7 @@ import {
   CHROME_STRUCTURAL_FILL_ROLE,
   leafSurfacePhase,
 } from './chromeSurfacePolicy';
+import { Tooltip } from './InfoTip';
 
 /**
  * A pad of equal compartments — ONE box, with rails instead of gaps.
@@ -37,8 +38,17 @@ export type ChromeSeat = {
   selected?: boolean;
   title?: string;
   ariaLabel?: string;
+  /**
+   * The kit tip for this seat, for a pad whose seats carry only a glyph. `title` is the native
+   * attribute, which truncates, delays and vanishes; a seat whose mark IS its whole label needs
+   * the tip that appears at once and answers keyboard focus (ADR-0059). Give one or the other.
+   */
+  tip?: { title: string; body: ReactNode };
   /** The consumer's own mark for this seat; the reset, the material and the geometry stay here. */
   className?: string;
+  /** What a live gate presses. A seat is not addressable any other way — it has no element
+   *  of the consumer's own to hang a hook on. */
+  testId?: string;
 };
 
 /**
@@ -49,6 +59,7 @@ export type ChromeSeat = {
 export function ChromeSeatGrid({
   rows,
   opening = 'var(--chrome-seat-opening)',
+  rowOpening,
   className = '',
   rowClassName = '',
   seatClassName = '',
@@ -62,6 +73,14 @@ export function ChromeSeatGrid({
    * control present the same square to the same letter, and no consumer restates the derivation.
    */
   opening?: string;
+  /**
+   * The visible opening on the BLOCK axis, when a pad is not square. Defaults to `opening`, which
+   * is what a pad of square compartments wants and what every consumer wanted until one of them
+   * had to fill a fixed-width rail: `opening` is then a share of that width and cannot also be
+   * asked of a height, since a percentage block-size against an auto-height grid resolves to
+   * nothing. Both axes still go through the one derivation (ADR-0569).
+   */
+  rowOpening?: string;
   className?: string;
   rowClassName?: string;
   seatClassName?: string;
@@ -80,7 +99,7 @@ export function ChromeSeatGrid({
   // sides take back, and the seat gives the same amount back as padding. Deriving the two halves
   // separately is how unequal compartments shipped (ADR-0569).
   const columns = chromeDividedSeatAxis(columnCount, opening);
-  const bands = chromeDividedSeatAxis(rows.length, opening);
+  const bands = chromeDividedSeatAxis(rows.length, rowOpening ?? opening);
 
   return (
     <DividedInnerChromeBox
@@ -115,15 +134,18 @@ export function ChromeSeatGrid({
                 />
               );
             }
-            return (
+            const control = (
               <button
                 key={seat.id}
                 type="button"
                 className={`chrome-seat ${seatClassName} ${seat.className ?? ''} ${seat.selected ? 'is-active' : ''}`.replace(/\s+/g, ' ').trim()}
                 // A row of identical controls is cut from one plank run rather than stamping the
                 // same grain nine times (ADR-0433); the index is the seat's place in the DATA.
-                style={{ ...inset, ...leafSurfacePhase(rowIndex * columnCount + columnIndex) }}
+                // With a tip the compartment's inset rides the wrapper instead, because the
+                // wrapper is then the grid item and the seat has to fill the opening it leaves.
+                style={{ ...(seat.tip ? null : inset), ...leafSurfacePhase(rowIndex * columnCount + columnIndex) }}
                 data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                data-testid={seat.testId}
                 disabled={seat.disabled}
                 title={seat.title}
                 aria-label={seat.ariaLabel}
@@ -134,6 +156,20 @@ export function ChromeSeatGrid({
               >
                 {seat.content}
               </button>
+            );
+            if (!seat.tip) return control;
+            return (
+              <Tooltip
+                key={seat.id}
+                className="chrome-seat-tip"
+                style={inset}
+                label={seat.ariaLabel ?? seat.tip.title}
+                title={seat.tip.title}
+                triggerIsInteractive
+                trigger={control}
+              >
+                {seat.tip.body}
+              </Tooltip>
             );
           })}
         </ChromeDividedGridRow>

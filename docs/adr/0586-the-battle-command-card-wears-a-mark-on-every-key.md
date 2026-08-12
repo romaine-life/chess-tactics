@@ -61,11 +61,26 @@ rail, where five marks stack in a column.
   are untouched and the pair is one sword in two liveries. A separate slot is not a second
   drawing — it is the only way a shared ink box can be a property of the card without
   refitting the board's own marks underneath it.
+- **The card is ONE divided box of fifteen compartments, not fifteen buttons.** It shipped
+  first as a CSS grid of framed keys with a gap, which put three edges between every pair of
+  marks — a frame, a strip of panel, another frame. That is the exact shape `ChromeSeatGrid`
+  exists to replace (ADR-0242): the frame is the box's, drawn once around all of them; every
+  separation is one of the box's own rails, capped where it meets that frame by a junction
+  the topology places; and a command is a COMPARTMENT rather than a control standing inside
+  one. The open F/G/C/V/B slots stay real compartments — dropping them would close the gap
+  and move every command after them one key to the left, and the card's cells *are* the
+  keyboard.
+  Two things the pad had to learn for this card, both because it is the first that is not a
+  set of fixed tool squares: an `opening` given as a share of the width it is handed, and a
+  `rowOpening` for the block axis, because a percentage of a fixed width cannot also be asked
+  of an auto height. Both still go through the one `chromeDividedSeatAxis` derivation, so the
+  compartments stay equal (ADR-0569).
 - **The key carries the mark and the cap, and nothing else.** The labels went with the
   marks, in the same turn: ten of them at `--ds-text-xs` were the wall of type the marks
   replaced, and keeping both would have been the reading problem with a picture stapled to
   it. What the label said is not lost — it is the tip's TITLE, above the sentence the tip
-  already carried. The key is 60.9px instead of 95.3px, and the card 199px instead of 302px.
+  already carried. The compartment is 51.9px instead of 95.3px, and the card 184px instead
+  of 302px — the labels bought most of that and the closed gaps the rest.
   A corner-seated cap was tried and is 13px shorter again; it is rejected because at 42px
   wide this card has no free corner, so the letter landed on the grid lattice, on the
   cursor's brackets and on both magnifier lenses — and a card whose premise is that its
