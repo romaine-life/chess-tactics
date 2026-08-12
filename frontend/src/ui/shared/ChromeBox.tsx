@@ -5,6 +5,7 @@ import {
   GameplayWorkspaceActivation,
   gameplayWorkspaceTransitionTarget,
 } from '../shell/AuthoredSceneSlot';
+import { controlsMobileLayout } from './controlsMobileLayout';
 
 export function ChromeSurfaceFill({
   role,
@@ -207,6 +208,10 @@ export function ShellControlsPanel({
       chromeConsumer="shell-controls"
       titled
       data-shell-controls-panel=""
+      // Narrow-width placement is this primitive's business, not each workflow's — the same
+      // reason the title, outer role and placement class are supplied here. Every host reads
+      // one answer, so the rail cannot grow a different mobile behaviour per screen.
+      data-controls-mobile={controlsMobileLayout()}
       // Every trigger in the panel wears the oak, borrowed components included (ADR-0555).
       data-chrome-leaf-surface=""
       className={`shell-controls-panel skirmish-hud ${className}`.trim()}

@@ -69,26 +69,37 @@ const SURFACES: Surface[] = [
 const DEFAULT_ROUTE = '/';
 const DEFAULT_DEVICE = 'phone-portrait';
 
-function readParams(): { device: string; route: string; zoom: number } {
+function readParams(): { device: string; route: string; zoom: number; hud: string } {
   const params = new URLSearchParams(window.location.search);
   const zoom = Number(params.get('zoom'));
   return {
     device: params.get('device') || DEFAULT_DEVICE,
     route: params.get('route') || DEFAULT_ROUTE,
     zoom: Number.isFinite(zoom) && zoom > 0 ? zoom : 0,
+    hud: params.get('hud') || 'legacy',
   };
 }
 
+/** The framed route, with the Controls-rail placement flag folded into its own query. */
+function framedAddress(route: string, hud: string): string {
+  if (hud !== 'sheet') return route;
+  const [path, query = ''] = route.split('?');
+  const params = new URLSearchParams(query);
+  params.set('hudMobile', 'sheet');
+  return `${path}?${params}`;
+}
+
 export default function MobileLab() {
-  const [{ device, route, zoom }, setState] = useState(readParams);
+  const [{ device, route, zoom, hud }, setState] = useState(readParams);
   // The address IS the state, so a specific device + screen is always one link.
-  const write = useCallback((next: Partial<{ device: string; route: string; zoom: number }>) => {
+  const write = useCallback((next: Partial<{ device: string; route: string; zoom: number; hud: string }>) => {
     setState((previous) => {
       const merged = { ...previous, ...next };
       const params = new URLSearchParams();
       params.set('device', merged.device);
       params.set('route', merged.route);
       if (merged.zoom) params.set('zoom', String(merged.zoom));
+      if (merged.hud !== 'legacy') params.set('hud', merged.hud);
       replaceAppHistoryState(null, `/mobile-lab?${params}`);
       return merged;
     });
@@ -169,6 +180,18 @@ export default function MobileLab() {
           aria-label="Route to preview"
           onChange={(event) => write({ route: event.target.value })}
         />
+        <span className="mobile-lab-legend">Controls rail</span>
+        {[['legacy', 'Today'], ['sheet', 'Strip + sheet']].map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            className="tileset-view-action"
+            aria-pressed={hud === id}
+            onClick={() => write({ hud: id })}
+          >
+            {label}
+          </button>
+        ))}
         <span className="mobile-lab-legend">Scale</span>
         {[0, 0.75, 0.5].map((z) => (
           <button
@@ -200,10 +223,10 @@ export default function MobileLab() {
               }}
             >
               <iframe
-                key={`${d.id}-${route}-${reloadKey}`}
+                key={`${d.id}-${route}-${hud}-${reloadKey}`}
                 className="mobile-lab-frame"
                 title={`${d.label} — ${route}`}
-                src={route}
+                src={framedAddress(route, hud)}
                 style={{
                   width: `${d.width}px`,
                   height: `${d.height}px`,

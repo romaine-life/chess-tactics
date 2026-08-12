@@ -27027,6 +27027,99 @@ button.tileset-relationship-cell {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* --- Controls rail: proposed mobile placement (opt-in, ?hudMobile=sheet) ------------
+     The rail carries four different jobs at once — destination tabs, always-on status
+     (turn + remaining forces), the active tab's panel, and on desktop a keyboard shortcut
+     grid. Stacked into the page it becomes a slab that competes with whatever workspace is
+     open, which is the collision the audit reports on the Strategikon routes.
+
+     Split by WHEN each part is needed, which is what decides the pattern:
+       · status + destinations  — always → a persistent strip, pinned bottom, in the thumb
+                                  zone (Hoober: ~75% of interaction is thumb-driven, and the
+                                  bottom centre is the reachable region; the board wants the
+                                  top anyway)
+       · the active tab panel   — on demand → peeks above the strip, capped so the board
+                                  stays visible, exactly the non-modal bottom-sheet case
+       · a workspace is open    — the rail yields to it and keeps only the strip
+     NN/G is explicit that a bottom sheet is "inherently a transient UI element", which is
+     why the always-on status is NOT in the sheet: it stays in the strip that never moves.
+
+     Placement lives on the primitive's own attribute, so the Battle, the Level Editor and
+     its chrome consumers all inherit one answer (see controlsMobileLayout.ts). */
+  [data-shell-controls-panel][data-controls-mobile="sheet"] {
+    position: fixed;
+    inset-block-end: 0;
+    inset-inline: 0;
+    /* Over the page content, under the fixed title bar (10000). A pinned strip that loses
+       the z-order is worse than no strip: the Run's ledger rows painted straight over its
+       workspace-navigation icons. */
+    z-index: 900;
+    max-block-size: min(58vh, 460px);
+    min-block-size: 0;
+  }
+  /* OuterChromeBox wraps its children in this content div, so the column lives here — the
+     panel element itself holds only the installed fill and that wrapper. */
+  [data-controls-mobile="sheet"] .le-outer-panel-content {
+    display: flex;
+    flex-direction: column;
+    min-block-size: 0;
+    block-size: 100%;
+  }
+
+  /* The strip. The header band stays — it is the panel's installed header chrome and the
+     workspace-navigation icons sit on it — but it is a 44-50px bar carrying one word, and
+     that row belongs to the board. Shrink it through its OWN stated token rather than
+     hiding it and leaving those icons on nothing. */
+  [data-shell-controls-panel][data-controls-mobile="sheet"] .outer-chrome-header {
+    flex: none;
+  }
+  [data-shell-controls-panel][data-controls-mobile="sheet"] .skirmish-card h2.kit-panel-title {
+    --kit-panel-title-base-h: 36px;
+  }
+  [data-controls-mobile="sheet"] .skirmish-hud-tabs {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: var(--ds-space-1);
+  }
+  /* Always-on status sits with the tabs, never inside the part that collapses. */
+  [data-controls-mobile="sheet"] .skirmish-score-panel {
+    flex: none;
+    padding-block: var(--ds-space-1);
+  }
+
+  /* The sheet: the active tab's panel, peeking above the strip and scrolling itself. */
+  [data-controls-mobile="sheet"] .skirmish-hud-panel {
+    flex: 1 1 auto;
+    min-block-size: 0;
+    overflow: hidden auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* A workspace took the screen: the rail yields to it and keeps only its strip. Two
+     stacked scrolling regions on a phone is the thing that made this unusable.
+
+     ANY workspace, not just the Strategikon's. Scoping this to `.strategikon-workspace`
+     first was wrong in a way worth recording: the Run's own workspaces — the Army ledger,
+     Lipsana, Expunctio — are the same situation and were left with the full rail pinned over
+     them, which the gate reported as 18 unreachable controls on the ledger alone. The rule
+     is about a workspace owning the screen, so it keys on the workspace, not on which one. */
+  .skirmish-screen:has(:is(.strategikon-workspace, .run-workspace)) [data-controls-mobile="sheet"] {
+    max-block-size: none;
+  }
+  .skirmish-screen:has(:is(.strategikon-workspace, .run-workspace)) [data-controls-mobile="sheet"] .skirmish-hud-panel,
+  .skirmish-screen:has(:is(.strategikon-workspace, .run-workspace)) [data-controls-mobile="sheet"] .shell-controls-break {
+    display: none;
+  }
+
+  /* The strip is fixed, so the page has to stop underneath it rather than behind it. */
+  .skirmish-screen:has([data-controls-mobile="sheet"]) {
+    padding-block-end: var(--controls-strip-reserve, 132px);
+  }
+  .skirmish-screen:has(:is(.strategikon-workspace, .run-workspace)):has([data-controls-mobile="sheet"]) {
+    --controls-strip-reserve: 108px;
+  }
+
   /* Browser + detail side by side has a 556px floor. Stack, and scroll. */
   .enchiridion-lipsanon-layout {
     grid-template-columns: minmax(0, 1fr);
