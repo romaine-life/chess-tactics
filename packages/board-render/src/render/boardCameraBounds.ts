@@ -107,6 +107,88 @@ export function defaultBoardCameraBounds(
   };
 }
 
+/**
+ * Slide a camera box until it is centred on the playable grid, keeping its authored size.
+ *
+ * The box is the room a player may pan around inside, so the slack between the board and the
+ * box IS the scrolling distance. A box that sits off-centre hands one side more of that room
+ * than the other, which reads on screen as the board drifting as you scroll. Only the position
+ * moves: an author composes the size against the artwork and does not want it renegotiated to
+ * square the centres.
+ *
+ * The mandatory opening frame is centred on the same point, so a box centred here survives
+ * `normalizeBoardCameraBounds` still centred — an undersized box grows symmetrically rather
+ * than being shoved off the centre it was just given.
+ */
+export function centerBoardCameraBoundsOnBoard(
+  bounds: BoardCameraBounds,
+  board: BoardDimensions,
+): BoardCameraBounds {
+  const playable = centeredPlayableBoardFramingBounds(board, 0);
+  const centerX = playable.minX + playable.width / 2;
+  const centerY = playable.minY + playable.height / 2;
+  return {
+    minX: centerX - bounds.width / 2,
+    minY: centerY - bounds.height / 2,
+    width: bounds.width,
+    height: bounds.height,
+  };
+}
+
+/**
+ * Resize a camera box to an exact world-pixel size about the centre it already has.
+ *
+ * World pixels are screen pixels at zoom 1, so a box sized to a display resolution is the box
+ * a player at that resolution sees, fully zoomed out, with the art drawn one-to-one.
+ */
+export function boardCameraBoundsAtSize(
+  bounds: BoardCameraBounds,
+  size: { width: number; height: number },
+): BoardCameraBounds {
+  const centerX = bounds.minX + bounds.width / 2;
+  const centerY = bounds.minY + bounds.height / 2;
+  return {
+    minX: centerX - size.width / 2,
+    minY: centerY - size.height / 2,
+    width: size.width,
+    height: size.height,
+  };
+}
+
+export interface BoardCameraResolution {
+  id: string;
+  width: number;
+  height: number;
+  /** Aspect family, for grouping a picker. */
+  aspect: string;
+}
+
+/**
+ * Display resolutions a camera box can be snapped to, grouped by aspect family.
+ *
+ * These are the sizes players actually run, not arbitrary numbers: matching one means the level
+ * hands that display its whole authored view at zoom 1 with nothing left over on either axis.
+ */
+export const BOARD_CAMERA_RESOLUTION_PRESETS: readonly BoardCameraResolution[] = Object.freeze([
+  { id: '1280x720', width: 1280, height: 720, aspect: '16:9' },
+  { id: '1600x900', width: 1600, height: 900, aspect: '16:9' },
+  { id: '1920x1080', width: 1920, height: 1080, aspect: '16:9' },
+  { id: '2560x1440', width: 2560, height: 1440, aspect: '16:9' },
+  { id: '3840x2160', width: 3840, height: 2160, aspect: '16:9' },
+  { id: '1280x800', width: 1280, height: 800, aspect: '16:10' },
+  { id: '1680x1050', width: 1680, height: 1050, aspect: '16:10' },
+  { id: '1920x1200', width: 1920, height: 1200, aspect: '16:10' },
+  { id: '2560x1600', width: 2560, height: 1600, aspect: '16:10' },
+  { id: '1024x768', width: 1024, height: 768, aspect: '4:3' },
+  { id: '1600x1200', width: 1600, height: 1200, aspect: '4:3' },
+  { id: '2560x1080', width: 2560, height: 1080, aspect: '21:9' },
+  { id: '3440x1440', width: 3440, height: 1440, aspect: '21:9' },
+] as const);
+
+export function boardCameraResolution(id: string): BoardCameraResolution | undefined {
+  return BOARD_CAMERA_RESOLUTION_PRESETS.find((resolution) => resolution.id === id);
+}
+
 /** Resolve old levels without authored camera data through the same default used by Snap. */
 export function resolvedBoardCameraBounds(board: BoardWithCameraBounds): BoardCameraBounds {
   return normalizeBoardCameraBounds(board.cameraBounds, board)
