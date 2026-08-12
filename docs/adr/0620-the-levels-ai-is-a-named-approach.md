@@ -1,4 +1,4 @@
-# 0082 — The level's AI is a named approach with its own parameter set
+# 0620 — The level's AI is a named approach with its own parameter set
 
 Status: accepted
 Date: 2026-07-12

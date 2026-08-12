@@ -9696,11 +9696,11 @@ const WORKSPACE_SIDES = new Set(['player', 'enemy', 'neutral']);
 // Playable-only piece types for a random-placement roster (no rocks) — mirrors the
 // frontend `isPlayablePieceType` gate on `Level.roster` (core/level.ts + core/pieces.ts).
 const WORKSPACE_ROSTER_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
-// ADR-0064 victory-condition kinds — mirror of core/level.ts VictoryCondition.
+// ADR-0617 victory-condition kinds — mirror of core/level.ts VictoryCondition.
 const WORKSPACE_CONDITION_KINDS = new Set(['eliminate', 'reach', 'turnLimit']);
 const WORKSPACE_PROMOTION_PIECES = new Set(['queen', 'rook', 'bishop', 'knight']);
 
-/** Structural check for one ADR-0064 victory condition. Returns an error string or null. Shape/enum
+/** Structural check for one ADR-0617 victory condition. Returns an error string or null. Shape/enum
  * only, mirroring the frontend's conditionErrors (core/level.ts). */
 function validateWorkspaceCondition(c, label) {
   if (!c || typeof c !== 'object' || Array.isArray(c)) return `${label} must be a condition object`;
@@ -9719,7 +9719,7 @@ function validateWorkspaceCondition(c, label) {
   return null;
 }
 
-/** Structural check for an authored `Level.victory` (ADR-0064) — an ORDERED array of if-then rules.
+/** Structural check for an authored `Level.victory` (ADR-0617) — an ORDERED array of if-then rules.
  * An empty list is legal shape here (the editor's validatePlayability P6 gates unwinnable/unlosable
  * sets); this only checks each rule has a conditions array + a valid `then`, and every condition is
  * well-formed. Returns an error string or null. */
@@ -9937,7 +9937,7 @@ function validateWorkspaceLevel(level, key) {
       return `levels.${key}.battle is invalid`;
     }
   }
-  // ADR-0064 authored victory — optional, structural mirror of the frontend's validateLevel
+  // ADR-0617 authored victory — optional, structural mirror of the frontend's validateLevel
   // (shape/enum only; the win/lose-non-empty gate stays editor-side, like P1–P6). Absent ⇒ the
   // objective preset defines win/lose; legacy bodies omit it and stay valid.
   if (level.victory !== undefined) {
@@ -12749,7 +12749,7 @@ async function dbPublishLevelBackgroundVersions(
     : null;
   const environmentGeometryDigests = predrawnEnvironmentGeometryDigests(level);
   // Resizing or sliding the playable grid over a plate is a declared owner operation, and it
-  // records `predrawnGridDetached` on the Level (ADR-0516). The environment-geometry digest asks
+  // records `predrawnGridDetached` on the Level (ADR-0630). The environment-geometry digest asks
   // exactly one question — "does this raster depict this exact terrain" — and detaching is the
   // owner answering it. Growing a board does not make a painted pixel wrong: the plate is drawn at
   // its own absolute `worldBounds` with no dependence on cols/rows, so there is nothing here for a
@@ -12905,7 +12905,7 @@ async function dbPublishLevelBackgroundVersions(
           // A detached grid has deliberately moved away from the board the cyan footprints were
           // measured on. A calibrated cell the board no longer covers becomes uncalibrated and
           // falls back to the full-cell highlight; it does not invalidate the selection
-          // (ADR-0516). The profile's signature over its own content, and its binding to this
+          // (ADR-0630). The profile's signature over its own content, and its binding to this
           // exact background version, are both still proven.
           ...(gridDetached ? {} : {
             boardColumns: decodedBoard.cols,
@@ -20044,7 +20044,7 @@ function mediaDomainProjectionIssue(row) {
   if (strategikonBackgroundSlot(row.slot)) {
     return strategikonBackgroundMediaIssue(row, runtime.value);
   }
-  // Walls sit in the terrain domain but own the ADR-0086 full-height frame, not the 96x180
+  // Walls sit in the terrain domain but own the ADR-0628 full-height frame, not the 96x180
   // tile projection, so they resolve before the board-tile rules below.
   if (wallMaterialSlot(row.slot)) {
     return wallMaterialMediaIssue(row, runtime.value);

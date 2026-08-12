@@ -8,7 +8,7 @@ import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { ChromeButton } from './shared/ChromeButton';
 import { useDeleteKeyAction } from './shared/deleteKeyAction';
 
-// The Level Editor's "Victory events" editor (ADR-0064) — a MASTER-DETAIL surface inside the
+// The Level Editor's "Victory events" editor (ADR-0617) — a MASTER-DETAIL surface inside the
 // Events workspace: a scrollable list of NAMED rules on the left, the selected rule's `IF <conditions>
 // THEN <faction> wins|loses` on the right. Templates (passed in via `templates`) sit atop the list
 // and append rules to it. Chrome is the editor's kit idiom only — le-seg-btn buttons, the shared Toggle /

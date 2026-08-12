@@ -486,7 +486,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
   const objectiveGoal = net
     ? objectiveBriefingForSide(victoryOverride ?? victoryRulesForObjective(objective, objectiveCtx), localSide).summary
     : objectiveSummary(objective, objectiveCtx.kingSide);
-  // How the battle actually ended (ADR-0064) — the fired victory rule's name, when one decided the
+  // How the battle actually ended (ADR-0617) — the fired victory rule's name, when one decided the
   // game. Falls back to the static objective goal (checkmate / clock / draw, or an older save).
   const resultDetail = useSkirmish((s) => s.resultDetail);
   // Status reads from THIS client's seat (single-player: 'player'; netplay: the lobby seat).

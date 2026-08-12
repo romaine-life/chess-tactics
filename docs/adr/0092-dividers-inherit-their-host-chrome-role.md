@@ -111,7 +111,7 @@ geometry, native-size rail rules, and live-catalog ownership remain in force.
 
 ## More Information
 
-- Extends [ADR-0063](0063-section-dividers-are-a-1d-bar-primitive-teeing-into-the-rail.md).
+- Extends [ADR-0618](0618-section-dividers-are-a-1d-bar-primitive-teeing-into-the-rail.md).
 - Partially supersedes divider ownership in
   [ADR-0082](0082-control-panel-chrome-has-outer-and-inner-roles.md),
   [ADR-0083](0083-chrome-frame-geometry-is-derived-not-authored-state.md), and

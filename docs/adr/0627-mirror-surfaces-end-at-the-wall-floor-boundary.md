@@ -4,7 +4,7 @@ date: 2026-07-12
 deciders: Nelson, Codex
 ---
 
-# ADR-0085: Mirror surfaces end at the wall-floor boundary
+# ADR-0627: Mirror surfaces end at the wall-floor boundary
 
 ## Context and Problem Statement
 
@@ -123,8 +123,8 @@ exact one-to-one virtual raster and authored aperture roles remain in force.
 ## More Information
 
 - Superseded proof rule:
-  [ADR-0084](0084-full-body-mirrors-prove-grounded-board-axis-line-of-sight.md)
+  [ADR-0626](0626-full-body-mirrors-prove-grounded-board-axis-line-of-sight.md)
 - Exact reflection and authored aperture roles:
-  [ADR-0083](0083-mirror-aperture-coverage-is-authored-per-asset.md)
+  [ADR-0625](0625-mirror-aperture-coverage-is-authored-per-asset.md)
 - Derived contract: [Board render contract](../board-render-contract.md)
 - Generated material rules: [Asset generation contract](../asset-generation-contract.md)

@@ -4,7 +4,7 @@ date: 2026-07-12
 deciders: Nelson, Codex
 ---
 
-# ADR-0086: All perimeter walls use full-height geometry
+# ADR-0628: All perimeter walls use full-height geometry
 
 ## Context and Problem Statement
 
@@ -140,9 +140,9 @@ restated here. ADR-0085 remains accepted and unchanged.
 ## More Information
 
 - Superseded decision:
-  [ADR-0083](0083-mirror-aperture-coverage-is-authored-per-asset.md)
+  [ADR-0625](0625-mirror-aperture-coverage-is-authored-per-asset.md)
 - Wall-face support and floor occlusion:
-  [ADR-0085](0085-mirror-surfaces-end-at-the-wall-floor-boundary.md)
+  [ADR-0627](0627-mirror-surfaces-end-at-the-wall-floor-boundary.md)
 - Generated feature-material rule:
   [ADR-0040](0040-feature-tiles-own-geometry-generate-material.md)
 - Migration policy: [Migration policy](../migration-policy.md)

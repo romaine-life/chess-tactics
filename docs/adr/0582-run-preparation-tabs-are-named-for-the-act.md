@@ -3,7 +3,7 @@ status: accepted
 date: 2026-08-11
 deciders: owner (Nelson) + Claude
 refines:
-  - "[ADR-0556](0556-run-preparation-chooses-in-a-tab-column-of-one-line-rows.md)"
+  - "[ADR-0631](0631-run-preparation-chooses-in-a-tab-column-of-one-line-rows.md)"
   - "[ADR-0334](0334-current-run-stays-visible-disabled-without-an-active-run.md)"
   - "[ADR-0289](0289-run-preparation-is-control-first-and-ataraxia-uses-one-selector.md)"
 ---

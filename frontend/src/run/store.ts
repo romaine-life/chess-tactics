@@ -100,7 +100,7 @@ function queueRemoteSave(run: RunDocument): void {
           if (accountRun && browserRun && accountRun.id !== browserRun.id) {
             // No companion message: `adoptionConflict` IS the state, and Run preparation states
             // it in full behind Current Run, where the player who has to answer it already is
-            // (ADR-0557). Restating it in the shared error channel put it beside Start New Run,
+            // (ADR-0632). Restating it in the shared error channel put it beside Start New Run,
             // which the conflict has never gated.
             useActiveRun.setState({
               adoptionConflict: { browserRun, accountRun },

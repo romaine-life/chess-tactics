@@ -90,7 +90,7 @@ unchanged.
   [ADR-0241](0241-run-army-ledger-is-one-continuous-divided-inner-grid.md),
   retaining its one-box continuous-ledger intent while replacing its
   consumer-composed divider placement.
-- Extends [ADR-0063](0063-section-dividers-are-a-1d-bar-primitive-teeing-into-the-rail.md),
+- Extends [ADR-0618](0618-section-dividers-are-a-1d-bar-primitive-teeing-into-the-rail.md),
   [ADR-0092](0092-dividers-inherit-their-host-chrome-role.md), and
   [ADR-0093](0093-chrome-rails-own-alignment-atoms-use-clip-aprons.md).
 - Upholds [ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)

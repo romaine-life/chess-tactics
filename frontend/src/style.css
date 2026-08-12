@@ -763,7 +763,7 @@ h1 {
   display: var(--profile-bar-frame, block);
 }
 
-/* Kit section divider — a 1-D horizontal separator (the `panel-divider` bar asset, ADR-0063).
+/* Kit section divider — a 1-D horizontal separator (the `panel-divider` bar asset, ADR-0618).
    Drop <div class="kit-divider"></div> between content sections inside any kit-framed panel to
    split it into stacked rows; use as many as you like. It is a branch rail carrying an AUTHORED
    THREE-WAY TEE atom (`corner-t`, hand-drawn to match the frame's gold corner but symmetric with
@@ -5697,7 +5697,7 @@ body.loading-bootstrap .app-startup-status {
    ChromeSeatGrid — so this block is the card's measure and the compartment's own stacking,
    and every edge between two commands is the box's rail. There is nothing here that draws a
    frame, a gap or a border: the fifteen framed buttons in a gapped CSS grid that this used
-   to be are exactly what that primitive exists to replace (ADR-0242/ADR-0586). */
+   to be are exactly what that primitive exists to replace (ADR-0242/ADR-0635). */
 .skirmish-grid.chrome-seat-grid {
   /* Against the pad's own max-content default: this card is not a fixed set of squares, it
      fills the rail it lives in, and its opening is derived from that width. */
@@ -6758,7 +6758,7 @@ body.loading-bootstrap .app-startup-status {
   width: var(--le-inner-square);
 }
 /* The default-facing menu is the same divided pad as the compass, floated under its trigger. It
-   paints no panel of its own — the pad's installed frame IS the menu's chrome (ADR-0570) — so all
+   paints no panel of its own — the pad's installed frame IS the menu's chrome (ADR-0634) — so all
    that is left here is where it hangs. The float stays on this wrapper rather than moving onto the
    pad: a divided grid positions itself relative for its own rail layer, and the registry's inner-box
    rule restates that at a specificity a class on the box cannot reliably beat. */
@@ -7751,7 +7751,7 @@ body.loading-bootstrap .app-startup-status {
   align-self: end;
 }
 
-/* A pad of equal compartments — the facing compass, the default-facing menu (ADR-0570). Every
+/* A pad of equal compartments — the facing compass, the default-facing menu (ADR-0634). Every
    size comes from the grid, which derives its tracks and each seat's inset from this one opening
    on both axes; a consumer that stated its own would be restating a rule it cannot see the whole
    of. The default is exactly what a framed tool square gives its glyph — the square minus its own
@@ -7927,7 +7927,7 @@ body.loading-bootstrap .app-startup-status {
 .le-predrawn-lock { display: grid; gap: 6px; color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.4; }
 .le-predrawn-lock strong { color: var(--skirmish-ink); }
 
-/* Victory-conditions editor (ADR-0064) — layout only; every control is a kit atom (le-seg-btn /
+/* Victory-conditions editor (ADR-0617) — layout only; every control is a kit atom (le-seg-btn /
    Toggle / Stepper / HouseSelect). Each RULE is a faint grouping block; its
    conditions stack with an IF/and prefix, then a THEN row. */
 .le-victory-presets { margin: 6px 0 2px; }
@@ -17253,7 +17253,7 @@ button.tileset-relationship-cell {
   color: #5f748a;
 }
 
-/* The 8-way facing pad is ONE divided box (ADR-0570), so it states no tracks, no gap, no width
+/* The 8-way facing pad is ONE divided box (ADR-0634), so it states no tracks, no gap, no width
    and no compartment size: the seat grid lays all of it from the shared opening. What is left
    here is the type. */
 .unit-facing-cell {
@@ -19238,7 +19238,7 @@ button.tileset-relationship-cell {
      in (see .settings-frame / .menu-dest-col above). A rail is a column of BUTTONS — there
      is no rail that should be click-through — so the primitive owns the opt-in rather than
      each consumer remembering to also wear .settings-frame or .menu-dest-col. Run
-     preparation is why: converting it to this primitive (ADR-0558) dropped the
+     preparation is why: converting it to this primitive (ADR-0633) dropped the
      .menu-dest-col its hand-assembled column had carried, and Current Run / Start New Run
      rendered pixel-perfect, hovered as buttons, and swallowed every click. */
   pointer-events: auto;
@@ -19863,7 +19863,7 @@ button.tileset-relationship-cell {
   /* Named because a surfaced row's texture pitch is built from it: the sheet has to step by
      exactly what the layout steps by, so the two may not be stated twice. (Run's choice list
      used to be the caller; it is a rail of ApparatusRailTabs now and steps by the rail's own
-     --settings-tab-surface-pitch instead. ADR-0558.) */
+     --settings-tab-surface-pitch instead. ADR-0633.) */
   --settings-section-rows-gap: 10px;
   display: grid;
   gap: var(--settings-section-rows-gap);
@@ -20282,7 +20282,7 @@ button.tileset-relationship-cell {
    label's outline, so it makes room INSIDE the clip instead: padding opens a stroke-width gutter
    the ink can occupy, and the matching negative margin puts the text back where it sat, so the
    only thing that changed is that the outline is no longer sheared off the first letter.
-   (The copy block itself is the shared .apparatus-tab-copy since ADR-0558 — the Campaign Editor
+   (The copy block itself is the shared .apparatus-tab-copy since ADR-0633 — the Campaign Editor
    tab is the primitive now, so only its own uppercase treatment is stated here.) */
 /* The stroke apron that used to live here is on `.apparatus-tab-copy` now, where the box that
    actually clips can carry it — every rail with a two-line label needs the room, not just this
@@ -24343,7 +24343,7 @@ button.tileset-relationship-cell {
 }
 
 /* Account/browser Run adoption is a decision made with two buttons, not a framed record of its
-   own. It is answered inside the Current Run detail column now (ADR-0557), which already
+   own. It is answered inside the Current Run detail column now (ADR-0632), which already
    supplies the head, the body inset and the row that closes each side — so the copy carries no
    padding of its own and each Keep is a row of the detail card. It used to stand in the
    choice column, in the seat the Current Run row occupies, and paid its own inset for that.
@@ -25423,7 +25423,7 @@ button.tileset-relationship-cell {
 
 /* The grouped case shows the relics themselves, so the RELIC is the control: its trigger paints
    nothing at all — no seat, no frame, no material — and the press is answered by the art lighting up
-   (ADR-0254's unframed icon triggers, restated as ADR-0589's one material exception). The reset rule
+   (ADR-0254's unframed icon triggers, restated as ADR-0636's one material exception). The reset rule
    below must keep a comment-free header: the surface-contract gate folds a preceding comment into
    the selector it looks up, and the approved frameless resets are keyed on the bare selector. */
 .enchiridion-lipsanon-group-grid > li,

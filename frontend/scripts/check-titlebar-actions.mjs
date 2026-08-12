@@ -95,7 +95,7 @@ if (!/<TitleBarButtonPrimitive[\s\S]*?\bseated\b[\s\S]*?account-avatar-button/.t
 // rail. Route contributions are deliberately NOT in here — they stay individually framed before
 // the persistent divider, which is what separates them from what the app always carries.
 //
-// The tracks come from the grid's own chromeDividedSeatAxis (ADR-0570) — the rail-overlap rule is
+// The tracks come from the grid's own chromeDividedSeatAxis (ADR-0634) — the rail-overlap rule is
 // stated once, for every pad in the app — but the COUNT must still be the seat list's, which is
 // what makes a bar without the gear two columns and one rail rather than an empty compartment.
 const cluster = readFileSync(join(root, 'shared', 'HeaderAccountCluster.tsx'), 'utf8');

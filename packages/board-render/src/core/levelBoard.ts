@@ -216,7 +216,7 @@ export interface LevelMeta {
   // The level's par in turns, authored in the RULES panel. Omitted ⇒ estimated from the board
   // (ADR-0539, core/speedBonus.ts).
   parTurns?: number;
-  // Authored win/lose lists (ADR-0064). Omitted ⇒ the `objective` preset defines the outcome
+  // Authored win/lose lists (ADR-0617). Omitted ⇒ the `objective` preset defines the outcome
   // (the RULES panel's "Custom win/lose" toggle is off) — the same back-compat default as above.
   victory?: VictoryRules;
   // Authored non-victory events: setup spawns, pawn promotion triggers, and future event kinds.

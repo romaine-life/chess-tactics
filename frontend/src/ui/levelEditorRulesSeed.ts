@@ -38,7 +38,7 @@ import { DEFAULT_TIME_CONTROL } from '../core/clock';
 import { rulesEqual } from './VictoryConditionsEditor';
 
 /** Rules-state fields with a direct user-authoring surface in the editor UI. `objective`
- * and `surviveTurns` are absent on purpose: they have no user-facing setter (ADR-0064
+ * and `surviveTurns` are absent on purpose: they have no user-facing setter (ADR-0617
  * replaced the objective dropdown with victory templates), so a seed always writes them. */
 export type AuthoredRulesField = 'victory' | 'events' | 'name' | 'clock' | 'templateChoice' | 'battleDeal' | 'par';
 

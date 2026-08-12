@@ -3,7 +3,7 @@ status: accepted
 date: 2026-08-11
 deciders: owner (Nelson) + Claude
 refines:
-  - "[ADR-0556](0556-run-preparation-chooses-in-a-tab-column-of-one-line-rows.md)"
+  - "[ADR-0631](0631-run-preparation-chooses-in-a-tab-column-of-one-line-rows.md)"
 ---
 
 # ADR-0573: A game is read back without being taken back

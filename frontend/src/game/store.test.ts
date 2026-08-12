@@ -81,7 +81,7 @@ afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();
   // The store is a module singleton shared across tests; a test that sets an authored victory
-  // override (ADR-0064) must not leak it into the next test's preset eval. Reset the victory state.
+  // override (ADR-0617) must not leak it into the next test's preset eval. Reset the victory state.
   useSkirmish.setState({ victoryOverride: null, resultDetail: null, pendingPromotion: null, adminMode: null });
   useSkirmish.getState().setNetMoveSink(null);
   useSkirmish.getState().setNetResignSink(null);
@@ -969,7 +969,7 @@ describe('skirmish store: rival-kings + direction-aware capture-king copy', () =
   });
 });
 
-describe('skirmish store: authored victory names the fired rule (ADR-0064)', () => {
+describe('skirmish store: authored victory names the fired rule (ADR-0617)', () => {
   it('an authored win reads by its rule name, not the mode label — in the log and resultDetail', () => {
     // AUTHORED to win by capturing the enemy KING while the enemy still fields a pawn, so this
     // exact named rule — not a full-force preset condition — is what decides.

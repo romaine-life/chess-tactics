@@ -5,7 +5,7 @@ deciders: Nelson, Claude
 partially_supersedes:
   - "[ADR-0116](0116-registered-predrawn-candidates-activate-the-locked-editor.md)'s prop clause"
 refines:
-  - "[ADR-0516](0516-the-playable-grid-is-placed-over-ai-artwork-by-hand.md)"
+  - "[ADR-0630](0630-the-playable-grid-is-placed-over-ai-artwork-by-hand.md)"
   - "[ADR-0518](0518-the-board-assembles-obstacles-before-armies.md)"
   - "[ADR-0162](0162-predrawn-backgrounds-retain-live-ground-cover.md)"
 ---
@@ -24,7 +24,7 @@ Two decisions since have narrowed what that reason actually covers.
 [ADR-0162](0162-predrawn-backgrounds-retain-live-ground-cover.md) took ground cover back out of the
 lock: cover is authored, animated and drawn live over the immutable raster, so it contradicts
 nothing, and it was excluded from the environment-geometry digest so a cover edit cannot stale the
-art. [ADR-0516](0516-the-playable-grid-is-placed-over-ai-artwork-by-hand.md) went further and said
+art. [ADR-0630](0630-the-playable-grid-is-placed-over-ai-artwork-by-hand.md) went further and said
 the quiet part out loud — an AI board's terrain is *"purely invisible movement rules, decoupled from
 appearance"*, and **"obstacles or water placed under a plate are the natural next thing to want."**
 

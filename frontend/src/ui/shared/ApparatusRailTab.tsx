@@ -2,10 +2,10 @@ import { createContext, useContext, type CSSProperties, type HTMLAttributes, typ
 // Every menu-language rail button in the app is this component. `check-rail-tab-primitive.mjs`
 // fails the build on any other file that names `settings-tab` / `main-menu-mode-tab` in markup,
 // because FOUR surfaces had each hand-assembled their own and drifted: the Run choice list
-// stepped by a different gap and grew a different seat than the rail beside it (ADR-0556), and
+// stepped by a different gap and grew a different seat than the rail beside it (ADR-0631), and
 // a mark that arrived by class name once painted itself under another surface's sizing rules.
 // New states belong HERE as props — `disabled`, `locked`, `trailing`, `onSelect`, `ariaLabel`
-// and the non-navigating host all arrived by converting a lookalike back in. ADR-0558.
+// and the non-navigating host all arrived by converting a lookalike back in. ADR-0633.
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
 import { FittedTabLabel } from './FittedTabLabel';
 import { ChromeNavButton } from './ChromeButton';
@@ -243,7 +243,7 @@ export function ApparatusRailTab({
   // interactive favourite at the tab's trailing edge, which cannot nest inside a button, and the
   // editor collection tabs select a collection without an address. Both hand-rolled the whole
   // tab to get it. It is a HOST choice, not a second tab: identical classes, seat, mark, copy
-  // and states, so the two hosts cannot drift the way four hand-assembled tabs did (ADR-0558).
+  // and states, so the two hosts cannot drift the way four hand-assembled tabs did (ADR-0633).
   if (!to) {
     return (
       <div

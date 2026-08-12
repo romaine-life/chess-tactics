@@ -4,10 +4,10 @@ date: 2026-07-11
 deciders: Nelson, Codex
 ---
 
-# ADR-0081: Wall mirrors reflect piece facing in board-grid space
+# ADR-0623: Wall mirrors reflect piece facing in board-grid space
 
 > **Superseded by
-> [ADR-0082](0082-wall-mirrors-are-exact-one-to-one-game-world-reflections.md)
+> [ADR-0624](0624-wall-mirrors-are-exact-one-to-one-game-world-reflections.md)
 > (2026-07-11).** ADR-0081's wall-specific facing and pre-flip sprite-selection rules
 > remain. ADR-0082 replaces the inherited grid-depth FOV and subject-scale controls with
 > exact one-to-one position and size, and requires taller mirror-bearing walls/apertures.
@@ -161,9 +161,9 @@ all inherited live-mirror requirements remain in force.
 ## More Information
 
 - Superseded decision:
-  [ADR-0080](0080-wall-mirrors-reflect-along-the-board-grid-wall-normal.md)
+  [ADR-0622](0622-wall-mirrors-reflect-along-the-board-grid-wall-normal.md)
 - Original physical facing intent:
-  [ADR-0077](0077-wall-mirrors-are-live-piece-reflective-surfaces.md)
+  [ADR-0621](0621-wall-mirrors-are-live-piece-reflective-surfaces.md)
 - Directional sprite authority:
   [ADR-0075](0075-unit-directions-are-blender-authored.md)
 - Canonical projection contract: [Blender projection contract](../blender-projection-contract.md)
