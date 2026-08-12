@@ -94,9 +94,15 @@ export function ThumbnailSurface({
       })
       .map((node) => node.dataset.levelThumbnailId)
       .filter((id): id is string => Boolean(id));
-    // A zero-row surface is complete. If layout is temporarily unmeasurable,
-    // require the first row rather than declaring a populated list complete.
-    setCriticalIds(new Set(visible.length || nodes.length === 0
+    // A zero-row surface is complete, and so is a surface whose rows all sit below the fold:
+    // nothing the player can see has to be painted before this screen may arrive. That is a
+    // MEASURED empty set, which is different from an unmeasurable one — on a landscape phone
+    // the rail stack above leaves a 19px band of this column on screen and the first row
+    // starts 25px below it, so `visible` is legitimately empty. Treating that as
+    // "unmeasurable" made the surface wait on a row far below the fold that is never painted,
+    // and the Levels screen hung at `loading` for good.
+    const measurable = bounds.bottom - bounds.top > 1;
+    setCriticalIds(new Set(measurable || nodes.length === 0
       ? visible
       : [nodes[0].dataset.levelThumbnailId].filter((id): id is string => Boolean(id))));
   }, [signature, viewportSelector]);
