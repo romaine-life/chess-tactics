@@ -98,6 +98,7 @@ import {
   RUN_CARD_POOL_MIN_TEXT_SIZE,
   RunCardPoolCatalog,
 } from './RunCardPoolStudio';
+import { RunCardArtReviewCatalog } from './RunCardArtReview';
 import { RunCardOutlineCatalog, RunCardOutlineViewer } from './RunCardOutlineStudio';
 import { RunCardSizeCatalog, RunCardSizeViewer } from './RunCardSizeStudio';
 import { RunCardPromptCatalog, RunCardPromptViewer } from './RunCardPromptStudio';
@@ -137,7 +138,7 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'deployment' | 'gym' | 'solver' | 'cardlayout' | 'cardsize' | 'carddivider' | 'cardicons' | 'cardfit' | 'cardpool' | 'cardoutline' | 'cardprompts' | 'screenart' | 'lipsanonmat' | 'actionmarks' | 'adlectiomark' | 'runrailmarks';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'deployment' | 'gym' | 'solver' | 'cardlayout' | 'cardsize' | 'carddivider' | 'cardicons' | 'cardfit' | 'cardpool' | 'cardoutline' | 'cardprompts' | 'cardartreview' | 'screenart' | 'lipsanonmat' | 'actionmarks' | 'adlectiomark' | 'runrailmarks';
 
 // Every prop KIND present in the catalog, in definition order — DERIVED from PROP_DEFS so a new
 // kind (e.g. 'rock') is a filter facet automatically. Hardcoding ['tree','house'] here silently
@@ -281,7 +282,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => Boolean(value && studioFamilies.some((family) => family.id === value));
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'deployment' || value === 'gym' || value === 'solver' || value === 'cardlayout' || value === 'cardsize' || value === 'carddivider' || value === 'cardicons' || value === 'cardfit' || value === 'cardpool' || value === 'cardoutline' || value === 'cardprompts' || value === 'screenart' || value === 'lipsanonmat' || value === 'actionmarks' || value === 'adlectiomark' || value === 'runrailmarks';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'deployment' || value === 'gym' || value === 'solver' || value === 'cardlayout' || value === 'cardsize' || value === 'carddivider' || value === 'cardicons' || value === 'cardfit' || value === 'cardpool' || value === 'cardoutline' || value === 'cardprompts' || value === 'cardartreview' || value === 'screenart' || value === 'lipsanonmat' || value === 'actionmarks' || value === 'adlectiomark' || value === 'runrailmarks';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -2140,6 +2141,15 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       id: 'cardsize', label: 'Card Size', hint: 'Tune how large the Bona Vacantia grant and the Sectio print their card rows, and the drift and light those cards carry.',
       main: <RunCardSizeCatalog onOpen={() => openViewer('cardsize')} />,
       controls: <button type="button" className="tileset-view-action" data-testid="open-run-card-size" onClick={() => openViewer('cardsize')}>Open Card Size</button>,
+    },
+    {
+      id: 'cardartreview', label: 'Card Art', hint: 'Every card illustration on the face it ships on, grouped by the King world it belongs to, with the raw candidate beneath each so the frame’s crop is visible.',
+      main: <RunCardArtReviewCatalog />,
+      controls: (
+        <p className="tileset-view-note">
+          Candidates only. Accepting a card is done from Card Prompts, one card at a time.
+        </p>
+      ),
     },
     {
       id: 'cardpool', label: 'Card Pool', hint: 'Re-derive the offer catalog live: piece material, footprint rules, the density cost curve, and where the rarity bands land.',

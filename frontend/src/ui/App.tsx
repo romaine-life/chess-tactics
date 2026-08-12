@@ -78,7 +78,6 @@ const DrawableCatalogLab = lazy(() => import('./DrawableCatalogLab').then((modul
 const LipsanonReview = lazy(() => import('./LipsanonReview').then((module) => ({ default: module.LipsanonReview })));
 const RunSectioArtReview = lazy(() => import('./RunSectioArtReview').then((module) => ({ default: module.RunSectioArtReview })));
 const RunProgressIconReview = lazy(() => import('./RunProgressIconReview').then((module) => ({ default: module.RunProgressIconReview })));
-const RunCardArtReview = lazy(() => import('./RunCardArtReview').then((module) => ({ default: module.RunCardArtReview })));
 const BrushIconReview = lazy(() => import('./BrushIconReview').then((module) => ({ default: module.BrushIconReview })));
 const MenuIconReview = lazy(() => import('./MenuIconReview').then((module) => ({ default: module.MenuIconReview })));
 
@@ -816,7 +815,6 @@ function renderScene(scene: ScenePath, search: string): ReactElement {
   if (path === '/studio' && new URLSearchParams(search).get('brushIconReview') === '1') return <BrushIconReview />;
   if (path === '/studio' && new URLSearchParams(search).get('runProgressIconReview') === '1') return <RunProgressIconReview />;
   if (path === '/studio' && new URLSearchParams(search).get('menuIconReview') === '1') return <MenuIconReview />;
-  if (path === '/studio' && new URLSearchParams(search).get('cardArtReview') === '1') return <RunCardArtReview />;
   if (path === '/studio' || path === '/tileset-studio') return <TilesetStudio />;
   // Wall review lives in the Studio proper: an owner proof only counts from a game-owned
   // surface, and this bespoke path is not one. The studio's route writer canonicalises this

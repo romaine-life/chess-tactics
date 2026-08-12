@@ -11,8 +11,6 @@ import {
 } from '../run/model';
 import { runCardName, runCardFlavor, runCardArtSlots } from '../run/cardNames';
 import { RunCard } from './RunCard';
-import { OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
-import { useSceneParticipant } from './shell/SceneBoundary';
 
 /**
  * Every card illustration of the ADR-0579 batch, mounted on the face it will actually be seen on.
@@ -39,12 +37,11 @@ function worldOf(metadata: unknown): string {
   return typeof anchor === 'string' && anchor.trim() ? anchor : 'Unassigned';
 }
 
-export function RunCardArtReview(): ReactElement {
+export function RunCardArtReviewCatalog(): ReactElement {
 
   const [catalog, setCatalog] = useState<AdminLiveMediaCatalog | null>(null);
   const [error, setError] = useState('');
 
-  useSceneParticipant('studio', error ? 'error' : catalog ? 'painted' : 'loading', error ? new Error(error) : undefined);
 
   useEffect(() => {
     let live = true;
@@ -96,12 +93,6 @@ export function RunCardArtReview(): ReactElement {
 
   return (
     <div className="run-card-art-review">
-      <OuterChromeBox chromeConsumer="run-card-art-review" titled>
-        <OuterChromeHeader title={`Run card art · ${mounted.length} candidates across ${worlds.length} worlds`} />
-        <p className="run-card-art-review-note">
-          Every illustration on the card face it ships on. Review only — nothing here is accepted.
-        </p>
-      </OuterChromeBox>
       {worlds.map(([world, entries]) => (
         <section key={world} className="run-card-art-review-world" aria-label={world}>
           <h2>{world} <span>{entries.length}</span></h2>
