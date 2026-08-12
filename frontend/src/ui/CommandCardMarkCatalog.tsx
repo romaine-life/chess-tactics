@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import {
   acceptLiveMediaVersions,
-  fetchAdminLiveMediaCatalog,
   reviewLiveMediaVersion,
   type AdminLiveMediaCatalog,
   type AdminLiveMediaVersion,
 } from '../net/liveMediaAdmin';
 import { fetchAdminDrawableCatalog, saveDrawableAsset } from '../net/drawableCatalogAdmin';
-import { defaultBackgroundSet } from '../art/backgroundSets';
+import { useAdminLiveMediaCatalog } from './studio/useAdminLiveMediaCatalog';
 import { ChromeButton } from './shared/ChromeButton';
-import { OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { CommandCard, COMMAND_CARD_KEY_ROWS } from './shared/CommandCard';
 import { SHORTCUT_BINDINGS } from './SkirmishHud';
@@ -21,10 +19,13 @@ import {
   skirmishShortcutIconUrl,
   type SkirmishShortcutIconVariant,
 } from './shared/SkirmishShortcutIcon';
-import { useSceneParticipant } from './shell/SceneBoundary';
 
 /**
- * Owner review for the Battle command card's marks.
+ * Owner review for the Battle command card's marks, as a Studio CATEGORY.
+ *
+ * It arrived on `main` as `/studio?commandCardMarkReview=1` while ADR-0588 was converting the six
+ * that already did that — written, like each of those, by copying the last one. That is the whole
+ * argument for the gate: the pattern reproduces itself faster than it can be cleaned up by hand.
  *
  * The card is composed here rather than picked from finished sets. Each key's candidates
  * were generated independently, so the best Grid and the best Deselect are not the same
@@ -233,23 +234,25 @@ function InstallCardControl({
   );
 }
 
-export function CommandCardMarkReview(): ReactElement {
-  const [catalog, setCatalog] = useState<AdminLiveMediaCatalog | null>(null);
-  const [error, setError] = useState('');
-  const [nonce, setNonce] = useState(0);
+export interface CommandCardMarkState {
+  catalog: AdminLiveMediaCatalog | null;
+  picked: Record<string, string>;
+  pick: (variant: string, id: string) => void;
+  error: string;
+  refresh: () => void;
+}
+
+export function useCommandCardMarks(): CommandCardMarkState {
+  const { catalog, error, refresh } = useAdminLiveMediaCatalog();
   const [picked, setPicked] = useState<Record<string, string>>({});
-  const refresh = useCallback(() => setNonce((value) => value + 1), []);
+  const pick = useCallback((variant: string, id: string) => {
+    setPicked((current) => ({ ...current, [variant]: id }));
+  }, []);
+  return { catalog, picked, pick, error, refresh };
+}
 
-  useEffect(() => {
-    let active = true;
-    void fetchAdminLiveMediaCatalog()
-      .then((next) => { if (active) setCatalog(next); })
-      .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : String(reason)); });
-    return () => { active = false; };
-  }, [nonce]);
-
-  const sceneError = useMemo(() => error ? new Error(error) : null, [error]);
-  useSceneParticipant('studio', sceneError ? 'error' : catalog ? 'painted' : 'loading', sceneError);
+export function CommandCardMarkCatalog({ state }: { state: CommandCardMarkState }): ReactElement {
+  const { catalog, picked, pick, error, refresh } = state;
 
   const candidates = useMemo(
     (): Map<SkirmishShortcutIconVariant, AdminLiveMediaVersion[]> => (
@@ -290,24 +293,10 @@ export function CommandCardMarkReview(): ReactElement {
     return map;
   }, [chosen]);
 
+  if (error) return <p role="alert">{error}</p>;
+  if (!catalog) return <p role="status">Loading candidates…</p>;
   return (
-    <main
-      className="command-card-review-screen skirmish-screen"
-      style={{ ['--skirmish-world-bg' as string]: `url("${defaultBackgroundSet().world}")` }}
-    >
-      <OuterChromeBox chromeConsumer="command-card-review" titled className="command-card-review-panel">
-        <OuterChromeHeader title="Battle Command Card Marks" />
-        <p>
-          The card on the left is the real one — the same divided box, the same leaf surface,
-          the same compartment drawing the 64px canvas the Controls tab paints in a match, at
-          the width the Battle rail gives it. Press a candidate to arm it there. Every mark is
-          fitted the same way: ink scaled to exactly 52px tall on the 64px canvas, both ink
-          dimensions even, so ten marks in a 3x5 pad read at one size (ADR-0560). Nothing is
-          installed until you press Install.
-        </p>
-        {error ? <p role="alert">{error}</p> : null}
-        {!catalog && !error ? <p role="status">Loading candidates…</p> : null}
-        {catalog ? (
+    <div data-testid="command-card-mark-catalog">
           <div className="command-card-review-body">
             <section className="command-card-review-cards" aria-label="Command card">
               <div className="command-card-review-column">
@@ -348,7 +337,7 @@ export function CommandCardMarkReview(): ReactElement {
                               className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'command-card-review-option', active && 'active is-active')}
                               aria-pressed={active}
                               title={`${entry.label} — ${metadataString(version, 'treatmentLabel') || version.label}`}
-                              onClick={() => setPicked((current) => ({ ...current, [entry.variant]: version.id }))}
+                              onClick={() => pick(entry.variant, version.id)}
                             >
                               <SkirmishShortcutIcon variant={entry.variant} src={version.media!.url} />
                               <span className="skirmish-grid-label">{metadataString(version, 'treatmentLabel') || version.label}</span>
@@ -368,8 +357,18 @@ export function CommandCardMarkReview(): ReactElement {
               })}
             </section>
           </div>
-        ) : null}
-      </OuterChromeBox>
-    </main>
+    </div>
+  );
+}
+
+export function CommandCardMarkControls(): ReactElement {
+  return (
+    <p className="tileset-catalog-note">
+      The card on the left is the real one — the same divided box, the same leaf surface, the same
+      compartment drawing the 64px canvas the Controls tab paints in a match, at the width the
+      Battle rail gives it. Press a candidate to arm it there. Every mark is fitted the same way:
+      ink scaled to exactly 52px tall on the 64px canvas, both ink dimensions even, so ten marks in
+      a 3&times;5 pad read at one size (ADR-0560). Nothing is installed until you press Install.
+    </p>
   );
 }
