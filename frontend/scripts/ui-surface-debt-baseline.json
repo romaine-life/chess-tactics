@@ -5606,14 +5606,6 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": "the chrome carries the connection to the global bar. */ :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .skirmish-card h2.kit-panel-title",
-      "surfaceHash": "f78227b301fc01c2133857005ac0128f938882866a936cf8ee5de7d1d8ddb690",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
       "selector": "the current state is \"lit\" (warm wood-light on, cool stone-light off) and the other dims. No raw-CSS chrome to throw away. */ .settings-toggle",
       "surfaceHash": "479bce85d5f33eb145bc5092c7eef41ef076d49c88111b0c636382badb901a4e",
       "occurrence": 1
