@@ -41,8 +41,9 @@ spec:
           image: {{ $imageRef | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
-            # auth.romaine.life is the OIDC authorization server. Chess Tactics
-            # is a public BFF client: authorization-code + PKCE, no client secret.
+            # auth.romaine.life is the OIDC authorization server. Chess Tactics is a BFF and a
+            # CONFIDENTIAL client (ADR-0576): authorization-code + PKCE, and it authenticates
+            # itself with the secret below on every token request.
             - name: AUTH_BASE_URL
               value: {{ required "auth.issuer is required" .Values.auth.issuer | quote }}
             - name: OIDC_CLIENT_ID
@@ -82,6 +83,39 @@ spec:
             # ADR-0038: who may author/publish the global OFFICIAL campaign tier.
             - name: ADMIN_EMAILS
               value: {{ .Values.adminEmails | quote }}
+            {{- end }}
+            {{- if .Values.externalSecret }}
+            # Encrypts the OAuth tokens held in `auth_sessions` (ADR-0576). The session cookie's
+            # token is hashed; these two cannot be, because the backend must present them to the
+            # identity provider to renew — so they are encrypted at rest instead.
+            #
+            # It comes from a Secret rather than values.yaml for the obvious reason, and it is
+            # OPTIONAL so a cluster without the Secret still starts: the backend then stores
+            # tokens plainly and says so loudly on every boot. That is the status quo it improves
+            # on, and refusing to start would take sign-in away entirely over a missing variable.
+            #
+            # Rotating the key ends every live session — rows encrypted under the old key can no
+            # longer be renewed and are deleted on next use, which is the honest outcome.
+            - name: AUTH_TOKEN_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: chess-tactics-oauth
+                  key: AUTH_TOKEN_ENCRYPTION_KEY
+            {{- end }}
+            {{- if .Values.externalSecret }}
+            # A Backend-For-Frontend is a confidential OAuth client
+            # (draft-ietf-oauth-browser-based-apps-26 §6.1.3.1), so the backend authenticates
+            # itself on every token request rather than relying on PKCE alone.
+            #
+            # Optional, and the provider registers this client public until the same secret is
+            # installed on its side too — promoting it has no safe order otherwise, because the
+            # provider refuses a secret from a client with none registered AND refuses a
+            # confidential client that sends none. See enforceConfidential in the auth repo.
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: chess-tactics-oauth
+                  key: OIDC_CLIENT_SECRET
             {{- end }}
             {{- if and (ne (include "chess-tactics.isTestEnv" .) "true") .Values.serviceAccountClientId }}
             # Headless AI training Jobs (POST /api/train-runs) run THIS image with a
