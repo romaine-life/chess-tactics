@@ -30,7 +30,7 @@ roads, no battle scene — came across verbatim and became the whole subject.
 Residue is a subject; absence is not. Card art has its own contract:
 [`../../art/card-art-brief-contract.md`](../../art/card-art-brief-contract.md),
 decided in
-[ADR-0578](../../adr/0578-card-art-is-briefed-from-a-king-rooted-event.md). Do
+[ADR-0579](../../adr/0579-card-art-is-briefed-from-a-king-rooted-event.md). Do
 not brief a card from this folder.
 
 ## Candidate Anchors

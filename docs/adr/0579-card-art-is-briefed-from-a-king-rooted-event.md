@@ -9,7 +9,7 @@ refines:
   - "[docs/lore/historical-anchors/README.md](../lore/historical-anchors/README.md)"
 ---
 
-# ADR-0578: Card art is briefed from a king-rooted event, not from a background anchor
+# ADR-0579: Card art is briefed from a king-rooted event, not from a background anchor
 
 ## Context and Problem Statement
 

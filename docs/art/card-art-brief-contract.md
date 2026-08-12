@@ -4,7 +4,7 @@ Read this before writing any Run card brief. It governs the 69 default-rules for
 the 15 King cards. It does **not** govern world or battle backgrounds — those keep
 [`../lore/historical-anchors/README.md`](../lore/historical-anchors/README.md), and confusing the two
 is what produced the set this contract replaces. See
-[ADR-0578](../adr/0578-card-art-is-briefed-from-a-king-rooted-event.md).
+[ADR-0579](../adr/0579-card-art-is-briefed-from-a-king-rooted-event.md).
 
 ## The one rule
 

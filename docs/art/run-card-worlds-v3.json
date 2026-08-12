@@ -2,7 +2,7 @@
   "schemaVersion": 3,
   "cardType": "Units",
   "status": "proposed",
-  "governedBy": "docs/adr/0578-card-art-is-briefed-from-a-king-rooted-event.md",
+  "governedBy": "docs/adr/0579-card-art-is-briefed-from-a-king-rooted-event.md",
   "contract": "docs/art/card-art-brief-contract.md",
   "supersedes": "docs/art/run-card-family-prompts-v2.json (left intact as the record of what shipped)",
   "note": "The 69 cards dealable under DEFAULT_RUN_RULES (cardSpan 2), each authored across the three layers of the contract. One illustration per CARD, retiring the (footprint, roster) family collapse of ADR-0520 for this deck.",

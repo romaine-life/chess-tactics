@@ -2,7 +2,7 @@
   "schemaVersion": 3,
   "cardType": "King",
   "status": "proposed",
-  "governedBy": "docs/adr/0578-card-art-is-briefed-from-a-king-rooted-event.md",
+  "governedBy": "docs/adr/0579-card-art-is-briefed-from-a-king-rooted-event.md",
   "contract": "docs/art/card-art-brief-contract.md",
   "supersedes": "docs/art/run-king-prompts-v2.json (left intact as the record of what shipped)",
   "note": "The fifteen King slots with their fixed casts. Nine acts are kept from v2 because they are already strong and singular; six are re-anchored, taking the slate from two realms to nine. Casts are fixed by each card formation and are not negotiable; everything else here is. Awaiting owner sign-off before briefs are written against it.",
