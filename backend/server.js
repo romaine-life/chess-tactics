@@ -6268,7 +6268,7 @@ const MIGRATIONS = [
   {
     version: 79,
     name: 'a Run can be owned by a guest',
-    // ADR-0588. A signed-out player generated no server data at all -- not data we discarded,
+    // ADR-0587. A signed-out player generated no server data at all -- not data we discarded,
     // but nowhere to put it: `owner_email` was the PRIMARY KEY, so a Run without an account had
     // no row it could occupy. That was a consequence of keying the table by email, not a decision
     // anyone made about guests, and it made every anonymous player invisible to counting,
@@ -23817,7 +23817,7 @@ function publicActiveRun(row) {
   };
 }
 
-// --- Who a Run belongs to (ADR-0588) -------------------------------------
+// --- Who a Run belongs to (ADR-0587) -------------------------------------
 // An account Run is keyed by email. A GUEST Run is keyed by the SHA-256 of an opaque key the
 // browser minted and holds -- the same shape as the session cookie of migration 77 and the Level
 // Editor's page credential, so the server stores no credential it could leak. Migration 79's
@@ -24005,7 +24005,7 @@ app.delete('/api/active-run', async (req, res) => {
   }
 });
 
-// POST /api/active-run/adopt-guest — the guest row this account inherits on sign-in (ADR-0588).
+// POST /api/active-run/adopt-guest — the guest row this account inherits on sign-in (ADR-0587).
 //
 // Reuses the merge `campaign_progress` already defines: the browser is the guest's authority, and
 // signing in folds it into the account. So this settles the SERVER's half only -- the guest row --
@@ -24066,7 +24066,7 @@ app.post('/api/active-run/adopt-guest', async (req, res) => {
   }
 });
 
-// GET /api/admin/run-population — ADMIN: how many Runs exist, and whose (ADR-0588).
+// GET /api/admin/run-population — ADMIN: how many Runs exist, and whose (ADR-0587).
 //
 // The question guest identity was built to make answerable. Before it there was nothing to count:
 // a signed-out player left no row, so every population figure silently meant "signed-in players".
