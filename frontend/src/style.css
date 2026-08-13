@@ -6882,14 +6882,47 @@ body.loading-bootstrap .app-startup-status {
   text-shadow: 0 2px 0 #010407;
   text-transform: uppercase;
 }
+/* The whole option-row treatment is explained HERE, over the one rule in this run that paints
+   nothing, because check-ui-surface-contract.mjs keys a rule on everything between the previous
+   `}` and its `{` — a comment directly above one of the three rules below becomes part of that
+   rule's identity, and all three are keyed on their bare selectors.
+
+   An option row IS a control, so it wears the leaf oak (ADR-0433). ADR-0433 says outright that
+   opening a dropdown does not turn its popup field into a leaf — and its reason is that the field
+   HOSTS option rows, so the rows are the leaves. Both halves were missing: the field painted
+   nothing and the rows wore a hand-mixed `rgba(10, 28, 43, .42)`, which made a menu of clickable
+   rows the one place in the shell where a pressable surface carried no wood at all. The oak is
+   named on the row in HouseSelect.tsx and PHASED there, so a menu is cut from one plank running
+   down the list instead of stamping one crop per row (ADR-0063).
+
+   `.house-select-option`'s three surface declarations only REMOVE the shell's native button
+   chrome and put nothing in its place — the wood arrives from the registered surface and the
+   rails around it are the menu box's own — so it is the same reset `.section-box-member-verb`
+   makes, and is registered as one.
+
+   Under the cursor the row is LIT rather than covered: a translucent wash over dark oak
+   desaturates it to grey, which reads as a row that has gone dead rather than one being pointed
+   at. Brightness keeps the grain and the hue. The CHOSEN option is a different fact from where
+   the cursor is, so it takes a different mark — the crisp cyan inset ring `.settings-tab.is-active`
+   wears, that being the same statement one menu-language surface over — and the two read together.
+
+   This rule's own job: the option row is a grid cell of the menu, so truncation lives on the
+   label rather than the row — text-overflow needs a block container, and an anonymous grid item
+   is not one. */
+.house-select-option-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .house-select-option {
   appearance: none;
   -webkit-appearance: none;
-  background: rgba(10, 28, 43, .42);
+  background: none;
   border: 0;
   border-radius: 0;
   box-sizing: border-box;
-  color: #d8eaff;
+  color: #e8f4ff;
   cursor: pointer;
   font: 800 var(--ds-text-xs)/1 var(--ds-font-sans, system-ui, sans-serif);
   min-height: 30px;
@@ -6900,21 +6933,12 @@ body.loading-bootstrap .app-startup-status {
   text-transform: uppercase;
   width: 100%;
 }
-/* The option row is a grid cell of the menu, so the truncation lives on the label rather than on
-   the row: text-overflow needs a block container, and an anonymous grid item is not one. */
-.house-select-option-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .house-select-option.is-active,
 .house-select-option:hover:not(:disabled) {
-  background: rgba(25, 94, 132, .95);
-  color: #f3fbff;
+  filter: brightness(1.28);
 }
 .house-select-option[aria-selected="true"] {
-  background: rgba(88, 151, 198, .42);
+  box-shadow: inset 0 0 0 2px rgba(101, 184, 255, .78);
   color: #ffffff;
 }
 .house-select-option:disabled {
@@ -29196,6 +29220,19 @@ button.run-card-formation-cell {
   gap: var(--ds-stack);
 }
 
+/* Run's detail column is a TAB column's width, not a preview column's (ADR-0638).
+   `.menu-dest-preview` sizes the Editor's peripheral board thumbnail — 300px "compact by
+   intent", explicitly narrower than a tab column — and Run's detail column inherited that
+   because it borrowed the class. It is not a peripheral preview: it opens with the press the
+   screen exists for, at the menu's own lettering, so it carries the same weight as the two rails
+   beside it and reads as the third of three peers. 22px short of them, that band read as a rail
+   tab that had failed to line up. Taken from `--col-tab-w` rather than restated, so the card
+   comes out byte-identical in width to the tabs on either side of it. Seated after
+   `.menu-dest-preview` above, which is the rule it overrides at equal specificity. */
+.play-detail-col {
+  inline-size: var(--col-tab-w);
+}
+
 /* One card per detail column: the facts (or the adoption question) and the verb that completes
    them share a single structural stone field, so nothing in the column reads as text floating on
    the live vista.
@@ -29382,6 +29419,131 @@ button.run-card-formation-cell {
 }
 
 .run-prep-verb:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: -2px;
+}
+
+/* ── The COMMITTING verb (ADR-0638) ────────────────────────────────────────────────────────────
+   Play on a Run being resumed, Start Run on one about to begin: the press its whole screen exists
+   for, seated as that screen's FIRST row and drawn at the main menu's own scale.
+
+   It is the primitive's rule, not Play's, but it is seated HERE — after `.play-detail-verb` and
+   `.run-prep-verb` above — because those consumers size their own band at the card's 16px, and a
+   band is decided by the row rather than by whichever consumer's selector happens to be longer.
+   Source order is the tie-break at equal specificity; moving this block above them silently
+   restores the small type.
+
+   The measurements are the rail tab's, taken from `.settings-tab.main-menu-mode-tab` rather than
+   chosen to look similar: the same 61px seat, the same 40px mark slot, the same 44px drawn glyph
+   and the same 11px between mark and word. A menu button and this button are the same act one
+   screen apart, and two seats that agree by eye drift the first time either is retuned. */
+.chrome-verb-row--confirm {
+  /* The rail tab's WHOLE box, frame included: `.settings-tab` is border-box at this height. */
+  --chrome-verb-confirm-seat: 61px;
+  /* Half of one inner rail — what a rail drawn ON a grid line takes from the cell each side of
+     it (ChromeDividedGrid's CHROME_DIVIDED_GRID_RAIL_HALF, in CSS). */
+  --chrome-verb-rail-half: calc(var(--le-chrome-inner-rail-w, 7px) / 2);
+  /* A row of a divided box is not a box: its top edge is the BOX's frame and its bottom edge is
+     half the divider it shares with the row beneath. So a 61px row draws a 71.5px box, which is
+     why the divider hung 10.5px below the bottom frame of the tab it lines up with. Content
+     height is the seat MINUS the two edges the row does not own. */
+  --chrome-verb-confirm-h: calc(
+    var(--chrome-verb-confirm-seat)
+    - var(--le-chrome-inner-rail-w, 7px)
+    - var(--chrome-verb-rail-half)
+  );
+  --chrome-verb-confirm-mark-slot: 40px;
+  --chrome-verb-confirm-mark-size: 44px;
+  /* The rail tab's own label box, declared by the name the shared fitter reads. `FittedTabLabel`
+     sizes its box from `--settings-tab-icon-slot` — mounted outside a `.settings-tab`, that token
+     has no value and the box has no height to fit against. It is the same 40px seat, so it is
+     stated here rather than a second number being invented for it. */
+  --settings-tab-icon-slot: var(--chrome-verb-confirm-mark-slot);
+  min-block-size: var(--chrome-verb-confirm-h);
+  padding: 0;
+}
+
+.chrome-verb-row--confirm .section-box-member-verb {
+  display: grid;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-lg);
+  letter-spacing: 0;
+  min-block-size: var(--chrome-verb-confirm-h);
+  /* Give back the half-rail below, so what is left between the box's top frame and the divider's
+     top edge is the tab's own 47px interior, centred exactly where the tab centres its icon.
+     Without it the glyph sat 3.5px low against the tab beside it. */
+  padding: 0 var(--ds-inset) var(--chrome-verb-rail-half);
+  text-transform: uppercase;
+}
+
+/* Mark and word are ONE group, CENTRED on the button — where a rail tab left-seats them. A tab is
+   one of a stack whose marks must line up down the rail; this is a single wide band, and a short
+   word left-seated in it reads as a label that fell off the edge.
+   `minmax(0, auto)` is what lets both be true at once: the track sizes to the word, so the group
+   is only as wide as it needs to be and centres — and it can still be squeezed below that, so a
+   long verb hands the shared fitter a box that is genuinely overrun and gets shrunk instead of
+   clipped. A `1fr` track would fill the button and never look overrun; a plain `auto` track would
+   never yield. */
+.chrome-verb-commit {
+  align-items: center;
+  column-gap: 11px;
+  display: grid;
+  grid-template-columns: var(--chrome-verb-confirm-mark-slot) minmax(0, auto);
+  inline-size: 100%;
+  justify-content: center;
+}
+
+/* A group of ONE — the answer beside the commitment (Keep Run), and every band until the mark's
+   art is installed. The column goes with the mark rather than being held open: empty, it pushes
+   the word off the button's centre with nothing on screen to explain why. */
+.chrome-verb-commit.is-unmarked {
+  grid-template-columns: minmax(0, auto);
+}
+
+/* Reserved, not conditional: the slot holds its width whether or not the mark's art is installed,
+   so installing it later cannot move the label (ADR-0318). `overflow: visible` lets the 44px glyph
+   spill its 40px slot exactly as the rail tab's does — the button's own edge is what clips it. */
+.chrome-verb-mark {
+  block-size: var(--chrome-verb-confirm-mark-slot);
+  display: grid;
+  inline-size: var(--chrome-verb-confirm-mark-slot);
+  overflow: visible;
+  place-items: center;
+  position: relative;
+}
+
+.chrome-verb-mark img {
+  block-size: var(--chrome-verb-confirm-mark-size);
+  image-rendering: pixelated;
+  inline-size: var(--chrome-verb-confirm-mark-size);
+  object-fit: contain;
+  /* Grow from a FIXED centre, the same way the rail tab seats an oversized mark. */
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+
+/* The label is `FittedTabLabel`, so `.settings-tab-label` already gives it the rail tab's box and
+   the shrink-to-fit the menu has always answered a long label with. Only the TYPE is stated here,
+   and the outline comes from the one place that states it — the same declaration
+   `.settings-tab strong` takes, so the two cannot drift (see --menu-label-stroke-*). */
+.chrome-verb-label strong {
+  -webkit-text-stroke: var(--menu-label-stroke-w) var(--menu-label-stroke-ink);
+  font-size: var(--ds-text-lg);
+  letter-spacing: 0;
+  paint-order: stroke fill;
+}
+
+/* A verb BESIDE the commitment — Keep Run, while the replacement question is open — keeps the
+   band's height and lettering and carries no mark: it is the same size of decision, and only one
+   of the two is the confirm. */
+.chrome-verb-row--confirm .section-box-member-verb:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.chrome-verb-row--confirm .section-box-member-verb:focus-visible {
   outline: 2px solid rgba(101, 184, 255, .72);
   outline-offset: -2px;
 }

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
 import { ChromeDividedGridRow, ChromeDividedGridRowGroup, DividedInnerChromeBox } from './ChromeDividedGrid';
 import { ChromeButton } from './ChromeButton';
+import { CHROME_LEAF_FILL_SURFACE, CHROME_STRUCTURAL_FILL_ROLE, leafSurfacePhase } from './chromeSurfacePolicy';
 
 export type HouseSelectOption<TValue extends string = string> = {
   value: TValue;
@@ -258,11 +259,17 @@ export function HouseSelect<TValue extends string>({
             be dividers dropped between the options by this file, which could only cap themselves as
             though they met a frame; a group is a semantic wrapper with no box for exactly that
             reason (see ChromeDividedGridRowGroup). */}
+        {/* Marble field, oak leaves (ADR-0433). The popup does NOT become a leaf when it opens —
+            that ADR says so outright — but its reason is that it HOSTS option rows, and each of
+            those rows is a control. Both halves were missing: the field painted nothing and the
+            rows wore a hand-mixed `rgba(10, 28, 43, .42)`, so a menu of clickable rows was the
+            one place in the shell where pressable surfaces carried no wood at all. */}
         <DividedInnerChromeBox
           id={`${id}-menu`}
           columns={['minmax(0, 1fr)']}
           scroll
           className="house-select-menu-box"
+          fillRole={CHROME_STRUCTURAL_FILL_ROLE}
           role="listbox"
           aria-label={ariaLabel}
         >
@@ -274,6 +281,11 @@ export function HouseSelect<TValue extends string>({
                 as="button"
                 id={`${id}-option-${option.value}`}
                 className={`house-select-option ${index === activeIndex ? 'is-active' : ''}`.trim()}
+                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                /* One plank running down the list, not the same crop stamped per row — the
+                   recovery every stacked leaf in the app makes (ADR-0063). The phase is the
+                   option's own index, so a menu that scrolls keeps one continuous grain. */
+                style={leafSurfacePhase(index)}
                 role="option"
                 aria-selected={option.value === value}
                 disabled={option.disabled}

@@ -119,7 +119,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // The verb is DECLARED, not marked up: a call site that could write its own control could
     // wrap it in a box of its own, which is exactly how it came to sit inside the card's frame
     // instead of being one of its rows (ChromeVerbRow).
-    expect(playMenu).toContain("const RUN_PLAY_VERBS: readonly ChromeVerb[] = [{ id: 'play', label: 'Play', to: '/run' }];");
+    expect(playMenu).toContain("const RUN_PLAY_VERBS: readonly ChromeVerb[] = [{ id: 'play', label: 'Play', to: '/run', confirm: true }];");
     expect(playMenu).not.toContain('to="/run"><span>Play</span></ChromeNavButton>');
     // Facts and verb share ONE structural field — no bare text and no loose plaque on the live
     // vista. The card is teal because it establishes a region; the verb row inside it is the only
@@ -357,6 +357,70 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // padding would hold every one of them short of it. Each cell carries the inset instead.
     expect(style).toMatch(/\.run-prep-box \{[\s\S]*?padding: 0;/);
     expect(style).toMatch(/\.run-prep-cell \{[\s\S]*?padding: var\(--ds-inset\);/);
+  });
+
+  it('opens both Run columns with the committing verb, at the menu’s own scale (ADR-0638)', () => {
+    const verbRow = readFileSync(new URL('./shared/ChromeVerbRow.tsx', import.meta.url), 'utf8');
+    // FIRST row of each column, not the last. Both screens closed with their verb in 16px type at
+    // the bottom of a card, which put the one press the screen exists for below everything
+    // explaining it and drawn smaller than the menu button pressed to get there.
+    expect(playMenu).toMatch(/columns=\{verbColumns\(RUN_PLAY_VERBS\)\}[^>]*>\s*<ChromeVerbRow verbs=\{RUN_PLAY_VERBS\}/);
+    expect(playMenu.indexOf('<ChromeVerbRow verbs={RUN_PLAY_VERBS}'))
+      .toBeLessThan(playMenu.indexOf('<div><dt>Battle</dt>'));
+    expect(playMenu).toMatch(/aria-label="Run preparation"\s*>\s*\{\/\*[\s\S]*?\*\/\}\s*<ChromeVerbRow verbs=\{runVerbs\}/);
+    expect(playMenu).toMatch(/<ChromeVerbRow verbs=\{runVerbs\}[\s\S]*?ataraxiaPrepCells\(\{/);
+    expect(playMenu).not.toMatch(/ataraxiaPrepCells\(\{[\s\S]*?<ChromeVerbRow verbs=\{runVerbs\}/);
+    // Both commitments say so on the VERB, and the armed pair marks only the answer that commits.
+    expect(playMenu).toMatch(/testId: 'run-start',[\s\S]{0,160}?confirm: true,/);
+    expect(playMenu).toMatch(/testId: 'run-abandon-and-start',[\s\S]{0,160}?confirm: true,/);
+    expect(playMenu).not.toMatch(/testId: 'run-keep',[\s\S]{0,160}?confirm: true,/);
+    // The BAND is derived from the row's contents, never declared per cell: arming the
+    // replacement question must not change the row's height under the cursor.
+    expect(verbRow).toContain('const commits = verbs.some((verb) => verb.confirm);');
+    expect(verbRow).toContain("commits ? 'chrome-verb-row--confirm' : ''");
+    // ONE drawing of "confirm" for the whole app, resolved by the row rather than passed in —
+    // a caller that could hand its own mark could put a different glyph on the same act.
+    expect(verbRow).toContain("const CONFIRM_MARK_ROLE = 'ui-kit-icons-confirm-png';");
+    expect(verbRow).toContain('installedUiMediaIfPresent(CONFIRM_MARK_ROLE)');
+    expect(verbRow).not.toMatch(/iconSrc\?:/);
+    // Reserved rather than fail-closed: the seat holds its geometry before the art is installed.
+    // The measurements are the rail tab's own, not numbers chosen to look similar.
+    // A ROW of a divided box is not a box: its top edge is the box's frame and its bottom edge is
+    // half the divider it shares with the row beneath. Sized at the seat outright it drew a 71.5px
+    // box, and its divider hung 10.5px below the bottom frame of the tab it lines up with.
+    expect(style).toMatch(/--chrome-verb-confirm-seat: 61px;/);
+    expect(style).toMatch(/--chrome-verb-confirm-h: calc\(\s*var\(--chrome-verb-confirm-seat\)\s*- var\(--le-chrome-inner-rail-w, 7px\)\s*- var\(--chrome-verb-rail-half\)\s*\);/);
+    // And the row gives that half-rail back as padding, so its interior is the tab's own 47px
+    // centred where the tab centres its icon — measured live, both land on the same y.
+    expect(style).toMatch(/\.chrome-verb-row--confirm \.section-box-member-verb \{[\s\S]*?padding: 0 var\(--ds-inset\) var\(--chrome-verb-rail-half\);/);
+    // Mark and word are one group CENTRED on the button. `minmax(0, auto)` is what makes the
+    // group hug its word (so it can centre) while still yielding to the fitter when the word is
+    // long — `1fr` fills the button and never looks overrun; plain `auto` never yields.
+    expect(style).toMatch(/\.chrome-verb-commit \{[\s\S]*?grid-template-columns: var\(--chrome-verb-confirm-mark-slot\) minmax\(0, auto\);[\s\S]*?justify-content: center;/);
+    // The mark's COLUMN goes with the mark. Held open while the art is uninstalled it pushed the
+    // word off centre with nothing on screen to explain it.
+    expect(verbRow).toContain("`chrome-verb-commit${mark ? '' : ' is-unmarked'}`");
+    expect(verbRow).toContain('{mark ? (');
+    expect(style).toMatch(/\.chrome-verb-commit\.is-unmarked \{\s*grid-template-columns: minmax\(0, auto\);/);
+    expect(style).toMatch(/\.chrome-verb-row--confirm \{[\s\S]*?--chrome-verb-confirm-mark-slot: 40px;/);
+    expect(style).toMatch(/\.chrome-verb-row--confirm \.section-box-member-verb \{[\s\S]*?font-size: var\(--ds-text-lg\);/);
+    expect(style).toMatch(/\.chrome-verb-label strong \{[\s\S]*?-webkit-text-stroke: var\(--menu-label-stroke-w\) var\(--menu-label-stroke-ink\);/);
+    // The label is the rail tabs' own fitter, not an ellipsis: armed, "Abandon and Start" shares
+    // its row with "Keep Run", and at 32px that overruns half a narrow column.
+    expect(verbRow).toContain('<FittedTabLabel className="chrome-verb-label">{verb.label}</FittedTabLabel>');
+    expect(style).toMatch(/\.chrome-verb-row--confirm \{[\s\S]*?--settings-tab-icon-slot: var\(--chrome-verb-confirm-mark-slot\);/);
+    // A band at the menu's scale makes its column a PEER of the two rails, not a peripheral
+    // preview beside them — so the column takes the tab width, and `.menu-dest-preview`'s
+    // deliberately-narrow 300px (the Editor's board thumbnail) stops applying to it.
+    expect(style).toMatch(/\.play-detail-col \{[\s\S]*?inline-size: var\(--col-tab-w\);/);
+    expect(style.indexOf('.play-detail-col {')).toBeGreaterThan(style.indexOf('.menu-dest-preview {'));
+    expect(style).toContain('--col-tab-w: var(--main-menu-tab-column-w);');
+    // Seated AFTER the two consumers that size their own band, because source order is the
+    // tie-break at equal specificity and moving it above them restores the small type.
+    expect(style.indexOf('.chrome-verb-row--confirm .section-box-member-verb {'))
+      .toBeGreaterThan(style.indexOf('.play-detail-verbs .play-detail-verb {'));
+    expect(style.indexOf('.chrome-verb-row--confirm .section-box-member-verb {'))
+      .toBeGreaterThan(style.indexOf('.run-prep-verb {'));
   });
 
   it('resolves Play rail icons from installed drawable membership, not retired path-shaped app-ui roles', () => {

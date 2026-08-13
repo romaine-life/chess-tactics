@@ -942,24 +942,8 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": ".house-select-option.is-active, .house-select-option:hover:not(:disabled)",
-      "surfaceHash": "d6fc5b8a200d53b1fffcc1c555c6beb7a350468a70edf68bbbdd12aee0078e03",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
-      "selector": ".house-select-option",
-      "surfaceHash": "5e87135f2dbe251b6b3434effc36b8168717935795c74b05bf284fdbd20e769e",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
       "selector": ".house-select-option[aria-selected=\"true\"]",
-      "surfaceHash": "7d75f8e56d5cbeaa1860730cfd5b7897dba8a107957dfcbaa2f32d1286cd4d95",
+      "surfaceHash": "a66e6d9166c7087da1814672cb191c430f6f1e17046a5b1d8e8fa4537c4d9f56",
       "occurrence": 1
     },
     {

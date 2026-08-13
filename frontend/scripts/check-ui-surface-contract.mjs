@@ -97,6 +97,16 @@ const APPROVED_FRAMELESS_SURFACE_RESETS = new Map([
     'border-radius:0',
     'box-shadow:none',
   ])],
+  // An option row of a dropdown IS a control, so it wears the registered leaf oak, named and
+  // phased on the row in HouseSelect.tsx (ADR-0433 — the popup field stays structural precisely
+  // BECAUSE it hosts these rows). These declarations remove the shell's native button chrome so
+  // the wood can arrive; the rails around each row are the menu box's own. It replaces a
+  // hand-mixed `rgba(10, 28, 43, .42)` that had been carried as debt.
+  ['src/style.css|.house-select-option', new Set([
+    'background:none',
+    'border:0',
+    'border-radius:0',
+  ])],
   ['src/style.css|.section-box-head', new Set([
     'background:none',
     'border:0',

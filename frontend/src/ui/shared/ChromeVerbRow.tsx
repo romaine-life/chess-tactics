@@ -1,7 +1,27 @@
-import { type ReactElement } from 'react';
+import { type ReactElement, type ReactNode } from 'react';
 import { ChromeDividedGridRow } from './ChromeDividedGrid';
+import { FittedTabLabel } from './FittedTabLabel';
 import { NavButton } from './NavButton';
+import { installedUiMediaIfPresent } from '../installedUiMedia';
 import { CHROME_LEAF_FILL_SURFACE, leafSurfacePhase } from './chromeSurfacePolicy';
+
+/**
+ * The mark a COMMITTING verb wears, resolved HERE rather than passed in.
+ *
+ * "Confirm" is one fact across the whole app — this is the press the screen exists for — so it is
+ * one drawing (ADR-0059). A caller that could hand its own mark could put a different glyph on the
+ * same act on the next screen, which is exactly the drift the rail tab's `iconSrc` doc describes.
+ *
+ * Reserved rather than fail-closed (ADR-0318): the seat holds its geometry before the art decision
+ * is installed, so the band is the same size with or without it.
+ */
+const CONFIRM_MARK_ROLE = 'ui-kit-icons-confirm-png';
+
+/** Read during render, never at import: the drawable catalog is installed before the component
+ *  tree is imported, but a module-level read would bind whatever was there at module evaluation. */
+function confirmMarkUrl(): string | null {
+  return installedUiMediaIfPresent(CONFIRM_MARK_ROLE);
+}
 
 /**
  * The verbs that CLOSE a divided box — the level preview's Edit Board / Test Play, the Aftermath's
@@ -28,6 +48,16 @@ export type ChromeVerb = {
   title?: string;
   testId?: string;
   ariaLabel?: string;
+  /**
+   * The verb the screen EXISTS for — Play on a Run you are resuming, Start Run on one you are
+   * about to begin. It wears the confirm mark and the main menu's own lettering, because it is
+   * the same act as pressing PLAY on the menu two screens back and a player should not have to
+   * find it in 16px type at the bottom of a card.
+   *
+   * At most one verb in a row is the commitment; the others are the answers beside it (Keep Run).
+   * The whole row takes the taller band either way, so arming a question cannot make it jump.
+   */
+  confirm?: boolean;
 };
 
 /**
@@ -46,10 +76,13 @@ export function verbColumns(verbs: readonly ChromeVerb[]): readonly string[] {
  * its own frame, which would draw a control sitting INSIDE the cell a few pixels in from the rail
  * that already bounds it. Same reset the section box's full-width verbs use.
  */
-function VerbCell({ verb, index, className }: {
+function VerbCell({ verb, index, className, commits, confirmMarkSrc }: {
   verb: ChromeVerb;
   index: number;
   className?: string;
+  /** Whether this verb's ROW holds a commitment — see ChromeVerbRow. */
+  commits: boolean;
+  confirmMarkSrc?: string;
 }): ReactElement {
   const seat = {
     className: `section-box-member-verb ${className ?? ''}`.trim(),
@@ -60,13 +93,41 @@ function VerbCell({ verb, index, className }: {
     'aria-label': verb.ariaLabel,
     title: verb.title,
   };
+  // A committing verb is a mark and a word, seated exactly as the main menu's own buttons seat
+  // them — mark slot, then label — and the label is the SAME fitter the rail tabs use. A verb
+  // band can be half a narrow column wide (armed, "Abandon and Start" shares its row with "Keep
+  // Run"), and at the menu's 32px that overruns; ellipsis there cut the verb mid-word, where the
+  // menu's answer to a long label has always been to shrink it until it fits.
+  //
+  // The mark is aria-hidden: "confirm" is what the label already says, and a reader that
+  // announced it twice would say the glyph's name in front of the verb.
+  //
+  // Every cell of a committing row is lettered and fitted; only the verb that COMMITS carries the
+  // mark, and the mark's COLUMN exists only when there is a mark to put in it. Two cases need
+  // that and they are the same case: the answer beside the commitment (Keep Run) never has one,
+  // and neither does anything until the art is installed. Held open regardless, the empty column
+  // pushes the word off the button's centre — which is what it looked like, an off-centre label
+  // with nothing visible to explain it. The mark and the word are ONE group centred on the
+  // button, so a group of one centres just as well; installing the art moves the word once, at
+  // install time, which is a content decision rather than something a player watches happen.
+  const mark = verb.confirm ? confirmMarkSrc ?? confirmMarkUrl() : null;
+  const body: ReactNode = commits ? (
+    <span className={`chrome-verb-commit${mark ? '' : ' is-unmarked'}`}>
+      {mark ? (
+        <span className="chrome-verb-mark" aria-hidden="true">
+          <img src={mark} alt="" draggable={false} />
+        </span>
+      ) : null}
+      <FittedTabLabel className="chrome-verb-label">{verb.label}</FittedTabLabel>
+    </span>
+  ) : verb.label;
   if (verb.to !== undefined && !verb.disabled) {
-    return <NavButton {...seat} to={verb.to}>{verb.label}</NavButton>;
+    return <NavButton {...seat} to={verb.to}>{body}</NavButton>;
   }
   const inert = verb.disabled === true || (verb.to === undefined && verb.onPress === undefined);
   return (
     <button {...seat} type="button" disabled={inert} onClick={inert ? undefined : verb.onPress}>
-      {verb.label}
+      {body}
     </button>
   );
 }
@@ -79,16 +140,38 @@ function VerbCell({ verb, index, className }: {
  * A box with no verbs must not render this row AT ALL. An element is a row of the grid whether or
  * not it renders anything, so an empty one would put a boundary rail above nothing.
  */
-export function ChromeVerbRow({ verbs, className, cellClassName }: {
+export function ChromeVerbRow({ verbs, className, cellClassName, confirmMarkSrc }: {
   verbs: readonly ChromeVerb[];
   className?: string;
   /** The consumer's own sizing for its verbs; the reset and the material stay this row's. */
   cellClassName?: string;
+  /**
+   * Review-only: exact candidate bytes to paint in the confirm seat, the same seam
+   * `BattleLogMarks.forgedSrc` opens. The Studio's Confirm Mark surface judges a candidate in the
+   * REAL band, and it must do that without installing it first. A play route never passes this
+   * and resolves the installed role only — review state has no business on a player route
+   * (ADR-0058).
+   */
+  confirmMarkSrc?: string;
 }): ReactElement {
+  // The BAND is the row's, derived from whether a commitment is in it — not a second thing the
+  // caller states. Declared per cell, a row could be handed one verb at the menu's scale and its
+  // neighbour at the card's, and arming a question would change the row's height under the cursor.
+  const commits = verbs.some((verb) => verb.confirm);
   return (
-    <ChromeDividedGridRow className={className} spans={verbs.length > 1 ? undefined : 'all'}>
+    <ChromeDividedGridRow
+      className={`${commits ? 'chrome-verb-row--confirm' : ''} ${className ?? ''}`.trim() || undefined}
+      spans={verbs.length > 1 ? undefined : 'all'}
+    >
       {verbs.map((verb, index) => (
-        <VerbCell key={verb.id} verb={verb} index={index} className={cellClassName} />
+        <VerbCell
+          key={verb.id}
+          verb={verb}
+          index={index}
+          className={cellClassName}
+          commits={commits}
+          confirmMarkSrc={confirmMarkSrc}
+        />
       ))}
     </ChromeDividedGridRow>
   );
