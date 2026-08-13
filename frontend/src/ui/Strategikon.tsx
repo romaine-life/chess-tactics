@@ -8,6 +8,8 @@ import {
 import { EnchiridionReference, EnchiridionSectionRail, LipsanaCodex } from './Enchiridion';
 import { HeldCardCodex } from './HeldCardCodex';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
+import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
+import { navigateApp } from './navigation';
 import { useOpenRailTab } from './shared/railOpenIntent';
 import { InnerChromeBox, ShellWorkspace } from './shared/ChromeBox';
 import { CHROME_STRUCTURAL_FILL_ROLE } from './shared/chromeSurfacePolicy';
@@ -97,6 +99,12 @@ export function Strategikon({
   // return use — named for its destination so it never reads as a second bare "Back"
   // beside a playtest's own return control.
   const returnName = base === '/run' ? 'Run' : 'Battle';
+  const sectionItems = strategikonNavigationItems(cardsIcon);
+  const sectionOptions: readonly HouseSelectOption<StrategikonSection>[] = sectionItems.map((item) => ({
+    value: item.section,
+    label: item.label,
+    title: item.title,
+  }));
 
   return (
     <ShellWorkspace
@@ -113,21 +121,44 @@ export function Strategikon({
       )}
       edgeAttached
       rail={(
-        <ApparatusRailColumn opens="panel-beside" className="strategikon-rail" aria-label="Strategikon sections">
-          {strategikonNavigationItems(cardsIcon).map((item, index) => (
-            <ApparatusRailTab
-              key={item.section}
-              label={item.label}
-              title={item.title}
-              to={href(item.section)}
-              index={index}
-              active={section === item.section}
-              expanded={openSection === item.section}
-              iconSrc={item.iconSrc}
-              iconClassName={item.iconClassName}
+        <>
+          <ApparatusRailColumn opens="panel-beside" className="strategikon-rail" aria-label="Strategikon sections">
+            {sectionItems.map((item, index) => (
+              <ApparatusRailTab
+                key={item.section}
+                label={item.label}
+                title={item.title}
+                to={href(item.section)}
+                index={index}
+                active={section === item.section}
+                expanded={openSection === item.section}
+                iconSrc={item.iconSrc}
+                iconClassName={item.iconClassName}
+              />
+            ))}
+          </ApparatusRailColumn>
+          {/* The same four sections as ONE control, for a screen that cannot spend four rows on
+              them. A phone stacks this rail above the section's own reference rail above the
+              record, so navigation took most of the screen and the content scrolled in a slot
+              too short to read — the rail does not scroll away, because it is the shell's, not
+              the content's.
+
+              It is the canonical picker (HouseSelect), not a bespoke menu, and it is the same
+              addresses the rail uses, so a section is reached identically either way. Only one
+              of the two is ever displayed — the narrow band hides the rail and shows this — so
+              nothing is duplicated in the accessibility tree. */}
+          <div className="strategikon-section-picker">
+            <HouseSelect<StrategikonSection>
+              /* The Strategikon root carries no section; the picker still has to name one, and
+                 the first is what the rail lands on there. */
+              value={section ?? sectionItems[0].section}
+              options={sectionOptions}
+              onChange={(next) => navigateApp(href(next))}
+              ariaLabel="Strategikon section"
+              testId="strategikon-section-picker"
             />
-          ))}
-        </ApparatusRailColumn>
+          </div>
+        </>
       )}
       aria-label="Strategikon"
       data-testid="strategikon"

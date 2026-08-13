@@ -27335,6 +27335,11 @@ button.tileset-relationship-cell {
    falls back to the CSS default 300x150 and silently ignores its width/height attributes. */
 .mobile-lab-frame { display: block; }
 
+/* The Strategikon section rail has two forms: the column of tabs (desktop, where a rail has
+   room) and ONE picker (narrow, where four rows of navigation is most of the screen). Exactly
+   one is displayed at a time, so the sections are never duplicated in the accessibility tree. */
+.strategikon-section-picker { display: none; }
+
 /* The docked Controls strip's collapse toggle. Rendered by ShellControlsPanel whenever the
    sheet placement is selected, but there is nothing to reclaim on the desktop rail — it is a
    full-height column, not a strip sharing the screen — so it appears only inside the narrow
@@ -27624,6 +27629,14 @@ button.tileset-relationship-cell {
     display: flex;
     flex-direction: column;
     align-items: stretch;
+  }
+  /* The rail becomes the picker: four rows of section navigation, above the section's OWN
+     reference rail, above the record, left the content in a slot too short to read — and the
+     rail cannot scroll away, because it belongs to the shell rather than to the content. */
+  .strategikon-rail { display: none; }
+  .strategikon-section-picker {
+    display: block;
+    padding: var(--ds-space-2) var(--ds-space-2) 0;
   }
   .strategikon-workspace-layout > *,
   .strategikon-pane.has-secondary-rail > * {
