@@ -27208,6 +27208,35 @@ button.tileset-relationship-cell {
     grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
+  /* The wordmark is the header on every page (ADR-0008) and it was being cut to
+     "CHESS TACTIC". Measured at 390px: it needs 142px and its column gave it 110px, while
+     the bar spent --ds-space-6 (32px) of padding on EACH side — 64px of a 390px row. The
+     landscape-phone band already tightens this to 12px; it is needed on the width axis for
+     the same reason, and 40px recovered covers the 32px shortfall with room left.
+
+     Shrinking the type is not the alternative: the house face's brick is em/16, so the scale
+     has exactly two usable sizes (16px and 32px) and the next step down would halve the
+     wordmark and cost it the dominance it is supposed to have. */
+  .app-shell-titlebar.settings-header-frame {
+    --titlebar-pad-inline: 12px;
+    padding-inline: var(--titlebar-pad-inline);
+  }
+  /* The last few pixels come from inside the lockup rather than from the type: the shield
+     takes a smaller size and the gap to the copy tightens, which costs the mark a little
+     scale and costs the wordmark nothing.
+
+     The MARK and its column move together. The home button IS the shield — verify:titlebar
+     asserts they share a right edge — so shrinking the track alone left a 32px button behind
+     a 40px mark and broke that contract (measured: 44px against an expected 52px). */
+  .brand-lockup-layout {
+    gap: 6px;
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+  .brand-lockup-mark {
+    block-size: 32px;
+    inline-size: 32px;
+  }
+
   /* The bar's two anchors are `auto` tracks, so once brand + lane exceed the row they shrink
      below their content and spill across each other again — which is how the Strategikon's
      "‹ Back to Run" ended up painted over the whole title breadcrumb, making Battle /
