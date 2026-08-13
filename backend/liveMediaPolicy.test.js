@@ -208,6 +208,19 @@ test('ADR-0560 main-menu marks carry a typed projection instead of staying bridg
       slot,
     );
   }
+  // The Battle HUD's four other section tabs share the strip with the gear, so they share its
+  // fit (ADR-0640). Named explicitly rather than left to the loop above: dropping one would
+  // refuse its Install with "requires one of its registered semantic slots", which reads as a
+  // bug in the review page rather than a missing member here.
+  for (const slot of [
+    'ui/kit/icons/unit-studio.png',
+    'ui/kit/icons/players.png',
+    'ui/kit/icons/info.png',
+    'ui/kit/icons/monitor.png',
+  ]) {
+    assert.equal(mainMenuMarkSlot(slot), slot, slot);
+    assert.equal(fittedMarkInkHeight(slot), 52, slot);
+  }
   assert.equal(mainMenuMarkSlot('ui/kit/icons/design-index.png'), null);
   assert.match(
     mainMenuMarkMediaIssue(row({ slot: 'ui/kit/icons/design-index.png' })),

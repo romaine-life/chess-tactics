@@ -53,6 +53,7 @@ import { RunSectioWrapCatalog, RunSectioWrapControls, useRunSectioWraps } from '
 import { LipsanonArtCatalog, LipsanonArtControls, useLipsanonArt } from './LipsanonArtCatalog';
 import { TerrainMarkCatalog, TerrainMarkControls, useTerrainMarks } from './TerrainMarkCatalog';
 import { CommandCardMarkCatalog, CommandCardMarkControls, useCommandCardMarks } from './CommandCardMarkCatalog';
+import { SkirmishTabMarkCatalog, SkirmishTabMarkControls, useSkirmishTabMarks } from './SkirmishTabMarkCatalog';
 import { ChromeLabCatalog, ChromeLabViewer, CHROME_LAB_TARGETS, defaultChromeLabTargetId } from './ChromeLab';
 import { RailLab } from './RailLab';
 import { GameLabCatalog, GameLabViewer } from './GameLab';
@@ -149,7 +150,7 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'deployment' | 'gym' | 'solver' | 'cardlayout' | 'cardsize' | 'carddivider' | 'cardicons' | 'cardfit' | 'cardpool' | 'cardoutline' | 'cardprompts' | 'screenart' | 'lipsanonmat' | 'actionmarks' | 'adlectiomark' | 'runrailmarks' | 'confirmmark' | 'brushmark' | 'menumarks' | 'runprogressmarks' | 'sectiowrap' | 'lipsanonart' | 'terrainmark' | 'commandcardmarks' | 'cardartreview' | 'kiticons' | 'liveruns' | 'logmarks';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'deployment' | 'gym' | 'solver' | 'cardlayout' | 'cardsize' | 'carddivider' | 'cardicons' | 'cardfit' | 'cardpool' | 'cardoutline' | 'cardprompts' | 'screenart' | 'lipsanonmat' | 'actionmarks' | 'adlectiomark' | 'runrailmarks' | 'confirmmark' | 'brushmark' | 'menumarks' | 'runprogressmarks' | 'sectiowrap' | 'lipsanonart' | 'terrainmark' | 'commandcardmarks' | 'cardartreview' | 'kiticons' | 'liveruns' | 'logmarks' | 'hudtabmarks';
 
 // Every prop KIND present in the catalog, in definition order — DERIVED from PROP_DEFS so a new
 // kind (e.g. 'rock') is a filter facet automatically. Hardcoding ['tree','house'] here silently
@@ -293,7 +294,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => Boolean(value && studioFamilies.some((family) => family.id === value));
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'deployment' || value === 'gym' || value === 'solver' || value === 'cardlayout' || value === 'cardsize' || value === 'carddivider' || value === 'cardicons' || value === 'cardfit' || value === 'cardpool' || value === 'cardoutline' || value === 'cardprompts' || value === 'screenart' || value === 'lipsanonmat' || value === 'actionmarks' || value === 'adlectiomark' || value === 'runrailmarks' || value === 'confirmmark' || value === 'brushmark' || value === 'menumarks' || value === 'runprogressmarks' || value === 'sectiowrap' || value === 'lipsanonart' || value === 'terrainmark' || value === 'commandcardmarks' || value === 'cardartreview' || value === 'kiticons' || value === 'liveruns' || value === 'logmarks';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'deployment' || value === 'gym' || value === 'solver' || value === 'cardlayout' || value === 'cardsize' || value === 'carddivider' || value === 'cardicons' || value === 'cardfit' || value === 'cardpool' || value === 'cardoutline' || value === 'cardprompts' || value === 'screenart' || value === 'lipsanonmat' || value === 'actionmarks' || value === 'adlectiomark' || value === 'runrailmarks' || value === 'confirmmark' || value === 'brushmark' || value === 'menumarks' || value === 'runprogressmarks' || value === 'sectiowrap' || value === 'lipsanonart' || value === 'terrainmark' || value === 'commandcardmarks' || value === 'cardartreview' || value === 'kiticons' || value === 'liveruns' || value === 'logmarks' || value === 'hudtabmarks';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -699,6 +700,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const lipsanonArt = useLipsanonArt();
   const terrainMarks = useTerrainMarks();
   const commandCardMarks = useCommandCardMarks();
+  const skirmishTabMarks = useSkirmishTabMarks();
   const adlectioMark = useAdlectioMarkCatalog();
   const [selectedAdlectioMarkId, setSelectedAdlectioMarkId] = useState('');
   const [surfaceSearch, setSurfaceSearch] = useState('');
@@ -1904,6 +1906,11 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       id: 'terrainmark', label: 'Terrain Mark', hint: 'The mark the Enchiridion’s Terrain section wears. Every candidate is mounted in the real section rail with that one seat swapped, so it is read against the five marks it stands beside. Install binds the selected one.',
       main: <TerrainMarkCatalog state={terrainMarks} />,
       controls: <TerrainMarkControls state={terrainMarks} />,
+    },
+    {
+      id: 'hudtabmarks', label: 'HUD Tab Marks', hint: 'The four marks the Battle HUD’s Unit, Roster, Log and View tabs wear — everything in that strip except the gear, which ADR-0560 already settled. Every candidate is armed in the REAL Controls head at its true 20px seat, beside that gear. Install accepts the armed ones in one act.',
+      main: <SkirmishTabMarkCatalog state={skirmishTabMarks} />,
+      controls: <SkirmishTabMarkControls />,
     },
     {
       id: 'commandcardmarks', label: 'Command Card Marks', hint: 'The ten marks the Battle command card wears. Each key’s candidates were generated on their own, so the card is COMPOSED here — arm a candidate per command and it lights in the real card above. Install accepts all ten in one act.',

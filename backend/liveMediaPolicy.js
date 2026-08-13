@@ -58,6 +58,12 @@ function fittedMarkTransform(slot) {
 // Battle command card's ten marks are here for the same reason and not a weaker one: they sit
 // in a 3x5 grid of equal buttons, which is a denser size comparison than any column, and they
 // are drawn through the identical fixed-seat-plus-contain rule.
+//
+// The Battle HUD's four other SECTION tabs joined for the reason the gear was already here, made
+// visible (ADR-0640): the tab strip is five compartments of one box drawing one 20px seat with
+// `contain`, so the gear read at full size while `unit-studio` — 26x40 of ink on its 64px canvas —
+// arrived beside it roughly 12px tall. One list, one height, and the strip stops reading as five
+// different sizes.
 const MAIN_MENU_MARK_FITTED_SLOTS = Object.freeze([
   'ui/main-menu/icons-carved/solo-skirmish.png',
   'ui/main-menu/icons-carved/campaign-editor.png',
@@ -65,6 +71,15 @@ const MAIN_MENU_MARK_FITTED_SLOTS = Object.freeze([
   'ui/main-menu/icons-carved/enchiridion.png',
   'ui/main-menu/icons-carved/settings.png',
   'ui/kit/icons/gear.png',
+  // The Battle HUD's Unit, Roster, Log and View tabs, which stand in one strip with that gear.
+  // Each is an existing kit slot with other consumers, so a mark installed here also moves the
+  // Strategikon's Prosopography and Lipsanotheca marks, the Enchiridion's units and lipsana
+  // bullets, the account menu's player glyph and the editor level row's info control — one mark,
+  // one contract, wherever it is painted.
+  'ui/kit/icons/unit-studio.png',
+  'ui/kit/icons/players.png',
+  'ui/kit/icons/info.png',
+  'ui/kit/icons/monitor.png',
   'ui/kit/icons/war.png',
   'ui/kit/icons/levels.png',
   'ui/kit/icons/shortcuts/enemy-attacks.png',

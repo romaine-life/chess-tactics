@@ -30,6 +30,7 @@ import { useAuthSession } from '../net/authSession';
 import { AdminControls } from './AdminControls';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 import { type SkirmishShortcutIconVariant } from './shared/SkirmishShortcutIcon';
+import { SkirmishTabIcon, type SkirmishTabId } from './shared/SkirmishTabIcon';
 import { CommandCard, COMMAND_CARD_KEY_ROWS } from './shared/CommandCard';
 import { CHROME_LEAF_FILL_SURFACE, leafSurfacePhase } from './shared/chromeSurfacePolicy';
 import { StrategikonTitleNavigation } from './StrategikonTitleNavigation';
@@ -52,14 +53,16 @@ const ROLE: Record<PieceType, string> = {
 
 const MARK = PIECE_MARK;
 
-type HudTab = 'unit' | 'roster' | 'log' | 'view' | 'controls' | 'admin';
+type HudTab = SkirmishTabId | 'admin';
 
 // Icon-based tab strip: each section is a kit glyph, not a text word. The `label`
 // stays as the accessible name (aria-label) + hover tooltip so the icon never loses
 // its meaning. Glyphs are reused from the curated kit icon set (ADR-0011/0032):
 //   unit = single knight, roster = two pawns (the whole force), log = info feed,
 //   view = display/screen, controls = gear.
-const HUD_TABS: { id: HudTab; label: string }[] = [
+// The marks themselves live with their seat in shared/SkirmishTabIcon, so the Studio
+// review mounts the strip the player gets rather than a lookalike (ADR-0059).
+export const HUD_TABS: { id: SkirmishTabId; label: string }[] = [
   { id: 'unit', label: 'Unit' },
   { id: 'roster', label: 'Roster' },
   { id: 'log', label: 'Log' },
@@ -417,7 +420,7 @@ export function SkirmishHud({
           },
           style: leafSurfacePhase(index),
           press: { onPress: () => setTab(t.id), ariaLabel: t.label, title: t.label, active: tab === t.id },
-          content: <span className={`skirmish-tab-icon skirmish-tab-icon-${t.id}`} aria-hidden="true" />,
+          content: <SkirmishTabIcon tab={t.id} />,
         })) : []}
       >
 

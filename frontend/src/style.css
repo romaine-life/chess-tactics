@@ -23252,6 +23252,100 @@ button.tileset-relationship-cell {
   text-align: center;
 }
 
+/* Studio > HUD Tab Marks. Layout ONLY: the strip is a real ShellControlsPanel and brings its
+   own frame, rails and 20px seats, and this page must not restyle the thing it is judging. */
+.skirmish-tab-mark-review {
+  display: grid;
+  gap: var(--ds-stack);
+}
+
+.skirmish-tab-mark-strips {
+  align-items: start;
+  display: flex;
+  gap: var(--ds-inline);
+  /* One row, always: the installed strip and the composed one exist to be read against each
+     other, and a wrapped pair cannot be. */
+  overflow-x: auto;
+}
+
+/* One column, flowing down. FLEX and not grid: the Studio pane's stylesheet wins the
+   grid-template-columns cascade here, and a two-track grid put each heading beside its caption
+   and the legend beside the strip. A flex column has no tracks to be given. */
+.skirmish-tab-mark-review .skirmish-tab-mark-column {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-inline-tight);
+}
+
+.skirmish-tab-mark-column > h2,
+.skirmish-tab-mark-column > p {
+  margin: 0;
+  max-inline-size: 22rem;
+}
+
+/* The tab names, under the strip and OUTSIDE the panel. Inside it they sat on the frame's bottom
+   rail and its corner atoms cut the first name off. */
+.skirmish-tab-mark-legend {
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+  margin: 0;
+}
+
+/* The Battle gives this panel the skirmish rail's width, so the review takes that same variable
+   rather than a number of its own: five compartments divide the rail, and a wider strip would show
+   him marks in a size of seat the game never draws. Left free, they stretched to the Studio's
+   whole column. */
+.skirmish-tab-mark-strip {
+  inline-size: var(--skirmish-rail-w);
+  max-inline-size: 100%;
+}
+
+.skirmish-tab-mark-install {
+  display: grid;
+  gap: var(--ds-space-2);
+  justify-items: start;
+}
+
+.skirmish-tab-mark-picks {
+  display: grid;
+  gap: var(--ds-stack);
+}
+
+.skirmish-tab-mark-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-inline-tight);
+}
+
+/* A candidate CHIP is not a HUD tab and does not pretend to be one: the tab is a compartment
+   of the strip above, and a loose framed button wearing its class would be the lookalike this
+   page exists to avoid. The chip carries the 64px art, the same mark at its true 20px seat,
+   and the candidate's name — sixteen options are indistinguishable at 20px alone, and the
+   64px art alone hides the thing that decides between them. */
+.skirmish-tab-mark-option.app-header-button {
+  align-items: center;
+  block-size: auto;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  inline-size: 5.6em;
+  justify-content: center;
+  min-width: 0;
+  text-align: center;
+}
+
+.skirmish-tab-mark-option-art {
+  block-size: 56px;
+  image-rendering: pixelated;
+  inline-size: 56px;
+  object-fit: contain;
+}
+
+.skirmish-tab-mark-option-label {
+  font-size: var(--ds-text-xs);
+  line-height: 1.1;
+}
+
 /* Studio > Action Marks: each catalog card carries the candidate in the SAME button the
    Expunctio row paints, in both states that control has — offered, and refused. Layout
    only; the buttons bring their own kit frame and the catalog never restyles the seat it

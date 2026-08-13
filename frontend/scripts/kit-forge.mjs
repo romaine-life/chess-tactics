@@ -54,21 +54,34 @@ const ref = {
 };
 
 // One spec per asset: the single subject codex must paint, its style ref + size.
+//
+// A SUBJECT AND ITS OWN MATERIAL — never a house hue. Most of this table used to open with the
+// word "blue", because the settings concept art these specs reference is a dark blue screen and
+// the first pass read the SURFACE's colour as the icon set's. It is not, and there has never been
+// a rule that a kit mark is blue, or blue and gold: ADR-0014 owns a palette BUDGET (a few hundred
+// colours per element), ADR-0025 and ADR-0035 own the subject and say "material palette per-image
+// … never a forced UI-blue", and ADR-0433 makes cool blue stone the material of the structural
+// FIELD — which a mark sitting on that field is the opposite of. ADR-0560 retired the last set
+// still doing it, and ADR-0637 records what the invented rule cost: a handshake in blue steel
+// gauntlets, because armour was assumed to be more correct than skin.
+//
+// So each mark says what its object is MADE OF. The one place a colour is named for its meaning
+// rather than its material is `reset`, where red is the signal.
 const SPECS = [
   // settings icons (64x64)
   ['settings', 'gear', ref.general, 'a gray settings gear'],
-  ['settings', 'speaker', ref.audio, 'a blue speaker emitting sound waves'],
+  ['settings', 'speaker', ref.audio, 'a dark bronze speaker emitting sound waves'],
   ['settings', 'knight', ref.gameplay, 'a cream-and-gray chess knight piece'],
   ['settings', 'wrench', ref.general, 'a gray wrench'],
-  ['settings', 'monitor', ref.general, 'a blue display screen / monitor'],
-  ['settings', 'save', ref.general, 'a blue floppy disk'],
+  ['settings', 'monitor', ref.general, 'a dark slate viewing plate in an oak frame with brass corner brackets'],
+  ['settings', 'save', ref.general, 'a pale gray floppy disk with a bone-white label'],
   ['settings', 'reset', ref.general, 'a red circular refresh / reset arrow (red is the correct color for this one)'],
-  ['settings', 'info', ref.general, 'a blue lowercase letter i inside a circle'],
-  ['settings', 'music', ref.audio, 'a blue music note'],
-  ['settings', 'effects', ref.audio, 'a blue equalizer of vertical waveform bars'],
-  ['settings', 'interface-sounds', ref.audio, 'a blue UI-sound mark: a small speaker or panel with sound bars'],
+  ['settings', 'info', ref.general, 'an aged brass roundel carrying a raised bone-white lowercase letter i'],
+  ['settings', 'music', ref.audio, 'a dark bronze music note'],
+  ['settings', 'effects', ref.audio, 'an equalizer of vertical waveform bars in warm brass'],
+  ['settings', 'interface-sounds', ref.audio, 'a brass UI-sound mark: a small speaker or panel with sound bars'],
   ['settings', 'brand-shield', ref.general, 'a heraldic crest badge: a bright blue chess rook (castle tower) centered on a dark navy field, enclosed by an ornate beveled gold border — the brand emblem from the header'],
-  ['settings', 'design-index', ref.creator, 'a blue creator-tools design / grid mark'],
+  ['settings', 'design-index', ref.creator, 'a creator-tools design / grid mark drawn on pale drafting paper'],
   ['settings', 'tileset-studio', ref.creator, 'a green grass terrain tile'],
   ['settings', 'unit-studio', ref.creator, 'a gray chess knight / unit bust'],
   ['settings', 'tileset-review', ref.creator, 'a green clipboard with a checklist'],
@@ -102,8 +115,8 @@ const SPECS = [
   ['shields', 'lion', ref.campaign, 'a lion emblem on a heraldic shield (dark field, gold border)'],
   // campaign-editor UI control icons (64x64)
   ['settings', 'star', ref.general, 'a single gold five-pointed star, flat low-fi'],
-  ['settings', 'chevron-up', ref.general, 'a single upward chevron / caret (the ^ symbol), pale steel blue, flat low-fi'],
-  ['settings', 'chevron-down', ref.general, 'a single downward chevron / caret (an inverted ^), pale steel blue, flat low-fi'],
+  ['settings', 'chevron-up', ref.general, 'a single upward chevron / caret (the ^ symbol), pale steel, flat low-fi'],
+  ['settings', 'chevron-down', ref.general, 'a single downward chevron / caret (an inverted ^), pale steel, flat low-fi'],
   ['settings', 'pencil', ref.general, 'a short gold wooden pencil with a pink-red eraser and a dark graphite tip, shown at a slight diagonal, flat low-fi'],
   ['settings', 'delete', ref.general, 'a red X delete mark: two crossed diagonal strokes, flat low-fi'],
   ['settings', 'lock', ref.general, 'a closed gold padlock, flat low-fi'],
