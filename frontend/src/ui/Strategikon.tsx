@@ -8,8 +8,8 @@ import {
 import { EnchiridionReference, EnchiridionSectionRail, LipsanaCodex } from './Enchiridion';
 import { HeldCardCodex } from './HeldCardCodex';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
-import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
-import { navigateApp } from './navigation';
+import type { HouseSelectOption } from './shared/HouseSelect';
+import { RailSectionPicker } from './shared/RailSectionPicker';
 import { useOpenRailTab } from './shared/railOpenIntent';
 import { InnerChromeBox, ShellWorkspace } from './shared/ChromeBox';
 import { CHROME_STRUCTURAL_FILL_ROLE } from './shared/chromeSurfacePolicy';
@@ -147,17 +147,14 @@ export function Strategikon({
               addresses the rail uses, so a section is reached identically either way. Only one
               of the two is ever displayed — the narrow band hides the rail and shows this — so
               nothing is duplicated in the accessibility tree. */}
-          <div className="strategikon-section-picker">
-            <HouseSelect<StrategikonSection>
-              /* The Strategikon root carries no section; the picker still has to name one, and
-                 the first is what the rail lands on there. */
-              value={section ?? sectionItems[0].section}
-              options={sectionOptions}
-              onChange={(next) => navigateApp(href(next))}
-              ariaLabel="Strategikon section"
-              testId="strategikon-section-picker"
-            />
-          </div>
+          <RailSectionPicker<StrategikonSection>
+            value={section}
+            placeholder="Choose a section"
+            options={sectionOptions}
+            href={(next) => href(next)}
+            ariaLabel="Strategikon section"
+            testId="strategikon-section-picker"
+          />
         </>
       )}
       aria-label="Strategikon"

@@ -66,6 +66,7 @@ import { installedUiMedia } from './installedUiMedia';
 import { STRATEGIKON_CARD_MARK_CLASS, useStrategikonCardsIcon } from './strategikonNavigation';
 import { LipsanonIcon } from './Lipsana';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
+import { RailSectionPicker } from './shared/RailSectionPicker';
 import { siblingRailAddresses, useOpenRailTab } from './shared/railOpenIntent';
 import { useProgressiveMount } from './shared/useProgressiveMount';
 import { ataraxiaNumeralArtUrl } from './ataraxiaNumeral';
@@ -1394,20 +1395,35 @@ export function EnchiridionSectionRail({
   // pane still waits for the committed address and its transition is unchanged.
   const openSection = useOpenRailTab(siblingRailAddresses(ENCHIRIDION_SECTIONS, sectionHref), section);
   return (
-    <ApparatusRailColumn opens="panel-beside" className="enchiridion-section-rail" aria-label="Enchiridion sections">
-      {ENCHIRIDION_SECTIONS.map((candidate, index) => (
-        <ApparatusRailTab
-          key={candidate}
-          label={ENCHIRIDION_SECTION_LABEL[candidate]}
-          to={sectionHref(candidate)}
-          index={index}
-          active={section === candidate}
-          expanded={openSection === candidate}
-          iconSrc={sectionIconSrc[candidate]}
-          iconClassName={candidate === 'cards' ? STRATEGIKON_CARD_MARK_CLASS : undefined}
-          markCanvas={candidate === 'ataraxia' ? 'bleed' : 'inset'}
-        />
-      ))}
-    </ApparatusRailColumn>
+    <>
+      <ApparatusRailColumn opens="panel-beside" className="enchiridion-section-rail" aria-label="Enchiridion sections">
+        {ENCHIRIDION_SECTIONS.map((candidate, index) => (
+          <ApparatusRailTab
+            key={candidate}
+            label={ENCHIRIDION_SECTION_LABEL[candidate]}
+            to={sectionHref(candidate)}
+            index={index}
+            active={section === candidate}
+            expanded={openSection === candidate}
+            iconSrc={sectionIconSrc[candidate]}
+            iconClassName={candidate === 'cards' ? STRATEGIKON_CARD_MARK_CLASS : undefined}
+            markCanvas={candidate === 'ataraxia' ? 'bleed' : 'inset'}
+          />
+        ))}
+      </ApparatusRailColumn>
+      {/* Six sections is six rows of a phone. Collapsed it is one, and a peer of the
+          Strategikon's own section picker directly above it — see RailSectionPicker. */}
+      <RailSectionPicker<EnchiridionSection>
+        value={section}
+        placeholder="Choose a reference"
+        options={ENCHIRIDION_SECTIONS.map((candidate) => ({
+          value: candidate,
+          label: ENCHIRIDION_SECTION_LABEL[candidate],
+        }))}
+        href={sectionHref}
+        ariaLabel="Enchiridion section"
+        testId="enchiridion-section-picker"
+      />
+    </>
   );
 }
