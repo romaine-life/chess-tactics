@@ -21,7 +21,7 @@
 // If a surface needs something a category cannot express, grow the category contract in
 // TilePreview.tsx (`main` and `controls` are both arbitrary elements). ADR-0588.
 
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -49,13 +49,60 @@ export function check(source) {
   ));
 }
 
+/**
+ * SECOND RULE: a catalog's own wrapper must be the Studio's scroll owner.
+ *
+ * The shell is `overflow: hidden` at the viewport's height and hands the scroll to its DIRECT
+ * content child. Almost every category returns `.tileset-studio-grid`, which that rule names; a
+ * category that needs a wrapper — because it shows something above its grid — has to be named
+ * there too, and if it is not, its content clips at the shell's height with no way to reach the
+ * rest. There is no error and nothing looks broken: the page simply ends.
+ *
+ * It has now cost two surfaces. Log Marks lost half its candidates, and HUD Tab Marks stranded
+ * eighty of them below the fold. The style.css comment asked the next wrapper to join the rule,
+ * which is availability rather than enforcement — so this enforces it.
+ *
+ * Keyed on the `-page` suffix the wrappers already share. A catalog wrapper named anything else
+ * is outside this net, which is the cost of not parsing JSX; the convention is cheap to keep.
+ */
+const CATALOG_WRAPPER = /className="([a-z][a-z-]*-page)"/g;
+const SCROLL_OWNER_RULE = /\.tileset-studio-shell\.is-catalog > \.[^{]+\{[^}]*overflow-y:\s*auto/;
+
+export function scrollOwnerFailures(catalogSources, css) {
+  const rule = css.match(SCROLL_OWNER_RULE)?.[0] ?? '';
+  const named = new Set([...rule.matchAll(/> \.([a-z][a-z-]*)/g)].map((hit) => hit[1]));
+  const failures = [];
+  for (const [file, source] of catalogSources) {
+    for (const hit of source.matchAll(CATALOG_WRAPPER)) {
+      const wrapper = hit[1];
+      if (named.has(wrapper)) continue;
+      failures.push(
+        `ui/${file} wraps its catalog in .${wrapper}, which the Studio's scroll-owner rule does not `
+        + 'name — so everything past the shell height clips with no way to reach it. Add '
+        + `".tileset-studio-shell.is-catalog > .${wrapper}" to that rule in style.css.`,
+      );
+    }
+  }
+  return failures;
+}
+
 if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('check-studio-surfaces.mjs')) {
   const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src');
-  const failures = check(readFileSync(path.join(root, 'ui', 'App.tsx'), 'utf8'));
+  const uiDir = path.join(root, 'ui');
+  const catalogSources = readdirSync(uiDir)
+    .filter((name) => name.endsWith('Catalog.tsx'))
+    .map((name) => [name, readFileSync(path.join(uiDir, name), 'utf8')]);
+  const failures = [
+    ...check(readFileSync(path.join(uiDir, 'App.tsx'), 'utf8')),
+    ...scrollOwnerFailures(catalogSources, readFileSync(path.join(root, 'style.css'), 'utf8')),
+  ];
   if (failures.length) {
     console.error('✗ check-studio-surfaces:');
     for (const failure of failures) console.error(`  ${failure}`);
     process.exit(1);
   }
-  console.log('✓ check-studio-surfaces: /studio routes the Studio; every review surface is a category inside it');
+  console.log(
+    `✓ check-studio-surfaces: /studio routes the Studio, every review surface is a category inside it, `
+    + `and all ${catalogSources.length} catalogs' wrappers can scroll`,
+  );
 }

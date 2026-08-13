@@ -317,10 +317,17 @@ export function SkirmishTabMarkCatalog({ state }: { state: SkirmishTabMarkState 
   if (error) return <p role="alert">{error}</p>;
   if (!catalog) return <p role="status">Loading candidates…</p>;
   return (
-    // The grid goes on an INNER body, never on the element the Studio pane places: that pane gives
-    // its child a constrained height, and a grid there has its auto rows crushed — the strips row
-    // measured 0px tall with the candidate list painted on top of it.
-    <div data-testid="skirmish-tab-mark-catalog">
+    // Two elements, and both are load-bearing.
+    //
+    // The OUTER one is the shell's direct content child, which is the Studio catalog's scroll
+    // owner — a wrapper that is not named in that rule clips at the shell's height with no way to
+    // reach the rest, which is how Log Marks once lost half its candidates and how eighty
+    // candidates here were unreachable below the fold.
+    //
+    // The grid goes on the INNER one, never on that child: the pane gives it a constrained height,
+    // and a grid there has its auto rows crushed — the strips row measured 0px tall with the
+    // candidate list painted on top of it.
+    <div className="skirmish-tab-mark-page" data-testid="skirmish-tab-mark-catalog">
       <div className="skirmish-tab-mark-review">
       <section className="skirmish-tab-mark-strips" aria-label="Controls head">
         <div className="skirmish-tab-mark-column">

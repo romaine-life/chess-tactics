@@ -12258,7 +12258,8 @@ body.loading-bootstrap .app-startup-status {
    exactly that. One rule listing both, so the next wrapper joins it instead of inventing a
    second scroll. */
 .tileset-studio-shell.is-catalog > .tileset-studio-grid,
-.tileset-studio-shell.is-catalog > .battle-log-mark-page {
+.tileset-studio-shell.is-catalog > .battle-log-mark-page,
+.tileset-studio-shell.is-catalog > .skirmish-tab-mark-page {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
