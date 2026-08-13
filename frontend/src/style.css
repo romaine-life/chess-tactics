@@ -27645,7 +27645,65 @@ button.tileset-relationship-cell {
 
   .rail-section-picker {
     display: block;
+    flex: none;
     padding-block-end: var(--ds-space-2);
+  }
+
+  /* LOCKED, not scrollable. The pickers and the section name are the pane's fixed head; the
+     record is the only thing that moves. The outer body scrolled as well — the panel was
+     taller than the pane, so the whole head slid away and you lost the control you had just
+     used — while the record has its OWN scrollport and was scrolling too. Two nested scrolls,
+     one of which took the navigation with it.
+
+     Height is handed down instead: the body stops scrolling, and each box between it and the
+     record gives the record the space left over. Sticky was the alternative and is worse here
+     — a pinned head over a scrolling record needs an opaque fill of its own, and this chrome
+     has no business painting one (ADR-0032). */
+  .strategikon-content { overflow: hidden; }
+  /* The head is `flex: none` (above); the RECORD is what absorbs the remainder. Without this
+     the reference pane kept its `block-size: 100%` — a full pane's worth of height starting
+     below a 69px picker — so the body overflowed by exactly the head and scrolled it away. */
+  .strategikon-workspace-layout > .shell-workspace-body,
+  .strategikon-pane.has-secondary-rail > .strategikon-reference-pane {
+    flex: 1 1 auto;
+    block-size: auto;
+    min-block-size: 0;
+  }
+  .strategikon-pane,
+  .strategikon-reference-pane,
+  .enchiridion-panel {
+    min-block-size: 0;
+  }
+  .strategikon-reference-pane,
+  .enchiridion-panel {
+    display: flex;
+    flex-direction: column;
+  }
+  .enchiridion-panel > .settings-section-title { flex: none; }
+  .enchiridion-reference-scroll {
+    flex: 1 1 auto;
+    min-block-size: 0;
+  }
+  /* The Lipsanotheca has no reference scrollport of its own — its rows and its detail are the
+     record — so removing the outer scroll left it clipped. It absorbs the remainder the same
+     way and scrolls its own rows. The mobile gate is what found this: every other section was
+     clean and this one stranded its list in landscape. */
+  .enchiridion-lipsanon-layout {
+    /* Flex, not the one-column grid: its children are scroll hosts carrying `min-block-size: 0`,
+       so a definite-height grid squeezed the two rows and the detail card painted over the row
+       list behind it — a tap on "Royal Tent" landed on the card covering it. Same squeeze the
+       menu shell and the Strategikon panes both hit; `flex: none` cannot go below content. */
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-block-size: 0;
+  }
+  .enchiridion-lipsanon-layout > * { flex: none; }
+  .enchiridion-lipsanon-layout > .enchiridion-lipsanon-browse-panel {
+    flex: 1 1 auto;
+    min-block-size: 0;
+    overflow: hidden auto;
+    -webkit-overflow-scrolling: touch;
   }
   .rail-section-picker .house-select {
     block-size: var(--rail-tab-block-size, 61px);

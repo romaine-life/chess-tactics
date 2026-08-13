@@ -1,6 +1,7 @@
 import type { ReactElement, ReactNode } from 'react';
 
 import { HouseSelect, type HouseSelectOption } from './HouseSelect';
+import { CHROME_LEAF_FILL_SURFACE } from './chromeSurfacePolicy';
 import { navigateApp } from '../navigation';
 
 /**
@@ -54,6 +55,10 @@ export function RailSectionPicker<TValue extends string>({
         options={withPlaceholder}
         onChange={(next) => { if (next !== '') navigateApp(href(next as TValue)); }}
         ariaLabel={ariaLabel}
+        // Wood, because it is a thing you press. The tabs it replaces wear the oak and so do
+        // the card filters beside it — a stone trigger reads as a field you type in, and this
+        // is the same control the rail was (ADR-0555).
+        fillSurface={CHROME_LEAF_FILL_SURFACE}
         testId={testId}
       />
     </div>
