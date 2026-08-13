@@ -1992,6 +1992,10 @@ h1 {
      however correctly the type itself is set. Mixing the font's unit with the screen's is the
      defect; if a consumer at another tier ever takes this, it needs its own brick-correct value. */
   --menu-label-stroke-w: 4px;
+  /* What the eye actually sees of that stroke: half of it, because the stroke is centred.
+     Anything that has to MATCH the label's outline — a sprite outlined with drop-shadows,
+     which paint entirely outside — reads this one, not the width above. */
+  --menu-label-stroke-outside: 2px;
   --menu-label-stroke-ink: #02070b;
   /* Spatial-role tokens (ADR-0031) — COMFORTABLE density is the default; in-game
      surfaces override these to the tight end (see .skirmish-screen). inset = padding
@@ -19819,6 +19823,18 @@ button.tileset-relationship-cell {
   width: var(--settings-tab-icon-size);
   image-rendering: pixelated;
   object-fit: contain;
+  /* The label beside this mark wears a dark outline one brick thick (see
+     --menu-label-stroke-w); the mark wore none at all, so the two read as belonging to
+     different pictures — the text sat in the wood and the sprite floated on it. Four
+     chained drop-shadows trace the sprite's own alpha at the same thickness, in the same
+     ink, so mark and label share one edge treatment. Chained rather than listed: each
+     shadow applies to the accumulated result, which fills the diagonals a four-way list
+     would leave open. */
+  filter:
+    drop-shadow(var(--menu-label-stroke-outside) 0 0 var(--menu-label-stroke-ink))
+    drop-shadow(calc(-1 * var(--menu-label-stroke-outside)) 0 0 var(--menu-label-stroke-ink))
+    drop-shadow(0 var(--menu-label-stroke-outside) 0 var(--menu-label-stroke-ink))
+    drop-shadow(0 calc(-1 * var(--menu-label-stroke-outside)) 0 var(--menu-label-stroke-ink));
   /* Grow from a FIXED centre at any size (margin:auto/grid would anchor an oversized glyph). */
   position: absolute;
   left: 50%;
