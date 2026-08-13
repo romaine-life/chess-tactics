@@ -41,8 +41,19 @@ export function UnitRungSprite({
   alt: string;
 }): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const width = Math.max(1, Math.round(baseWidth * zoom));
-  const height = Math.max(1, Math.round(baseHeight * zoom));
+  /**
+   * The backing store is sized in DEVICE pixels, not CSS pixels.
+   *
+   * A 150% display runs at devicePixelRatio 1.5, so a canvas sized in CSS pixels is
+   * resampled by 1.5 on its way to the panel: some source columns land on two device
+   * pixels and some on one. On pixel art that is not softness, it is a shape change —
+   * parts of a silhouette physically widen — and it is worst on whichever piece
+   * carries the most internal detail. Sizing the store in device pixels means one
+   * stored pixel is one screen pixel and the browser resamples nothing.
+   */
+  const dpr = typeof window === 'undefined' ? 1 : Math.max(1, window.devicePixelRatio || 1);
+  const width = Math.max(1, Math.round(baseWidth * zoom * dpr));
+  const height = Math.max(1, Math.round(baseHeight * zoom * dpr));
 
   useEffect(() => {
     let cancelled = false;
@@ -109,7 +120,7 @@ export function UnitRungSprite({
     };
     image.src = mode === 'rung' && authoredSrc ? authoredSrc : src;
     return () => { cancelled = true; };
-  }, [src, authoredSrc, baseWidth, baseHeight, width, height, zoom, mode]);
+  }, [src, authoredSrc, baseWidth, baseHeight, width, height, zoom, mode, dpr]);
 
   // Backing store in REAL tier pixels so an authored rung lands 1:1; laid out at the 1x
   // rect, because the grid box scales everything by the tier already. Without the CSS

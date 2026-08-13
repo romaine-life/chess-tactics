@@ -93,6 +93,7 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
     return Number.isFinite(raw) ? Math.min(TIER_INDEX_RANGE.max, Math.max(TIER_INDEX_RANGE.min, raw)) : 0;
   });
   const tierZoom = zoomForTier(tierIndex);
+  const devicePixelScale = typeof window === 'undefined' ? 1 : Math.max(1, window.devicePixelRatio || 1);
   // Below 1:1 the board minifies through its mip chain rather than dropping columns,
   // so the browser is allowed to resample here too; magnified, whole-pixel is what
   // the board does and what the art was authored for.
@@ -280,8 +281,10 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
                 // still landing, so the all-palette list would show nothing until the last
                 // upload. Undefined until one exists, and then the seat stops simulating.
                 const paletteRungs = asset?.rungsByPalette?.[paletteId];
+                // DEVICE pixels: the rung has to match what the panel physically shows, or
+                // a 150% display resamples it by 1.5 and the pixel grid stops being a grid.
                 const chosen = paletteRungs?.length
-                  ? spriteRungForWidth(baseW * tierZoom, paletteRungs)
+                  ? spriteRungForWidth(baseW * tierZoom * devicePixelScale, paletteRungs)
                   : null;
                 const authoredSrc = chosen && asset
                   ? `/api/unit-sprites/${asset.id}/${asset.rowRevision}/${paletteId}/${facing}/${chosen.rung}.png`
