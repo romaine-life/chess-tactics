@@ -58,10 +58,16 @@ describe('Level Editor board pointer contract', () => {
 
     expect(viewPane.match(/onContextMenuCapture=/g)).toHaveLength(1);
     expect(viewPane).toContain('onContextMenuCapture={(event) => event.preventDefault()}');
-    expect(viewPane).toContain('onPointerDownCapture={startSecondaryPan}');
+    // Capture carries the secondary button AND touch (composed into one named handler); the
+    // bubbling path stays primary-only, so an editable child keeps its own tool gestures.
+    expect(viewPane).toContain('onPointerDownCapture={capturePointerDown}');
+    expect(viewPane).toMatch(/const capturePointerDown = [^;]*?\{\s*startSecondaryPan\(event\);/s);
     expect(viewPane).toContain('if (event.button !== 2) return;');
     expect(viewPane).toContain('onPointerDown={startNonSecondaryPan}');
     expect(viewPane).toContain('if (event.button === 2) return;');
+    // One finger is deliberately NOT a camera gesture here: the board's cells own the primary
+    // press, so the camera only claims a touch once a SECOND finger makes it unambiguous.
+    expect(viewPane).toContain('if (pointersRef.current.size >= 2) {');
   });
 
   it('lets only the primary button reach each editable hit target', () => {

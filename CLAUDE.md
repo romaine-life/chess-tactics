@@ -381,6 +381,32 @@ and don't tell the user screenshots are impossible. Use the helper below.
    does — the armies are not yet in contact, so a capture is out of reach and only a
    long-range check or fork can land — so craft a Battle that is already joined.
 
+   Any change to a player-facing screen additionally runs the mobile gate, which drives
+   the real routes in a device-emulated Chrome (touch points, coarse pointer, phone UA)
+   and measures the rendered DOM:
+   ```
+   npm run verify:mobile -- '<vite-url>'
+   npm run verify:mobile -- '<vite-url>' --profile phone-landscape --route '/settings'
+   ```
+   It reports five things per route per device: the page scrolling sideways, a control
+   that cannot be scrolled into view, a control clipped under 60% of itself, content
+   stranded in a container that cannot scroll, and a hit box under 44x44. A control below
+   the fold is NOT a finding — the gate scrolls it into view and re-measures, so only a
+   genuinely unreachable control fails. **This is why it exists:** the narrow-width chrome
+   is a band of overrides that neutralise baked desktop offsets, and when the menu shell
+   was rebuilt into the twin screen the band stopped reaching the destination row — every
+   Settings and Play destination tab rendered at centre x = -56, entirely off the left
+   edge, and nothing in the test suite could see it.
+
+   The Level Editor is deliberately outside its route set (a desktop authoring surface).
+   Pass `--route` to audit anything not listed.
+
+   **Mobile means BOTH orientations — ordinary responsive behaviour, on phones and
+   tablets.** No screen may demand the device be turned. The app shipped a portrait
+   "Rotate your device" gate from 2026-07-01 to 2026-08-11 that blanked every phone and
+   tablet held upright; it is gone, and the gate now FAILS any route where a blocker
+   covers the viewport. Make the screen work at the size it is given.
+
 This works on ANY live route by selector — no per-target fixture, so there's no "new
 screen ⇒ flail" cliff. `frontend/scripts/shot.mjs` is the implementation.
 
@@ -395,6 +421,23 @@ For the Level Editor's full Events workspace, append `eventsEditor=1` to the
 canonical `layer=rules` URL. Append `eventsTab=deployment` for Deployment or
 `eventsTab=other` for Other Events; Victory Rules is the default and omits that
 parameter.
+
+**Mobile is reviewed at `/mobile-lab`, never by describing it.** The dev server is
+loopback-only so it cannot be opened on a phone, and a desktop window shows the desktop
+layout of the very screens under test — so a plain route link is worthless as a mobile
+handoff. The lab mounts the REAL routes in same-origin iframes at exact device viewports,
+with all state in the address:
+
+- `/mobile-lab?device=<id>&route=<url-encoded address>` — `device` is `phone-portrait`,
+  `phone-landscape`, `phone-landscape-max`, `tablet-portrait`, `tablet-landscape`, or `all`
+  for every frame side by side. `route` takes ANY address, including a `?craft=` Run spec.
+- `&zoom=0.75|0.5` scales the frame to fit the window. The iframe keeps its true pixel size
+  and is scaled visually, so its layout viewport — and every width media query — stays honest.
+
+Hand over a `/mobile-lab` link for any mobile change; hand over the plain route only when the
+desktop layout is the thing to judge. An iframe reports a FINE pointer, so the portrait rotate
+gate does not appear there — `npm run verify:mobile` is what exercises a real coarse-pointer
+device.
 
 The Studio encodes its state in the URL, so deep-link instead of clicking:
 - `mode=catalog|lab|viewer`

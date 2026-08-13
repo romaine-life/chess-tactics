@@ -5,6 +5,9 @@ import {
   GameplayWorkspaceActivation,
   gameplayWorkspaceTransitionTarget,
 } from '../shell/AuthoredSceneSlot';
+import { useLayoutEffect, useState } from 'react';
+import { ControlsDockToggle } from './ControlsDockToggle';
+import { controlsMobileLayout } from './controlsMobileLayout';
 // Cyclic with ChromeDividedGrid on purpose and safely: the grid needs this module's box and fill,
 // and the Controls panel's head IS a divided block. Every reference on both sides is inside a
 // component body, so neither module touches the other while it is still evaluating.
@@ -246,18 +249,60 @@ export function ShellControlsPanel({
    */
   fixed?: ReactNode;
 }): ReactElement {
+  const mobileLayout = controlsMobileLayout();
+  // Collapse belongs to the DOCK, not to any workflow: it is what the rail does when the
+  // screen it shares is worth more than its own body. So it lives here with placement, and
+  // every host gets the same affordance rather than the Battle growing a private one.
+  // Only the docked strip can collapse — on the desktop rail there is nothing to reclaim,
+  // which is why the control is rendered solely for that layout and hidden above the narrow
+  // band by the same media query that docks it.
+  const [collapsed, setCollapsed] = useState(false);
+  // What the docked strip actually occupies, published for the screen behind it to reserve.
+  // A hard-coded number cannot be right: the strip's height depends on the host's own head
+  // and on whether the body is collapsed or the rail has yielded to a workspace, so the page
+  // either left a gap under the board or ran the board behind the strip. Measured, it is
+  // simply correct in every one of those states.
+  useLayoutEffect(() => {
+    if (mobileLayout !== 'sheet') return undefined;
+    const panel = document.querySelector<HTMLElement>('[data-shell-controls-panel]');
+    if (!panel) return undefined;
+    const publish = (): void => {
+      document.documentElement.style.setProperty('--controls-dock-height', `${Math.round(panel.getBoundingClientRect().height)}px`);
+    };
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(panel);
+    return () => {
+      observer.disconnect();
+      document.documentElement.style.removeProperty('--controls-dock-height');
+    };
+  }, [mobileLayout, collapsed]);
   return (
     <OuterChromeBox
       {...props}
       chromeConsumer="shell-controls"
       titled
       data-shell-controls-panel=""
+      data-controls-collapsed={mobileLayout === 'sheet' && collapsed ? '' : undefined}
+      // Narrow-width placement is this primitive's business, not each workflow's — the same
+      // reason the title, outer role and placement class are supplied here. Every host reads
+      // one answer, so the rail cannot grow a different mobile behaviour per screen.
+      data-controls-mobile={mobileLayout}
       // Every trigger in the panel wears the oak, borrowed components included (ADR-0555).
       data-chrome-leaf-surface=""
       className={`shell-controls-panel skirmish-hud ${className}`.trim()}
     >
       <ShellControlsHead
-        actions={titleActions}
+        // The toggle rides the head's existing actions row rather than taking a row of its
+        // own: that row is already right-aligned and already clears the frame, and a
+        // collapse control that costs a row of board to offer you a row of board back is
+        // not worth having.
+        actions={mobileLayout === 'sheet' ? (
+          <>
+            {titleActions}
+            <ControlsDockToggle collapsed={collapsed} onToggle={() => setCollapsed((open) => !open)} />
+          </>
+        ) : titleActions}
         className={titleClassName}
         sections={titleSections}
         strip={titleStrip}

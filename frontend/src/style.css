@@ -12728,6 +12728,11 @@ body.loading-bootstrap .app-startup-status {
 }
 
 .tileset-view-stage {
+  /* The pane IS the camera: it owns drag-to-pan and pinch-to-zoom (ViewPane). Without this
+     the browser claims a touch drag for page scrolling and fires pointercancel partway
+     through, so on a phone the board could not be panned at all and a pinch zoomed the whole
+     document instead of the camera. */
+  touch-action: none;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
   align-self: stretch;
@@ -18760,9 +18765,16 @@ button.tileset-relationship-cell {
   --titlebar-label-pad-inline: var(--ds-space-4);
   /* Grid relationships and every relationship inside the control lane use this token. */
   column-gap: var(--titlebar-control-gap);
-  /* Page inset is published so the control lane can resolve its final edge to the
-     canonical control gap. */
-  --titlebar-pad-inline: var(--ds-space-6);
+  /* ONE inset from the bar edge, on both axes and at both ends. (No apostrophes in a
+     comment inside a rule that paints: check-ui-surface-contract splits declarations
+     without stripping comments and treats an apostrophe as a string quote, which silently
+     swallows every declaration after it — see the note handed over with this change.) It used to be
+     --ds-space-6 (32px) inline against --ds-titlebar-inset (8px) block, which is why the
+     brand sat 32px from the left while the control cluster sat 8px from the right: two
+     different rhythms in one row, and the lane carried a compensating pull to reconcile
+     them. With one inset that pull resolves to zero on its own — the special case existed
+     only because the two numbers disagreed. */
+  --titlebar-pad-inline: var(--ds-titlebar-inset);
   border: 0;
   padding: var(--ds-titlebar-inset) var(--titlebar-pad-inline) calc(var(--ds-titlebar-inset) + var(--titlebar-rule-h));
   background: none;
@@ -18860,6 +18872,13 @@ button.tileset-relationship-cell {
 .brand-lockup-layout {
   align-items: center;
   color: #eef8ff;
+  /* ONE content line for the bar. The control lane defines it — its origin is the bar's
+     origin and its bottom is the structural divider's top edge — and the brand now sits on
+     the same box instead of centring inside the padding box, which put it 6px lower than
+     every control beside it (shield centre 36 against the cluster's 30). The lane's box is
+     the structural one, so the brand adopts it rather than the other way round. */
+  block-size: calc(var(--app-header-h) - var(--titlebar-rule-h));
+  margin-block: calc(-1 * var(--ds-titlebar-inset)) 0;
   display: inline-grid;
   gap: clamp(10px, calc(var(--layout-vw, 100vw) * .01), 16px);
   grid-template-columns: clamp(40px, calc(var(--layout-vw, 100vw) * .04), 54px) minmax(0, 1fr);
@@ -27269,66 +27288,98 @@ button.tileset-relationship-cell {
 }
 .campaign-result-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 4px; }
 
-/* ============================================================================
-   MOBILE SUPPORT — landscape-only phones (added 2026-07-01)
-   ----------------------------------------------------------------------------
-   The app is built desktop-first; on a phone it is played in LANDSCAPE. Three
-   media contexts drive it:
-
-     • portrait + coarse         -> the rotate-to-landscape gate (touch phones only:
-                                     never nag a desktop user to rotate a window)
-     • max-width <= 960px        -> fix the shared chrome family at ANY narrow width
-     • narrow AND short (<=540h) -> the landscape-phone tweaks (shorter app bar,
-                                     board + HUD side-by-side)
-
-   IMPORTANT: only the rotate GATE is gated on `pointer: coarse`. The layout fix is
-   width-based, NOT pointer-based — the baked desktop offsets break the chrome at any
-   narrow width (a narrow desktop window, or DevTools' plain "Responsive" mode, which
-   reports a fine pointer), so gating the fix on coarse-pointer left those broken. 960
-   is the ceiling because the largest landscape phone (iPhone Pro Max) is 932px wide,
-   while a real desktop layout wants >= ~1000px.
-
-   A true OS orientation lock is impossible in a mobile browser (screen.orientation
-   .lock is unsupported on iOS Safari), so portrait shows a prompt instead of forcing
-   rotation. The layout rules NEUTRALISE the desktop dressing-room offsets baked into
-   the shared menu/settings/Play chrome — a rail `translate(-230px)` and a 931px
-   content panel `translate(-270px)` that are never otherwise reset (they push both
-   mostly off a narrow screen). Layout only; no chrome art is hand-rolled (ADR-0032).
-   Placed last so these overrides win the cascade; the two-class panel reset below is
-   specificity-matched (0,2,0) so it beats the baked `.settings-art-route
-   .settings-main-frame` rule (a single-class override would silently lose — the
-   original bug). */
-
-/* -- Rotate-to-landscape gate. Hidden everywhere except a touch device in portrait. */
-.rotate-gate { display: none; }
-
-@media (orientation: portrait) and (pointer: coarse) {
-  .rotate-gate {
-    position: fixed;
-    inset: 0;
-    z-index: 100000;               /* above the fixed title bar (10000) and route veil (9999) */
-    display: grid;
-    place-items: center;
-    padding: 32px;
-    text-align: center;
-    background: #05090d;
-    color: var(--ds-ink-2, #dbe7ea);
-  }
-}
-
-.rotate-gate-inner { display: grid; gap: 16px; justify-items: center; max-width: 300px; }
-.rotate-gate-icon { width: 76px; height: 76px; color: var(--ds-ink-2, #dbe7ea); opacity: .92; }
-.rotate-gate-title {
-  margin: 0;
+/* ── Mobile review lab (/mobile-lab) ────────────────────────────────────────────────────────
+   A tool surface, not a player screen, so it follows the Studio's "just a web page" licence
+   (it reuses .tileset-view-action for its controls). It paints NO surface of its own — the
+   device frames are outlines — so it introduces nothing the UI surface contract owns. */
+.mobile-lab {
+  block-size: 100%;
+  box-sizing: border-box;
+  color: var(--ds-ink-2, #dbe7ea);
+  display: flex;
+  flex-direction: column;
   font-family: var(--ds-font-display, ui-monospace, monospace);
-  font-size: 32px;
-  letter-spacing: 1px;
+  gap: 10px;
+  overflow: auto;
+  padding: calc(var(--app-header-h, 84px) + 12px) 16px 16px;
+}
+.mobile-lab-bar { display: grid; gap: 4px; }
+.mobile-lab-title { font-size: var(--ds-text-lg, 1.25rem); letter-spacing: .04em; margin: 0; text-transform: uppercase; }
+.mobile-lab-note { color: var(--ds-ink-3, #9eb1c5); font-size: var(--ds-text-sm, .85rem); line-height: 1.45; margin: 0; max-inline-size: 92ch; }
+.mobile-lab-controls { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; }
+.mobile-lab-legend {
+  color: var(--ds-ink-3, #9eb1c5);
+  font-size: var(--ds-text-sm, .85rem);
+  letter-spacing: .06em;
+  min-inline-size: 62px;
   text-transform: uppercase;
 }
-.rotate-gate-copy { margin: 0; color: var(--ds-ink-3, #948C7E); font-size: 1rem; line-height: 1.4; }
+.mobile-lab-dim { color: var(--ds-ink-3, #9eb1c5); font-size: var(--ds-text-sm, .8rem); }
+.mobile-lab-address {
+  color: inherit;
+  flex: 1 1 320px;
+  font: inherit;
+  min-inline-size: 0;
+  outline: 1px solid rgba(125, 224, 255, .28);
+  padding: 6px 8px;
+}
+/* aria-pressed is the selected state — no new painted surface, just the outline. */
+.mobile-lab .tileset-view-action[aria-pressed="true"] { outline: 2px solid rgba(125, 224, 255, .85); }
+.mobile-lab-stage { align-items: start; display: flex; flex-wrap: wrap; gap: 18px; padding-block-start: 4px; }
+.mobile-lab-device { display: grid; gap: 6px; margin: 0; }
+.mobile-lab-caption { color: var(--ds-ink-3, #9eb1c5); font-size: var(--ds-text-sm, .85rem); letter-spacing: .04em; }
+/* Reserves the SCALED footprint; the iframe inside keeps its true pixel size so its own
+   layout viewport — and every width media query in the app — stays honest. */
+.mobile-lab-viewport { outline: 1px solid rgba(125, 224, 255, .38); overflow: hidden; position: relative; }
+/* Size comes from the element's own inline style in real px — an iframe left at `auto`
+   falls back to the CSS default 300x150 and silently ignores its width/height attributes. */
+.mobile-lab-frame { display: block; }
 
-/* -- Narrow-viewport chrome fix (any narrow width — phones AND narrow windows). ---- */
+/* The docked Controls strip's collapse toggle. Rendered by ShellControlsPanel whenever the
+   sheet placement is selected, but there is nothing to reclaim on the desktop rail — it is a
+   full-height column, not a strip sharing the screen — so it appears only inside the narrow
+   band that docks the rail in the first place. */
+.shell-controls-collapse { display: none; }
+
 @media (max-width: 960px) {
+  /* ============================================================================
+     MOBILE SUPPORT — both orientations, ordinary responsive behaviour
+     ----------------------------------------------------------------------------
+     The app is built desktop-first and adapts down. It supports PORTRAIT AND
+     LANDSCAPE on phones and tablets, like any responsive web app; there is no
+     orientation gate and no screen that demands the device be turned. Two media
+     contexts drive it:
+
+       • max-width <= 960px        -> fix the shared chrome family at ANY narrow width
+       • narrow AND short (<=540h) -> the landscape-phone tweaks (tighter app bar,
+                                       board + HUD side-by-side)
+
+     The layout fix is width-based, NOT pointer-based — the baked desktop offsets break
+     the chrome at any narrow width (a narrow desktop window, or DevTools' plain
+     "Responsive" mode, which reports a fine pointer), so gating it on coarse-pointer
+     would leave those broken. 960 is the ceiling because the largest landscape phone
+     (iPhone Pro Max) is 932px wide, while a real desktop layout wants >= ~1000px.
+
+     HISTORY: this band shipped 2026-07-01 as landscape-only, with a portrait
+     "Rotate your device" gate on `(orientation: portrait) and (pointer: coarse)`. That
+     gate covered the screen on every phone AND every tablet held upright, which is how
+     most people hold both, so the app did nothing at all for them. It was removed when
+     mobile support became both-orientations; portrait already had a working stacked
+     board layout underneath it (the max-width:860px block above). Do not reintroduce an
+     orientation prompt — make the screen work at the size it is given. `npm run
+     verify:mobile` fails any route whose controls cannot be reached, in either
+     orientation, and reports a screen-covering blocker as GATED rather than passing it.
+
+     These rules NEUTRALISE the desktop dressing-room offsets baked into the shared
+     menu/settings/Play chrome — a rail translate and a fixed-width content panel that
+     are never otherwise reset (they push both mostly off a narrow screen). Layout only;
+     no chrome art is hand-rolled (ADR-0032). Placed last so these overrides win the
+     cascade; the two-class panel reset below is specificity-matched (0,2,0) so it beats
+     the baked `.settings-art-route .settings-main-frame` rule (a single-class override
+     would silently lose — the original bug). */
+
+  /* -- Narrow-viewport chrome fix (any narrow width — phones AND narrow windows). ---- */
+
   /* --- Shared menu / settings / campaign chrome family --------------------- */
   .settings-screen { inline-size: 100%; min-block-size: 100%; zoom: 1; }
 
@@ -27402,6 +27453,373 @@ button.tileset-relationship-cell {
   /* Touch-target floor for the small in-panel controls (WCAG ~44px). */
   .settings-chrome-button,
   .app-header-button { min-block-size: 44px; }
+
+  /* The ambience credit is a floating corner badge on the backdrop LAYER, painted under the
+     shell at z-index 1. On a desktop it sits in empty canvas bottom-right; at these widths the
+     shell fills the whole area, so it lands beneath a menu button and becomes untappable — the
+     gate reports its centre hit-testing to "Current Run" / "General" on every menu route.
+     There is no free corner to move it to (it is not in the shell's scroll flow, so it cannot
+     be docked after the content), and raising it above the shell would make a 64x24 patch of a
+     primary menu button open an external tab instead. So the decoration sheds, the way the
+     title bar already sheds its objective and identity chips when the bar gets tight. Deleting
+     this rule brings it back if the attribution is wanted at these sizes. */
+  .ambience-credit { display: none; }
+
+  /* Two formation marks 14px wide sitting 8px apart: under the 24px floor AND crowding each
+     other, so neither can be hit reliably. They are already 44 tall; widen to the floor. */
+  .run-arrangement-hand-mark { min-inline-size: 24px; }
+
+  /* The in-game bar is `minmax(0,1fr) auto minmax(0,1fr)` — brand · status · cluster — which
+     gives the CENTRE track its content width and splits the remainder between the outer two.
+     That inverts under pressure: on a 390px phone in a Battle the status wants 310px, both
+     outer tracks collapse to 0px, and the brand and the control lane overflow their empty
+     tracks straight across the status. Measured: the centre covered the brand lockup by 42px
+     and the lane by 142px, so the home shield and the Run breadcrumb could not be tapped at
+     all — every tap there landed on the status chip painted over them.
+     Invert the model instead: the two anchors take the width they need and the CENTRE is what
+     yields, which is the right answer for a bar whose middle is status and whose sides are
+     navigation. verify:titlebar now asserts the three regions do not overlap. */
+  .app-shell-titlebar.skirmish-topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  /* The wordmark is the header on every page (ADR-0008) and it was being cut to
+     "CHESS TACTIC". Measured at 390px: it needs 142px and its column gave it 110px, while
+     the bar spent --ds-space-6 (32px) of padding on EACH side — 64px of a 390px row. The
+     landscape-phone band already tightens this to 12px; it is needed on the width axis for
+     the same reason, and 40px recovered covers the 32px shortfall with room left.
+
+     Shrinking the type is not the alternative: the house face's brick is em/16, so the scale
+     has exactly two usable sizes (16px and 32px) and the next step down would halve the
+     wordmark and cost it the dominance it is supposed to have. */
+  /* The last few pixels come from inside the lockup rather than from the type: the shield
+     takes a smaller size and the gap to the copy tightens, which costs the mark a little
+     scale and costs the wordmark nothing.
+
+     The MARK and its column move together. The home button IS the shield — verify:titlebar
+     asserts they share a right edge — so shrinking the track alone left a 32px button behind
+     a 40px mark and broke that contract (measured: 44px against an expected 52px). */
+  .brand-lockup-layout {
+    gap: 6px;
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+  .brand-lockup-mark {
+    block-size: 32px;
+    inline-size: 32px;
+  }
+
+  /* The bar's two anchors are `auto` tracks, so once brand + lane exceed the row they shrink
+     below their content and spill across each other again — which is how the Strategikon's
+     "‹ Back to Run" ended up painted over the whole title breadcrumb, making Battle /
+     Strategikon / Chartulary untappable. A three-level trail is not a phone affordance
+     anyway: shed the TRAIL and keep the brand and the screen it names, the same way this bar
+     already sheds its objective and Run identity chips when it gets tight. */
+  .brand-lockup-route { display: none; }
+
+  /* --- Twin-screen destination row (the rot this band did not cover) ------------------
+     The rules above were written when a destination was a single `.settings-main-frame`
+     beside the rail. The menu shell has since become the TWIN SCREEN: the persistent menu
+     column stays mounted and a destination fills the second track as its own row of
+     FIXED-width columns (`.menu-dest` → `.menu-dest-tabs` 322px + `.menu-dest-action`
+     572px), pulled left by the shared `--rail-pull-*` so it seats under the rail's own
+     desktop offset. This band reset the RAIL's transform and never the row's, so every
+     destination tab landed off the left edge — measured centre x = -56 on a 844px
+     viewport, i.e. Settings' General/Audio/Gameplay and Play's Current Run / Start New
+     Run were unreachable at any scroll. `npm run verify:mobile` is what measures this.
+
+     Neutralise the pull at its SHARED SOURCE (the vars `.menu-dest` derives from) rather
+     than restating `transform: none` per element, so the row and the rail can never
+     disagree again — the same reasoning that put the pull in vars in the first place.
+     Then let the row STACK: at this width there is no arrangement of a 322px tab column
+     beside a 572px panel that fits, so columns become full-width rows and the shell
+     scrolls, exactly as the single-column rules above already intend. */
+  .main-menu-twin-screen .settings-shell {
+    --rail-pull-x: 0px;
+    --rail-pull-y: 0px;
+    /* Stack as a FLEX column, not the desktop grid. Every column in this shell carries
+       `min-block-size: 0` (they are scroll hosts on the desktop), which zeroes their
+       contribution to an auto grid track's minimum — so a definite-height shell squeezed the
+       two tracks to 169px/121px against content needing 223px/636px, and each column's
+       `overflow: visible` contents then painted straight over the column below (Settings'
+       General tab landed on top of the menu's own Settings button). Flex items with
+       `flex: none` cannot be squeezed below their content, so the stack is exact and the
+       shell — which is already the scroll host here — scrolls. */
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;                               /* twin-screen sets gap:0 for abutting columns */
+  }
+  .main-menu-twin-screen .settings-shell > * { flex: none; }
+
+  .menu-dest {
+    flex: none;
+    flex-direction: column;
+    inline-size: 100%;
+    min-inline-size: 0;
+    gap: 10px;
+    transform: none;
+  }
+
+  /* Only the WIDTH is wrong when stacked — the left inset is `--col-side-inset`, which is
+     col1's own button inset by construction, so keeping it is what makes a destination
+     button line up with the menu button above it. */
+  .menu-dest-col {
+    inline-size: 100%;
+    max-inline-size: 100%;
+    min-inline-size: 0;
+  }
+  .menu-dest-tabs,
+  .menu-dest-action {
+    inline-size: 100%;
+    max-inline-size: 100%;
+  }
+  /* The rail primitive pins its own 322px through the placement attribute — (0,2,0), so the
+     plain-class rules above lose to it and the tab column stayed desktop-width. Reset it at
+     the same selector that sets it rather than escalating specificity elsewhere. */
+  .apparatus-rail-column[data-apparatus-rail-placement="open"] {
+    inline-size: 100%;
+  }
+  /* The action column clips by design (its rows paint ornaments past their own edge). Stacked
+     it is the tallest thing on the page, so clipping strands its controls — let the shell's
+     scroll reach them instead. */
+  .menu-dest-action { overflow: visible; }
+
+  /* Play's column 2 is a grid whose second track scrolls; stacked it must not also try to
+     fill a viewport-height track it no longer owns. */
+  .play-source-rail { grid-template-rows: auto auto; }
+
+  /* Enchiridion is a real destination that sizes itself from --layout-vw minus the rail
+     pull and a fixed tab column — an expression that resolves to ~58px here. Stack it on
+     the same terms as every other destination. */
+  .menu-dest > .enchiridion-workspace {
+    flex-direction: column;
+    inline-size: 100%;
+    max-inline-size: 100%;
+  }
+  .menu-dest > .enchiridion-workspace > .enchiridion-section-rail {
+    inline-size: 100%;
+    padding-inline-start: 0;
+  }
+  .menu-dest > .enchiridion-workspace > .enchiridion-content {
+    inline-size: 100%;
+    padding-inline-start: 0;
+  }
+
+  /* --- Strategikon (the in-Run / in-Battle reference shell) ---------------------------
+     Built as columns of fixed rails: the workspace is `322px + rest`, and a section with a
+     secondary rail nests ANOTHER `322px + rest` inside it. That is 644px of rail before any
+     content, so on a 390px phone the section tabs came out 16–36% visible and the panels
+     overflowed containers that clip. Stack it on the same terms as the menu shell: rails
+     become full-width rows above their content, and the panes that clip by design at a width
+     where they fit are given a scroll instead.
+
+     Stack as a FLEX column, not a one-column grid, for the same reason the menu shell does:
+     every pane here carries `min-block-size: 0` (they are scroll hosts on the desktop), which
+     zeroes its contribution to an auto grid track's minimum, so a definite-height workspace
+     squeezes the rows and the content panel paints straight over the rail above it — the
+     section tabs stayed reachable but a tap on "Chartulary" landed on the panel covering it.
+     `flex: none` items cannot be squeezed below their content. */
+  .strategikon-workspace-layout,
+  .strategikon-pane.has-secondary-rail {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .strategikon-workspace-layout > *,
+  .strategikon-pane.has-secondary-rail > * {
+    flex: none;
+    min-inline-size: 0;
+  }
+  /* The rail docks to the workspace edge by stepping back out of the body inset — that is a
+     COLUMN's exemption (ADR-0297). Stacked it is a row and would just sit off the left edge. */
+  .strategikon-pane > .enchiridion-section-rail {
+    margin-inline-start: 0;
+  }
+  .strategikon-workspace .shell-workspace-body-content {
+    overflow: hidden auto;
+  }
+
+  /* Three 132px filter minimums plus a button do not fit a phone; one per row does. */
+  .enchiridion-card-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* --- Controls rail: proposed mobile placement (opt-in, ?hudMobile=sheet) ------------
+     The rail carries four different jobs at once — destination tabs, always-on status
+     (turn + remaining forces), the active tab's panel, and on desktop a keyboard shortcut
+     grid. Stacked into the page it becomes a slab that competes with whatever workspace is
+     open, which is the collision the audit reports on the Strategikon routes.
+
+     Split by WHEN each part is needed, which is what decides the pattern:
+       · status + destinations  — always → a persistent strip, pinned bottom, in the thumb
+                                  zone (Hoober: ~75% of interaction is thumb-driven, and the
+                                  bottom centre is the reachable region; the board wants the
+                                  top anyway)
+       · the active tab panel   — on demand → peeks above the strip, capped so the board
+                                  stays visible, exactly the non-modal bottom-sheet case
+       · a workspace is open    — the rail yields to it and keeps only the strip
+     NN/G is explicit that a bottom sheet is "inherently a transient UI element", which is
+     why the always-on status is NOT in the sheet: it stays in the strip that never moves.
+
+     Placement lives on the primitive's own attribute, so the Battle, the Level Editor and
+     its chrome consumers all inherit one answer (see controlsMobileLayout.ts). */
+  [data-shell-controls-panel][data-controls-mobile="sheet"] {
+    position: fixed;
+    inset-block-end: 0;
+    inset-inline: 0;
+    /* Over the page content, under the fixed title bar (10000). A pinned strip that loses
+       the z-order is worse than no strip: the Run's ledger rows painted straight over its
+       workspace-navigation icons. */
+    z-index: 900;
+    /* ONE height while open, not a cap. As a cap the strip took whatever its current tab
+       happened to need — measured 317px on Log, 460px on Roster, and 325px jumping to 390px
+       the moment a piece was selected — and because the board reserves this height, the board
+       itself resized under the player's finger mid-move. A dock has detents: open and
+       collapsed. The body scrolls inside the open one, which it was already built to do. */
+    block-size: min(58vh, 460px);
+    min-block-size: 0;
+  }
+  /* Both detents that are NOT the open one size to their content: there is no body to hold
+     open, and forcing the full height would leave a tall empty slab. */
+  [data-shell-controls-panel][data-controls-mobile="sheet"][data-controls-collapsed] {
+    block-size: auto;
+  }
+  /* The rail belongs on whichever edge is INTERIOR, and this dock changes which one that is.
+     Docked right, the panel meets the viewport on its right, the title bar on its top and the
+     floor on its bottom, so the offscreen-rails contract reduces its frame to a LEFT rail
+     only. Pinned to the bottom it spans the full width instead: left and right now reach the
+     viewport and the TOP is the one edge facing the board. Left as-is it drew a rail down the
+     side it no longer needs and nothing at all where the board meets it, which is the "just
+     abruptly starts" edge.
+
+     Same installed frame and the same rail width — only the side moves. Written at the same
+     specificity as the contract it amends, because that rule carries !important. */
+  :root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel][data-controls-mobile="sheet"]::before {
+    border-width: var(--le-chrome-outer-rail-w) 0 0 0 !important;
+    border-image-width: var(--le-chrome-outer-rail-w) 0 0 0 !important;
+  }
+  /* Both side edges now reach the screen, so neither carries a rail for the fill to hide
+     under — the inset that keeps the surface from bleeding past the art becomes a visible
+     strip of backdrop instead. Spend it only on the top, where the rail actually lands. */
+  :root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel][data-controls-mobile="sheet"] {
+    --le-outer-fill-box-right: 0px;
+    --le-outer-fill-box-left: 0px;
+    /* Both covers go to zero with the rails they stood in for. These are what the panel's
+       name and its title marks clear themselves by, so leaving them derived would inset the
+       head by a rail that is no longer drawn on either side. */
+    --shell-controls-frame-cover-start: 0px;
+    --shell-controls-frame-cover-end: 0px;
+  }
+
+  /* OuterChromeBox wraps its children in this content div, so the column lives here — the
+     panel element itself holds only the installed fill and that wrapper. */
+  [data-controls-mobile="sheet"] .le-outer-panel-content {
+    display: flex;
+    flex-direction: column;
+    min-block-size: 0;
+    block-size: 100%;
+  }
+
+  /* The strip. The header band stays — it is the panel's installed header chrome and the
+     workspace-navigation icons sit on it — but it is a 44-50px bar carrying one word, and
+     that row belongs to the board. Shrink it through its OWN stated token rather than
+     hiding it and leaving those icons on nothing. */
+  [data-shell-controls-panel][data-controls-mobile="sheet"] .outer-chrome-header {
+    flex: none;
+  }
+  [data-shell-controls-panel][data-controls-mobile="sheet"] .skirmish-card h2.kit-panel-title {
+    --kit-panel-title-base-h: 36px;
+  }
+  [data-controls-mobile="sheet"] .skirmish-hud-tabs {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: var(--ds-space-1);
+  }
+  /* Always-on status sits with the tabs, never inside the part that collapses. */
+  [data-controls-mobile="sheet"] .skirmish-score-panel {
+    flex: none;
+    padding-block: var(--ds-space-1);
+  }
+
+  /* The sheet: the active tab's panel, peeking above the strip and scrolling itself. */
+  [data-controls-mobile="sheet"] .skirmish-hud-panel {
+    flex: 1 1 auto;
+    min-block-size: 0;
+    overflow: hidden auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* A workspace took the screen: the rail yields to it and keeps only its strip. Two
+     stacked scrolling regions on a phone is the thing that made this unusable.
+
+     ANY workspace, not just the Strategikon's. Scoping this to `.strategikon-workspace`
+     first was wrong in a way worth recording: the Run's own workspaces — the Army ledger,
+     Lipsana, Expunctio — are the same situation and were left with the full rail pinned over
+     them, which the gate reported as 18 unreachable controls on the ledger alone. The rule
+     is about a workspace owning the screen, so it keys on the workspace, not on which one. */
+  .skirmish-screen:has(:is(.strategikon-workspace, .run-workspace)) [data-controls-mobile="sheet"] {
+    block-size: auto;
+    max-block-size: none;
+  }
+  .skirmish-screen:has(:is(.strategikon-workspace, .run-workspace)) [data-controls-mobile="sheet"] .skirmish-hud-panel,
+  .skirmish-screen:has(:is(.strategikon-workspace, .run-workspace)) [data-controls-mobile="sheet"] .shell-controls-break {
+    display: none;
+  }
+
+  /* The collapse. Only the sheet goes — the strip is what makes the rail worth docking, and
+     always-on status must not be behind a toggle. */
+  [data-shell-controls-panel][data-controls-collapsed] .skirmish-hud-panel,
+  [data-shell-controls-panel][data-controls-collapsed] .shell-controls-break {
+    display: none;
+  }
+  /* The toggle is a strip control, not a body one: it stays put while the body goes. Above
+     the narrow band there is no dock and nothing to reclaim, so it is not shown at all. */
+  /* Sized like the marks it sits beside — .strategikon-title-navigation gives its own
+     actions 24px, and this shares their row. The glyph is drawn into that square with
+     `contain`, the ordinary seat mechanism, so the art is never rescaled by a background
+     declaration and never dictates the footprint. */
+  .shell-controls-collapse {
+    display: inline-flex;
+    block-size: 24px;
+    inline-size: 24px;
+    flex: none;
+  }
+  .shell-controls-collapse-glyph {
+    block-size: 100%;
+    image-rendering: pixelated;
+    inline-size: 100%;
+    object-fit: contain;
+    pointer-events: none;
+  }
+
+  /* The board viewport is LOCKED. It is a camera — it pans and zooms in place — so the page
+     behind it must not also scroll: at 390x844 the screen ran 868px against an 844px box and
+     put a scrollbar down the side of the battlefield for 24px nobody needed. The strip is
+     fixed and the sheet scrolls itself, so nothing here wants page scroll. */
+  .skirmish-screen:has([data-controls-mobile="sheet"]) {
+    block-size: 100%;
+    overflow: hidden;
+    /* Measured and published by the panel itself (ShellControlsPanel), so the reservation
+       follows the strip through collapsing and through yielding to a workspace instead of
+       guessing one number for three different heights. The fallback is only for the frame
+       before the first measurement lands. */
+    padding-block-end: var(--controls-dock-height, 132px);
+  }
+  .skirmish-screen:has(:is(.strategikon-workspace, .run-workspace)):has([data-controls-mobile="sheet"]) {
+    --controls-strip-reserve: 108px;
+  }
+
+  /* Browser + detail side by side has a 556px floor. Stack, and scroll. */
+  .enchiridion-lipsanon-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    overflow: hidden auto;
+  }
+  .enchiridion-card-gallery-layout {
+    grid-template-rows: auto auto;
+    overflow: hidden auto;
+  }
 }
 
 /* -- Landscape-phone tweaks (narrow AND short — i.e. a phone held sideways). ------- */

@@ -73,7 +73,19 @@ export function ThumbnailSurface({
     const root = rootRef.current;
     if (!root) return;
     const viewport = root.closest(viewportSelector) ?? root;
-    const bounds = viewport.getBoundingClientRect();
+    const viewportBounds = viewport.getBoundingClientRect();
+    // Clamp to the window. The critical set is what the player can SEE on arrival, and a
+    // viewport element is only a proxy for that while it is the thing doing the scrolling.
+    // In the narrow stacked layout the shell scrolls and this column is unbounded, so it
+    // reports its whole content height — which made every thumbnail critical and held the
+    // scene at `loading` until the last one far below the fold painted. On a phone that
+    // never settled and the Levels screen simply never finished loading. Where the column
+    // IS the scrollport (every desktop width) it already sits inside the window and this
+    // clamp changes nothing.
+    const bounds = {
+      top: Math.max(viewportBounds.top, 0),
+      bottom: Math.min(viewportBounds.bottom, window.innerHeight),
+    };
     const nodes = [...root.querySelectorAll<HTMLElement>('[data-level-thumbnail-id]')];
     const visible = nodes
       .filter((node) => {
@@ -82,9 +94,15 @@ export function ThumbnailSurface({
       })
       .map((node) => node.dataset.levelThumbnailId)
       .filter((id): id is string => Boolean(id));
-    // A zero-row surface is complete. If layout is temporarily unmeasurable,
-    // require the first row rather than declaring a populated list complete.
-    setCriticalIds(new Set(visible.length || nodes.length === 0
+    // A zero-row surface is complete, and so is a surface whose rows all sit below the fold:
+    // nothing the player can see has to be painted before this screen may arrive. That is a
+    // MEASURED empty set, which is different from an unmeasurable one — on a landscape phone
+    // the rail stack above leaves a 19px band of this column on screen and the first row
+    // starts 25px below it, so `visible` is legitimately empty. Treating that as
+    // "unmeasurable" made the surface wait on a row far below the fold that is never painted,
+    // and the Levels screen hung at `loading` for good.
+    const measurable = bounds.bottom - bounds.top > 1;
+    setCriticalIds(new Set(measurable || nodes.length === 0
       ? visible
       : [nodes[0].dataset.levelThumbnailId].filter((id): id is string => Boolean(id))));
   }, [signature, viewportSelector]);
