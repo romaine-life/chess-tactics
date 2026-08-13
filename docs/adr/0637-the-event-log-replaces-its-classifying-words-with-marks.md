@@ -84,16 +84,18 @@ line is the marks doing their whole job, not a hole.
   and losing gold as two different installed marks and which way it went is the thing a reader
   most wants at a glance.
 
-- **Half the vocabulary is borrowed, not forged.** `clock` is the title bar's installed
-  hourglass, `objective` is its objective flag, and the two coins are the Run's own
-  `RunGoldIcon` / `RunGoldTransactionIcon` — the same components the board's rising marker
-  draws. Forging a second hourglass or a second coin for this seat is the bespoke parallel
+- **Two marks are borrowed, not forged.** `clock` is the title bar's installed hourglass and
+  `objective` is its objective flag — the same glyphs that bar draws two inches above the row.
+  Forging a second hourglass for this seat is the bespoke parallel
   [ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md) forbids, and it
-  would let the log and the screen beside it show two different coins.
+  would let the log and the screen beside it show two different clocks. The two coins were
+  borrowed at first, from the Run's own `RunGoldIcon` / `RunGoldTransactionIcon`; the gold
+  consequence below records why a log row needs a TRANSACTION mark instead, which is a
+  different fact rather than the same fact drawn twice.
 
-- **Seven marks had no existing home** — the three outcomes, the three causes that are not the
-  clock, and `check` — and get their own slots in the kit's game-icon family under a new
-  `battle-log-mark` runtime component.
+- **Eight marks had no existing home** — the three outcomes, the two causes that are not the
+  clock, `check`, and the two gold transactions — and get their own slots in the kit's
+  game-icon family under a new `battle-log-mark` runtime component.
   Like the Run-position and action marks they ship **trimmed to their own ink**: the seat is
   18px and draws with `contain`, which scales the canvas, so transparent margin left on a 64×64
   frame would come straight off the drawn glyph.
@@ -119,7 +121,7 @@ line is the marks doing their whole job, not a hole.
 
 **The pixels are the owner's call, not the agent's.** Candidates are judged in **Studio → Log
 Marks**, a catalog category reached by clicking its tab
-([ADR-0058](0058-every-route-is-click-reachable.md)). A seat selector picks which of the seven
+([ADR-0058](0058-every-route-is-click-reachable.md)). A seat selector picks which of the eight
 is being decided; every candidate for it is drawn on the **real log rows at the real 18px
 seat**, beside the marks already installed for the others. A mark this small cannot be judged
 from its 64px art — a headstone that reads beautifully at native size can arrive at the seat as
@@ -133,7 +135,7 @@ should be judged by sight rather than described.
   twelve line kinds lost their opening clause.
 - `LogEntry.marks` is additive and optional, so a persisted match resumes with its old rows
   unmarked and shows their full original sentences. No `PersistedMatch` version bump and no Run
-  save migration follows — this is presentation plus seven additive live-media slots, each
+  save migration follows — this is presentation plus eight additive live-media slots, each
   recoverable by retiring it.
 - **A gold row needs a TRANSACTION mark, not a resource mark.** The Run’s `RunGoldIcon` means
   “gold” and states no direction, so drawing it on a payout put a bare number under an
@@ -151,20 +153,40 @@ should be judged by sight rather than described.
   ADR-0511) was considered first and rejected by the owner as too vague. Its slot is retired in
   the database and refuses uploads with `media_slot_retired`, so restoring it would have been a
   migration; the new mark is additive and needed none.
-- **Defeat is decided and installed:** option 115 of the plain family, content
-  `ce39f7df…282deeab9`, native 49x49, accepted into `ui/kit/icons/game/defeat.png` and bound
-  to `ui-kit-icons-game-defeat-png`. Every defeat line in the Event Log paints it. Six seats
-  remain open.
+- **All eight seats are decided and live.** Every one is an `accepted` version on an `active`,
+  production-eligible slot, and production serves those exact bytes:
+
+  | seat | picture | option | content | native |
+  | --- | --- | --- | --- | --- |
+  | `victory` | gold trophy | 01 | `1dbead0f…` | 51×51 |
+  | `defeat` | plain headstone | 115 | `ce39f7df…` | 49×49 |
+  | `draw` | balance scales | 12 | `c0fd3b14…` | 58×58 |
+  | `checkmate` | the notation `#` | 04 | `fa2fb785…` | 59×59 |
+  | `resign` | a handshake | 103 | `10ebbc1d…` | 62×62 |
+  | `check` | the notation `+` | 11 | `f6749b26…` | 54×54 |
+  | `gold` | coin stack, green plus | 01 | `feaaf0a0…` | 48×48 |
+  | `gold-loss` | coin stack, red minus | 01 | `198bd7fb…` | 53×53 |
+
+  Both notation glyphs were picked over the pictorial alternative offered beside them (a blade
+  across the crown for `check`, a toppled king for `checkmate`), and picked consistently: the
+  row directly above an ending already ends in `+` or `#`, so the mark repeats the score sheet
+  rather than translating it.
+- **Four families were ruled out before these, and each is recorded rather than merely dropped**
+  — in the batch-id map in `frontend/src/ui/BattleLogMarkCatalog.tsx`, with the reason, so none
+  of them gets re-proposed by an agent that never saw the review. The rule that came out of it:
+  **one batch is one concept**, because two concepts sharing a batch cannot be retired apart.
 - Acceptance refuses bytes that do not state they are native 1x, and the first upload pass
   omitted `nativeEvidence` entirely — so EVERY seat would have failed at Install, not just the
-  one that was tried first. All 128 candidates now carry it. The claim is true of these:
+  one that was tried first. All candidates carry it now. The claim is true of these:
   PixelLab generates at 64x64 and `trimToInkSquare` only crops and pads, so the uploaded bytes
   are the source at 1x.
-- Until the owner installs one per seat, every forged mark renders its reserved empty seat —
-  and because an ending row’s whole text is now its marks, those rows are blank end to end.
-  That is the contract working, and it is also why the review page previews the first candidate
-  wherever nothing is installed: a page of empty boxes demonstrates nothing.
-- The vocabulary is a list, so a fifth mark is a variant rather than a second seat. Whatever is
+- The reserved-seat contract is what let the art land one seat at a time over a day of review
+  without the log moving under it. While a seat was open its mark rendered as an empty 18px box,
+  and because an ending row’s whole text is now its marks, those rows were blank end to end —
+  the contract working, and also why the review page previews the first candidate wherever
+  nothing is installed: a page of empty boxes demonstrates nothing. That preview path stays,
+  because retiring a mark puts a seat back in exactly that state.
+- The vocabulary is a list, so a NEW mark is a variant rather than a second seat. Whatever is
   added must pass the same test: does it REPLACE a word, and does the game already draw it?
 - `verify:icon-seats` now covers four rules rather than two, and will fail if either untrimmed
   title-bar glyph is re-uploaded with different ink.
@@ -178,10 +200,12 @@ should be judged by sight rather than described.
   Batches: `battle-log-defeat-mark-2026-08-12-v2` (16 headstones) and
   `battle-log-marks-2026-08-12-v1` (16 chess plus signs and 16 threatened crowns for `check`,
   16 laurel wreaths, 16 balance scales).
-- **Check is offered as two concepts deliberately.** The chess plus is the symbol the notation
+- **Check was offered as two concepts deliberately.** The chess plus is the symbol the notation
   directly above the row already ends in; the threatened crown is the fact rather than its
   notation. Both read at 18px, and which one belongs in a log that is already full of `+` is a
-  judgement about the whole surface, not about the art.
+  judgement about the whole surface, not about the art. The owner took the plus, which is also
+  what `checkmate` had already settled: the two seats now carry `+` and `#`, the same pair the
+  score sheet one column to the right is written in.
 - The first VICTORY family was laurel wreaths, and a wreath is already the Ataraxia mark — the
   Battle’s win would have worn the Run’s ladder emblem. Retired for a gold trophy and a King
   still standing (the grave’s opposite), offered together. Retiring it is also why the page’s
@@ -195,3 +219,15 @@ should be judged by sight rather than described.
   64px and fails at the seat, where a horizontal piece collapses into a blue smear with a gold
   blob. That is a legibility fact about this seat, recorded so the idea is not re-attempted at
   this size without re-checking it.
+- **`resign` took three families, and the reasons are worth keeping.** White flags went first:
+  a flag is warfare rather than chess, it collides with the objective flag a few rows up, and
+  Lichess draws resign that way and carries a standing complaint that players read it as a
+  peace offer (lichess-org/lila#12306, whose own suggested replacement is the toppled king).
+  The replacement pair was a tipped king and a handshake; the handshakes arrived in blue steel
+  gauntlets because the agent had invented a rule that a kit icon "should" be blue and gold.
+  **There is no such rule** — [ADR-0014](0014-ui-chrome-low-fidelity-aesthetic.md) owns a palette
+  BUDGET, not a hue, and the set already carries red, green and white wherever colour means
+  something. Skin is what makes a hand read as a hand, and armouring it left one blue mass
+  where two hands should separate. The installed mark is redrawn with real skin, two tones so
+  the grip reads, and cuffs in `--skirmish-blue` and `--skirmish-red` — the two sides' own
+  colours, the same pair the log's side rails use one column to the left.
