@@ -40,10 +40,27 @@ import { StudioCatalogCard } from './studio/StudioCatalogCard';
  * could only retire a family by taking its unrelated siblings with it. The bytes stay uploaded
  * and unaccepted either way; nothing here deletes anything.
  *
- * Two families have been ruled out so far, and both are recorded rather than merely dropped:
+ * ONE BATCH IS ONE CONCEPT. Two concepts sharing a batch cannot be told apart here, so ruling
+ * one out means re-uploading the survivor under its own id — which is exactly what the resign
+ * seat cost. Generate a second concept into a second batch.
+ *
+ * Four families have been ruled out so far, and each is recorded rather than merely dropped:
  * - `battle-log-defeat-mark-2026-08-11-v1` — every headstone carried a cross on its face.
  * - the laurel wreaths in `battle-log-marks-2026-08-12-v1` — a wreath is already the Ataraxia
  *   mark, so the Battle's victory would have worn the Run's ladder emblem.
+ * - the white flags in `battle-log-cause-marks-2026-08-12-v1` — a white flag is a surrender
+ *   symbol borrowed from warfare rather than anything chess does, and it collides with the
+ *   objective flag a few rows up. Lichess draws resign as a flag and carries a standing
+ *   complaint that players read it as a peace offer and click it meaning to offer a draw
+ *   (lichess-org/lila#12306, whose suggested replacement is the toppled king).
+ * - the handshakes in `battle-log-resign-mark-2026-08-12-v2` — drawn in blue steel gauntlets
+ *   because a kit icon "should" be blue and gold, which is an observation about what the set
+ *   happens to depict, not a rule. Skin is what makes a hand read as a hand, and armouring it
+ *   threw that away, leaving one blue mass where two hands should separate. The set already
+ *   carries red, green and white wherever colour means something — ADR-0014 owns a palette
+ *   BUDGET, not a hue. Redrawn in `…-handshake-2026-08-12-v3` with real skin, two tones so the
+ *   grip reads, and cuffs in `--skirmish-blue` and `--skirmish-red`: the two sides' own colours,
+ *   the same pair the log's side rails use one column to the left.
  */
 export const BATTLE_LOG_MARK_BATCH_IDS: Readonly<Record<BattleLogForgedMark, readonly string[]>> =
   Object.freeze({
@@ -51,7 +68,10 @@ export const BATTLE_LOG_MARK_BATCH_IDS: Readonly<Record<BattleLogForgedMark, rea
     defeat: ['battle-log-defeat-mark-2026-08-12-v2'],
     draw: ['battle-log-marks-2026-08-12-v1'],
     checkmate: ['battle-log-cause-marks-2026-08-12-v1'],
-    resign: ['battle-log-cause-marks-2026-08-12-v1'],
+    resign: [
+      'battle-log-resign-tipped-king-2026-08-12-v3',
+      'battle-log-resign-handshake-2026-08-12-v3',
+    ],
     check: ['battle-log-marks-2026-08-12-v1'],
     gold: ['battle-log-gold-mark-2026-08-12-v1'],
     'gold-loss': ['battle-log-gold-loss-mark-2026-08-12-v1'],
@@ -447,13 +467,13 @@ export function BattleLogMarkControls({ state }: { state: BattleLogMarkState }):
       <p className="tileset-catalog-note">
         A mark REPLACES the words that classified its line, because a glyph is read faster than a
         word. An ending takes an outcome and a cause, and between them the row needs no words at
-        all. Seven seats need art; the clock, the objective flag and the two coins are already
-        installed elsewhere and the log borrows those. Each option is drawn on the real rows at
-        the real 18px seat. Nothing is installed until you install one — until then the rows
-        above preview option 01.
+        all. Eight seats need art; the clock and the objective flag are already installed
+        elsewhere and the log borrows those. Each option is drawn on the real rows at the real
+        18px seat. All eight are decided and live — installing another option here replaces what
+        the game draws now, and every seat shows its installed mark until you do.
       </p>
-      {/* The same labelled select the Studio picks its category with — four seats need
-          deciding and this page shows one at a time, which is a choice, not a toggle. */}
+      {/* The same labelled select the Studio picks its category with — eight seats, shown one
+          at a time, because each is its own decision rather than a toggle. */}
       <label className="tileset-category-select" title="Which Event Log mark this page is choosing">
         <span>Seat</span>
         <select
