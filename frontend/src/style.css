@@ -10247,6 +10247,32 @@ body.loading-bootstrap .app-startup-status {
   .skirmish-screen {
     grid-template-rows: var(--app-header-h) minmax(520px, 62vh) max-content;
   }
+  /* No frame on the stacked panel: the marble IS the panel here.
+
+     The offscreen-rails contract reduces this frame to a LEFT rail, which is right for the
+     desktop dock -- docked right, the left edge is the only interior one. Stacked full width
+     under the board there is no interior edge at all, so that rail became a stripe down one
+     side with no top to meet, and the frame read as unfinished rather than absent.
+
+     Width is what this view has least of, and a frame costs it on both sides for nothing.
+     Drop the rails and let the installed surface reach the edges; the panel is still the
+     registered outer box, still wearing its own fill, with no chrome hand-rolled in its place.
+     (No apostrophes in this comment: check-ui-surface-contract splits declarations without
+     stripping comments and treats one as a string quote, hiding every declaration after it.) */
+  :root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel]::before {
+    border-width: 0 !important;
+    border-image-width: 0 !important;
+  }
+  /* Nothing is drawn on any edge now, so nothing covers what reaches them: the inset that
+     held the fill back under a rail would otherwise show as a strip of backdrop, and the head
+     would clear itself by rails that are no longer there. */
+  [data-shell-controls-panel] {
+    --le-outer-fill-box-left: 0px;
+    --le-outer-fill-box-right: 0px;
+    --shell-controls-frame-cover-start: 0px;
+    --shell-controls-frame-cover-end: 0px;
+  }
+
   .skirmish-hud-panel {
     flex: none;
     overflow: visible;
