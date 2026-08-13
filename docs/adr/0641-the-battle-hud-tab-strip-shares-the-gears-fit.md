@@ -135,6 +135,23 @@ and declares ONE fraction for all five marks — which is the fit's payoff: no t
 its own. Measured after: every mark 20.0px against the title marks' 22.0px, on seats of 20px and
 27px.
 
+**The compensated box must land on WHOLE pixels.** 20 / 0.8125 is 24.6154, and the first pass used
+it raw — a fractional box centred by a fractional margin. The compartment tracks are themselves
+fractional (measured 58.438, 62.563, 66.109 across window widths), so the mark landed on a different
+device-pixel grid at every width, and with `image-rendering: pixelated` its RENDERED SIZE was
+measured jumping between 24px and 25px across eight widths. That reads as the glyph shifting inside
+its button, intermittently, with nothing having changed — and it is what the owner reported. The
+canvas is now `round(…, 2px)`, which keeps both the box and the half taken off each side whole, so
+the mark occupies the same pixels wherever its compartment lands. The declared fraction stays the
+ART's own; only the box is snapped.
+
+A residual difference survives and is **pre-existing, not introduced here**: because the tracks are
+fractional, a `pixelated` 64→24 downscale still resamples very slightly differently at some widths.
+Measured across eight widths, the old uncompensated 20px box produced six distinct renderings and
+the snapped box produces seven at ONE constant size — the whole-pixel jump is gone, the sub-pixel
+resample is not. Removing it means making the head's tracks land on whole pixels, which is shared
+chrome (ADR-0569) and a wider change than this decision.
+
 **`verify:icon-seats` had to learn that a seat can pin its HEIGHT.** Its `fill` is the LONG axis over
 the canvas, and those are different numbers for a mark wider than it is tall: the pawn pair is 60×52
 on a 64px canvas — 94% across, 81% down. Registering the strip against the long axis demanded `.9375`,

@@ -5470,11 +5470,20 @@ body.loading-bootstrap .app-startup-status {
    ONE number for the whole strip, and that is the payoff of the fit: every mark here is
    52/64, so no tab declares a fraction of its own. `verify:icon-seats` checks all five
    against the installed bytes, so a mark re-uploaded at another ink height fails loudly
-   instead of quietly reading a different size than its neighbours. */
+   instead of quietly reading a different size than its neighbours.
+
+   The canvas is ROUNDED to an even whole pixel, and that is a bug fix rather than tidiness.
+   20 / 0.8125 is 24.6154, and a fractional box centred by a fractional margin lands on a
+   different device-pixel grid at every rail width — with `image-rendering: pixelated` the mark
+   then RESAMPLES differently, and its rendered size was measured jumping between 24px and 25px
+   across eight window widths. It reads as the glyph shifting inside its button, intermittently,
+   with nothing having changed. Rounding to a 2px step keeps both the box and the half it takes
+   off each side whole, so the mark occupies the same pixels wherever the compartment lands.
+   The declared fraction stays the ART's own (what the gate checks); only the box is snapped. */
 .skirmish-tab-icon {
   --titlebar-mark-ink-fill: .8125;
   --titlebar-mark-seat: 20px;
-  --titlebar-mark-canvas: calc(var(--titlebar-mark-seat) / var(--titlebar-mark-ink-fill, 1));
+  --titlebar-mark-canvas: round(calc(var(--titlebar-mark-seat) / var(--titlebar-mark-ink-fill, 1)), 2px);
   background-position: center;
   background-repeat: no-repeat;
   background-size: contain;

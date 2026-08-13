@@ -5230,14 +5230,6 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": "/* Icon-based tab glyphs — reused curated kit icons (ADR-0011/0032), full-colour on the dark panel like the count-pip rooks. Sized to sit inside the 44px kit frame. The seat carries the SAME ink-fraction compensation the title bar's mark seats use (see `--titlebar-mark-canvas` above): the box grows by 1/fill and bleeds the surplus back out with a negative margin, so the drawn INK lands on the 20px seat while the layout footprint stays 20px. Without it a mark fitted to 52px of ink on a 64px canvas drew at 81% — measured 16.3px against the 22px the Strategikon marks two inches above it draw, on one screen (ADR-0641). ONE number for the whole strip, and that is the payoff of the fit: every mark here is 52/64, so no tab declares a fraction of its own. `verify:icon-seats` checks all five against the installed bytes, so a mark re-uploaded at another ink height fails loudly instead of quietly reading a different size than its neighbours. */ .skirmish-tab-icon",
-      "surfaceHash": "fc04880a02d75f534958e7e194caae2d6eb6f612efe4a1d514816d195d3d311d",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
       "selector": "/* Inner chrome role: buttons, toggles, selects, text wells, and small line boxes inherit the same rail weight instead of each component tuning its own pixels. */ .level-editor-screen .settings-chrome-button, .level-editor-screen .settings-toggle, .level-editor-screen .settings-stepper .settings-chrome-button",
       "surfaceHash": "a2a0242581e72ffa8b52ea021bbfed55b9d33a600cf0ab62af1cb6a03382b567",
       "occurrence": 1
@@ -5552,6 +5544,14 @@
       "context": "",
       "selector": "keyboard focus keeps a real outline. */ .skirmish-roster-slot.active",
       "surfaceHash": "62b82020d10a6a8c2bc58c993e1de07cb1d9aecd2373c1068a6ac3565f87bb4d",
+      "occurrence": 1
+    },
+    {
+      "kind": "css",
+      "file": "src/style.css",
+      "context": "",
+      "selector": "only the box is snapped. */ .skirmish-tab-icon",
+      "surfaceHash": "fc04880a02d75f534958e7e194caae2d6eb6f612efe4a1d514816d195d3d311d",
       "occurrence": 1
     },
     {
