@@ -22,7 +22,8 @@ export const MM_LIVE = { btnH: 61, railW: 322, gap: 11, icon: 64, textX: 16, btn
 //             — the ONE shipped treatment: a hard drop shadow straight down, zero blur. It reads
 //             as a dark edge UNDER the glyphs and nothing on the other three sides.
 //   stroke* → .settings-tab strong { -webkit-text-stroke: <width> <colour> } with
-//             `paint-order: stroke fill` — auditioned in the tuner and baked at 5px. The label
+//             `paint-order: stroke fill` — auditioned in the tuner, then set to a whole brick
+//             of the house font (4px at the 32px tier these labels use). The label
 //             boxes must not clip for it to paint (see .settings-tab-label), which mmLive.test.ts
 //             guards too: an outline plus a clip is an outline sheared off the first letter.
 export const MM_LABEL_LIVE = {
@@ -31,7 +32,9 @@ export const MM_LABEL_LIVE = {
   shadowBlur: 0,
   shadowColor: '#02070b',
   outline: 'stroke',
-  strokeW: 5,
+  // In bricks, not screen pixels: the stroke is centred, so width/2 paints outside, and every
+  // label wearing it is 32px where the house font's brick is 2px. 4px = one brick outside.
+  strokeW: 4,
   strokeColor: '#02070b',
 } as const;
 

@@ -3,6 +3,7 @@ import { readAdminBattleHref } from '../admin/battleRoute';
 import { type AdminBattleMode } from '../game/store';
 import { useSkirmish } from '../game/SkirmishStoreContext';
 import { authorizeAdminPlaytest } from '../net/adminPlaytest';
+import { goReauthenticate, isReauthenticationRequired } from '../net/auth';
 import { acquireLipsanon, grantGold, LIPSANON_BY_ID, RUN_LIPSANA, type LipsanonId } from '../run/model';
 import { useActiveRun } from '../run/store';
 import { navigateApp, readValidatedReturnTo } from './navigation';
@@ -38,6 +39,30 @@ export function AdminControls({
   const [lipsanonId, setLipsanonId] = useState<LipsanonChoice>('');
   const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState('');
+  const [needsReauthentication, setNeedsReauthentication] = useState(false);
+
+  /**
+   * The server's step-up challenge is not a failed control and not a sign-out: the session is
+   * alive and the credentials behind it are simply older than the eight-hour admin window
+   * (ADR-0576). Reporting it as `authorize-admin-playtest failed (401):
+   * insufficient_user_authentication` told the owner nothing and left no way out — the account
+   * menu's re-authenticate item is offered from `/api/auth/me`, so it is absent on exactly the
+   * page that was loaded while the window was still open and went stale in front of them.
+   */
+  const reportActionFailure = (error: unknown, fallback: string): void => {
+    if (isReauthenticationRequired(error)) {
+      setNeedsReauthentication(true);
+      setStatus('');
+      return;
+    }
+    setStatus(error instanceof Error ? error.message : fallback);
+  };
+
+  const beginAction = (action: string): void => {
+    setBusy(action);
+    setStatus('');
+    setNeedsReauthentication(false);
+  };
 
   useEffect(() => {
     if (isAdmin && !runHydrated) void hydrateRun();
@@ -59,15 +84,14 @@ export function AdminControls({
 
   const armBattleAction = async (mode: AdminBattleMode): Promise<void> => {
     if (battleUnavailable || !battleHref) return;
-    setBusy(mode);
-    setStatus('');
+    beginAction(mode);
     try {
       await authorizeAdminPlaytest({ action: mode });
       if (!armAdminMode(mode)) throw new Error('The active Battle changed before the control could be armed.');
       if (presentation === 'battle') onBattleArmed?.(mode);
       else navigateApp(battleHref);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'The administrator action could not be authorized.');
+      reportActionFailure(error, 'The administrator action could not be authorized.');
     } finally {
       setBusy(null);
     }
@@ -81,14 +105,13 @@ export function AdminControls({
       setStatus('Enter a positive whole gold amount.');
       return;
     }
-    setBusy('gain-gold');
-    setStatus('');
+    beginAction('gain-gold');
     try {
       await authorizeAdminPlaytest({ action: 'gain-gold', amountTenths });
       replaceRun(grantGold(run, amountTenths));
       setStatus(`Granted ${amountTenths} gold.`);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Gold could not be granted.');
+      reportActionFailure(error, 'Gold could not be granted.');
     } finally {
       setBusy(null);
     }
@@ -96,8 +119,7 @@ export function AdminControls({
 
   const gainLipsanon = async (): Promise<void> => {
     if (!run || !lipsanonId) return;
-    setBusy('gain-lipsanon');
-    setStatus('');
+    beginAction('gain-lipsanon');
     try {
       await authorizeAdminPlaytest({
         action: 'gain-lipsanon',
@@ -109,7 +131,7 @@ export function AdminControls({
       setStatus(`Granted ${LIPSANON_BY_ID[lipsanonId].name}.`);
       setLipsanonId('');
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'The lipsanon could not be granted.');
+      reportActionFailure(error, 'The lipsanon could not be granted.');
     } finally {
       setBusy(null);
     }
@@ -136,6 +158,25 @@ export function AdminControls({
       </SettingsSection>
     );
   }
+
+  // One footer for both presentations. The step-up takes priority over any leftover status: it is
+  // the only outcome the owner cannot act on from here, so it carries its own way out. A full-page
+  // trip through the provider is safe mid-Battle — the live board is persisted and a reload resumes
+  // the exact position (game/matchPersistence) — so this needs no warning attached.
+  const statusNote = needsReauthentication ? (
+    <div className="admin-control-status admin-control-reauth" role="status" data-testid="admin-reauthentication-required">
+      <span>Administrator actions need a sign-in from the last eight hours. You are still signed in.</span>
+      <SettingsButton
+        tone="primary"
+        onClick={() => goReauthenticate()}
+        data-testid="admin-reauthenticate"
+      >
+        Sign in again
+      </SettingsButton>
+    </div>
+  ) : status ? (
+    <p className="admin-control-status" role="status">{status}</p>
+  ) : null;
 
   const battleDescription = net
     ? 'Live multiplayer is server-sequenced; client-only interventions are disabled to prevent a desync.'
@@ -261,7 +302,7 @@ export function AdminControls({
             </InnerChromeBox>
           </div>
         </div>
-        {status ? <p className="admin-control-status" role="status">{status}</p> : null}
+        {statusNote}
       </div>
     );
   }
@@ -358,7 +399,7 @@ export function AdminControls({
           </div>
         </SettingsRow>
       </SettingsSection>
-      {status ? <p className="admin-control-status" role="status">{status}</p> : null}
+      {statusNote}
     </>
   );
 }

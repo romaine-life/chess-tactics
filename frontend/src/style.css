@@ -1982,9 +1982,20 @@ h1 {
      destination slabs a click behind them (Play's Run cards, the Editor's level list) — they sit
      on the same wood in the same shell, so plain text there reads as a mismatch, not hierarchy.
      Everything that clips a label has to make room for it; see .settings-tab-label. Small utility
-     buttons (Reset, Open) deliberately do NOT take it — 5px closes their smaller text solid.
-     MM_LABEL_LIVE mirrors both values and mmLive.test.ts derives them back out of here. */
-  --menu-label-stroke-w: 5px;
+     buttons (Reset, Open) deliberately do NOT take it — it closes their smaller text solid.
+     MM_LABEL_LIVE mirrors both values and mmLive.test.ts derives them back out of here.
+     WIDTH IS IN BRICKS, NOT SCREEN PIXELS. The stroke is centred on the glyph outline, so half
+     of it paints outside; the visible outline is therefore width/2. Every label that wears this
+     is at --ds-text-lg (32px), where the house font's brick is 2px, so 4px puts exactly ONE
+     brick outside the glyph. It was 5px, which put 1.25 bricks outside — an outline a quarter
+     of a stroke thicker than the strokes it surrounds, which is why these labels read as soft
+     however correctly the type itself is set. Mixing the font's unit with the screen's is the
+     defect; if a consumer at another tier ever takes this, it needs its own brick-correct value. */
+  --menu-label-stroke-w: 4px;
+  /* What the eye actually sees of that stroke: half of it, because the stroke is centred.
+     Anything that has to MATCH the label's outline — a sprite outlined with drop-shadows,
+     which paint entirely outside — reads this one, not the width above. */
+  --menu-label-stroke-outside: 2px;
   --menu-label-stroke-ink: #02070b;
   /* Spatial-role tokens (ADR-0031) — COMFORTABLE density is the default; in-game
      surfaces override these to the tight end (see .skirmish-screen). inset = padding
@@ -19055,7 +19066,7 @@ button.tileset-relationship-cell {
    and had no room of its own — so the editor's War and Levels tabs still lost the left of every
    word while the main menu's labels, which do not clip at all, looked right. */
 .apparatus-tab-copy {
-  --tab-label-stroke-apron: var(--menu-label-stroke-w, 5px);
+  --tab-label-stroke-apron: var(--menu-label-stroke-w, 4px);
   align-content: center;
   display: grid;
   gap: 2px;
@@ -19855,6 +19866,18 @@ button.tileset-relationship-cell {
   width: var(--settings-tab-icon-size);
   image-rendering: pixelated;
   object-fit: contain;
+  /* The label beside this mark wears a dark outline one brick thick (see
+     --menu-label-stroke-w); the mark wore none at all, so the two read as belonging to
+     different pictures — the text sat in the wood and the sprite floated on it. Four
+     chained drop-shadows trace the sprite's own alpha at the same thickness, in the same
+     ink, so mark and label share one edge treatment. Chained rather than listed: each
+     shadow applies to the accumulated result, which fills the diagonals a four-way list
+     would leave open. */
+  filter:
+    drop-shadow(var(--menu-label-stroke-outside) 0 0 var(--menu-label-stroke-ink))
+    drop-shadow(calc(-1 * var(--menu-label-stroke-outside)) 0 0 var(--menu-label-stroke-ink))
+    drop-shadow(0 var(--menu-label-stroke-outside) 0 var(--menu-label-stroke-ink))
+    drop-shadow(0 calc(-1 * var(--menu-label-stroke-outside)) 0 var(--menu-label-stroke-ink));
   /* Grow from a FIXED centre at any size (margin:auto/grid would anchor an oversized glyph). */
   position: absolute;
   left: 50%;
@@ -20378,6 +20401,16 @@ button.tileset-relationship-cell {
   font-size: var(--ds-text-sm);
   margin: 0;
   padding-inline: var(--ds-space-2);
+}
+
+/* The step-up footer carries its own way out, so it is a row rather than a sentence: the
+   explanation and the button that answers it read as one statement. Wraps because the battle
+   presentation's panel is far narrower than the settings tab's. */
+.admin-control-reauth {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
 }
 
 .settings-chrome-button {
