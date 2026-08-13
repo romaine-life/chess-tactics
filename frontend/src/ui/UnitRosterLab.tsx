@@ -242,6 +242,12 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
             ? 'Camera zoom 100% — every sprite is authored at this size.'
             : `Camera zoom ${Math.round(tierZoom * 100)}% — what a player sees at this tier.`}
         </p>
+        {/* A shape complaint about this page cannot be settled from a screenshot taken
+            somewhere else: an OS scale factor, a browser zoom, or a fractional device
+            ratio all change what the panel physically draws while every number in the
+            source stays correct. So the page states what THIS browser did — measured off
+            the rendered boxes and the drawn pixels, not recomputed from the inputs. */}
+        <RosterGeometryReadout />
       </div>
 
       <div
@@ -374,4 +380,59 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
       </div>
     </div>
   );
+}
+
+/**
+ * What this browser actually drew, measured rather than derived.
+ *
+ * Every disagreement about a unit's shape on this page so far has come from
+ * comparing a capture taken at one device pixel ratio against a screen running at
+ * another. The inputs were right in both, so reading the source could not settle it.
+ * This reads the rendered geometry back out: the ratio in force, the box the seat
+ * occupies, and the ASPECT of the drawn ink against the aspect of the source sprite.
+ * A piece that reads wide shows up here as an aspect above the source's.
+ */
+function RosterGeometryReadout(): ReactElement | null {
+  const [text, setText] = useState<string | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    let stop = false;
+    const measure = (): void => {
+      if (stop) return;
+      const canvas = document.querySelector<HTMLCanvasElement>('.unit-roster-unit-slot canvas');
+      const tile = document.querySelector<HTMLImageElement>('img.unit-roster-ground');
+      if (!canvas || !tile) { window.setTimeout(measure, 400); return; }
+      const box = canvas.getBoundingClientRect();
+      const tileBox = tile.getBoundingClientRect();
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      let inkAspect = 'n/a';
+      if (context && canvas.width && canvas.height) {
+        const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+        let x0 = canvas.width, x1 = -1, y0 = canvas.height, y1 = -1;
+        for (let y = 0; y < canvas.height; y += 1) {
+          for (let x = 0; x < canvas.width; x += 1) {
+            if (data[(y * canvas.width + x) * 4 + 3] > 24) {
+              if (x < x0) x0 = x;
+              if (x > x1) x1 = x;
+              if (y < y0) y0 = y;
+              if (y > y1) y1 = y;
+            }
+          }
+        }
+        if (x1 >= x0 && y1 >= y0) inkAspect = `${x1 - x0 + 1}x${y1 - y0 + 1} = ${((x1 - x0 + 1) / (y1 - y0 + 1)).toFixed(3)}`;
+      }
+      setText([
+        `devicePixelRatio ${window.devicePixelRatio}`,
+        `canvas box ${Math.round(box.width)}x${Math.round(box.height)} css, store ${canvas.width}x${canvas.height}`,
+        `tile box ${Math.round(tileBox.width)} css`,
+        `unit/tile ${(box.width / tileBox.width).toFixed(3)} (board draws 0.531)`,
+        `drawn ink ${inkAspect}`,
+      ].join('  ·  '));
+      window.setTimeout(measure, 1500);
+    };
+    measure();
+    return () => { stop = true; };
+  }, []);
+  if (!text) return null;
+  return <p className="unit-roster-note" style={{ opacity: 0.85 }}>{text}</p>;
 }
