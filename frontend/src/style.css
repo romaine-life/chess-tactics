@@ -27467,10 +27467,22 @@ button.tileset-relationship-cell {
   }
   /* The toggle is a strip control, not a body one: it stays put while the body goes. Above
      the narrow band there is no dock and nothing to reclaim, so it is not shown at all. */
+  /* Sized like the marks it sits beside — .strategikon-title-navigation gives its own
+     actions 24px, and this shares their row. The glyph is drawn into that square with
+     `contain`, the ordinary seat mechanism, so the art is never rescaled by a background
+     declaration and never dictates the footprint. */
   .shell-controls-collapse {
     display: inline-flex;
-    min-block-size: 32px;
-    padding-inline: var(--ds-space-2);
+    block-size: 24px;
+    inline-size: 24px;
+    flex: none;
+  }
+  .shell-controls-collapse-glyph {
+    block-size: 100%;
+    image-rendering: pixelated;
+    inline-size: 100%;
+    object-fit: contain;
+    pointer-events: none;
   }
 
   /* The board viewport is LOCKED. It is a camera — it pans and zooms in place — so the page
