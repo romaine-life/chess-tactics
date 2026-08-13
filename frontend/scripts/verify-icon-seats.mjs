@@ -31,7 +31,15 @@ const TOLERANCE = 0.01;
  * `baseline: true` marks a rule in a row that shares a BOTTOM edge, not merely a box.
  * Those also declare --titlebar-mark-ink-below — the fraction of the canvas under the
  * ink — and it is checked here for the same reason the fill is: a re-upload that moves
- * the glyph inside its canvas lifts it off the row with nothing pointing at the cause. */
+ * the glyph inside its canvas lifts it off the row with nothing pointing at the cause.
+ *
+ * `axis: 'height'` marks a seat whose declared fraction is the ink HEIGHT rather than its long
+ * axis. Those are not the same number: a mark wider than it is tall spends the fit on its width,
+ * so the Battle HUD's pawn pair is 60x52 on a 64px canvas — 94% across and 81% down. A seat that
+ * pinned the HEIGHT (ADR-0560's fit, so a column of marks shares one top and bottom margin) must
+ * be checked against 81%, and checking it against 94% would demand a number that draws every
+ * OTHER mark in the strip too small. Default is the long axis, which is what the title bar's own
+ * seats compensate for. */
 const DECLARED = [
   { rule: '.skirmish-clock .skirmish-icon', slot: 'ui/kit/icons/game/wait.png' },
   { rule: '.skirmish-objective .skirmish-icon', slot: 'ui/kit/icons/game/objective.png' },
@@ -46,6 +54,17 @@ const DECLARED = [
   { rule: '[data-strategikon-section="prosopography"] img', slot: 'ui/kit/icons/unit-studio.png', baseline: true },
   { rule: '[data-strategikon-section="lipsanotheca"] img', slot: 'ui/kit/icons/info.png', baseline: true },
   { rule: '.skirmish-hud-title-action-glyph', slot: 'ui/kit/icons/studio-catalog.png', baseline: true },
+  // The Battle HUD's tab strip. All five share ONE declaration on `.skirmish-tab-icon`, because
+  // all five are fitted to the same 52px of ink (ADR-0641) — so five entries here check five sets
+  // of bytes against that single number, which is exactly the claim being made. A mark re-uploaded
+  // at a different ink height reads a different size than the four beside it, and this is what
+  // says so. No `baseline`: the seat is a centred box in its compartment, not a row sharing a
+  // bottom edge, so there is no bottom edge to fall off.
+  { rule: '.skirmish-tab-icon', slot: 'ui/kit/icons/unit-studio.png', axis: 'height' },
+  { rule: '.skirmish-tab-icon', slot: 'ui/kit/icons/players.png', axis: 'height' },
+  { rule: '.skirmish-tab-icon', slot: 'ui/kit/icons/info.png', axis: 'height' },
+  { rule: '.skirmish-tab-icon', slot: 'ui/kit/icons/monitor.png', axis: 'height' },
+  { rule: '.skirmish-tab-icon', slot: 'ui/kit/icons/gear.png', axis: 'height' },
 ];
 
 /**
@@ -83,6 +102,9 @@ function inkFill(bytes) {
   const h = maxY - minY + 1;
   return {
     fill: Math.max(w, h) / Math.max(png.width, png.height),
+    // The HEIGHT fraction is a different number from the long-axis one whenever a mark is wider
+    // than it is tall, and which one a seat compensates for depends on which one it pinned.
+    heightFill: h / png.height,
     below: (png.height - (maxY + 1)) / png.height,
     ink: `${w}x${h} at (${minX},${minY})`,
     canvas: `${png.width}x${png.height}`,
@@ -97,7 +119,7 @@ const slots = Array.isArray(catalog.slots)
 const bySlot = new Map(slots.map((row) => [row.slot, row]));
 
 const failures = [];
-for (const { rule, slot, baseline } of DECLARED) {
+for (const { rule, slot, baseline, axis } of DECLARED) {
   const declared = declaredInkFill(css, rule);
   const declaredBelow = declaredInkBelow(css, rule);
   const row = bySlot.get(slot);
@@ -105,6 +127,10 @@ for (const { rule, slot, baseline } of DECLARED) {
   const response = await fetch(`${base}/api/media/${row.media.sha256}`);
   if (!response.ok) { failures.push(`${slot}: media ${response.status}`); continue; }
   const measured = inkFill(Buffer.from(await response.arrayBuffer()));
+  const observed = axis === 'height' ? measured.heightFill : measured.fill;
+  // "Trimmed" means the canvas IS the ink, which is a statement about the whole canvas — so it is
+  // read off the long axis whatever a seat pinned. A mark whose height fills the canvas but whose
+  // width does not still carries margin, and still needs its compensation.
   const trimmed = measured.fill >= 1 - TOLERANCE;
   if (trimmed && declared !== null) {
     failures.push(
@@ -116,10 +142,11 @@ for (const { rule, slot, baseline } of DECLARED) {
       `${slot} is untrimmed (ink fills ${(measured.fill * 100).toFixed(0)}% of ${measured.canvas}) `
       + `but ${rule} declares no --titlebar-mark-ink-fill, so it draws small on the shared seat.`,
     );
-  } else if (!trimmed && Math.abs(declared - measured.fill) > TOLERANCE) {
+  } else if (!trimmed && Math.abs(declared - observed) > TOLERANCE) {
     failures.push(
       `${slot}: style.css declares --titlebar-mark-ink-fill: ${declared}, installed bytes measure `
-      + `${measured.fill.toFixed(3)} (${measured.canvas}, ink ${measured.ink}). The art changed; update the rule.`,
+      + `${observed.toFixed(3)} ${axis === 'height' ? 'down' : 'across'} (${measured.canvas}, `
+      + `ink ${measured.ink}). The art changed; update the rule.`,
     );
   }
   if (baseline && !trimmed) {
@@ -138,7 +165,7 @@ for (const { rule, slot, baseline } of DECLARED) {
     }
   }
   console.log(
-    `${slot.padEnd(34)} fill ${String(declared ?? '—').padEnd(6)}/${measured.fill.toFixed(3)}`
+    `${slot.padEnd(34)} fill ${String(declared ?? '—').padEnd(6)}/${observed.toFixed(3)}`
     + `  below ${String(baseline ? declaredBelow ?? '—' : '—').padEnd(6)}/${measured.below.toFixed(4)}`
     + `  ${measured.canvas} ink ${measured.ink}`,
   );

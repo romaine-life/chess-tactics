@@ -118,6 +118,30 @@ it is why the page says so rather than leaving it to be discovered.
 
 - The strip reads at one size. The four marks arrive at ~16px of ink like the gear instead of ~12px,
   which is the difference between a mark and a smudge at this scale.
+### The fit alone did not make the strip match the screen
+
+Installed and measured on the live Battle, every tab mark drew **16.3px of ink in its 20px seat**
+while the Strategikon marks two inches above it drew **22px**. The owner said so before the numbers
+did: *"the icon size is not matching the other icons on the screen."*
+
+The fit was necessary and not sufficient. `background-size: contain` draws the whole 64px canvas, so
+a mark fitted to 52px of ink lands at 81% of its seat by construction — every mark equally, which is
+why the strip was internally consistent and still wrong beside its neighbours. The title bar solved
+this long ago: its seats grow their box by `1 / ink-fill` and bleed the surplus back with a negative
+margin, so the drawn ink lands on the shared seat while the layout footprint does not move.
+
+**The tab seat now uses that same mechanism, not a second one** ([ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)),
+and declares ONE fraction for all five marks — which is the fit's payoff: no tab carries a number of
+its own. Measured after: every mark 20.0px against the title marks' 22.0px, on seats of 20px and
+27px.
+
+**`verify:icon-seats` had to learn that a seat can pin its HEIGHT.** Its `fill` is the LONG axis over
+the canvas, and those are different numbers for a mark wider than it is tall: the pawn pair is 60×52
+on a 64px canvas — 94% across, 81% down. Registering the strip against the long axis demanded `.9375`,
+which would have drawn the other four a fifth too large. Entries now carry `axis: 'height'`, and the
+five tab seats are registered under it, so a mark re-uploaded at another ink height fails loudly
+instead of quietly reading a different size than the four beside it.
+
 - **The owner's picks are installed and live**: Bone knight 11, Bone and ebony pawns 11, Brass
   roundel 04, and Slate viewing plate 01 for View. The spyglass was not taken.
 - **`verify:icon-seats` failed the moment they were installed, which is the gate working**, and its

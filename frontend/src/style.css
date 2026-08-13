@@ -5458,15 +5458,31 @@ body.loading-bootstrap .app-startup-status {
 }
 
 /* Icon-based tab glyphs — reused curated kit icons (ADR-0011/0032), full-colour on
-   the dark panel like the count-pip rooks. Sized to sit inside the 44px kit frame. */
+   the dark panel like the count-pip rooks. Sized to sit inside the 44px kit frame.
+
+   The seat carries the SAME ink-fraction compensation the title bar's mark seats use
+   (see `--titlebar-mark-canvas` above): the box grows by 1/fill and bleeds the surplus
+   back out with a negative margin, so the drawn INK lands on the 20px seat while the
+   layout footprint stays 20px. Without it a mark fitted to 52px of ink on a 64px canvas
+   drew at 81% — measured 16.3px against the 22px the Strategikon marks two inches above
+   it draw, on one screen (ADR-0641).
+
+   ONE number for the whole strip, and that is the payoff of the fit: every mark here is
+   52/64, so no tab declares a fraction of its own. `verify:icon-seats` checks all five
+   against the installed bytes, so a mark re-uploaded at another ink height fails loudly
+   instead of quietly reading a different size than its neighbours. */
 .skirmish-tab-icon {
+  --titlebar-mark-ink-fill: .8125;
+  --titlebar-mark-seat: 20px;
+  --titlebar-mark-canvas: calc(var(--titlebar-mark-seat) / var(--titlebar-mark-ink-fill, 1));
   background-position: center;
   background-repeat: no-repeat;
   background-size: contain;
-  block-size: 20px;
+  block-size: var(--titlebar-mark-canvas);
   display: block;
   image-rendering: pixelated;
-  inline-size: 20px;
+  inline-size: var(--titlebar-mark-canvas);
+  margin: calc((var(--titlebar-mark-seat) - var(--titlebar-mark-canvas)) / 2);
 }
 
 .skirmish-tab-icon-unit { background-image: var(--media-ui-kit-icons-unit-studio-png); }
