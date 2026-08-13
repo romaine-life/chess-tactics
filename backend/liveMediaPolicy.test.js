@@ -8,6 +8,12 @@ const {
   ADLECTIO_MARK_SLOT,
   adlectioMarkMediaIssue,
   adlectioMarkSlot,
+  CONFIRM_MARK_COMPONENT,
+  CONFIRM_MARK_SLOT,
+  CONFIRM_MARK_VARIANT,
+  confirmMarkMediaIssue,
+  confirmMarkReviewSurface,
+  confirmMarkSlot,
   ATARAXIA_NUMERAL_COMPONENT,
   ATARAXIA_NUMERAL_PROOF_RENDERER,
   ATARAXIA_NUMERAL_PROOF_SCHEMA,
@@ -1723,6 +1729,99 @@ const adlectioMarkRow = (overrides = {}) => ({
   metadata: { runtime: { component: ADLECTIO_MARK_COMPONENT, nativeRole: ADLECTIO_MARK_COMPONENT, altText: '' } },
   native_evidence: { inkBox: { width: 61, height: 63 } },
   ...overrides,
+});
+
+const confirmMarkRow = (overrides = {}) => ({
+  slot: CONFIRM_MARK_SLOT,
+  domain: 'ui-kit',
+  role: 'icon',
+  media_type: 'image/png',
+  width: 64,
+  height: 64,
+  metadata: {
+    runtime: {
+      component: CONFIRM_MARK_COMPONENT,
+      nativeRole: CONFIRM_MARK_COMPONENT,
+      variant: CONFIRM_MARK_VARIANT,
+      altText: '',
+    },
+  },
+  native_evidence: { inkBox: { width: 56, height: 51 } },
+  ...overrides,
+});
+
+test('the confirm mark is one registered slot, because it is one act', () => {
+  assert.equal(confirmMarkSlot(CONFIRM_MARK_SLOT), CONFIRM_MARK_VARIANT);
+  assert.equal(confirmMarkSlot('ui/kit/icons/run/new.png'), null);
+  assert.equal(confirmMarkSlot(''), null);
+});
+
+test('the confirm mark keeps the kit canvas and reserves its margin', () => {
+  // The band draws the WHOLE 64x64 canvas at a 40px slot, exactly as a rail tab does, so the
+  // reserved transparent margin IS the optical centring — a trimmed mark would draw LARGER
+  // than the kit icons beside it rather than smaller.
+  assert.equal(confirmMarkMediaIssue(confirmMarkRow()), null);
+  assert.match(
+    confirmMarkMediaIssue(confirmMarkRow({ native_evidence: { inkBox: { width: 64, height: 64 } } })),
+    /reserve canvas margin/,
+  );
+  assert.match(
+    confirmMarkMediaIssue(confirmMarkRow({ native_evidence: { inkBox: { width: 20, height: 18 } } })),
+    /kit optical mass/,
+  );
+  assert.match(confirmMarkMediaIssue(confirmMarkRow({ native_evidence: {} })), /nativeEvidence\.inkBox/);
+  assert.match(confirmMarkMediaIssue(confirmMarkRow({ width: 48, height: 48 })), /64x64 kit icon canvas/);
+  assert.match(confirmMarkMediaIssue(confirmMarkRow({ media_type: 'image/webp' })), /image\/png/);
+  assert.match(confirmMarkMediaIssue(confirmMarkRow({ domain: 'terrain' })), /ui-kit domain/);
+});
+
+test('a confirm mark must say which seat it was authored for', () => {
+  // The rail marks share this slot's geometry exactly, so geometry alone cannot tell the two
+  // apart — without the component the Studio's two review surfaces would offer each other's
+  // candidates and either would install into the wrong seat.
+  assert.match(
+    confirmMarkMediaIssue(confirmMarkRow({
+      metadata: { runtime: { component: 'run-rail-mark', nativeRole: 'run-rail-mark', variant: CONFIRM_MARK_VARIANT, altText: '' } },
+    })),
+    /component must be chrome-confirm-verb/,
+  );
+  assert.match(
+    confirmMarkMediaIssue(confirmMarkRow({
+      metadata: { runtime: { component: CONFIRM_MARK_COMPONENT, nativeRole: 'run-rail-mark', variant: CONFIRM_MARK_VARIANT, altText: '' } },
+    })),
+    /nativeRole must be chrome-confirm-verb/,
+  );
+  assert.match(
+    confirmMarkMediaIssue(confirmMarkRow({
+      metadata: { runtime: { component: CONFIRM_MARK_COMPONENT, nativeRole: CONFIRM_MARK_COMPONENT, variant: 'current', altText: '' } },
+    })),
+    /variant must be confirm/,
+  );
+  assert.match(confirmMarkMediaIssue(confirmMarkRow({ metadata: {} })), /requires metadata\.runtime/);
+  assert.match(
+    confirmMarkMediaIssue(confirmMarkRow({
+      metadata: { runtime: { component: CONFIRM_MARK_COMPONENT, nativeRole: CONFIRM_MARK_COMPONENT, variant: CONFIRM_MARK_VARIANT, altText: '', tone: 'gold' } },
+    })),
+    /unsupported keys: tone/,
+  );
+  // The verb's own word is the accessible name; alt text here would be read out in front of it.
+  assert.match(
+    confirmMarkMediaIssue(confirmMarkRow({
+      metadata: { runtime: { component: CONFIRM_MARK_COMPONENT, nativeRole: CONFIRM_MARK_COMPONENT, variant: CONFIRM_MARK_VARIANT, altText: 'confirm' } },
+    })),
+    /altText must be empty/,
+  );
+});
+
+test('the confirm mark is proved on the surface that mounts the real band', () => {
+  const surface = (href) => confirmMarkReviewSurface(new URL(href), CONFIRM_MARK_SLOT);
+  assert.equal(surface('http://localhost:5173/studio?mode=catalog&cat=confirmmark'), true);
+  assert.equal(surface('http://localhost:5173/studio?mode=catalog&cat=runrailmarks'), false);
+  assert.equal(surface('http://localhost:5173/play'), false);
+  assert.equal(
+    confirmMarkReviewSurface(new URL('http://localhost:5173/studio?cat=confirmmark'), 'ui/kit/icons/run/new.png'),
+    false,
+  );
 });
 
 test('the Adlectio mark is one registered ui-kit slot, not a shape', () => {
