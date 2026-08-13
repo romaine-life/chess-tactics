@@ -18561,9 +18561,16 @@ button.tileset-relationship-cell {
   --titlebar-label-pad-inline: var(--ds-space-4);
   /* Grid relationships and every relationship inside the control lane use this token. */
   column-gap: var(--titlebar-control-gap);
-  /* Page inset is published so the control lane can resolve its final edge to the
-     canonical control gap. */
-  --titlebar-pad-inline: var(--ds-space-6);
+  /* ONE inset from the bar edge, on both axes and at both ends. (No apostrophes in a
+     comment inside a rule that paints: check-ui-surface-contract splits declarations
+     without stripping comments and treats an apostrophe as a string quote, which silently
+     swallows every declaration after it — see the note handed over with this change.) It used to be
+     --ds-space-6 (32px) inline against --ds-titlebar-inset (8px) block, which is why the
+     brand sat 32px from the left while the control cluster sat 8px from the right: two
+     different rhythms in one row, and the lane carried a compensating pull to reconcile
+     them. With one inset that pull resolves to zero on its own — the special case existed
+     only because the two numbers disagreed. */
+  --titlebar-pad-inline: var(--ds-titlebar-inset);
   border: 0;
   padding: var(--ds-titlebar-inset) var(--titlebar-pad-inline) calc(var(--ds-titlebar-inset) + var(--titlebar-rule-h));
   background: none;
@@ -18661,6 +18668,13 @@ button.tileset-relationship-cell {
 .brand-lockup-layout {
   align-items: center;
   color: #eef8ff;
+  /* ONE content line for the bar. The control lane defines it — its origin is the bar's
+     origin and its bottom is the structural divider's top edge — and the brand now sits on
+     the same box instead of centring inside the padding box, which put it 6px lower than
+     every control beside it (shield centre 36 against the cluster's 30). The lane's box is
+     the structural one, so the brand adopts it rather than the other way round. */
+  block-size: calc(var(--app-header-h) - var(--titlebar-rule-h));
+  margin-block: calc(-1 * var(--ds-titlebar-inset)) 0;
   display: inline-grid;
   gap: clamp(10px, calc(var(--layout-vw, 100vw) * .01), 16px);
   grid-template-columns: clamp(40px, calc(var(--layout-vw, 100vw) * .04), 54px) minmax(0, 1fr);
@@ -27217,10 +27231,6 @@ button.tileset-relationship-cell {
      Shrinking the type is not the alternative: the house face's brick is em/16, so the scale
      has exactly two usable sizes (16px and 32px) and the next step down would halve the
      wordmark and cost it the dominance it is supposed to have. */
-  .app-shell-titlebar.settings-header-frame {
-    --titlebar-pad-inline: 12px;
-    padding-inline: var(--titlebar-pad-inline);
-  }
   /* The last few pixels come from inside the lockup rather than from the type: the shield
      takes a smaller size and the gap to the copy tightens, which costs the mark a little
      scale and costs the wordmark nothing.
