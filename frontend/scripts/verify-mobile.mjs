@@ -12,6 +12,7 @@
 //
 // What it measures, per route per device profile:
 //   page-overflow-x   the page scrolls sideways (the classic desktop-layout-on-a-phone tell)
+//   screen-scrolls    a gameplay screen is taller than the device; it must be frozen, not a page
 //   control-obscured  a control's own centre hit-tests to something else — it cannot be tapped
 //   control-cut-off   a control is clipped to under 60% of itself by an ancestor or the viewport
 //   control-offscreen a control's centre lies outside the viewport — unreachable at any scroll
@@ -265,6 +266,41 @@ function measure() {
     });
   }
 
+  // A gameplay screen is FROZEN: it fills the viewport exactly and nothing scrolls it. The board
+  // is elastic and the Controls panel scrolls inside its own capped row, so there is never a
+  // reason for the screen itself to grow past the device.
+  //
+  // Reachability alone will not catch this, which is why it gets its own check: every control on
+  // a scrolling screen is reachable BY SCROLLING, so the audit passed a Deployment whose entire
+  // formation strip and "Begin Battle" sat 730px below the fold of a page nobody would think to
+  // scroll. The Level Editor is exempt — it is a long authoring column and deliberately scrolls.
+  for (const screen of document.querySelectorAll('.skirmish-screen:not(.level-editor-screen)')) {
+    // Only a screen that can actually SCROLL. `scrollHeight` counts clipped descendants too, so
+    // measuring it alone reported a frozen `overflow: hidden` screen as scrolling because a board
+    // canvas overdraws its viewport by 3px. Content that is clipped and unreachable is a real
+    // defect and the reachability checks below are the ones that own it.
+    const scrolls = /auto|scroll/.test(getComputedStyle(screen).overflowY)
+      && screen.scrollHeight > screen.clientHeight + 1;
+    const pageScrolls = document.documentElement.scrollHeight > vh + 1;
+    if (!scrolls && !pageScrolls) continue;
+    const overflow = Math.max(
+      scrolls ? screen.scrollHeight - screen.clientHeight : 0,
+      pageScrolls ? document.documentElement.scrollHeight - vh : 0,
+    );
+    let worst = null;
+    for (const el of screen.querySelectorAll('*')) {
+      const r = el.getBoundingClientRect();
+      if (r.height === 0 || r.bottom <= vh + 1) continue;
+      if (!worst || r.bottom > worst.bottom) worst = { bottom: r.bottom, el };
+    }
+    findings.push({
+      kind: 'screen-scrolls',
+      detail: `gameplay screen is ${overflow}px taller than the device and scrolls`,
+      target: worst ? describe(worst.el) : '(unattributed)',
+      overflow,
+    });
+  }
+
   // Contents of a camera pane are excluded from the REACHABILITY checks below. A board cell
   // sitting off the left edge is not unreachable — the pane pans and zooms, and its cover
   // constraint guarantees any cell can be brought into view — so measuring individual cells
@@ -458,7 +494,10 @@ if (has('json')) {
 }
 
 // ── Report ──────────────────────────────────────────────────────────────────────────────
-const KIND_ORDER = ['page-overflow-x', 'control-offscreen', 'control-cut-off', 'control-obscured', 'stranded-overflow', 'touch-target'];
+// Every kind a route can report. A kind missing from this list is still counted in the route's
+// total and then printed by nothing — the run says "1 issue" and shows no issue, which is how
+// `screen-scrolls` arrived silent on 23 routes the first time it fired.
+const KIND_ORDER = ['page-overflow-x', 'screen-scrolls', 'control-offscreen', 'control-cut-off', 'control-obscured', 'stranded-overflow', 'touch-target'];
 const totals = new Map();
 for (const r of results) for (const f of r.findings ?? []) totals.set(f.kind, (totals.get(f.kind) ?? 0) + 1);
 

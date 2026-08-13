@@ -10273,13 +10273,39 @@ body.loading-bootstrap .app-startup-status {
      makes it fill a full-height rail, and in a content-sized row it resolved to ZERO height —
      which is why the tab panel measured 312x0 while its contents painted outside the frame.
      Stacked, the page is the scroller and the body is simply as tall as what it holds. */
-  /* Say the row's size outright. Restoring the content minimum down the chain does not lift
-     an `auto` track here — the panel, the box inside it and its body each carry
-     `min-block-size: 0` for the desktop rail they belong to, and the track kept resolving to
-     the leftover 205px. `max-content` states the thing directly: this row is as tall as the
-     Controls panel, and the page scrolls to it. */
-  .skirmish-screen {
-    grid-template-rows: var(--app-header-h) minmax(520px, 62vh) max-content;
+  /* FROZEN. A phone gets an application that fills the screen exactly, not a web page you
+     scroll: the board is what is left after the Controls panel, and the panel scrolls inside
+     itself when it holds more than its share.
+
+     The alternative was measured and is worse. Sized `max-content`, the panel grew past the
+     viewport and took the screen with it — 130px of page scroll on a Battle, 360px on a Sectio
+     with "Continue to next Battle" under the fold, and 730px on a Deployment where every
+     formation control AND "Begin Battle" were off the bottom of the screen. Reachable by
+     scrolling, which is why the usability audit passed them, and unfindable in practice.
+
+     So the panel takes its content height CAPPED, and the elastic row is the board. The cap is
+     one number, stated here: below it the panel is exactly as tall as it needs to be, above it
+     the panel's own body scrolls (which is what it does on the desktop rail too).
+
+     STACKED SCREENS ONLY. A phone in landscape is 390px tall and composes in two columns with the
+     Controls as a side rail — a completely different shape, stated in the (max-height: 540px)
+     band far below. Applying the frozen stack there capped a rail that needed to scroll and put
+     48 controls out of reach across 14 routes. `min-height: 541px` is the same boundary that band
+     uses, from the other side, so the two can never both apply. */
+  @media (min-height: 541px) {
+    .skirmish-screen:not(.level-editor-screen) {
+      --mobile-controls-max: 44vh;
+      block-size: 100dvh;
+      grid-template-rows: var(--app-header-h) minmax(0, 1fr) minmax(0, var(--mobile-controls-max));
+      overflow: hidden;
+    }
+
+    /* The board no longer demands 520px. It gets what the panel leaves, and a fitted board simply
+       draws itself smaller — that is what it does at every other size. Left at 520px it forced the
+       screen taller than the viewport again, which is the scroll this section exists to remove. */
+    .skirmish-screen:not(.level-editor-screen) .skirmish-war-room {
+      min-height: 0;
+    }
   }
 
   /* The stacked panel has no frame. That is declared in the tree now, by ShellControlsPanel from
@@ -10288,13 +10314,50 @@ body.loading-bootstrap .app-startup-status {
      time to the offscreen-rails contract below, which sets the same property at the same
      specificity with the same `!important` and simply comes later in the file. */
 
-  .skirmish-hud-panel {
-    flex: none;
+  /* Everything below belongs to the frozen STACKED screen — see the boundary note above. */
+  @media (min-height: 541px) {
+  /* The tab body is the panel's scroller again — the same contract it has on the desktop rail,
+     and the right one for a frozen screen. It was made `flex: none` while the page was the
+     scroller; with the page frozen that would push the panel past its capped row instead. */
+  .skirmish-screen:not(.level-editor-screen) .skirmish-hud-panel {
+    flex: 1 1 auto;
+    min-block-size: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  /* …and the panel's own content column scrolls too, because the tab body is not where every
+     screen puts its controls. Deployment hangs its formation controls and Begin Battle off this
+     wrapper directly, so with only the tab body scrolling they were simply CLIPPED by the capped
+     row — measured at y=997 on an 844px screen with no scroller anywhere in their ancestry.
+     Whatever a phase hangs here is reachable now.
+
+     This wrapper is `overflow: visible` everywhere else so divider atoms can sit over the frame.
+     On a phone the panel has no frame for them to sit over. */
+  .skirmish-screen:not(.level-editor-screen) .le-outer-panel-content {
+    min-block-size: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  /* One scroller in the panel, and it is the wrapper above. This block owns a scrollport of its
+     own on the desktop rail; nested inside the panel's it made the sticky verb below anchor to a
+     scrollport bottom that was itself past the screen edge — Continue to next Battle came to rest
+     at y=861 on an 844px screen, still 17px out of reach after being pinned. */
+  .skirmish-screen:not(.level-editor-screen) .run-meta-controls {
+    max-block-size: none;
+    min-block-size: 0;
     overflow: visible;
-    /* And its own `min-height: 0` goes with the scroller it belonged to. Left in place it
-       contributes NOTHING to the panel's content minimum, so asking the panel for
-       `min-content` still measured the head alone — 205px, exactly the wrong answer. */
-    min-block-size: min-content;
+  }
+
+  /* NOT DONE: the phase's committing verb — Begin Battle, Continue to next Battle — is reached by
+     one short scroll of the panel rather than always being on screen.
+     `position: sticky` was tried here and is the wrong tool. Pinned inside the scroller it does
+     bring the verb into view, and then it sits ON TOP of whatever is under it at rest: Exploratio
+     and Expunctio became untappable on every Sectio-family screen, which is the same defect moved
+     somewhere else. A bar that never covers anything has to be OUTSIDE the scroller, and that is a
+     footer slot on ShellControlsPanel (it has `fixed` for pinning above the body; there is no
+     counterpart below), not a stylesheet rule. */
   }
 
   /* The editor assigns named board/rail areas on desktop. When the shared Skirmish shell drops
@@ -10329,6 +10392,18 @@ body.loading-bootstrap .app-startup-status {
     padding: 0 8px 12px;
   }
 
+  /* Frozen: the row is the limit, so this cell must not report a content minimum of its own or
+     the grid grows past the screen it was told to fit. Stacked screens only — see above. */
+  @media (min-height: 541px) {
+    .skirmish-screen:not(.level-editor-screen) .skirmish-hud {
+      block-size: 100%;
+      max-block-size: 100%;
+      min-block-size: 0;
+      overflow: hidden;
+      padding-block-end: 0;
+    }
+  }
+
   /* Page scrolls on mobile — expand the editor's sole desktop KitScroll into the
      document instead of leaving its 100%-height flex child collapsed inside an
      auto-height rail. */
@@ -10346,8 +10421,10 @@ body.loading-bootstrap .app-startup-status {
     display: none;
   }
 
-  /* Page scrolls on mobile — don't nest a gameplay panel scroll inside it. */
-  .skirmish-hud-panel {
+  /* The editor still scrolls its page on mobile (it is out of scope for the frozen gameplay
+     shell above, and its rail is a long authoring column). Gameplay screens keep the panel
+     scroll — see the `:not(.level-editor-screen)` rules above. */
+  .level-editor-screen .skirmish-hud-panel {
     overflow: visible;
   }
 
@@ -28044,6 +28121,11 @@ button.tileset-relationship-cell {
     height: 100%; max-height: none;
     overflow-y: auto; -webkit-overflow-scrolling: touch;
   }
+
+  /* Landscape needs no defence against the stacked band above: those rules are gated on
+     `min-height: 541px`, and this band is `max-height: 540px`, so they can never both apply.
+     Landscape is already frozen in its own way — two columns, two rows, `overflow: hidden`
+     above — with the Controls as a scrolling side rail rather than a capped strip. */
 
   /* Level authoring needs a usable board plus full-width controls, not the battle HUD's compact
      landscape split. Keep the editor's named areas stacked even though this later rule restores
