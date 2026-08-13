@@ -204,8 +204,14 @@ const PLAY_CHOICE_ROW_SEATS = { current: 0, new: 1 } as const;
  * is no column line for a rail to be — `verbColumns` states that rather than the card counting its
  * own tracks. `confirm` is what gives it the menu's own lettering and the confirm mark; the card's
  * facts read as the receipt under it.
+ *
+ * **Begin**, and the same word on New's verb (ADR-0640). A commitment must not repeat the tab
+ * that opened it — "Continue" opening a card whose button says Continue spends the press on a
+ * word the player has already read — and it is ONE act behind both tabs, so it is one word under
+ * one mark. Resuming is "begin playing" rather than "begin the Run"; that is the price of not
+ * echoing the tab, and it is a smaller cost than the echo.
  */
-const RUN_PLAY_VERBS: readonly ChromeVerb[] = [{ id: 'play', label: 'Play', to: '/run', confirm: true }];
+const RUN_PLAY_VERBS: readonly ChromeVerb[] = [{ id: 'play', label: 'Begin', to: '/run', confirm: true }];
 
 /**
  * The adoption card's tracks. EVERY row of it spans — the lede, each candidate's name, its facts
@@ -302,7 +308,10 @@ function RunPanel({
     ]
     : [{
       id: 'start',
-      label: starting ? 'Starting…' : 'Start Run',
+      // The same word Continue's verb carries — one act, one word, one mark (ADR-0640). What a
+      // new Run costs the one being held is the cell directly under it, and the armed pair below
+      // states it outright; the verb does not have to carry "Run" to warn anybody.
+      label: starting ? 'Starting…' : 'Begin',
       testId: 'run-start',
       disabled: newRunUnavailable || starting,
       confirm: true,
@@ -568,7 +577,7 @@ function RunPanel({
 
         {choice === 'new' ? (
           /* No heading. The rail tab that opened this column already says New, and the column's own
-             first row says Start Run — a title between them could only repeat one of the two, and
+             first row is the verb — a title between them could only repeat one of the two, and
              it would spend a row of the column to do it. The aside keeps the name for anyone
              reading the page by its landmarks — "New Run" rather than the tab's bare "New",
              because a landmark is read out of the rail that gave it its subject, where Continue's

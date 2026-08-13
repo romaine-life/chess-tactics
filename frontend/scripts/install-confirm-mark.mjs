@@ -3,8 +3,14 @@
 //
 //   node scripts/install-confirm-mark.mjs --base <url> --dir <folder> [--dry-run]
 //
-// The mark a COMMITTING verb wears — Play on a Run being resumed, Start Run on one about to
-// begin. One mark for the act, so one slot, and installing it binds every confirm band at once.
+// The mark a COMMITTING verb wears — the press that takes you into the Run, whether you are
+// resuming one or beginning one. One mark for the act, so one slot, and installing it binds every
+// confirm band at once.
+//
+// Three batches were generated before one was chosen, and all three stay uploaded so the decision
+// can be re-read against what it was made against. `index` is what the review surface sorts on,
+// so it is also the record of which idea came last: hands 1-4, go marks 11-14, checks 21-24.
+// The owner's pick is `hand-placing`, accepted from the Studio's Confirm Mark surface.
 //
 // This script's whole job is to get the candidate rows and their immutable bytes in place.
 // Review and acceptance deliberately do NOT happen here: the backend requires a game-owned
@@ -40,6 +46,10 @@ const cookie = process.env.LIVE_MEDIA_COOKIE ?? '';
 const SLOT = 'ui/kit/icons/confirm.png';
 const REVIEW_SURFACE_PATH = '/studio?mode=catalog&cat=confirmmark';
 const BATCH_ID = 'confirm-mark-2026-08-12-v1';
+const GO_BATCH_ID = 'confirm-mark-go-2026-08-12-v1';
+const HAND_BATCH_ID = 'confirm-mark-hand-2026-08-12-v1';
+/** The accepted one. A check means "valid"; these buttons mean "make your move". */
+const INSTALLED = { batchId: HAND_BATCH_ID, entryId: '04-placing', label: 'Hand placing a pawn on the board' };
 
 /**
  * The candidates, in the order the review surface offers them. `file` is the generator's own
