@@ -40,7 +40,11 @@ import { StudioCatalogCard } from './studio/StudioCatalogCard';
  * could only retire a family by taking its unrelated siblings with it. The bytes stay uploaded
  * and unaccepted either way; nothing here deletes anything.
  *
- * Three families have been ruled out so far, and each is recorded rather than merely dropped:
+ * ONE BATCH IS ONE CONCEPT. Two concepts sharing a batch cannot be told apart here, so ruling
+ * one out means re-uploading the survivor under its own id — which is exactly what the resign
+ * seat cost. Generate a second concept into a second batch.
+ *
+ * Four families have been ruled out so far, and each is recorded rather than merely dropped:
  * - `battle-log-defeat-mark-2026-08-11-v1` — every headstone carried a cross on its face.
  * - the laurel wreaths in `battle-log-marks-2026-08-12-v1` — a wreath is already the Ataraxia
  *   mark, so the Battle's victory would have worn the Run's ladder emblem.
@@ -49,6 +53,14 @@ import { StudioCatalogCard } from './studio/StudioCatalogCard';
  *   objective flag a few rows up. Lichess draws resign as a flag and carries a standing
  *   complaint that players read it as a peace offer and click it meaning to offer a draw
  *   (lichess-org/lila#12306, whose suggested replacement is the toppled king).
+ * - the handshakes in `battle-log-resign-mark-2026-08-12-v2` — drawn in blue steel gauntlets
+ *   because a kit icon "should" be blue and gold, which is an observation about what the set
+ *   happens to depict, not a rule. Skin is what makes a hand read as a hand, and armouring it
+ *   threw that away, leaving one blue mass where two hands should separate. The set already
+ *   carries red, green and white wherever colour means something — ADR-0014 owns a palette
+ *   BUDGET, not a hue. Redrawn in `…-handshake-2026-08-12-v3` with real skin, two tones so the
+ *   grip reads, and cuffs in `--skirmish-blue` and `--skirmish-red`: the two sides' own colours,
+ *   the same pair the log's side rails use one column to the left.
  */
 export const BATTLE_LOG_MARK_BATCH_IDS: Readonly<Record<BattleLogForgedMark, readonly string[]>> =
   Object.freeze({
@@ -56,7 +68,10 @@ export const BATTLE_LOG_MARK_BATCH_IDS: Readonly<Record<BattleLogForgedMark, rea
     defeat: ['battle-log-defeat-mark-2026-08-12-v2'],
     draw: ['battle-log-marks-2026-08-12-v1'],
     checkmate: ['battle-log-cause-marks-2026-08-12-v1'],
-    resign: ['battle-log-resign-mark-2026-08-12-v2'],
+    resign: [
+      'battle-log-resign-tipped-king-2026-08-12-v3',
+      'battle-log-resign-handshake-2026-08-12-v3',
+    ],
     check: ['battle-log-marks-2026-08-12-v1'],
     gold: ['battle-log-gold-mark-2026-08-12-v1'],
     'gold-loss': ['battle-log-gold-loss-mark-2026-08-12-v1'],
