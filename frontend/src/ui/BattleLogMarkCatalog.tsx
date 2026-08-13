@@ -56,9 +56,11 @@ import { StudioCatalogCard } from './studio/StudioCatalogCard';
  * - the handshakes in `battle-log-resign-mark-2026-08-12-v2` — drawn in blue steel gauntlets
  *   because a kit icon "should" be blue and gold, which is an observation about what the set
  *   happens to depict, not a rule. Skin is what makes a hand read as a hand, and armouring it
- *   threw that away; they also collide with the hand Lichess uses for a DRAW offer. The set
- *   already carries red, green and white wherever colour means something — ADR-0014 owns a
- *   palette BUDGET, not a hue.
+ *   threw that away, leaving one blue mass where two hands should separate. The set already
+ *   carries red, green and white wherever colour means something — ADR-0014 owns a palette
+ *   BUDGET, not a hue. Redrawn in `…-handshake-2026-08-12-v3` with real skin, two tones so the
+ *   grip reads, and cuffs in `--skirmish-blue` and `--skirmish-red`: the two sides' own colours,
+ *   the same pair the log's side rails use one column to the left.
  */
 export const BATTLE_LOG_MARK_BATCH_IDS: Readonly<Record<BattleLogForgedMark, readonly string[]>> =
   Object.freeze({
@@ -66,7 +68,10 @@ export const BATTLE_LOG_MARK_BATCH_IDS: Readonly<Record<BattleLogForgedMark, rea
     defeat: ['battle-log-defeat-mark-2026-08-12-v2'],
     draw: ['battle-log-marks-2026-08-12-v1'],
     checkmate: ['battle-log-cause-marks-2026-08-12-v1'],
-    resign: ['battle-log-resign-tipped-king-2026-08-12-v3'],
+    resign: [
+      'battle-log-resign-tipped-king-2026-08-12-v3',
+      'battle-log-resign-handshake-2026-08-12-v3',
+    ],
     check: ['battle-log-marks-2026-08-12-v1'],
     gold: ['battle-log-gold-mark-2026-08-12-v1'],
     'gold-loss': ['battle-log-gold-loss-mark-2026-08-12-v1'],
