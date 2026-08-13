@@ -29404,7 +29404,20 @@ button.run-card-formation-cell {
    and the same 11px between mark and word. A menu button and this button are the same act one
    screen apart, and two seats that agree by eye drift the first time either is retuned. */
 .chrome-verb-row--confirm {
-  --chrome-verb-confirm-h: 61px;
+  /* The rail tab's WHOLE box, frame included: `.settings-tab` is border-box at this height. */
+  --chrome-verb-confirm-seat: 61px;
+  /* Half of one inner rail — what a rail drawn ON a grid line takes from the cell each side of
+     it (ChromeDividedGrid's CHROME_DIVIDED_GRID_RAIL_HALF, in CSS). */
+  --chrome-verb-rail-half: calc(var(--le-chrome-inner-rail-w, 7px) / 2);
+  /* A row of a divided box is not a box: its top edge is the BOX's frame and its bottom edge is
+     half the divider it shares with the row beneath. So a 61px row draws a 71.5px box, which is
+     why the divider hung 10.5px below the bottom frame of the tab it lines up with. Content
+     height is the seat MINUS the two edges the row does not own. */
+  --chrome-verb-confirm-h: calc(
+    var(--chrome-verb-confirm-seat)
+    - var(--le-chrome-inner-rail-w, 7px)
+    - var(--chrome-verb-rail-half)
+  );
   --chrome-verb-confirm-mark-slot: 40px;
   --chrome-verb-confirm-mark-size: 44px;
   /* The rail tab's own label box, declared by the name the shared fitter reads. `FittedTabLabel`
@@ -29422,32 +29435,35 @@ button.run-card-formation-cell {
   font-size: var(--ds-text-lg);
   letter-spacing: 0;
   min-block-size: var(--chrome-verb-confirm-h);
-  padding: 0 var(--ds-inset);
+  /* Give back the half-rail below, so what is left between the box's top frame and the divider's
+     top edge is the tab's own 47px interior, centred exactly where the tab centres its icon.
+     Without it the glyph sat 3.5px low against the tab beside it. */
+  padding: 0 var(--ds-inset) var(--chrome-verb-rail-half);
   text-transform: uppercase;
 }
 
-/* Mark then word, filling the cell — the rail tab's own arrangement, at the rail tab's own gap.
-   The label track is `minmax(0, 1fr)` for the same reason the tab's is: the shared fitter shrinks
-   its text against the box it is GIVEN, so a content-sized track would never look overrun and the
-   text would never shrink. */
+/* Mark and word are ONE group, CENTRED on the button — where a rail tab left-seats them. A tab is
+   one of a stack whose marks must line up down the rail; this is a single wide band, and a short
+   word left-seated in it reads as a label that fell off the edge.
+   `minmax(0, auto)` is what lets both be true at once: the track sizes to the word, so the group
+   is only as wide as it needs to be and centres — and it can still be squeezed below that, so a
+   long verb hands the shared fitter a box that is genuinely overrun and gets shrunk instead of
+   clipped. A `1fr` track would fill the button and never look overrun; a plain `auto` track would
+   never yield. */
 .chrome-verb-commit {
   align-items: center;
   column-gap: 11px;
   display: grid;
-  grid-template-columns: var(--chrome-verb-confirm-mark-slot) minmax(0, 1fr);
+  grid-template-columns: var(--chrome-verb-confirm-mark-slot) minmax(0, auto);
   inline-size: 100%;
+  justify-content: center;
 }
 
-/* The answer BESIDE the commitment — Keep Run, while the replacement question is open. It keeps
-   the band and the lettering and drops the mark COLUMN with the mark: an empty 40px seat there
-   would read as art that failed to load rather than as the one verb that is not the confirm. */
+/* A group of ONE — the answer beside the commitment (Keep Run), and every band until the mark's
+   art is installed. The column goes with the mark rather than being held open: empty, it pushes
+   the word off the button's centre with nothing on screen to explain why. */
 .chrome-verb-commit.is-unmarked {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.chrome-verb-commit.is-unmarked .chrome-verb-label {
-  justify-items: center;
-  text-align: center;
+  grid-template-columns: minmax(0, auto);
 }
 
 /* Reserved, not conditional: the slot holds its width whether or not the mark's art is installed,

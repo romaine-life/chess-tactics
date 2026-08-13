@@ -103,14 +103,19 @@ function VerbCell({ verb, index, className, commits, confirmMarkSrc }: {
   // announced it twice would say the glyph's name in front of the verb.
   //
   // Every cell of a committing row is lettered and fitted; only the verb that COMMITS carries the
-  // mark seat. An empty seat on its neighbour would read as art that failed to load, so the
-  // unmarked cell simply has no mark column.
+  // mark, and the mark's COLUMN exists only when there is a mark to put in it. Two cases need
+  // that and they are the same case: the answer beside the commitment (Keep Run) never has one,
+  // and neither does anything until the art is installed. Held open regardless, the empty column
+  // pushes the word off the button's centre — which is what it looked like, an off-centre label
+  // with nothing visible to explain it. The mark and the word are ONE group centred on the
+  // button, so a group of one centres just as well; installing the art moves the word once, at
+  // install time, which is a content decision rather than something a player watches happen.
   const mark = verb.confirm ? confirmMarkSrc ?? confirmMarkUrl() : null;
   const body: ReactNode = commits ? (
-    <span className={`chrome-verb-commit${verb.confirm ? '' : ' is-unmarked'}`}>
-      {verb.confirm ? (
+    <span className={`chrome-verb-commit${mark ? '' : ' is-unmarked'}`}>
+      {mark ? (
         <span className="chrome-verb-mark" aria-hidden="true">
-          {mark ? <img src={mark} alt="" draggable={false} /> : null}
+          <img src={mark} alt="" draggable={false} />
         </span>
       ) : null}
       <FittedTabLabel className="chrome-verb-label">{verb.label}</FittedTabLabel>

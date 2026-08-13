@@ -83,8 +83,21 @@ read as a rail tab that had failed to line up. At `--col-tab-w` all three column
 byte-identical, and the label track goes 178px to 200px — wider than the rail tab's own 188px —
 so every label including "Abandon and Start" renders at the full 32px with the fitter idle.
 
-The seat is **reserved, not fail-closed** (ADR-0318): the band holds its 40px slot with or
-without installed art, so installing the mark later cannot move the label. Four candidates are
+**A row of a divided box is not a box, and the seat has to be paid out accordingly.** The row's
+top edge is the box's own frame and its bottom edge is half the divider it shares with the row
+beneath, so sizing it at 61px outright drew a 71.5px box and hung its divider 10.5px below the
+bottom frame of the tab it lines up with. The content height is the seat minus the two edges the
+row does not own, and the row gives the half-rail back as padding — which leaves the tab's own
+47px interior, centred exactly where the tab centres its icon. Measured live: the divider now
+occupies the identical band as the tab's bottom frame, to 0px on both edges.
+
+**Mark and word are one group, centred on the button** — where a rail tab left-seats them,
+because a tab is one of a stack whose marks line up down the rail and this is a single wide band
+where a short word left-seated reads as a label that fell off the edge. The mark's COLUMN exists
+only when there is a mark: the seat is NOT held open against a future install (the reading
+ADR-0318 would suggest), because empty it pushes the word off the button's centre with nothing on
+screen to explain it, and a group of one centres just as well. Installing the art moves the word
+once, at install time — a content decision, not something a player watches happen. Four candidates are
 uploaded to `ui/kit/icons/confirm.png` and the owner installs one from **Studio → Confirm
 Mark**, which mounts each in the real band beside the shortest label a commitment takes
 (`PLAY`) and the longest (`ABANDON AND START`) — a mark that only works next to one of them is

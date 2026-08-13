@@ -384,9 +384,24 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(verbRow).toContain('installedUiMediaIfPresent(CONFIRM_MARK_ROLE)');
     expect(verbRow).not.toMatch(/iconSrc\?:/);
     // Reserved rather than fail-closed: the seat holds its geometry before the art is installed.
-    expect(verbRow).toContain('{mark ? <img src={mark} alt="" draggable={false} /> : null}');
     // The measurements are the rail tab's own, not numbers chosen to look similar.
-    expect(style).toMatch(/\.chrome-verb-row--confirm \{[\s\S]*?--chrome-verb-confirm-h: 61px;/);
+    // A ROW of a divided box is not a box: its top edge is the box's frame and its bottom edge is
+    // half the divider it shares with the row beneath. Sized at the seat outright it drew a 71.5px
+    // box, and its divider hung 10.5px below the bottom frame of the tab it lines up with.
+    expect(style).toMatch(/--chrome-verb-confirm-seat: 61px;/);
+    expect(style).toMatch(/--chrome-verb-confirm-h: calc\(\s*var\(--chrome-verb-confirm-seat\)\s*- var\(--le-chrome-inner-rail-w, 7px\)\s*- var\(--chrome-verb-rail-half\)\s*\);/);
+    // And the row gives that half-rail back as padding, so its interior is the tab's own 47px
+    // centred where the tab centres its icon — measured live, both land on the same y.
+    expect(style).toMatch(/\.chrome-verb-row--confirm \.section-box-member-verb \{[\s\S]*?padding: 0 var\(--ds-inset\) var\(--chrome-verb-rail-half\);/);
+    // Mark and word are one group CENTRED on the button. `minmax(0, auto)` is what makes the
+    // group hug its word (so it can centre) while still yielding to the fitter when the word is
+    // long — `1fr` fills the button and never looks overrun; plain `auto` never yields.
+    expect(style).toMatch(/\.chrome-verb-commit \{[\s\S]*?grid-template-columns: var\(--chrome-verb-confirm-mark-slot\) minmax\(0, auto\);[\s\S]*?justify-content: center;/);
+    // The mark's COLUMN goes with the mark. Held open while the art is uninstalled it pushed the
+    // word off centre with nothing on screen to explain it.
+    expect(verbRow).toContain("`chrome-verb-commit${mark ? '' : ' is-unmarked'}`");
+    expect(verbRow).toContain('{mark ? (');
+    expect(style).toMatch(/\.chrome-verb-commit\.is-unmarked \{\s*grid-template-columns: minmax\(0, auto\);/);
     expect(style).toMatch(/\.chrome-verb-row--confirm \{[\s\S]*?--chrome-verb-confirm-mark-slot: 40px;/);
     expect(style).toMatch(/\.chrome-verb-row--confirm \.section-box-member-verb \{[\s\S]*?font-size: var\(--ds-text-lg\);/);
     expect(style).toMatch(/\.chrome-verb-label strong \{[\s\S]*?-webkit-text-stroke: var\(--menu-label-stroke-w\) var\(--menu-label-stroke-ink\);/);
