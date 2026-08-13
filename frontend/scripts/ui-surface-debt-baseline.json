@@ -22,14 +22,6 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": ":is(.level-editor-screen, .skirmish-screen) .le-outer-panel::before",
-      "surfaceHash": "8386168f6ac65401b19b7c81baccc18c3be05db7f17ca6da4e25abbbb23874ff",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
       "selector": ":is(.level-editor-screen, .skirmish-screen) .le-outer-panel",
       "surfaceHash": "d6eff958152818be786188af470ad50e26aa3b87716412a67a1e1d7a7840635c",
       "occurrence": 1
@@ -5102,6 +5094,14 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
+      "selector": "/* An outer panel may declare that it has NO frame, and this rule is where that is honoured — the frame is simply never drawn, rather than drawn and then taken back somewhere else. That distinction is the whole point. The frame used to be removed by a narrow-band rule far below, and the offscreen-rails contract further down still set the same border property at the same specificity with the same `!important`. Media queries add no specificity, so the later rule won on source order and the panel kept one rail down its left side with no top to meet. Four attempts to subtract it failed for that reason alone. An unframed panel now matches no frame rule at all, so there is nothing left for a later rule to restore. Who declares it: ShellControlsPanel, from the layout MODE (ui/shell/layoutMode.ts). Stacked full width under a board there is no interior edge for a frame to describe, and width is what that view has least of. */ :is(.level-editor-screen, .skirmish-screen) .le-outer-panel:not([data-chrome-frame=\"none\"])::before",
+      "surfaceHash": "8386168f6ac65401b19b7c81baccc18c3be05db7f17ca6da4e25abbbb23874ff",
+      "occurrence": 1
+    },
+    {
+      "kind": "css",
+      "file": "src/style.css",
+      "context": "",
       "selector": "/* Army-wide display layers from the in-match shortcut grid. Side-coded: player = cool blue/green, enemy = warm magenta/red. Declared before .is-threat / .is-move so the focused-piece cyan and the enemy danger-zone red win where layers overlap a cell. */ .skirmish-board-cell-hit.is-player-move::before",
       "surfaceHash": "d902d4b986c1fed89445de4a5e284a91d2056920d62322a0cd41eb2a6e87f964",
       "occurrence": 1
@@ -5744,22 +5744,6 @@
       "context": "@media (max-width: 800px)",
       "selector": ".predrawn-grid-size-controls",
       "surfaceHash": "119b36ab9f1c786f825fed48955e83f282a2c195fcd677170e7d2b670306a8db",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "@media (max-width: 860px)",
-      "selector": "the panel is still the registered outer box, still wearing its own fill, with no chrome hand-rolled in its place. (No apostrophes in this comment: check-ui-surface-contract splits declarations without stripping comments and treats one as a string quote, hiding every declaration after it.) */ :root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel]::before",
-      "surfaceHash": "2bcd88548f93b137a197d0605bc97aa9bbf1f3573681a9226c880be3983ebcc6",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "@media (max-width: 960px)",
-      "selector": "/* The rail belongs on whichever edge is INTERIOR, and this dock changes which one that is. Docked right, the panel meets the viewport on its right, the title bar on its top and the floor on its bottom, so the offscreen-rails contract reduces its frame to a LEFT rail only. Pinned to the bottom it spans the full width instead: left and right now reach the viewport and the TOP is the one edge facing the board. Left as-is it drew a rail down the side it no longer needs and nothing at all where the board meets it, which is the \"just abruptly starts\" edge. Same installed frame and the same rail width — only the side moves. Written at the same specificity as the contract it amends, because that rule carries !important. */ :root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel][data-controls-mobile=\"sheet\"]::before",
-      "surfaceHash": "0995efba8da6e95753d4db6419f7c257038746109788c8230b78c130cf1d763d",
       "occurrence": 1
     },
     {

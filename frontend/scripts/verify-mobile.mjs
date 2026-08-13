@@ -200,6 +200,43 @@ function measure() {
     return area(intersect(rect, clip)) / area(rect);
   };
 
+  // Is this point of the control actually PAINTED where it claims to be right now?
+  //
+  // A different question from visibleFraction above, and the obscured test needs this one. A
+  // control scrolled below the fold of an inner scrollport still reports a live rect at its
+  // laid-out position — getBoundingClientRect does not know the scrollport ends higher up. Hit
+  // testing that point therefore returns whatever IS painted there, which is some other screen
+  // furniture, and the control gets reported as unreachable when it is merely scrolled away.
+  //
+  // That is not hypothetical: the third unit in a Run army ledger sat at y=643 while its own
+  // scrollport ended at y=601, so its centre hit the Controls panel's "Sectio views" eyebrow
+  // behind it. It was reported as obscured on two device profiles for weeks, and several rounds
+  // of layout surgery went into "fixing" a control that was never broken — scrolling reaches it,
+  // which is exactly what visibleFraction says by treating a scrollable axis as unclipped.
+  //
+  // So here a scrollable ancestor DOES clip: the question is what is on screen at this instant,
+  // not what is reachable. Same containing-block walk, because an out-of-flow subtree escapes
+  // ancestors that do not contain it.
+  const pointIsPresented = (el, x, y) => {
+    let effective = getComputedStyle(el).position;
+    for (let node = el.parentElement; node && node !== document.documentElement; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      const canClip = effective === 'fixed'
+        ? (style.transform !== 'none' || style.filter !== 'none' || style.perspective !== 'none')
+        : effective === 'absolute' ? containingBlockFor(style) : true;
+      if (style.position === 'fixed' || style.position === 'absolute') effective = style.position;
+      else if (canClip) effective = 'static';
+      if (!canClip) continue;
+      const clipsX = style.overflowX !== 'visible';
+      const clipsY = style.overflowY !== 'visible';
+      if (!clipsX && !clipsY) continue;
+      const box = node.getBoundingClientRect();
+      if (clipsX && (x < box.left || x > box.right)) return false;
+      if (clipsY && (y < box.top || y > box.bottom)) return false;
+    }
+    return true;
+  };
+
   const INTERACTIVE = [
     'button', 'a[href]', '[role="button"]', '[role="tab"]', '[role="link"]',
     'input:not([type="hidden"])', 'select', 'textarea', 'summary',
@@ -301,6 +338,9 @@ function measure() {
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
     if (cx < 0 || cx > vw || cy < 0 || cy > vh) continue; // reported as offscreen above
+    // Scrolled out of an inner scrollport, not covered by anything. Reachability is the
+    // separate question the cut-off/offscreen checks above already answer.
+    if (!pointIsPresented(el, cx, cy)) continue;
     const hit = document.elementFromPoint(cx, cy);
     if (!hit || hit === el || el.contains(hit) || hit.contains(el)) continue;
     push('control-obscured', `its centre taps ${describe(hit)} instead`, el);
