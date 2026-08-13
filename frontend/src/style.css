@@ -6882,14 +6882,47 @@ body.loading-bootstrap .app-startup-status {
   text-shadow: 0 2px 0 #010407;
   text-transform: uppercase;
 }
+\/* The whole option-row treatment is explained HERE, over the one rule in this run that paints
+   nothing, because check-ui-surface-contract.mjs keys a rule on everything between the previous
+   `}` and its `{` — a comment directly above one of the three rules below becomes part of that
+   rule's identity, and all three are keyed on their bare selectors.
+
+   An option row IS a control, so it wears the leaf oak (ADR-0433). ADR-0433 says outright that
+   opening a dropdown does not turn its popup field into a leaf — and its reason is that the field
+   HOSTS option rows, so the rows are the leaves. Both halves were missing: the field painted
+   nothing and the rows wore a hand-mixed `rgba(10, 28, 43, .42)`, which made a menu of clickable
+   rows the one place in the shell where a pressable surface carried no wood at all. The oak is
+   named on the row in HouseSelect.tsx and PHASED there, so a menu is cut from one plank running
+   down the list instead of stamping one crop per row (ADR-0063).
+
+   `.house-select-option`'s three surface declarations only REMOVE the shell's native button
+   chrome and put nothing in its place — the wood arrives from the registered surface and the
+   rails around it are the menu box's own — so it is the same reset `.section-box-member-verb`
+   makes, and is registered as one.
+
+   Under the cursor the row is LIT rather than covered: a translucent wash over dark oak
+   desaturates it to grey, which reads as a row that has gone dead rather than one being pointed
+   at. Brightness keeps the grain and the hue. The CHOSEN option is a different fact from where
+   the cursor is, so it takes a different mark — the crisp cyan inset ring `.settings-tab.is-active`
+   wears, that being the same statement one menu-language surface over — and the two read together.
+
+   This rule's own job: the option row is a grid cell of the menu, so truncation lives on the
+   label rather than the row — text-overflow needs a block container, and an anonymous grid item
+   is not one. */
+.house-select-option-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .house-select-option {
   appearance: none;
   -webkit-appearance: none;
-  background: rgba(10, 28, 43, .42);
+  background: none;
   border: 0;
   border-radius: 0;
   box-sizing: border-box;
-  color: #d8eaff;
+  color: #e8f4ff;
   cursor: pointer;
   font: 800 var(--ds-text-xs)/1 var(--ds-font-sans, system-ui, sans-serif);
   min-height: 30px;
@@ -6900,21 +6933,12 @@ body.loading-bootstrap .app-startup-status {
   text-transform: uppercase;
   width: 100%;
 }
-/* The option row is a grid cell of the menu, so the truncation lives on the label rather than on
-   the row: text-overflow needs a block container, and an anonymous grid item is not one. */
-.house-select-option-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .house-select-option.is-active,
 .house-select-option:hover:not(:disabled) {
-  background: rgba(25, 94, 132, .95);
-  color: #f3fbff;
+  filter: brightness(1.28);
 }
 .house-select-option[aria-selected="true"] {
-  background: rgba(88, 151, 198, .42);
+  box-shadow: inset 0 0 0 2px rgba(101, 184, 255, .78);
   color: #ffffff;
 }
 .house-select-option:disabled {
