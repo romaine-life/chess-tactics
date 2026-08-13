@@ -20337,6 +20337,16 @@ button.tileset-relationship-cell {
   padding-inline: var(--ds-space-2);
 }
 
+/* The step-up footer carries its own way out, so it is a row rather than a sentence: the
+   explanation and the button that answers it read as one statement. Wraps because the battle
+   presentation's panel is far narrower than the settings tab's. */
+.admin-control-reauth {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+
 .settings-chrome-button {
   align-items: center;
   appearance: none;
