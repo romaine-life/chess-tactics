@@ -27066,44 +27066,45 @@ button.tileset-relationship-cell {
    band that docks the rail in the first place. */
 .shell-controls-collapse { display: none; }
 
-/* ============================================================================
-   MOBILE SUPPORT — both orientations, ordinary responsive behaviour
-   ----------------------------------------------------------------------------
-   The app is built desktop-first and adapts down. It supports PORTRAIT AND
-   LANDSCAPE on phones and tablets, like any responsive web app; there is no
-   orientation gate and no screen that demands the device be turned. Two media
-   contexts drive it:
-
-     • max-width <= 960px        -> fix the shared chrome family at ANY narrow width
-     • narrow AND short (<=540h) -> the landscape-phone tweaks (tighter app bar,
-                                     board + HUD side-by-side)
-
-   The layout fix is width-based, NOT pointer-based — the baked desktop offsets break
-   the chrome at any narrow width (a narrow desktop window, or DevTools' plain
-   "Responsive" mode, which reports a fine pointer), so gating it on coarse-pointer
-   would leave those broken. 960 is the ceiling because the largest landscape phone
-   (iPhone Pro Max) is 932px wide, while a real desktop layout wants >= ~1000px.
-
-   HISTORY: this band shipped 2026-07-01 as landscape-only, with a portrait
-   "Rotate your device" gate on `(orientation: portrait) and (pointer: coarse)`. That
-   gate covered the screen on every phone AND every tablet held upright, which is how
-   most people hold both, so the app did nothing at all for them. It was removed when
-   mobile support became both-orientations; portrait already had a working stacked
-   board layout underneath it (the max-width:860px block above). Do not reintroduce an
-   orientation prompt — make the screen work at the size it is given. `npm run
-   verify:mobile` fails any route whose controls cannot be reached, in either
-   orientation, and reports a screen-covering blocker as GATED rather than passing it.
-
-   These rules NEUTRALISE the desktop dressing-room offsets baked into the shared
-   menu/settings/Play chrome — a rail translate and a fixed-width content panel that
-   are never otherwise reset (they push both mostly off a narrow screen). Layout only;
-   no chrome art is hand-rolled (ADR-0032). Placed last so these overrides win the
-   cascade; the two-class panel reset below is specificity-matched (0,2,0) so it beats
-   the baked `.settings-art-route .settings-main-frame` rule (a single-class override
-   would silently lose — the original bug). */
-
-/* -- Narrow-viewport chrome fix (any narrow width — phones AND narrow windows). ---- */
 @media (max-width: 960px) {
+  /* ============================================================================
+     MOBILE SUPPORT — both orientations, ordinary responsive behaviour
+     ----------------------------------------------------------------------------
+     The app is built desktop-first and adapts down. It supports PORTRAIT AND
+     LANDSCAPE on phones and tablets, like any responsive web app; there is no
+     orientation gate and no screen that demands the device be turned. Two media
+     contexts drive it:
+
+       • max-width <= 960px        -> fix the shared chrome family at ANY narrow width
+       • narrow AND short (<=540h) -> the landscape-phone tweaks (tighter app bar,
+                                       board + HUD side-by-side)
+
+     The layout fix is width-based, NOT pointer-based — the baked desktop offsets break
+     the chrome at any narrow width (a narrow desktop window, or DevTools' plain
+     "Responsive" mode, which reports a fine pointer), so gating it on coarse-pointer
+     would leave those broken. 960 is the ceiling because the largest landscape phone
+     (iPhone Pro Max) is 932px wide, while a real desktop layout wants >= ~1000px.
+
+     HISTORY: this band shipped 2026-07-01 as landscape-only, with a portrait
+     "Rotate your device" gate on `(orientation: portrait) and (pointer: coarse)`. That
+     gate covered the screen on every phone AND every tablet held upright, which is how
+     most people hold both, so the app did nothing at all for them. It was removed when
+     mobile support became both-orientations; portrait already had a working stacked
+     board layout underneath it (the max-width:860px block above). Do not reintroduce an
+     orientation prompt — make the screen work at the size it is given. `npm run
+     verify:mobile` fails any route whose controls cannot be reached, in either
+     orientation, and reports a screen-covering blocker as GATED rather than passing it.
+
+     These rules NEUTRALISE the desktop dressing-room offsets baked into the shared
+     menu/settings/Play chrome — a rail translate and a fixed-width content panel that
+     are never otherwise reset (they push both mostly off a narrow screen). Layout only;
+     no chrome art is hand-rolled (ADR-0032). Placed last so these overrides win the
+     cascade; the two-class panel reset below is specificity-matched (0,2,0) so it beats
+     the baked `.settings-art-route .settings-main-frame` rule (a single-class override
+     would silently lose — the original bug). */
+
+  /* -- Narrow-viewport chrome fix (any narrow width — phones AND narrow windows). ---- */
+
   /* --- Shared menu / settings / campaign chrome family --------------------- */
   .settings-screen { inline-size: 100%; min-block-size: 100%; zoom: 1; }
 
@@ -27370,8 +27371,18 @@ button.tileset-relationship-cell {
        the z-order is worse than no strip: the Run's ledger rows painted straight over its
        workspace-navigation icons. */
     z-index: 900;
-    max-block-size: min(58vh, 460px);
+    /* ONE height while open, not a cap. As a cap the strip took whatever its current tab
+       happened to need — measured 317px on Log, 460px on Roster, and 325px jumping to 390px
+       the moment a piece was selected — and because the board reserves this height, the board
+       itself resized under the player's finger mid-move. A dock has detents: open and
+       collapsed. The body scrolls inside the open one, which it was already built to do. */
+    block-size: min(58vh, 460px);
     min-block-size: 0;
+  }
+  /* Both detents that are NOT the open one size to their content: there is no body to hold
+     open, and forcing the full height would leave a tall empty slab. */
+  [data-shell-controls-panel][data-controls-mobile="sheet"][data-controls-collapsed] {
+    block-size: auto;
   }
   /* The rail belongs on whichever edge is INTERIOR, and this dock changes which one that is.
      Docked right, the panel meets the viewport on its right, the title bar on its top and the
@@ -27383,18 +27394,14 @@ button.tileset-relationship-cell {
 
      Same installed frame and the same rail width — only the side moves. Written at the same
      specificity as the contract it amends, because that rule carries !important. */
-  :root:has(.app-titlebar.chrome-rails-offscreen)
-    :is(.level-editor-screen, .skirmish-screen)
-    [data-shell-controls-panel][data-controls-mobile="sheet"]::before {
+  :root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel][data-controls-mobile="sheet"]::before {
     border-width: var(--le-chrome-outer-rail-w) 0 0 0 !important;
     border-image-width: var(--le-chrome-outer-rail-w) 0 0 0 !important;
   }
   /* Both side edges now reach the screen, so neither carries a rail for the fill to hide
      under — the inset that keeps the surface from bleeding past the art becomes a visible
      strip of backdrop instead. Spend it only on the top, where the rail actually lands. */
-  :root:has(.app-titlebar.chrome-rails-offscreen)
-    :is(.level-editor-screen, .skirmish-screen)
-    [data-shell-controls-panel][data-controls-mobile="sheet"] {
+  :root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel][data-controls-mobile="sheet"] {
     --le-outer-fill-box-right: 0px;
     --le-outer-fill-box-left: 0px;
     /* Both covers go to zero with the rails they stood in for. These are what the panel's
@@ -27452,6 +27459,7 @@ button.tileset-relationship-cell {
      them, which the gate reported as 18 unreachable controls on the ledger alone. The rule
      is about a workspace owning the screen, so it keys on the workspace, not on which one. */
   .skirmish-screen:has(:is(.strategikon-workspace, .run-workspace)) [data-controls-mobile="sheet"] {
+    block-size: auto;
     max-block-size: none;
   }
   .skirmish-screen:has(:is(.strategikon-workspace, .run-workspace)) [data-controls-mobile="sheet"] .skirmish-hud-panel,

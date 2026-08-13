@@ -5764,6 +5764,14 @@
     },
     {
       "kind": "css",
+      "file": "src/style.css",
+      "context": "@media (max-width: 960px)",
+      "selector": "/* The rail belongs on whichever edge is INTERIOR, and this dock changes which one that is. Docked right, the panel meets the viewport on its right, the title bar on its top and the floor on its bottom, so the offscreen-rails contract reduces its frame to a LEFT rail only. Pinned to the bottom it spans the full width instead: left and right now reach the viewport and the TOP is the one edge facing the board. Left as-is it drew a rail down the side it no longer needs and nothing at all where the board meets it, which is the \"just abruptly starts\" edge. Same installed frame and the same rail width — only the side moves. Written at the same specificity as the contract it amends, because that rule carries !important. */ :root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel][data-controls-mobile=\"sheet\"]::before",
+      "surfaceHash": "0995efba8da6e95753d4db6419f7c257038746109788c8230b78c130cf1d763d",
+      "occurrence": 1
+    },
+    {
+      "kind": "css",
       "file": "src/ui/PredrawnOcclusionEditor.css",
       "context": "",
       "selector": ".predrawn-occlusion-editor-point",
