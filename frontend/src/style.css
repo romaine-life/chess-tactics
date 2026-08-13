@@ -27335,6 +27335,11 @@ button.tileset-relationship-cell {
    falls back to the CSS default 300x150 and silently ignores its width/height attributes. */
 .mobile-lab-frame { display: block; }
 
+/* A title-bar control may carry a short visible form for a row with no room for the full one.
+   Both are rendered; exactly one is displayed, and the accessible name is pinned to the full
+   label either way (see TitleBarControls). */
+.titlebar-control-label-short { display: none; }
+
 /* A rail of sections has two forms: the column of tabs (wherever a rail has room) and ONE
    picker (narrow, where a row per section is most of the screen). Exactly one is displayed at
    a time, so the sections are never duplicated in the accessibility tree. */
@@ -27642,6 +27647,19 @@ button.tileset-relationship-cell {
 
   .strategikon-rail,
   .enchiridion-section-rail { display: none; }
+
+  /* The bar has no room for a destination spelled out — the brand was being cut to "CH" to
+     make space for it. */
+  .titlebar-control-label-full { display: none; }
+  .titlebar-control-label-short { display: inline; }
+
+  /* The two pickers are peers, so they share a left edge — and the record below them shares
+     it too. One sits in the workspace rail slot and one inside the body, which carries the
+     workspace content inset, so they started 22px apart. The rail-slot picker takes the same
+     inset rather than the body giving its up. */
+  .strategikon-workspace-layout > .rail-section-picker {
+    margin-inline-start: var(--shell-workspace-body-inset-start, 0px);
+  }
 
   .rail-section-picker {
     display: block;

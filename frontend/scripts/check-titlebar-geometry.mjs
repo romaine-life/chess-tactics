@@ -59,6 +59,9 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 200));
 
   const geometry = await page.evaluate(() => {
+    const maybeRect = (element) => (element
+      ? rect(element)
+      : { top: 0, right: 0, bottom: 0, left: 0, width: 0, height: 0 });
     const rect = (element) => {
       const value = element.getBoundingClientRect();
       return {
@@ -107,9 +110,12 @@ try {
       lane: rect(lane),
       // The three horizontal regions of the bar. They share ONE grid track and are placed by
       // justify-self, so nothing stops them sliding over each other once the bar narrows.
-      brandLayout: rect(document.querySelector('.brand-lockup-layout')),
-      center: rect(document.querySelector('.app-shell-titlebar-center')),
-      centerContent: rect(document.querySelector('.app-shell-titlebar-center > *')),
+      // Optional: a bar need not contribute a centre at all, and one that does may leave it
+      // empty. `rect` assumes an element, so these ask for a zero box instead of throwing —
+      // the gate crashed outright on a Strategikon route whose centre has no child.
+      brandLayout: maybeRect(document.querySelector('.brand-lockup-layout')),
+      center: maybeRect(document.querySelector('.app-shell-titlebar-center')),
+      centerContent: maybeRect(document.querySelector('.app-shell-titlebar-center > *')),
       divider: rect(divider),
       horizontalDividerTop,
       horizontalDividerBottom,
@@ -168,7 +174,8 @@ try {
   // region lands on the status chip on top. Measured against the CONTENT of the centre, because
   // the centre element itself may legitimately stretch while its chips sit in the free space.
   const centerInk = geometry.centerContent.width > 0 ? geometry.centerContent : geometry.center;
-  if (centerInk.width > 0) {
+  // A bar with no centre, or an empty one, has no region to collide with.
+  if (centerInk.width > 0 && geometry.brandLayout.width > 0) {
     if (centerInk.left < geometry.brandLayout.right - tolerance) {
       failures.push(
         `title-bar centre overlaps the brand lockup by ${Math.round(geometry.brandLayout.right - centerInk.left)}px`

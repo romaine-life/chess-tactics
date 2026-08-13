@@ -168,6 +168,9 @@ export function Strategikon({
           kind: 'navigation',
           presentation: 'return',
           label: `‹ Back to ${returnName}`,
+          // 127px of a 390px row for a destination the screen already names. The full text
+          // stays the accessible name and returns wherever the bar has room.
+          shortLabel: '‹ Back',
           destination: `${base}${search}`,
           title: `Close the Strategikon and return to the ${returnName}.`,
           testId: 'strategikon-back',
