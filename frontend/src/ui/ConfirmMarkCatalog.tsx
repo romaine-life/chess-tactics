@@ -13,8 +13,8 @@ import { CHROME_STRUCTURAL_FILL_ROLE } from './shared/chromeSurfacePolicy';
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
 
 /**
- * Owner review for the mark a COMMITTING verb wears — Play on a Run being resumed, Start Run on
- * one about to begin (ADR-0638).
+ * Owner review for the mark a COMMITTING verb wears — the press that takes you into the Run,
+ * whether you are resuming one or beginning one (ADR-0638).
  *
  * It is ONE mark for the whole app rather than one per screen: "this is the press the screen
  * exists for" is a single fact, and a second drawing of it is the drift ADR-0059 names. So this
@@ -26,7 +26,7 @@ import { StudioCatalogCard } from './studio/StudioCatalogCard';
  * sheet would be judging a glyph; what is being decided here is whether the glyph reads at the
  * size and against the material it will actually be seen at.
  *
- * Both labels are shown, because the mark has to carry a short word and a long one: "PLAY" leaves
+ * Both labels are shown, because the mark has to carry a short word and a long one: "BEGIN" leaves
  * the band nearly empty and "ABANDON AND START" crowds it, and a mark that only works beside one
  * of them is not installed here.
  *
@@ -45,7 +45,7 @@ export const CONFIRM_MARK_COMPONENT = 'chrome-confirm-verb';
 /** The two bands a candidate is read in: the shortest label the app gives a commitment and the
  *  longest. Disabled deliberately nowhere — an unavailable band dims the mark with it. */
 const PREVIEW_BANDS: readonly { key: string; verbs: readonly ChromeVerb[] }[] = Object.freeze([
-  { key: 'play', verbs: [{ id: 'play', label: 'Play', confirm: true }] },
+  { key: 'play', verbs: [{ id: 'play', label: 'Begin', confirm: true }] },
   { key: 'abandon', verbs: [{ id: 'abandon', label: 'Abandon and Start', confirm: true }] },
 ]);
 
@@ -156,8 +156,8 @@ export function ConfirmMarkCatalog({ state }: { state: ConfirmMarkState }): Reac
   return (
     <div data-testid="confirm-mark-catalog">
       <p className="tileset-catalog-note">
-        The mark every committing verb wears — Play on a Run you are resuming, Start Run on one you
-        are beginning. One mark for the act, so installing binds all of them.
+        The mark every committing verb wears — the press that takes you into the Run, whether you
+        are resuming one or beginning one. One mark for the act, so installing binds all of them.
       </p>
       {options.length ? (
         <div className="tileset-studio-grid studio-seat-grid">

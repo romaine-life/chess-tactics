@@ -8,7 +8,7 @@ refines:
   - "[ADR-0637](0637-the-event-log-replaces-its-classifying-words-with-marks.md)"
 ---
 
-# ADR-0640: The Battle HUD's tab strip shares the gear's fit, and no mark is blue by rule
+# ADR-0641: The Battle HUD's tab strip shares the gear's fit, and no mark is blue by rule
 
 ## Context
 

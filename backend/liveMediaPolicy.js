@@ -60,7 +60,7 @@ function fittedMarkTransform(slot) {
 // are drawn through the identical fixed-seat-plus-contain rule.
 //
 // The Battle HUD's four other SECTION tabs joined for the reason the gear was already here, made
-// visible (ADR-0640): the tab strip is five compartments of one box drawing one 20px seat with
+// visible (ADR-0641): the tab strip is five compartments of one box drawing one 20px seat with
 // `contain`, so the gear read at full size while `unit-studio` — 26x40 of ink on its 64px canvas —
 // arrived beside it roughly 12px tall. One list, one height, and the strip stops reading as five
 // different sizes.
@@ -1033,6 +1033,85 @@ function runRailMarkMediaIssue(row, projectedRuntime = null) {
   }
   if (fraction < RUN_RAIL_MARK_INK_MIN) {
     return 'Run rail marks must carry the kit optical mass: ink fills less than 62% of the canvas';
+  }
+  return null;
+}
+
+/**
+ * The mark a COMMITTING verb wears — the press that takes you into the Run, whether you are
+ * resuming one or beginning one (ADR-0638). One slot, because it is one act: installing it binds
+ * every confirm band in the app at once.
+ *
+ * Its geometry contract is the rail tab's, and deliberately the same VALUES rather than the same
+ * words: the band takes the tab's 61px seat, its 40px mark slot and its 44px draw of the 64px
+ * canvas, so a mark authored for one reads correctly in the other and the two cannot drift into
+ * two size classes for the same kit. What it may NOT borrow is the rail mark's validator — that
+ * one pins `runtime.component` to `run-rail-mark`, and a candidate must say which seat it was
+ * authored for or the Studio's two review surfaces would offer each other's candidates.
+ */
+const CONFIRM_MARK_COMPONENT = 'chrome-confirm-verb';
+const CONFIRM_MARK_CANVAS = RUN_RAIL_MARK_CANVAS;
+const CONFIRM_MARK_INK_MIN = RUN_RAIL_MARK_INK_MIN;
+const CONFIRM_MARK_INK_MAX = RUN_RAIL_MARK_INK_MAX;
+const CONFIRM_MARK_SLOT = 'ui/kit/icons/confirm.png';
+const CONFIRM_MARK_VARIANT = 'confirm';
+
+/** Whether this slot is the confirm mark. One slot, so the variant is a constant. */
+function confirmMarkSlot(slot) {
+  return String(slot || '') === CONFIRM_MARK_SLOT ? CONFIRM_MARK_VARIANT : null;
+}
+
+/** The Studio category that mounts a candidate in the real verb band — the only surface an
+ *  owner proof for this slot can honestly be earned on. */
+function confirmMarkReviewSurface(url, slot) {
+  return Boolean(confirmMarkSlot(slot))
+    && url instanceof URL
+    && url.pathname === '/studio'
+    && url.searchParams.get('cat') === 'confirmmark';
+}
+
+/** The typed completeness validator that lifts this slot out of `ui-kit`'s bridge-only default. */
+function confirmMarkMediaIssue(row, projectedRuntime = null) {
+  if (!confirmMarkSlot(row.slot)) return 'The confirm mark requires its registered semantic slot';
+  if (row.domain !== 'ui-kit') return 'The confirm mark requires the ui-kit domain';
+  if (row.media_type !== 'image/png') return 'The confirm mark requires image/png';
+  if (Number(row.width) !== CONFIRM_MARK_CANVAS || Number(row.height) !== CONFIRM_MARK_CANVAS) {
+    return `The confirm mark requires the canonical ${CONFIRM_MARK_CANVAS}x${CONFIRM_MARK_CANVAS} kit icon canvas`;
+  }
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'The confirm mark requires metadata.runtime';
+  const allowed = new Set(['component', 'variant', 'altText', 'nativeRole']);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `Confirm mark runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== CONFIRM_MARK_COMPONENT) {
+    return `Confirm mark metadata.runtime.component must be ${CONFIRM_MARK_COMPONENT}`;
+  }
+  if (runtime.nativeRole !== CONFIRM_MARK_COMPONENT) {
+    return `Confirm mark metadata.runtime.nativeRole must be ${CONFIRM_MARK_COMPONENT}`;
+  }
+  if (runtime.variant !== CONFIRM_MARK_VARIANT) {
+    return `Confirm mark metadata.runtime.variant must be ${CONFIRM_MARK_VARIANT}`;
+  }
+  // The verb's own word owns the accessible name; the mark restating it would make a reader say
+  // the glyph's name in front of the verb.
+  if (runtime.altText !== '') {
+    return 'Confirm mark metadata.runtime.altText must be empty because the verb label owns its accessible name';
+  }
+  // Margin is a claim about the BYTES, stated where the row's other byte claims live.
+  const native = isObjectRecord(row.native_evidence) ? row.native_evidence : {};
+  const inkBox = isObjectRecord(native.inkBox) ? native.inkBox : null;
+  if (!inkBox) return 'The confirm mark must state nativeEvidence.inkBox, the measured ink box of these bytes';
+  const longest = Math.max(Number(inkBox.width), Number(inkBox.height));
+  if (!Number.isFinite(longest) || longest <= 0) return 'Confirm mark nativeEvidence.inkBox is not a measured box';
+  const fraction = longest / CONFIRM_MARK_CANVAS;
+  if (fraction > CONFIRM_MARK_INK_MAX) {
+    return 'The confirm mark must reserve canvas margin: ink fills more than 95% of the canvas';
+  }
+  if (fraction < CONFIRM_MARK_INK_MIN) {
+    return 'The confirm mark must carry the kit optical mass: ink fills less than 62% of the canvas';
   }
   return null;
 }
@@ -2440,6 +2519,9 @@ module.exports = {
   runRailMarkMediaIssue,
   runRailMarkSlot,
   runRailMarkReviewSurface,
+  confirmMarkMediaIssue,
+  confirmMarkSlot,
+  confirmMarkReviewSurface,
   predrawnBoardAlignmentIssue,
   predrawnBoardMediaIssue,
   predrawnBoardOwnerProofIssue,
@@ -2467,6 +2549,9 @@ module.exports = {
   titleBarMarkSlot,
   titleBarMarkMediaIssue,
   ADLECTIO_MARK_COMPONENT,
+  CONFIRM_MARK_COMPONENT,
+  CONFIRM_MARK_SLOT,
+  CONFIRM_MARK_VARIANT,
   ADLECTIO_MARK_SLOT,
   adlectioMarkSlot,
   adlectioMarkMediaIssue,

@@ -109,7 +109,12 @@ not the mark.
   slightly differently.
 - Installing the mark binds every confirm band at once, because there is one role. That is the
   point, and it means the decision is made once rather than per screen.
-- Until an install happens the bands show label-only with the slot held open. That is the
-  reserved state working, not a missing asset.
+- Until an install happens the bands show the word alone — the mark's COLUMN goes with the mark,
+  so an uninstalled seat costs nothing and never pushes the word off centre.
+- `ui-kit` candidates are bridge-only until a slot has a typed completeness validator, so the
+  slot carries a backend projection (`confirmMarkMediaIssue`) beside the rail marks'. It reuses
+  their canvas and ink band by NAME rather than by value — the two seats are the same geometry
+  — and pins `runtime.component`, which is the only thing that tells the two apart and stops
+  either review surface offering the other's candidates.
 - No gameplay, save-shape, `RunSaveVersion` or database-schema change. `ui/kit/icons/confirm.png`
   is a NEW slot carrying candidates only; nothing existing is overwritten or re-pointed.

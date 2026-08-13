@@ -79,6 +79,8 @@ const {
   nativeMediaEvidenceIssue,
   runRailMarkMediaIssue,
   runRailMarkSlot,
+  confirmMarkMediaIssue,
+  confirmMarkSlot,
   predrawnBoardMediaIssue,
   predrawnBoardOwnerProofIssue,
   predrawnBoardSlotSlug,
@@ -20075,6 +20077,9 @@ function mediaDomainProjectionIssue(row) {
   }
   if (runRailMarkSlot(row.slot)) {
     return runRailMarkMediaIssue(row, runtime.value);
+  }
+  if (confirmMarkSlot(row.slot)) {
+    return confirmMarkMediaIssue(row, runtime.value);
   }
   if (adlectioMarkSlot(row.slot)) {
     return adlectioMarkMediaIssue(row, runtime.value);

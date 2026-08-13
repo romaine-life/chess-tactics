@@ -119,7 +119,12 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // The verb is DECLARED, not marked up: a call site that could write its own control could
     // wrap it in a box of its own, which is exactly how it came to sit inside the card's frame
     // instead of being one of its rows (ChromeVerbRow).
-    expect(playMenu).toContain("const RUN_PLAY_VERBS: readonly ChromeVerb[] = [{ id: 'play', label: 'Play', to: '/run', confirm: true }];");
+    expect(playMenu).toContain("const RUN_PLAY_VERBS: readonly ChromeVerb[] = [{ id: 'play', label: 'Begin', to: '/run', confirm: true }];");
+    // ONE word behind both tabs (ADR-0640). A commitment must not repeat the tab that opened it —
+    // "Continue" opening a card whose button says Continue spends the press on a word already
+    // read — and it is one act behind both, so it is one word under the one mark.
+    expect(playMenu).not.toMatch(/label: 'Continue', to: '\/run'/);
+    expect(playMenu).not.toContain("'Starting…' : 'Start Run'");
     expect(playMenu).not.toContain('to="/run"><span>Play</span></ChromeNavButton>');
     // Facts and verb share ONE structural field — no bare text and no loose plaque on the live
     // vista. The card is teal because it establishes a region; the verb row inside it is the only
@@ -285,7 +290,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('to={PLAY_RUN_NEW_SELECTOR_HREF}');
     expect(playMenu).toContain('data-testid="run-detail-new"');
     // No heading over it. The rail tab that opened the column already says New and the verb at the
-    // bottom says Start Run, so a title between them only spends a row repeating one of the two.
+    // first row is the verb, so a title between them only spends a row repeating one of the two.
     // The aside's own label keeps the name for the landmark, and keeps its subject: a landmark is
     // read away from the rail that supplied it, so the bare "New" of the tab is not enough there.
     expect(playMenu).not.toMatch(/<div className="ce-selected-head"><h2>New Run<\/h2><\/div>/);
@@ -500,7 +505,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('if (starting || syncing || !eligible.length) return;');
     expect(playMenu).toContain('if (run) await abandon();');
     expect(playMenu).toMatch(/await abandon\(\);[\s\S]*?replace\(createRun\([\s\S]*?navigateApp\('\/run'\)/);
-    expect(playMenu).toContain("label: starting ? 'Starting…' : 'Start Run',");
+    expect(playMenu).toContain("label: starting ? 'Starting…' : 'Begin',");
     // The verb IS the cell: the box's own frame and rail are its edges, so it draws no frame and
     // the wood fills the whole compartment. It is ChromeVerbRow's cell rather than a private copy
     // of one — this branch hand-rolled the row first and the shared primitive landed the same day,
@@ -521,7 +526,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
   });
 
   it('confirms Run replacement inline in the detail column instead of a popup', () => {
-    // The disclosure card states the stakes before any click; the first Start Run click
+    // The disclosure card states the stakes before any click; the first press of the verb
     // arms an explicit Keep Run / Abandon and Start pair in the same actions row.
     expect(playMenu).not.toContain('useConfirm');
     expect(playMenu).toContain('data-testid="run-replace-warning"');
@@ -645,7 +650,7 @@ describe('Run rule options are a departure from the defaults, not a step in setu
     expect(prepSection).toMatch(/<InnerChromeBox[\s\S]*?fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
   });
 
-  it('seats below Start Run, so it is not a step between the Ataraxia choice and the verb', () => {
+  it('seats below the verb, so it is not a step between the Ataraxia choice and the press', () => {
     expect(playMenu).toMatch(/<ChromeVerbRow verbs=\{runVerbs\}[\s\S]*?\{runRulesCells\}/);
     expect(playMenu).not.toMatch(/\{runRulesCells\}[\s\S]*?<ChromeVerbRow verbs=\{runVerbs\}/);
   });
