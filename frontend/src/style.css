@@ -29186,6 +29186,19 @@ button.run-card-formation-cell {
   gap: var(--ds-stack);
 }
 
+/* Run's detail column is a TAB column's width, not a preview column's (ADR-0638).
+   `.menu-dest-preview` sizes the Editor's peripheral board thumbnail — 300px "compact by
+   intent", explicitly narrower than a tab column — and Run's detail column inherited that
+   because it borrowed the class. It is not a peripheral preview: it opens with the press the
+   screen exists for, at the menu's own lettering, so it carries the same weight as the two rails
+   beside it and reads as the third of three peers. 22px short of them, that band read as a rail
+   tab that had failed to line up. Taken from `--col-tab-w` rather than restated, so the card
+   comes out byte-identical in width to the tabs on either side of it. Seated after
+   `.menu-dest-preview` above, which is the rule it overrides at equal specificity. */
+.play-detail-col {
+  inline-size: var(--col-tab-w);
+}
+
 /* One card per detail column: the facts (or the adoption question) and the verb that completes
    them share a single structural stone field, so nothing in the column reads as text floating on
    the live vista.

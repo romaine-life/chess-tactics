@@ -74,6 +74,15 @@ one press on the topmost control of the column and nothing else — and Options 
 is what it was already for (its own note: *not a step between the Ataraxia choice and the
 verb*).
 
+**A band at the menu's scale makes its column a PEER of the rails beside it**, so Run's detail
+column takes the tab width. It had been sized by `.menu-dest-preview` — 300px, "compact by
+intent", authored for the Editor's peripheral board thumbnail and explicitly narrower than a tab
+column — which it inherited only by borrowing the class. That is the wrong kind of column for
+this: it opens with the press the screen exists for. Left 22px short of the two rails, the band
+read as a rail tab that had failed to line up. At `--col-tab-w` all three columns come out
+byte-identical, and the label track goes 178px to 200px — wider than the rail tab's own 188px —
+so every label including "Abandon and Start" renders at the full 32px with the fitter idle.
+
 The seat is **reserved, not fail-closed** (ADR-0318): the band holds its 40px slot with or
 without installed art, so installing the mark later cannot move the label. Four candidates are
 uploaded to `ui/kit/icons/confirm.png` and the owner installs one from **Studio → Confirm
