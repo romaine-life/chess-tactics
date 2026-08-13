@@ -222,12 +222,16 @@ function InstallStripControl({
           expectedActiveVersionId: slot?.activeVersionId ?? null,
         };
       }));
-      setStatus(
-        'Installed. Reload to see the strip. Run `npm run verify:icon-seats` next — the Strategikon’s '
-        + 'Prosopography and Lipsanotheca seats declare the OLD ink numbers by hand, and the gate '
-        + 'prints the two it wants instead.',
-      );
+      setStatus('Installed. Reloading…');
       onInstalled();
+      // RELOAD, rather than a sentence asking him to.
+      //
+      // The Installed strip reads the drawable catalog the app booted with, and `onInstalled`
+      // only re-fetches the live-media one — so a successful install left this page drawing the
+      // marks it had just replaced. The one thing on screen that answers "did it change?" was
+      // answering no. A note saying to reload is not a fix: the page has everything it needs to
+      // be right, and the strip beside it is the whole reason to be here.
+      window.location.reload();
     } catch (reason) {
       setStatus(reason instanceof Error ? `Install failed: ${reason.message}` : 'Install failed.');
     } finally {

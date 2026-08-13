@@ -48,9 +48,18 @@ const DECLARED = [
   { rule: '.skirmish-hud-title-action-glyph', slot: 'ui/kit/icons/studio-catalog.png', baseline: true },
 ];
 
+/**
+ * The declared number for one seat, read from the block its selector belongs to.
+ *
+ * A SELECTOR LIST counts. Several of these seats are fitted identically and therefore declare the
+ * same pair of numbers, and the honest way to write that is one rule listing them — three copies of
+ * one fact is exactly what goes stale unevenly, which is what this gate exists to catch. So the
+ * match looks forward from the selector past any remaining members of its list to the brace, which
+ * finds it wherever in the list it sits.
+ */
 function declaredNumber(css, rule, property) {
   const escaped = rule.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = css.match(new RegExp(`${escaped}\\s*\\{[^}]*${property}:\\s*([0-9.]+)`));
+  const match = css.match(new RegExp(`${escaped}\\s*(?:,[^{}]*)?\\{[^}]*${property}:\\s*([0-9.]+)`));
   return match ? Number(match[1]) : null;
 }
 

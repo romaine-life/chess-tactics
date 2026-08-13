@@ -118,13 +118,25 @@ it is why the page says so rather than leaving it to be discovered.
 
 - The strip reads at one size. The four marks arrive at ~16px of ink like the gear instead of ~12px,
   which is the difference between a mark and a smudge at this scale.
-- **`verify:icon-seats` will fail the moment `unit-studio` or `info` is installed, and that is the
-  gate working.** `[data-strategikon-section="prosopography"]` and `…="lipsanotheca"` declare the
-  OLD ink numbers (`.625` / `.1875`) by hand; fitted bytes measure `.8125` / `.09375`, the same pair
-  `enchiridion.png` already declares one rule above them. The gate reads the installed bytes and
-  prints both numbers, so the edit is named rather than hunted. It is deliberately not made ahead of
-  the install: the declaration must describe the bytes that are actually live, and until Install is
-  pressed those are the old ones.
+- **The owner's picks are installed and live**: Bone knight 11, Bone and ebony pawns 11, Brass
+  roundel 04, and Slate viewing plate 01 for View. The spyglass was not taken.
+- **`verify:icon-seats` failed the moment they were installed, which is the gate working**, and its
+  message named the fix: `[data-strategikon-section="prosopography"]` and `…="lipsanotheca"` still
+  declared the old `.625` / `.1875` by hand. Fitted bytes measure `.8125` / `.09375` — the same pair
+  `enchiridion.png` already declared one rule above them — so **three copies of one fact became one
+  rule listing all three selectors.** That is the honest shape: three identical numbers are what go
+  stale unevenly, which is the whole thing this gate exists to catch.
+
+  The gate had to learn to read a SELECTOR LIST for that. Its per-rule regex required the selector
+  to be followed immediately by `{`, so grouping the three made it report all three as undeclared —
+  a gate that silently requires duplication to satisfy it. It now looks forward past the remaining
+  members of the list, which finds a selector wherever in that list it sits.
+- **Install reloads the page.** The Installed strip reads the drawable catalog the app booted with,
+  and the install's `refresh()` only re-fetches the live-media one — so a successful install left
+  this page still drawing the marks it had just replaced, and the one thing on screen that answers
+  "did it change?" was answering no. The first install shipped with a sentence asking for a reload
+  instead, which is not a fix: the owner pressed Install, saw nothing move, and reported it as not
+  having worked. It had.
 - Candidates were generated at the canvas they ship on. ADR-0560's packer header warns that a 128px
   render packed to 52 mushes exactly the art with no hard geometry to survive it; these were
   generated at 64×64, a ~0.9× fit.
