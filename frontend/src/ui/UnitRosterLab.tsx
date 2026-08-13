@@ -5,7 +5,7 @@ import {
   pieceSpritePath,
   type UnitPalette,
 } from '../core/pieces';
-import { activeUnitFamilies, tileFrameSrc, type UnitFacing } from '@chess-tactics/board-render';
+import { activeUnitFamilies, tileFrameSrc, unitAssetById, type UnitFacing } from '@chess-tactics/board-render';
 import { tileAssets } from '../art/tileset';
 import { fetchAdminUnitCatalog } from '../net/unitAssets';
 import { spriteRungForWidth, zoomForTier } from '../game/zoomTiers';
@@ -279,9 +279,19 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
                 const asset = catalog?.assets.find(
                   (a) => a.id === catalog.families.find((f) => f.family === family)?.acceptedAssetId,
                 );
-                // The board's 1x draw rect: the single authored size in use today.
-                const baseW = Math.min(78, asset?.footprint.sourceCanvasWidth ?? 78);
-                const baseH = Math.min(92, asset?.footprint.sourceCanvasHeight ?? 92);
+                // The board's 1x draw rect, read from the registry the BOARD draws from
+                // rather than the admin catalog. The admin fetch is for the before/after and
+                // the rung list; when it had not resolved -- or 403'd -- this fell through to
+                // `?? 78` / `?? 92`, which are the maximum CAPS, not any unit's size. Every
+                // piece then drew at 78x92 instead of 51x81: 53% too wide against only 14%
+                // too tall, so the whole roster read wide and no capture reproduced it,
+                // because the catalog happened to resolve in mine. A fallback that silently
+                // substitutes a limit for a measurement is the defect.
+                const drawn = unitAssetById(family);
+                const baseW = Math.min(78, drawn?.footprint.sourceCanvasPx
+                  ?? asset?.footprint.sourceCanvasWidth ?? 51);
+                const baseH = Math.min(92, drawn?.footprint.sourceCanvasHeightPx
+                  ?? asset?.footprint.sourceCanvasHeight ?? 81);
                 // The rung this tier actually wants, from the sizes this PALETTE has —
                 // rungs go in one colour at a time, and a ladder is judged while it is
                 // still landing, so the all-palette list would show nothing until the last
