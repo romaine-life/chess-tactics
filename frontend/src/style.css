@@ -1982,9 +1982,16 @@ h1 {
      destination slabs a click behind them (Play's Run cards, the Editor's level list) — they sit
      on the same wood in the same shell, so plain text there reads as a mismatch, not hierarchy.
      Everything that clips a label has to make room for it; see .settings-tab-label. Small utility
-     buttons (Reset, Open) deliberately do NOT take it — 5px closes their smaller text solid.
-     MM_LABEL_LIVE mirrors both values and mmLive.test.ts derives them back out of here. */
-  --menu-label-stroke-w: 5px;
+     buttons (Reset, Open) deliberately do NOT take it — it closes their smaller text solid.
+     MM_LABEL_LIVE mirrors both values and mmLive.test.ts derives them back out of here.
+     WIDTH IS IN BRICKS, NOT SCREEN PIXELS. The stroke is centred on the glyph outline, so half
+     of it paints outside; the visible outline is therefore width/2. Every label that wears this
+     is at --ds-text-lg (32px), where the house font's brick is 2px, so 4px puts exactly ONE
+     brick outside the glyph. It was 5px, which put 1.25 bricks outside — an outline a quarter
+     of a stroke thicker than the strokes it surrounds, which is why these labels read as soft
+     however correctly the type itself is set. Mixing the font's unit with the screen's is the
+     defect; if a consumer at another tier ever takes this, it needs its own brick-correct value. */
+  --menu-label-stroke-w: 4px;
   --menu-label-stroke-ink: #02070b;
   /* Spatial-role tokens (ADR-0031) — COMFORTABLE density is the default; in-game
      surfaces override these to the tight end (see .skirmish-screen). inset = padding
@@ -19055,7 +19062,7 @@ button.tileset-relationship-cell {
    and had no room of its own — so the editor's War and Levels tabs still lost the left of every
    word while the main menu's labels, which do not clip at all, looked right. */
 .apparatus-tab-copy {
-  --tab-label-stroke-apron: var(--menu-label-stroke-w, 5px);
+  --tab-label-stroke-apron: var(--menu-label-stroke-w, 4px);
   align-content: center;
   display: grid;
   gap: 2px;
