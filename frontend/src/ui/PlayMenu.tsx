@@ -199,10 +199,13 @@ function ContinuePanel({ inventory }: { inventory: ContinueInventory }): ReactEl
 const PLAY_CHOICE_ROW_SEATS = { current: 0, new: 1 } as const;
 
 /**
- * The Continue card's closing verb. One verb, so its row spans the card and there is no column
- * line for a rail to be — `verbColumns` states that rather than the card counting its own tracks.
+ * The Continue card's OPENING verb — the press this whole screen exists for, so it is the first
+ * thing in the card rather than the last (ADR-0638). One verb, so its row spans the card and there
+ * is no column line for a rail to be — `verbColumns` states that rather than the card counting its
+ * own tracks. `confirm` is what gives it the menu's own lettering and the confirm mark; the card's
+ * facts read as the receipt under it.
  */
-const RUN_PLAY_VERBS: readonly ChromeVerb[] = [{ id: 'play', label: 'Play', to: '/run' }];
+const RUN_PLAY_VERBS: readonly ChromeVerb[] = [{ id: 'play', label: 'Play', to: '/run', confirm: true }];
 
 /**
  * The adoption card's tracks. EVERY row of it spans — the lede, each candidate's name, its facts
@@ -293,6 +296,7 @@ function RunPanel({
         label: starting ? 'Starting…' : 'Abandon and Start',
         testId: 'run-abandon-and-start',
         disabled: starting,
+        confirm: true,
         onPress: () => { void start(); },
       },
     ]
@@ -301,6 +305,7 @@ function RunPanel({
       label: starting ? 'Starting…' : 'Start Run',
       testId: 'run-start',
       disabled: newRunUnavailable || starting,
+      confirm: true,
       onPress: () => { if (presentedRun) { setArmed(true); return; } void start(); },
     }];
   const adoptionCandidates = (conflict: RunAdoptionConflict): Array<{
@@ -528,15 +533,21 @@ function RunPanel({
                   share a single structural stone card, so neither stands as bare text on the live
                   vista. The card is teal because it establishes a region; the Play plate inside
                   it is oak because it is the one thing here that takes a click (ADR-0433). The
-                  verb still directly follows the facts it completes (ADR-0475) — it is inside the
-                  same field now rather than under it.
+                  verb is the OPENING row of that field now.
 
-                  Play IS the card's closing row: a plaque parked in the field drew a second frame
+                  Play IS a row of the card: a plaque parked in the field drew a second frame
                   a few pixels inside the one already around it, with a margin of marble showing
                   on all four sides. As a row it reaches the card's frame on both sides and the
-                  kit's rail above it, and that rail is the box's own — laid and capped from its
-                  grid lines rather than placed by hand (ADR-0059). */}
+                  kit's rail below it, and that rail is the box's own — laid and capped from its
+                  grid lines rather than placed by hand (ADR-0059).
+
+                  It seats FIRST, at the menu's own lettering with the confirm mark (ADR-0638).
+                  The verb used to close the card in 16px type, which put the one press this
+                  screen exists for at the bottom of a list of facts and drawn smaller than
+                  anything the player pressed to get here. The facts read as its receipt now:
+                  what you are about to resume, under the button that resumes it. */}
               <DividedInnerChromeBox className="play-detail-card" columns={verbColumns(RUN_PLAY_VERBS)} fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
+                <ChromeVerbRow verbs={RUN_PLAY_VERBS} className="play-detail-verbs" cellClassName="play-detail-verb" />
                 <ChromeDividedGridRow spans="all" className="play-detail-facts">
                   <dl>
                     <div><dt>Battle</dt><dd>{presentedRun.battleIndex + 1} of {presentedRun.war.battles.length}</dd></div>
@@ -550,23 +561,22 @@ function RunPanel({
                     <div><dt>Deployment</dt><dd>Arrange formations</dd></div>
                   </dl>
                 </ChromeDividedGridRow>
-                <ChromeVerbRow verbs={RUN_PLAY_VERBS} className="play-detail-verbs" cellClassName="play-detail-verb" />
               </DividedInnerChromeBox>
             </div>
           </aside>
         ) : null}
 
         {choice === 'new' ? (
-          /* No heading. The rail tab that opened this column already says New, and the verb at the
-             bottom says Start Run — a title sitting between the press and the verb it arms could
-             only repeat one of them, and it would spend a row of the column to do it. The aside
-             keeps the name for anyone reading the page by its landmarks — "New Run" rather than
-             the tab's bare "New", because a landmark is read out of the rail that gave it its
-             subject, where Continue's name still stands on its own. */
+          /* No heading. The rail tab that opened this column already says New, and the column's own
+             first row says Start Run — a title between them could only repeat one of the two, and
+             it would spend a row of the column to do it. The aside keeps the name for anyone
+             reading the page by its landmarks — "New Run" rather than the tab's bare "New",
+             because a landmark is read out of the rail that gave it its subject, where Continue's
+             name still stands on its own. */
           <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="New Run" data-testid="run-detail-new">
             {/* ONE field, not four slabs with the vista showing through between them. Preparing a
-                Run is a single control — choose the rung, read what it costs you, press the verb —
-                and it was drawn as four separate boxes whose gaps read as four unrelated things
+                Run is a single control — press the verb, or read the rung and what it costs you
+                first — and it was drawn as four separate boxes whose gaps read as four unrelated things
                 that happened to be stacked. The gaps are now the box's own rails, which is what a
                 boundary between parts of one thing looks like in this kit, and each part is a CELL
                 with its controls inserted into it (ADR-0433: marble field, oak leaves).
@@ -583,6 +593,20 @@ function RunPanel({
               fillRole={CHROME_STRUCTURAL_FILL_ROLE}
               aria-label="Run preparation"
             >
+              {/* The verb IS the cell — wood filling the whole area between the rails, with the
+                  box's frame as its edge — and armed it SPLITS into two, each answer its own
+                  compartment of the same row. Both shapes are ChromeVerbRow's, declared as data:
+                  this branch hand-rolled the row first, and the shared primitive landed on main
+                  the same day doing exactly this, which makes a private copy the parallel
+                  ADR-0059 forbids.
+
+                  It seats FIRST, at the menu's own lettering with the confirm mark (ADR-0638).
+                  Everything under it is SETUP — the rung, what a new Run costs the one you hold,
+                  the rules — and setup that stands between a player and the press reads as a form
+                  to be filled in. The defaults are the game, so the ordinary Run is one press on
+                  the topmost control of the column and nothing else. */}
+              <ChromeVerbRow verbs={runVerbs} className="run-prep-verbs" cellClassName="run-prep-verb" />
+
               {ataraxiaPrepCells({
                 value: ataraxiaTier,
                 highestUnlockedTier,
@@ -605,18 +629,10 @@ function RunPanel({
                 </ChromeDividedGridRow>
               ) : null}
 
-              {/* The verb IS the cell — wood filling the whole area between the rails, with the
-                  box's frame as its edge — and armed it SPLITS into two, each answer its own
-                  compartment of the same row. Both shapes are ChromeVerbRow's, declared as data:
-                  this branch hand-rolled the row first, and the shared primitive landed on main
-                  the same day doing exactly this, which makes a private copy the parallel
-                  ADR-0059 forbids. */}
-              <ChromeVerbRow verbs={runVerbs} className="run-prep-verbs" cellClassName="run-prep-verb" />
-
-              {/* Below the verb, deliberately. The defaults are the game and almost nobody opens
-                  this, so it must not sit between the Ataraxia choice and Start Run as if it were
-                  a step in setup. It no longer grows the box either — its cells are there whether
-                  the choices are showing or not, so opening it moves nothing. */}
+              {/* Last, deliberately. The defaults are the game and almost nobody opens this, so it
+                  must not sit between the Ataraxia choice and Start Run as if it were a step in
+                  setup. It no longer grows the box either — its cells are there whether the
+                  choices are showing or not, so opening it moves nothing. */}
               {runRulesCells}
             </DividedInnerChromeBox>
           </aside>
