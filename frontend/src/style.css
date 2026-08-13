@@ -6882,7 +6882,7 @@ body.loading-bootstrap .app-startup-status {
   text-shadow: 0 2px 0 #010407;
   text-transform: uppercase;
 }
-\/* The whole option-row treatment is explained HERE, over the one rule in this run that paints
+/* The whole option-row treatment is explained HERE, over the one rule in this run that paints
    nothing, because check-ui-surface-contract.mjs keys a rule on everything between the previous
    `}` and its `{` — a comment directly above one of the three rules below becomes part of that
    rule's identity, and all three are keyed on their bare selectors.
