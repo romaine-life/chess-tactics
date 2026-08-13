@@ -10226,6 +10226,36 @@ body.loading-bootstrap .app-startup-status {
     overflow-y: auto;
   }
 
+  /* The stacked Controls row must be as tall as the Controls panel, and it was not: measured
+     205px against 323px of content, so the panel's frame stopped mid-panel and Selected unit
+     spilled out the bottom onto the page behind it.
+
+     The panel carries `min-block-size: 0` — correct on the desktop rail, where it is a
+     full-height column that owns a scroller — and that removes the automatic minimum an `auto`
+     grid row would otherwise take from its content, letting the row compress below it. Asking
+     for the content minimum back is the whole fix; the row is already `auto`.
+
+     Its body then stops being a flexible scroller. `flex: 1 1 auto` + `min-height: 0` is what
+     makes it fill a full-height rail, and in a content-sized row it resolved to ZERO height —
+     which is why the tab panel measured 312x0 while its contents painted outside the frame.
+     Stacked, the page is the scroller and the body is simply as tall as what it holds. */
+  /* Say the row's size outright. Restoring the content minimum down the chain does not lift
+     an `auto` track here — the panel, the box inside it and its body each carry
+     `min-block-size: 0` for the desktop rail they belong to, and the track kept resolving to
+     the leftover 205px. `max-content` states the thing directly: this row is as tall as the
+     Controls panel, and the page scrolls to it. */
+  .skirmish-screen {
+    grid-template-rows: var(--app-header-h) minmax(520px, 62vh) max-content;
+  }
+  .skirmish-hud-panel {
+    flex: none;
+    overflow: visible;
+    /* And its own `min-height: 0` goes with the scroller it belonged to. Left in place it
+       contributes NOTHING to the panel's content minimum, so asking the panel for
+       `min-content` still measured the head alone — 205px, exactly the wrong answer. */
+    min-block-size: min-content;
+  }
+
   .run-lipsanon-strip {
     max-inline-size: calc(100% - (2 * var(--ds-space-3)));
   }
