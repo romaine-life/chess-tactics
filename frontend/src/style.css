@@ -27060,6 +27060,12 @@ button.tileset-relationship-cell {
    falls back to the CSS default 300x150 and silently ignores its width/height attributes. */
 .mobile-lab-frame { display: block; }
 
+/* The docked Controls strip's collapse toggle. Rendered by ShellControlsPanel whenever the
+   sheet placement is selected, but there is nothing to reclaim on the desktop rail — it is a
+   full-height column, not a strip sharing the screen — so it appears only inside the narrow
+   band that docks the rail in the first place. */
+.shell-controls-collapse { display: none; }
+
 /* ============================================================================
    MOBILE SUPPORT — both orientations, ordinary responsive behaviour
    ----------------------------------------------------------------------------
@@ -27453,9 +27459,32 @@ button.tileset-relationship-cell {
     display: none;
   }
 
-  /* The strip is fixed, so the page has to stop underneath it rather than behind it. */
+  /* The collapse. Only the sheet goes — the strip is what makes the rail worth docking, and
+     always-on status must not be behind a toggle. */
+  [data-shell-controls-panel][data-controls-collapsed] .skirmish-hud-panel,
+  [data-shell-controls-panel][data-controls-collapsed] .shell-controls-break {
+    display: none;
+  }
+  /* The toggle is a strip control, not a body one: it stays put while the body goes. Above
+     the narrow band there is no dock and nothing to reclaim, so it is not shown at all. */
+  .shell-controls-collapse {
+    display: inline-flex;
+    min-block-size: 32px;
+    padding-inline: var(--ds-space-2);
+  }
+
+  /* The board viewport is LOCKED. It is a camera — it pans and zooms in place — so the page
+     behind it must not also scroll: at 390x844 the screen ran 868px against an 844px box and
+     put a scrollbar down the side of the battlefield for 24px nobody needed. The strip is
+     fixed and the sheet scrolls itself, so nothing here wants page scroll. */
   .skirmish-screen:has([data-controls-mobile="sheet"]) {
-    padding-block-end: var(--controls-strip-reserve, 132px);
+    block-size: 100%;
+    overflow: hidden;
+    /* Measured and published by the panel itself (ShellControlsPanel), so the reservation
+       follows the strip through collapsing and through yielding to a workspace instead of
+       guessing one number for three different heights. The fallback is only for the frame
+       before the first measurement lands. */
+    padding-block-end: var(--controls-dock-height, 132px);
   }
   .skirmish-screen:has(:is(.strategikon-workspace, .run-workspace)):has([data-controls-mobile="sheet"]) {
     --controls-strip-reserve: 108px;
