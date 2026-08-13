@@ -74,6 +74,7 @@ const TilesetStudio = lazy(() => importTilePreview().then((module) => ({ default
 const LevelEditor = lazy(() => importLevelEditor().then((module) => ({ default: module.LevelEditor })));
 const PortraitEditor = lazy(() => importPortraitEditor().then((module) => ({ default: module.PortraitEditor })));
 const PredrawnReference = lazy(() => import('./PredrawnReference').then((module) => ({ default: module.PredrawnReference })));
+const MobileLab = lazy(() => import('./MobileLab'));
 const DrawableCatalogLab = lazy(() => import('./DrawableCatalogLab').then((module) => ({ default: module.DrawableCatalogLab })));
 const RunWatch = lazy(() => import('./RunWatch').then((module) => ({ default: module.RunWatch })));
 
@@ -785,12 +786,6 @@ export function App(): ReactElement {
             ) : <span>Loading…</span>}
           </div>
         ) : null}
-        <div className="rotate-gate" role="alertdialog" aria-label="Rotate your device to landscape">
-          <div className="rotate-gate-inner">
-            <p className="rotate-gate-title">Rotate your device</p>
-            <p className="rotate-gate-copy">Chess Tactics plays in landscape.</p>
-          </div>
-        </div>
       </div>
     </>
   );
@@ -813,6 +808,10 @@ function renderScene(scene: ScenePath, search: string): ReactElement {
     return handle ? <RunWatch handle={handle} /> : <PredrawnReference />;
   }
   if (path === '/predrawn-reference') return <PredrawnReference />;
+  // Mobile review lab: the real routes in same-origin iframes at exact device viewports.
+  // The dev server is loopback-only, so this is the only way to look at a phone layout on
+  // the machine the work is done on.
+  if (path === '/mobile-lab') return <MobileLab />;
   if (path === '/studio' || path === '/tileset-studio') return <TilesetStudio />;
   // Wall review lives in the Studio proper: an owner proof only counts from a game-owned
   // surface, and this bespoke path is not one. The studio's route writer canonicalises this

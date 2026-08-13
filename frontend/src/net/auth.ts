@@ -95,6 +95,23 @@ export function goSignIn(returnTo?: string): void {
 }
 
 /**
+ * Ask the provider for credentials again WITHOUT ending the session. The callback recognises the
+ * session already in hand and re-arms it in place, so the 90-day session — and the absolute
+ * deadline it is measured against — survives (ADR-0576).
+ *
+ * This is the answer to `isReauthenticationRequired`, and it is shared because every surface that
+ * can meet a step-up 401 needs it: an admin whose window closed while the page was open has no
+ * other way back, and the account menu's copy only appears when the page was LOADED stale.
+ */
+export function reauthenticateHref(returnTo: string = window.location.pathname + window.location.search): string {
+  return `/api/auth/sign-in?prompt=login&returnTo=${encodeURIComponent(returnTo)}`;
+}
+
+export function goReauthenticate(returnTo?: string): void {
+  window.location.href = reauthenticateHref(returnTo);
+}
+
+/**
  * True when a 401 means the authentication behind a still-valid session is not recent enough
  * (RFC 9470's `insufficient_user_authentication`).
  *

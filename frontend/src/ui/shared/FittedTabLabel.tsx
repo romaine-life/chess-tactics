@@ -17,7 +17,16 @@ const FONTS_READY: Promise<unknown> = typeof document !== 'undefined' && documen
   ? document.fonts.ready
   : Promise.resolve();
 
-export function FittedTabLabel({ children }: { children: string }): ReactElement {
+/**
+ * `className` is for a surface that mounts this box OUTSIDE a rail tab — the committing verb's
+ * band (ADR-0638), which wants the same fitter and the same box and states its own type. The
+ * `settings-tab-label` class stays either way: it is what the box IS, and the fitter's geometry
+ * comes from it.
+ */
+export function FittedTabLabel({ children, className }: {
+  children: string;
+  className?: string;
+}): ReactElement {
   const boxRef = useRef<HTMLSpanElement | null>(null);
   const textRef = useRef<HTMLElement | null>(null);
 
@@ -92,7 +101,7 @@ export function FittedTabLabel({ children }: { children: string }): ReactElement
   }, [children]);
 
   return (
-    <span ref={boxRef} className="settings-tab-label">
+    <span ref={boxRef} className={`settings-tab-label ${className ?? ''}`.trim()}>
       <strong ref={textRef}>{children}</strong>
     </span>
   );

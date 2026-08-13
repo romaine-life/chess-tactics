@@ -78,6 +78,7 @@ export type SceneViewId =
   | 'studio'
   | 'predrawn-reference'
   | 'portrait-editor'
+  | 'mobile-lab'
   | 'party';
 export type ScenePaintOwner =
   | 'run-watch'
@@ -89,6 +90,7 @@ export type ScenePaintOwner =
   | 'studio'
   | 'predrawn-reference'
   | 'portrait-editor'
+  | 'mobile-lab'
   | 'lobbies';
 export type SceneWaitPresentation = 'loading' | 'transition-only';
 
@@ -210,6 +212,7 @@ export const SCENE_DEFINITIONS = Object.freeze({
   // Run to someone who cannot act on it, so it shares no state with the Run scene tree.
   runWatch: defineScene({ id: 'run-watch', parent: null, slot: 'root', view: 'run-watch' }),
   portraitEditor: defineScene({ id: 'portrait-editor', parent: null, slot: 'root', view: 'portrait-editor' }),
+  mobileLab: defineScene({ id: 'mobile-lab', parent: null, slot: 'root', view: 'mobile-lab' }),
   party: defineScene({ id: 'party', parent: 'main-menu', slot: 'menu-destination', view: 'party' }),
 });
 

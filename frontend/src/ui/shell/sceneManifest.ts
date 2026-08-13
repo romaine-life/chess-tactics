@@ -204,6 +204,11 @@ export function sceneManifest(
       instance(SCENE_DEFINITIONS.portraitEditor),
     ]);
   }
+  if (path === '/mobile-lab') {
+    return scene(path, manifest('mobile-lab', 'tool', 'mobile-lab', ['mobile-lab']), [
+      instance(SCENE_DEFINITIONS.mobileLab),
+    ]);
+  }
 
   // --- The main menu and every destination it retains. App renders MainMenu for
   // unmatched routes, and the registry's root entry resolves them the same way, so

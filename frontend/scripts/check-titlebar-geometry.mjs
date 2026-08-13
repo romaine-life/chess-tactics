@@ -32,12 +32,25 @@ if (!executablePath) {
 const browser = await puppeteer.launch({
   executablePath,
   headless: 'new',
-  args: ['--no-sandbox', '--disable-gpu', '--disable-software-rasterizer', '--disable-background-networking', '--no-first-run'],
+  // The named environment URL is a *.localhost host, which this browser must resolve itself.
+  args: ['--no-sandbox', '--disable-gpu', '--disable-software-rasterizer', '--disable-background-networking',
+    '--no-first-run', '--host-resolver-rules=MAP *.localhost 127.0.0.1'],
 });
 
 try {
   const page = await browser.newPage();
   await page.setViewport({ width, height, deviceScaleFactor: scale });
+  // The account cluster this gate measures only exists for a signed-in owner, so a fresh
+  // browser with no cookies waited 15s for a control that was never going to render and
+  // reported a timeout instead of a geometry verdict. Acquire the backend's loopback-only
+  // dev session first, exactly as scripts/shot.mjs does; never for a non-loopback target.
+  const target = new URL(url);
+  if (['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname) || target.hostname.endsWith('.localhost')) {
+    const signIn = new URL('/api/auth/sign-in', target);
+    signIn.searchParams.set('returnTo', '/api/auth/me');
+    await page.goto(signIn.href, { waitUntil: 'domcontentloaded', timeout: 30000 })
+      .catch(() => {});
+  }
   await page.goto(url, { waitUntil: 'networkidle0', timeout: 8000 })
     .catch(() => page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 }));
   await page.waitForSelector('.app-shell-titlebar', { timeout: 15000 });
@@ -92,6 +105,11 @@ try {
       brandCopy: rect(brandCopy),
       fill: rect(fill),
       lane: rect(lane),
+      // The three horizontal regions of the bar. They share ONE grid track and are placed by
+      // justify-self, so nothing stops them sliding over each other once the bar narrows.
+      brandLayout: rect(document.querySelector('.brand-lockup-layout')),
+      center: rect(document.querySelector('.app-shell-titlebar-center')),
+      centerContent: rect(document.querySelector('.app-shell-titlebar-center > *')),
       divider: rect(divider),
       horizontalDividerTop,
       horizontalDividerBottom,
@@ -141,6 +159,27 @@ try {
   near(geometry.brandHome.left, geometry.brandMark.left, 'brand home left to shield');
   if (geometry.brandHome.right > geometry.brandCopy.left + tolerance) {
     failures.push(`brand home overlaps inert title copy by ${geometry.brandHome.right - geometry.brandCopy.left}px`);
+  }
+  // The bar's three regions — brand lockup, centre status, control lane — occupy the same grid
+  // track and are placed with justify-self, so the layout does not reserve room for each: it
+  // simply lets them overlap once the bar is narrower than their sum. On a 390px phone running
+  // a Battle the centre spans the whole track and covers both the brand lockup and part of the
+  // lane, which makes the home shield and the Run breadcrumb untappable — every tap in that
+  // region lands on the status chip on top. Measured against the CONTENT of the centre, because
+  // the centre element itself may legitimately stretch while its chips sit in the free space.
+  const centerInk = geometry.centerContent.width > 0 ? geometry.centerContent : geometry.center;
+  if (centerInk.width > 0) {
+    if (centerInk.left < geometry.brandLayout.right - tolerance) {
+      failures.push(
+        `title-bar centre overlaps the brand lockup by ${Math.round(geometry.brandLayout.right - centerInk.left)}px`
+        + ' — the home shield and screen-name breadcrumb cannot be tapped',
+      );
+    }
+    if (centerInk.right > geometry.lane.left + tolerance) {
+      failures.push(
+        `title-bar centre overlaps the control lane by ${Math.round(centerInk.right - geometry.lane.left)}px`,
+      );
+    }
   }
   await page.addStyleTag({
     content: `

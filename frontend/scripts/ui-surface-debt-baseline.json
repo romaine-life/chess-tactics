@@ -942,24 +942,8 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": ".house-select-option.is-active, .house-select-option:hover:not(:disabled)",
-      "surfaceHash": "d6fc5b8a200d53b1fffcc1c555c6beb7a350468a70edf68bbbdd12aee0078e03",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
-      "selector": ".house-select-option",
-      "surfaceHash": "5e87135f2dbe251b6b3434effc36b8168717935795c74b05bf284fdbd20e769e",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
       "selector": ".house-select-option[aria-selected=\"true\"]",
-      "surfaceHash": "7d75f8e56d5cbeaa1860730cfd5b7897dba8a107957dfcbaa2f32d1286cd4d95",
+      "surfaceHash": "a66e6d9166c7087da1814672cb191c430f6f1e17046a5b1d8e8fa4537c4d9f56",
       "occurrence": 1
     },
     {
@@ -5765,9 +5749,9 @@
     {
       "kind": "css",
       "file": "src/style.css",
-      "context": "@media (orientation: portrait) and (pointer: coarse)",
-      "selector": ".rotate-gate",
-      "surfaceHash": "b90041ea5df76b8a172d9ec48617d3d91f97efd66a7372921e29c78c6d758e8c",
+      "context": "@media (max-width: 960px)",
+      "selector": "/* The rail belongs on whichever edge is INTERIOR, and this dock changes which one that is. Docked right, the panel meets the viewport on its right, the title bar on its top and the floor on its bottom, so the offscreen-rails contract reduces its frame to a LEFT rail only. Pinned to the bottom it spans the full width instead: left and right now reach the viewport and the TOP is the one edge facing the board. Left as-is it drew a rail down the side it no longer needs and nothing at all where the board meets it, which is the \"just abruptly starts\" edge. Same installed frame and the same rail width — only the side moves. Written at the same specificity as the contract it amends, because that rule carries !important. */ :root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel][data-controls-mobile=\"sheet\"]::before",
+      "surfaceHash": "0995efba8da6e95753d4db6419f7c257038746109788c8230b78c130cf1d763d",
       "occurrence": 1
     },
     {
