@@ -28,6 +28,26 @@ describe('shared decoded image resources', () => {
     expect(FakeImage.loads).toBe(1);
   });
 
+  // The startup and scene-readiness gates both block on this promise, and `decode()` may stay
+  // pending forever on a document the browser is not painting. Unbounded, that stranded the app
+  // with no error at all: React never mounted and index.html's static "Loading..." stayed up.
+  // A loaded image is usable whether or not it was pre-decoded, so the wait is bounded.
+  it('hands over a loaded image whose decode never settles', async () => {
+    vi.useFakeTimers();
+    class NeverDecodes extends FakeImage {
+      decode = vi.fn(() => new Promise<void>(() => {}));
+    }
+    vi.stubGlobal('Image', NeverDecodes);
+    const pending = loadDecodedImage('/api/media/never-decodes.png');
+    let settled = false;
+    void pending.then(() => { settled = true; });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(5_000);
+    await expect(pending).resolves.toBeInstanceOf(NeverDecodes);
+    vi.useRealTimers();
+  });
+
   it('does not cache a failed record as readiness and permits a retry', async () => {
     vi.stubGlobal('Image', FakeImage);
     await expect(loadDecodedImage('/fail-once.png')).rejects.toBeInstanceOf(ImageResourceError);

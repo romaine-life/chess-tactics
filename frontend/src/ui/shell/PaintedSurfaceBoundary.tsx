@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { loadingError, loadingMark, loadingMeasure } from '../../diagnostics/loadingTimeline';
-import { loadDecodedImage } from '../../render/imageResources';
+import { decodeWithinBudget, loadDecodedImage } from '../../render/imageResources';
 import { useSceneParticipant } from './SceneBoundary';
 
 type SurfacePhase = 'loading' | 'painted' | 'error';
@@ -22,7 +22,12 @@ export function waitForRenderedImage(image: HTMLImageElement): Promise<void> {
         image.addEventListener('error', () => reject(new Error(`Image failed: ${image.currentSrc || image.src}`)), { once: true });
       });
   return loaded.then(async () => {
-    if (typeof image.decode === 'function') await image.decode();
+    // Bounded (see decodeWithinBudget). This gate decides when a scene becomes visible, and
+    // `decode()` may stay pending forever on a document the browser is not painting — which left
+    // the persistent shell on screen with the scene behind it stuck in `loading`, showing a title
+    // bar and nothing else, with no error anywhere because nothing had rejected. The
+    // naturalWidth check below still rejects artwork that genuinely has no pixels.
+    await decodeWithinBudget(image);
     if (image.naturalWidth <= 0) throw new Error(`Image has no drawable pixels: ${image.currentSrc || image.src}`);
   });
 }
