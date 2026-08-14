@@ -55,35 +55,40 @@ function useTitleRouteFit(shellRef: RefObject<HTMLSpanElement | null>, trail: st
     let frame = 0;
     let cancelled = false;
 
+    const apply = (): void => {
+      const shed = new Map<number, HTMLElement[]>();
+      for (const element of shell.querySelectorAll<HTMLElement>('[data-title-route-shed]')) {
+        const order = Number(element.dataset.titleRouteShed);
+        shed.set(order, [...(shed.get(order) ?? []), element]);
+      }
+      const elision = [...shell.querySelectorAll<HTMLElement>('[data-title-route-elision]')];
+
+      for (const group of shed.values()) for (const element of group) element.hidden = false;
+      for (const element of elision) element.hidden = true;
+
+      // The rounded box against the rounded content, so a sub-pixel column does not read as an
+      // overflow and cost the trail a name it had room for.
+      const overflowing = (): boolean => shell.scrollWidth > shell.clientWidth + 1;
+      if (!elision.length || !overflowing()) return;
+
+      for (const element of elision) element.hidden = false;
+      for (const order of [...shed.keys()].sort((left, right) => left - right)) {
+        for (const element of shed.get(order) ?? []) element.hidden = true;
+        if (!overflowing()) return;
+      }
+    };
+
     const fit = (): void => {
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => {
-        if (cancelled) return;
-
-        const shed = new Map<number, HTMLElement[]>();
-        for (const element of shell.querySelectorAll<HTMLElement>('[data-title-route-shed]')) {
-          const order = Number(element.dataset.titleRouteShed);
-          shed.set(order, [...(shed.get(order) ?? []), element]);
-        }
-        const elision = [...shell.querySelectorAll<HTMLElement>('[data-title-route-elision]')];
-
-        for (const group of shed.values()) for (const element of group) element.hidden = false;
-        for (const element of elision) element.hidden = true;
-
-        // The rounded box against the rounded content, so a sub-pixel column does not read as
-        // an overflow and cost the trail a name it had room for.
-        const overflowing = (): boolean => shell.scrollWidth > shell.clientWidth + 1;
-        if (!elision.length || !overflowing()) return;
-
-        for (const element of elision) element.hidden = false;
-        for (const order of [...shed.keys()].sort((left, right) => left - right)) {
-          for (const element of shed.get(order) ?? []) element.hidden = true;
-          if (!overflowing()) return;
-        }
+        if (!cancelled) apply();
       });
     };
 
-    fit();
+    // The first pass runs in the layout effect, not a frame later: a route change would
+    // otherwise paint the whole trail once, clipped at the column edge, before shedding it.
+    // Everything after is frame-debounced, because a resize drag delivers many per frame.
+    apply();
     window.addEventListener('resize', fit);
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(fit);
     observer?.observe(shell);
