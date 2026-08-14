@@ -9,7 +9,10 @@ import { GameplayWorkspaceSceneSlot } from './shell/AuthoredSceneSlot';
 const RUN_ACTIVITY = Symbol('run-activity');
 const RUN_FORM = Symbol('run-form');
 
-type RunHudProps = Omit<SkirmishHudProps, 'strategikonPath' | 'strategikonSearch' | 'controlsContent'>;
+type RunHudProps = Omit<
+  SkirmishHudProps,
+  'strategikonPath' | 'strategikonSearch' | 'strategikonHeldCards' | 'controlsContent'
+>;
 
 export interface RunActivityViewport {
   className: string;
@@ -76,6 +79,11 @@ function RunFormView({ form, activity }: { form: RunFormInput; activity: RunActi
         ...activity.hudProps,
         strategikonPath,
         strategikonSearch: form.routeSearch,
+        // The register's own size, from the same place its address comes from. An activity
+        // cannot supply it: the Run frame owns the Strategikon, so it owns what the index says
+        // about it, and a Battle handing its own count down would be a second answer to one
+        // question. A Skirmish has no Run behind this index and so counts nothing.
+        strategikonHeldCards: form.run?.cards.length,
       }}
       screenStyle={activity.screenStyle}
       registerSceneSurface={activity.registerSceneSurface}

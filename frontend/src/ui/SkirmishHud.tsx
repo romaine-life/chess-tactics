@@ -254,6 +254,8 @@ export type SkirmishHudProps = {
   /** Battle-context reference workspace. The route owns whether it is open. */
   strategikonPath?: string | null;
   strategikonSearch?: string;
+  /** Cards the Run holds, counted on the index's Chartulary mark. Absent on a Skirmish. */
+  strategikonHeldCards?: number;
   /** Switches the Run's primary Battle and self-inspection workspaces without unmounting Battle. */
   /** Between-Battle phases replace only the existing panel's contents. */
   controlsContent?: ReactNode;
@@ -289,6 +291,7 @@ export function SkirmishHud({
   abandonRun = null,
   strategikonPath = null,
   strategikonSearch = '',
+  strategikonHeldCards,
   controlsContent,
   initialTab = 'unit',
 }: SkirmishHudProps = {}) {
@@ -386,7 +389,7 @@ export function SkirmishHud({
   const logLines: LogEntry[] = log.length ? log : [{ text: 'Skirmish begins.' }];
   const turnLabel = clientTurnLabel(game, localSide, !!net?.pendingMove);
   const strategikonNavigation = strategikonPath
-    ? <StrategikonTitleNavigation path={strategikonPath} search={strategikonSearch} />
+    ? <StrategikonTitleNavigation path={strategikonPath} search={strategikonSearch} heldCards={strategikonHeldCards} />
     : null;
 
   return (
