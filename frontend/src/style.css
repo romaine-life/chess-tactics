@@ -6179,23 +6179,10 @@ body.loading-bootstrap .app-startup-status {
   margin-inline: 0;
 }
 
-/* The Controls name closes on the forged nailhead band (ADR-0589, restored) */
 :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head .skirmish-card h2.kit-panel-title {
-  --kit-panel-title-rule-h: 10px;
-  background: var(--media-ui-titlebar-band-forged-png) left bottom / auto var(--kit-panel-title-rule-h) repeat-x;
   /* The rail under the name is the block's own boundary, so the name stacks straight onto it —
      the stack gap here would only push the seam down into bare marble. */
   margin-block-end: 0;
-  /* The title's block-size is fixed and its box is border-box, so the strip takes its 10px out of
-     the text field. The seat below gives exactly that back. */
-  padding-block-end: var(--kit-panel-title-rule-h);
-}
-
-:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head .skirmish-card h2.kit-panel-title .kit-panel-title-text {
-  margin-block-start: calc(
-    var(--le-control-rail-w, var(--kit-panel-title-base-frame-w))
-    + (var(--kit-panel-title-visible-h) - var(--kit-panel-title-rule-h) - 1em) / 2
-  );
 }
 
 /* The strip is one seat tall plus what the rails above and below take back: each is drawn ON its
@@ -6427,11 +6414,10 @@ body.loading-bootstrap .app-startup-status {
    here could not do that: it would restart the stone at the band's own origin and seam against
    the body below.
 
-   What closes it is a bolted forged strip. That strip came off with the oak when this rule dropped
-   its `background` — the two were layers of one shorthand — and the owner asked for it back: it is
-   the panel's rule, and only the WOOD was what ADR-0433 objected to. It is declared on the Controls
-   head rather than here, because the app's own bar closes itself differently and this element names
-   both. See the `.shell-controls-head` title rule above, and ShellControlsPanel. */
+   What used to close it was a bolted forged strip baked into this element — an earlier
+   iteration's private rule, from before this panel had section breaks. The head is a divided
+   block now, so the line under the name is the block's own rail, drawn by the same primitive as
+   every other break in the panel and capped where it meets the frame. See ShellControlsPanel. */
 :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .skirmish-card h2.kit-panel-title {
   --kit-panel-title-base-frame-w: 12px;
   --kit-panel-title-base-h: clamp(44px, calc(var(--app-header-h) * .58), 50px);
