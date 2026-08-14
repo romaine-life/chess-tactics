@@ -5390,6 +5390,14 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
+      "selector": "/* The Controls name closes on the forged nailhead band (ADR-0589, restored) */ :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head .skirmish-card h2.kit-panel-title",
+      "surfaceHash": "d42cac2957224c5219b934ae9a4641018895bbb900ef70424080053771a931a8",
+      "occurrence": 1
+    },
+    {
+      "kind": "css",
+      "file": "src/style.css",
+      "context": "",
       "selector": "/* The door is the action — a bare icon button (no fabricated surface), labelled for screen readers + a hover tooltip, brightening on hover/focus. */ .account-menu-exit",
       "surfaceHash": "7581fde9a3ddfa554cd58d22ba74dc79927f42b5f93eddfa0d0caeb98281227b",
       "occurrence": 1

@@ -24,10 +24,24 @@ ADR-0569 had already removed from the title bar's trailing cluster.
 
 ## Decision
 
-**The band paints nothing.** It declares no surface at all, so the panel's own installed marble
-runs through it unbroken. A second surface layer could not do that — it would restart the stone at
-the band's own origin and seam against the body below — which is why the answer is "no paint"
-rather than "paint marble instead of oak".
+**The band wears no wood.** It declares no surface, so the panel's own installed marble runs
+through it unbroken. A second surface layer could not do that — it would restart the stone at the
+band's own origin and seam against the body below — which is why the answer is "no paint" rather
+than "paint marble instead of oak".
+
+> **Revision (2026-08-13): the forged strip comes back.** The owner's call — *"it shouldn't have
+> been removed"* — and he is right that it was never argued for. The oak and the strip were two
+> layers of ONE `background` shorthand on the title element, so dropping the wood dropped the
+> nailhead rule with it, and this ADR wrote that up as intent afterwards. Only the WOOD was the
+> ADR-0433 problem: the strip is forged metal and promises nothing pressable. So the band declares
+> the strip and nothing else, on the Controls head specifically rather than on `.kit-panel-title`,
+> which the app's own bar also names and which closes itself differently.
+>
+> The strip closes the NAME; the block's rail underneath is the head's boundary against whatever
+> follows. Two jobs, one above the other, and together they read as the single heavy studded rule
+> the panel has always had. The rail is unchanged, so the strip's verticals still tee into it and
+> every shape below still holds. The strip is a raw `background` and returns to the surface-debt
+> baseline it was carried in before, as owner-approved debt.
 
 **The head is one divided block**, laid by `ShellControlsPanel` and built exactly like the title
 bar's invariant cluster: **inner-box chrome**, one rail on every internal boundary, and each member
@@ -101,8 +115,11 @@ compartments raises no junction cap for a vertical that is not there.
 
 ## Consequences
 
-The name re-centres in a field that got 10px taller when the bolted strip came off, and the
-Strategikon marks now ride that same seat rather than being pinned to the top of it — pinned, they
+The name centres in the field the strip leaves it, which is the seating it always had — the strip
+takes its 10px out of a title whose block size is fixed and whose box is border-box, and the text
+seat gives exactly that back. (Between this ADR shipping and the revision above, the field was 10px
+taller and the name re-centred in it.) The Strategikon marks ride that same seat rather than being
+pinned to the top of it — pinned, they
 stopped tracking the name the moment the field changed height, which is exactly what this change
 did.
 
