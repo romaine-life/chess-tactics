@@ -89,6 +89,57 @@ function framedAddress(route: string, hud: string): string {
   return `${path}?${params}`;
 }
 
+/**
+ * What a frame that has not painted is waiting on, in the fewest words that identify the stage.
+ *
+ * This exists because the failure it describes has only ever occurred on the owner's machine.
+ * Every headless capture composes in about four seconds; his browser has sat blank, twice, on
+ * screens that were provably fine in the DOM I could reach. A stuck "Composing…" is no better
+ * evidence than a black rectangle — but a stuck line that names the stage is a diagnosis he can
+ * hand over by screenshotting it, without opening a console or running anything.
+ *
+ * The stages are ordered by how early they fail, so the first true one is the deepest fact:
+ * unreachable document, then React never mounting, then no scene at all, then a scene stuck with
+ * named surfaces below it still loading.
+ */
+export type FrameWait = {
+  reachable: boolean;
+  /** index.html's static status is still on screen, so React never rendered over it. */
+  bootstrapPresent: boolean;
+  phases: readonly string[];
+  waiting: readonly string[];
+  errored: readonly string[];
+};
+
+/** Read the frame's state. Kept apart from the sentence below so that sentence is testable. */
+export function readFrameWait(doc: Document | null): FrameWait {
+  if (!doc) return { reachable: false, bootstrapPresent: false, phases: [], waiting: [], errored: [] };
+  const surfaces = [...doc.querySelectorAll('[data-loading-surface]')];
+  const named = (match: string): string[] => surfaces
+    .filter((el) => el.className.includes(match))
+    .map((el) => el.getAttribute('data-loading-surface') ?? '')
+    .filter(Boolean);
+  return {
+    reachable: true,
+    bootstrapPresent: Boolean(doc.getElementById('app-bootstrap-status')),
+    phases: [...new Set([...doc.querySelectorAll('[data-scene-phase]')]
+      .map((el) => el.getAttribute('data-scene-phase') ?? '')
+      .filter(Boolean))],
+    waiting: named('is-loading'),
+    errored: named('is-error'),
+  };
+}
+
+export function describeFrameWait(state: FrameWait): string {
+  if (!state.reachable) return 'frame document unreachable';
+  if (state.bootstrapPresent) return 'React has not mounted — startup blocked';
+  if (!state.phases.length) return 'app mounted, no scene yet';
+  const phases = state.phases.join(', ');
+  if (state.errored.length) return `scene ${phases} · FAILED: ${state.errored.slice(0, 2).join(', ')}`;
+  if (state.waiting.length) return `scene ${phases} · waiting on ${state.waiting.slice(0, 2).join(', ')}`;
+  return `scene ${phases} · no surface reporting`;
+}
+
 export default function MobileLab() {
   const [{ device, route, zoom, hud }, setState] = useState(readParams);
   // The address IS the state, so a specific device + screen is always one link.
@@ -230,7 +281,7 @@ export default function MobileLab() {
                   screen more than once, and the frame was working every time. The state
                   belongs on screen instead of in the reader's head. */}
               <div className="mobile-lab-frame-status" aria-hidden="true">
-                Composing {d.label.toLowerCase()}…
+                <span data-frame-status-line>Composing {d.label.toLowerCase()}…</span>
               </div>
               <iframe
                 key={`${d.id}-${route}-${hud}-${reloadKey}`}
@@ -242,8 +293,15 @@ export default function MobileLab() {
                   // paints, so the placeholder is dismissed by the scene actually arriving.
                   // Same-origin by construction, and any failure to reach in leaves the
                   // placeholder up rather than uncovering a black frame.
+                  //
+                  // It also REPORTS what it is waiting on, because a frame that never paints is
+                  // the one failure this lab exists to surface and the owner's browser is the
+                  // only place it has ever happened. A generic "Composing…" that sticks says
+                  // nothing more than a black rectangle did; naming the stage turns a screenshot
+                  // of the stuck frame into the diagnosis.
                   const frame = event.currentTarget;
                   const started = Date.now();
+                  const line = frame.parentElement?.querySelector('[data-frame-status-line]');
                   const settle = (): void => {
                     const doc = frame.contentDocument;
                     const painted = Boolean(doc?.querySelector('[data-scene-phase="current"]'))
@@ -252,7 +310,10 @@ export default function MobileLab() {
                       frame.parentElement?.setAttribute('data-frame-painted', '');
                       return;
                     }
-                    if (Date.now() - started > 30_000) return;
+                    const seconds = Math.round((Date.now() - started) / 1000);
+                    if (line && seconds > 3) {
+                      line.textContent = `${describeFrameWait(readFrameWait(doc))} · ${seconds}s`;
+                    }
                     requestAnimationFrame(settle);
                   };
                   settle();

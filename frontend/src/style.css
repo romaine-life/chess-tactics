@@ -27525,6 +27525,9 @@ button.tileset-relationship-cell {
    dead screen every time. */
 .mobile-lab-frame-status {
   align-items: center;
+  box-sizing: border-box;
+  line-height: 1.5;
+  padding-inline: var(--ds-space-3);
   background: var(--ds-surface-sunken, #0b1622);
   color: var(--ds-text-muted, #8fb0c4);
   display: flex;
