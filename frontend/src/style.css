@@ -27520,6 +27520,25 @@ button.tileset-relationship-cell {
    falls back to the CSS default 300x150 and silently ignores its width/height attributes. */
 .mobile-lab-frame { display: block; }
 
+/* Covers the frame until the app inside it has actually painted (see MobileLab). A bare iframe
+   is BLACK while it composes, and this app takes seconds on a craft route, so the wait read as a
+   dead screen every time. */
+.mobile-lab-frame-status {
+  align-items: center;
+  background: var(--ds-surface-sunken, #0b1622);
+  color: var(--ds-text-muted, #8fb0c4);
+  display: flex;
+  font-size: var(--ds-text-sm);
+  inset: 0;
+  justify-content: center;
+  pointer-events: none;
+  position: absolute;
+  text-align: center;
+  z-index: 1;
+}
+
+.mobile-lab-viewport[data-frame-painted] .mobile-lab-frame-status { display: none; }
+
 /* A title-bar control may carry a short visible form for a row with no room for the full one.
    Both are rendered; exactly one is displayed, and the accessible name is pinned to the full
    label either way (see TitleBarControls). */

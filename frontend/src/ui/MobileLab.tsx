@@ -222,11 +222,41 @@ export default function MobileLab() {
                 height: `${d.height * (zoom || 1)}px`,
               }}
             >
+              {/* A frame that has not painted yet says so. An iframe renders as a black
+                  rectangle until the app inside it composes, and this app takes about four
+                  seconds on a plain route and closer to six on a `?craft=` one, because
+                  crafting mints a Run and the scene restarts on the new document. Black for
+                  six seconds is indistinguishable from broken — it was reported as a blank
+                  screen more than once, and the frame was working every time. The state
+                  belongs on screen instead of in the reader's head. */}
+              <div className="mobile-lab-frame-status" aria-hidden="true">
+                Composing {d.label.toLowerCase()}…
+              </div>
               <iframe
                 key={`${d.id}-${route}-${hud}-${reloadKey}`}
                 className="mobile-lab-frame"
                 title={`${d.label} — ${route}`}
                 src={framedAddress(route, hud)}
+                onLoad={(event) => {
+                  // `load` fires when the document is parsed, which is well before the app
+                  // paints, so the placeholder is dismissed by the scene actually arriving.
+                  // Same-origin by construction, and any failure to reach in leaves the
+                  // placeholder up rather than uncovering a black frame.
+                  const frame = event.currentTarget;
+                  const started = Date.now();
+                  const settle = (): void => {
+                    const doc = frame.contentDocument;
+                    const painted = Boolean(doc?.querySelector('[data-scene-phase="current"]'))
+                      && !doc?.getElementById('app-bootstrap-status');
+                    if (painted) {
+                      frame.parentElement?.setAttribute('data-frame-painted', '');
+                      return;
+                    }
+                    if (Date.now() - started > 30_000) return;
+                    requestAnimationFrame(settle);
+                  };
+                  settle();
+                }}
                 style={{
                   width: `${d.width}px`,
                   height: `${d.height}px`,

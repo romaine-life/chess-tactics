@@ -5142,6 +5142,14 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
+      "selector": "/* Covers the frame until the app inside it has actually painted (see MobileLab). A bare iframe is BLACK while it composes, and this app takes seconds on a craft route, so the wait read as a dead screen every time. */ .mobile-lab-frame-status",
+      "surfaceHash": "a0395827891c75a6035f60d6b62c2b25b302f9557be5e8d9fe4ee2da9de51123",
+      "occurrence": 1
+    },
+    {
+      "kind": "css",
+      "file": "src/style.css",
+      "context": "",
       "selector": "/* Crest: transparent PNG cropped from the approved render by normalize-main-menu-profile.mjs. */ .profile-crest",
       "surfaceHash": "35bc9c3da691f3395dd90c9f47461a1b89c908930611e88116fe663524f992b0",
       "occurrence": 1
