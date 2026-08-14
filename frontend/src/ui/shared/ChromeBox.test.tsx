@@ -11,25 +11,27 @@ function junctions(html: string): string[] {
 }
 
 /**
- * The line under CONTROLS is the head block's own row boundary against the panel body (ADR-0589).
- * It belongs to the head, not to whatever the head happens to carry — so every shape draws it,
- * including the shape that carries nothing.
+ * Every Controls head closes on a line under the name, and which line it is says what the boundary
+ * IS (ADR-0589). Between the name and a strip of compartments inside the head it is the block's own
+ * inner rail. Between the HEAD and the panel body it is the panel's standard outer section break —
+ * the same divider the panel lays under a `fixed` section.
  *
- * That last one shipped without it. ADR-0589 enumerated two heads, a strip of compartments and a
+ * The head that is only a name shipped with neither. ADR-0589 enumerated two heads, a strip and a
  * single control, and took the bolted forged strip off the title element on the strength of that.
  * The Run borrows this panel with its whole activity in the BODY, so its head is only the name, and
  * it came out as bare marble under the title with no rule anywhere on it.
  */
-describe('the Controls head closes with the block\'s own rail', () => {
-  it('rules the line under the name when the head is only its name', () => {
+describe('the Controls head closes with a line under the name', () => {
+  it('breaks on the standard outer divider when the head is only its name', () => {
     const html = renderToStaticMarkup(<ShellControlsPanel><p>Run activity</p></ShellControlsPanel>);
 
-    expect(html).toContain('chrome-divided-grid shell-controls-head');
-    expect(html).toContain('shell-controls-head-foot');
-    expect(rails(html)).toBe(1);
-    // Nothing stands under the name, so the block has no vertical to cross that rail — and a cap
-    // with no rail arriving at it is a stray atom sitting on the panel's frame.
-    expect(html).not.toContain('chrome-divided-grid__vertical-rail');
+    expect(html).toContain('le-control-divider-host shell-controls-break');
+    expect(html).toContain('data-chrome-divider-role="outer"');
+    expect(html).toContain('data-chrome-divider-junctions="endpoints"');
+    // No block: a block rules the lines BETWEEN a head's members, and this head has none. Laying
+    // one anyway put the strip's inner weight on a boundary that is a panel section break.
+    expect(html).not.toContain('chrome-divided-grid shell-controls-head');
+    expect(rails(html)).toBe(0);
     expect(junctions(html)).toEqual([]);
   });
 

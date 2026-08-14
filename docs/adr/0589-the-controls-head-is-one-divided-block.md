@@ -89,14 +89,26 @@ same row boundary at the same weight. It has no foot, because a foot rail exists
 verticals BETWEEN compartments and a single column has none; a second line under one control would
 divide a strip with nothing on the other side of it.
 
-A head that is ONLY its name is that same block with nothing under the name but the boundary itself
-— the name row and a foot, and the rail between them. **This shape was missed when the decision
-first shipped**, and it is the Run's: the Run borrows the Controls panel with its whole activity in
-the BODY, so it declares neither sections nor content. `ShellControlsHead` returned the bare name
-for it, which drew no block and therefore no rule, and taking the bolted forged strip off the title
-element left it with no line at all — bare marble under **CONTROLS** on every Run phase. The line
-belongs to the head, not to whatever the head happens to carry, so it is drawn for all three shapes.
-`ChromeBox.test.tsx` pins each one: the rail count under the name, and that a shape with no
+**A head that is ONLY its name has no block, and breaks on the standard outer divider.** This shape
+was missed when the decision first shipped, and it is the Run's: the Run borrows the Controls panel
+with its whole activity in the BODY, so it declares neither sections nor content.
+`ShellControlsHead` returned the bare name for it, which drew nothing, and taking the bolted forged
+strip off the title element left it with no line at all — bare marble under **CONTROLS** on every
+Run phase.
+
+A block is what rules the lines BETWEEN a head's members, so a head with no members has no block to
+lay. What it has is the boundary between the head and the panel's content, and that is a panel
+SECTION BREAK — the same `ChromeDivider role="outer"` in the same `.le-control-divider-host` that
+this panel already lays under a `fixed` section. Not the block's inner rail: inner is the weight
+chosen above for the strip's own divisions, and this is not one of those.
+
+That break had never been laid on a screen other than the Level Editor, and its host rule was
+scoped to `.level-editor-screen` — so the first one in the Run rail lost the `z-index` that lifts a
+break over the panel's own frame. The bar stopped a rail-width short and its gold tee was buried
+under the side rail instead of seated on it. The host is a chrome-family rule now, like everything
+else the shared panel lays.
+
+`ChromeBox.test.tsx` pins all three shapes: which line each one draws, and that a head with no
 compartments raises no junction cap for a vertical that is not there.
 
 ## Consequences

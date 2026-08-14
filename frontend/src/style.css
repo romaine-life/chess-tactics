@@ -6362,8 +6362,14 @@ body.loading-bootstrap .app-startup-status {
 
 /* Repeatable divider host: each instance represents one section break in the
    rail's content box. .kit-divider then uses --kit-divider-reach to bleed back
-   out to the frame rails, keeping the authored T caps and horizontal bar aligned. */
-.level-editor-screen .le-control-divider-host {
+   out to the frame rails, keeping the authored T caps and horizontal bar aligned.
+
+   Every screen in the chrome family, not just the editor: the Controls panel is one
+   primitive and its section break is the same break wherever it is laid. Scoped to the
+   editor, a break in the Battle or the Run rail lost the z-index that lifts it over the
+   panel's own frame — the bar stopped a rail-width short and its gold tee was buried
+   under the side rail instead of seated on it. */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .le-control-divider-host {
   --kit-divider-gap: 0px;
   flex: none;
   margin-block: calc(var(--ds-gutter) * -0.5);
