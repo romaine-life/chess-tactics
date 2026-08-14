@@ -20,6 +20,41 @@ const decodedImages = new Map<string, Promise<HTMLImageElement>>();
 const DECODE_BUDGET_MS = 4_000;
 
 /**
+ * How long an image may spend NOT ARRIVING before it counts as failed.
+ *
+ * A stalled request is not an error the browser reports: `load` never fires and neither does
+ * `error`, so a readiness gate awaiting it waits for the rest of the session. That is not
+ * hypothetical here — the owner's browser issued six `/api/media/…` requests that never completed
+ * while the server answered every one of them 200 with a correct Content-Length, and the Controls
+ * panel's surface sat in `loading` behind a blank screen indefinitely.
+ *
+ * Generous, because a slow connection must still succeed: this is the line between "slow" and
+ * "never coming", not a performance budget. Past it the image REJECTS rather than resolving,
+ * because unlike a skipped pre-decode there are no pixels — the caller's retry and its error
+ * surface are exactly the right outcome, and both already exist.
+ */
+const LOAD_BUDGET_MS = 20_000;
+
+/**
+ * Fail `work` if it has not settled within the load budget.
+ *
+ * Shared, because both readiness gates need it and a bound that only one of them has is a bound
+ * the app does not have: whichever gate lacks it becomes the one that strands the screen.
+ */
+export function withLoadDeadline<T>(work: Promise<T>, src: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new ImageResourceError(`${src} (no response within ${LOAD_BUDGET_MS}ms)`)),
+      LOAD_BUDGET_MS,
+    );
+    work.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error: unknown) => { clearTimeout(timer); reject(error); },
+    );
+  });
+}
+
+/**
  * Wait for a LOADED image to finish pre-decoding, but never longer than the budget.
  *
  * The one place that bound is expressed, because both readiness gates in this app depend on it:
@@ -60,13 +95,14 @@ export function loadDecodedImage(src: string): Promise<HTMLImageElement> {
   const cached = decodedImages.get(src);
   if (cached) return cached;
 
-  const pending = new Promise<HTMLImageElement>((resolve, reject) => {
+  const pending = withLoadDeadline(new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
     image.decoding = 'async';
     // main.tsx blocks `reactRoot.render()` on composeInstalledChromeCss, which awaits one of these
-    // per chrome surface (ADR-0369), so an unbounded decode here means React never mounts at all.
+    // per chrome surface (ADR-0369), so an unbounded wait here means React never mounts at all.
     // Reproduced with all six chrome fill images pending at once while the server served every one
-    // of them 200 with a correct Content-Length.
+    // of them 200 with a correct Content-Length. Both halves are bounded: the request by the
+    // deadline around this promise, the pre-decode by its own budget.
     image.onload = () => {
       decodeWithinBudget(image).then(
         () => resolve(image),
@@ -75,7 +111,7 @@ export function loadDecodedImage(src: string): Promise<HTMLImageElement> {
     };
     image.onerror = () => reject(new ImageResourceError(src));
     image.src = src;
-  }).catch((error) => {
+  }), src).catch((error) => {
     // A transient failure must be retryable; successful decoded records remain reusable.
     decodedImages.delete(src);
     throw error;

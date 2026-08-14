@@ -48,6 +48,27 @@ describe('shared decoded image resources', () => {
     vi.useRealTimers();
   });
 
+  // A stalled request fires neither `load` nor `error`, so an unbounded gate waits for the rest of
+  // the session. Observed in the wild: six media requests issued and never completed while the
+  // server answered every one 200, leaving the Controls panel's surface in `loading` behind a
+  // blank screen. Unlike a skipped pre-decode there are no pixels here, so this must REJECT — the
+  // caller's retry and error surface are the right outcome and both already exist.
+  it('fails an image that never arrives, instead of waiting for it forever', async () => {
+    vi.useFakeTimers();
+    class NeverArrives extends FakeImage {
+      set src(_value: string) { FakeImage.loads += 1; } // no load, no error — just silence
+    }
+    vi.stubGlobal('Image', NeverArrives);
+    const pending = loadDecodedImage('/api/media/never-arrives.png');
+    const settled = vi.fn();
+    void pending.then(settled, settled);
+    await vi.advanceTimersByTimeAsync(19_000);
+    expect(settled).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(2_000);
+    await expect(pending).rejects.toBeInstanceOf(ImageResourceError);
+    vi.useRealTimers();
+  });
+
   it('does not cache a failed record as readiness and permits a retry', async () => {
     vi.stubGlobal('Image', FakeImage);
     await expect(loadDecodedImage('/fail-once.png')).rejects.toBeInstanceOf(ImageResourceError);

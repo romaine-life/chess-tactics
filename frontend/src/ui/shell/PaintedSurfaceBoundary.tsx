@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { loadingError, loadingMark, loadingMeasure } from '../../diagnostics/loadingTimeline';
-import { decodeWithinBudget, loadDecodedImage } from '../../render/imageResources';
+import { decodeWithinBudget, loadDecodedImage, withLoadDeadline } from '../../render/imageResources';
 import { useSceneParticipant } from './SceneBoundary';
 
 type SurfacePhase = 'loading' | 'painted' | 'error';
@@ -13,14 +13,20 @@ function userFacingError(error: Error | null): string {
 }
 
 export function waitForRenderedImage(image: HTMLImageElement): Promise<void> {
+  // BOUNDED, because a stalled request fires neither `load` nor `error` and this promise decides
+  // whether a surface is ever shown. That is the failure the mobile lab caught in the owner's
+  // browser and reported as `scene startup · waiting on gameplay-hud`: the Controls panel's
+  // readiness gate held on an image that never arrived, so the scene stayed in startup and the
+  // screen stayed blank with nothing logged, because nothing had rejected. Past the deadline it
+  // rejects, which is what puts this surface's own error and Retry on screen instead.
   const loaded = image.complete
     ? image.naturalWidth > 0
       ? Promise.resolve()
       : Promise.reject(new Error(`Image failed: ${image.currentSrc || image.src}`))
-    : new Promise<void>((resolve, reject) => {
+    : withLoadDeadline(new Promise<void>((resolve, reject) => {
         image.addEventListener('load', () => resolve(), { once: true });
         image.addEventListener('error', () => reject(new Error(`Image failed: ${image.currentSrc || image.src}`)), { once: true });
-      });
+      }), image.currentSrc || image.src);
   return loaded.then(async () => {
     // Bounded (see decodeWithinBudget). This gate decides when a scene becomes visible, and
     // `decode()` may stay pending forever on a document the browser is not painting — which left
