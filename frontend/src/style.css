@@ -18988,6 +18988,9 @@ button.tileset-relationship-cell {
   align-items: baseline;
   display: flex;
   min-width: 0;
+  /* A trail longer than the brand column is CLIPPED inside that column. Without this the
+     overflow paints on across the bar's centre, over the live status the centre track owns. */
+  overflow: hidden;
 }
 
 .brand-lockup-route:not(:empty) {
@@ -18997,6 +19000,8 @@ button.tileset-relationship-cell {
 .brand-lockup-route:not(:empty)::before {
   color: #79d3ff;
   content: "\203A";
+  /* An anonymous flex item shrinks like any other, and this one is a mark, not a spring. */
+  flex: none;
   margin-inline: .5em .5em;
   opacity: .75;
 }
@@ -19005,10 +19010,12 @@ button.tileset-relationship-cell {
   align-items: baseline;
   display: flex;
   min-width: 0;
+  overflow: hidden;
 }
 
 .title-route-separator {
   color: #79d3ff;
+  flex: none;
   margin-inline: .5em;
   opacity: .75;
 }
@@ -19022,6 +19029,14 @@ button.tileset-relationship-cell {
   color: inherit;
   cursor: pointer;
   display: inline;
+  /* A crumb is never narrower than the word it carries. It is a flex item with
+     `min-inline-size: 0`, so without this it shrinks under its own text and the next crumb
+     paints straight over it: at 1440 on `Run › Battle › Strategikon › Chartulary` the brand
+     column offers the trail 191px against the 258px it wants, and every crumb AND every
+     separator gave a share — the line read `RUN › BATTLESTRATEGIKONCHARTUL` with the
+     separators buried under the words beside them. Overflow is answered below, by choosing
+     what gives; it is never answered by letting the words collide. */
+  flex: none;
   font: inherit;
   letter-spacing: inherit;
   line-height: inherit;
@@ -19032,6 +19047,22 @@ button.tileset-relationship-cell {
   text-shadow: inherit;
   text-transform: inherit;
   white-space: nowrap;
+}
+
+/* A crumb TitleRoute has shed to make the trail fit. `.title-route-button` sets `display`, so
+   the UA's `[hidden]` rule loses to it and a shed crumb would keep its box. */
+.title-route-button[hidden] {
+  display: none;
+}
+
+/* The mark that stands in for the shed crumbs. It is chrome, not a name: it wears the
+   separators' colour so the eye reads `Battle › … › Chartulary` as one trail with something
+   left out, rather than as a place you could go. It is not a NavButton — a shed ancestor is no
+   longer named, so under ADR-0409 there is nothing here to be the canonical address of. */
+.title-route-elision {
+  color: #79d3ff;
+  flex: none;
+  opacity: .75;
 }
 
 .title-route-button:is(:hover, :focus-visible) {
