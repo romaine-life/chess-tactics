@@ -349,7 +349,22 @@ function ShellControlsHead({
     : content
       ? [{ id: 'head-content', content, className: 'shell-controls-head-row' }]
       : [];
-  if (!members.length) return name;
+  // A head that is ONLY its name — the Run's borrowed panel, which puts its whole activity in the
+  // body — is the same block with nothing under the name but the boundary itself. It still draws
+  // that boundary, because the line under CONTROLS is the head's rail against the panel body and
+  // not a consequence of having a strip: returning the bare name here left the name floating on
+  // unbroken marble, which is the one shape ADR-0589 did not enumerate and the one that lost its
+  // rule when the bolted forged strip came off the title element.
+  if (!members.length) {
+    return (
+      <DividedInnerChromeBox className="shell-controls-head" columns={['100%']} framed={false}>
+        <ChromeDividedGridRow spans="all" className="shell-controls-head-title-row">
+          {name}
+        </ChromeDividedGridRow>
+        <ChromeDividedGridRow spans="all" className="shell-controls-head-foot" />
+      </DividedInnerChromeBox>
+    );
+  }
   const divided = members.length > 1;
   // Equal tracks do not give equal compartments (ADR-0569). Two different things are taken off a
   // cell here, and both have to be given back or the openings are not equal:

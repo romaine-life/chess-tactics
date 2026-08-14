@@ -83,11 +83,21 @@ All five compartments then paint the same width, verified on a scanline through 
 ±1px appears at widths where the Controls column is fractional, which is the browser's own
 device-pixel rounding of a lane that does not divide evenly.
 
-**Both head shapes are the same block.** A head given ordinary content instead of sections — the
+**Every head shape is the same block.** A head given ordinary content instead of sections — the
 Level Editor's layer picker — is that block with a single column, so the rule under its name is the
 same row boundary at the same weight. It has no foot, because a foot rail exists to terminate the
 verticals BETWEEN compartments and a single column has none; a second line under one control would
 divide a strip with nothing on the other side of it.
+
+A head that is ONLY its name is that same block with nothing under the name but the boundary itself
+— the name row and a foot, and the rail between them. **This shape was missed when the decision
+first shipped**, and it is the Run's: the Run borrows the Controls panel with its whole activity in
+the BODY, so it declares neither sections nor content. `ShellControlsHead` returned the bare name
+for it, which drew no block and therefore no rule, and taking the bolted forged strip off the title
+element left it with no line at all — bare marble under **CONTROLS** on every Run phase. The line
+belongs to the head, not to whatever the head happens to carry, so it is drawn for all three shapes.
+`ChromeBox.test.tsx` pins each one: the rail count under the name, and that a shape with no
+compartments raises no junction cap for a vertical that is not there.
 
 ## Consequences
 
