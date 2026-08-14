@@ -6179,12 +6179,6 @@ body.loading-bootstrap .app-startup-status {
   margin-inline: 0;
 }
 
-:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .shell-controls-head .skirmish-card h2.kit-panel-title {
-  /* The rail under the name is the block's own boundary, so the name stacks straight onto it —
-     the stack gap here would only push the seam down into bare marble. */
-  margin-block-end: 0;
-}
-
 /* The strip is one seat tall plus what the rails above and below take back: each is drawn ON its
    boundary and covers half its width from the row. The same half comes off the seats as padding,
    so a mark centres in the opening rather than in the cell — the inline halves are declared here
@@ -6329,6 +6323,37 @@ body.loading-bootstrap .app-startup-status {
   margin-inline: 0;
   position: absolute;
   z-index: 3;
+}
+
+/* The Controls name and its marks sit ALONG the line under them rather than centred in the band's
+   field. The head is a title and that line is where it ends, so both ends of the row bottom out on
+   the same seat and read as one row against it. Centred, they floated with the whole gap below
+   them and the break read as belonging to the content instead of closing the head.
+
+   Both ends take the SAME clearance off that seat, from one declaration, for the reason the inline
+   clearance is shared: a number stated twice is a number that can drift, and the name and the marks
+   ending on different lines is exactly what a reader sees. */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) [data-shell-controls-panel] {
+  --shell-controls-name-seat-clearance: var(--ds-stack);
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) [data-shell-controls-panel] .skirmish-card h2.kit-panel-title {
+  align-items: flex-end;
+  /* The band's own bottom IS the seat. Its stack gap below pushed the seat off the marks' one — the
+     marks are absolutely positioned against the HEADER, and a margin here moves only the title, so
+     the two ends of the row ended on lines 8px apart. The gap the break needs is the break's. */
+  margin-block-end: 0;
+  padding-block-end: var(--shell-controls-name-seat-clearance);
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) [data-shell-controls-panel] .skirmish-card h2.kit-panel-title .kit-panel-title-text {
+  /* The seat is the element's own bottom now, so the centring offset would push the name back off it. */
+  margin-block-start: 0;
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) [data-shell-controls-panel] .outer-chrome-header > .outer-chrome-header-title-actions {
+  align-items: flex-end;
+  padding-block-end: var(--shell-controls-name-seat-clearance);
 }
 
 .level-editor-screen .outer-chrome-header > .le-layer-picker-row {
