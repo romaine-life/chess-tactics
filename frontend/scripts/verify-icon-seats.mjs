@@ -54,17 +54,6 @@ const DECLARED = [
   { rule: '[data-strategikon-section="prosopography"] img', slot: 'ui/kit/icons/unit-studio.png', baseline: true },
   { rule: '[data-strategikon-section="lipsanotheca"] img', slot: 'ui/kit/icons/info.png', baseline: true },
   { rule: '.skirmish-hud-title-action-glyph', slot: 'ui/kit/icons/studio-catalog.png', baseline: true },
-  // The Battle HUD's tab strip. All five share ONE declaration on `.skirmish-tab-icon`, because
-  // all five are fitted to the same 52px of ink (ADR-0641) — so five entries here check five sets
-  // of bytes against that single number, which is exactly the claim being made. A mark re-uploaded
-  // at a different ink height reads a different size than the four beside it, and this is what
-  // says so. No `baseline`: the seat is a centred box in its compartment, not a row sharing a
-  // bottom edge, so there is no bottom edge to fall off.
-  { rule: '.skirmish-tab-icon', slot: 'ui/kit/icons/unit-studio.png', axis: 'height' },
-  { rule: '.skirmish-tab-icon', slot: 'ui/kit/icons/players.png', axis: 'height' },
-  { rule: '.skirmish-tab-icon', slot: 'ui/kit/icons/info.png', axis: 'height' },
-  { rule: '.skirmish-tab-icon', slot: 'ui/kit/icons/monitor.png', axis: 'height' },
-  { rule: '.skirmish-tab-icon', slot: 'ui/kit/icons/gear.png', axis: 'height' },
 ];
 
 /**

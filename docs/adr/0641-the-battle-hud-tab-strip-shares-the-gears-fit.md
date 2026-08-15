@@ -118,39 +118,44 @@ it is why the page says so rather than leaving it to be discovered.
 
 - The strip reads at one size. The four marks arrive at ~16px of ink like the gear instead of ~12px,
   which is the difference between a mark and a smudge at this scale.
-### The fit alone did not make the strip match the screen
+### The seat draws the mark at 81%, and the compensation for that was REVERTED
 
-Installed and measured on the live Battle, every tab mark drew **16.3px of ink in its 20px seat**
-while the Strategikon marks two inches above it drew **22px**. The owner said so before the numbers
-did: *"the icon size is not matching the other icons on the screen."*
+`contain` draws the whole 64px canvas, so a mark fitted to 52px of ink lands at 81% of its seat by
+construction — measured 16.3px against the 22px the Strategikon marks two inches above it draw. The
+owner said so before the numbers did: *"the icon size is not matching the other icons on the
+screen."*
 
-The fit was necessary and not sufficient. `background-size: contain` draws the whole 64px canvas, so
-a mark fitted to 52px of ink lands at 81% of its seat by construction — every mark equally, which is
-why the strip was internally consistent and still wrong beside its neighbours. The title bar solved
-this long ago: its seats grow their box by `1 / ink-fill` and bleed the surplus back with a negative
-margin, so the drawn ink lands on the shared seat while the layout footprint does not move.
+Compensating for it the way the title bar does (grow the box by `1 / ink-fill`, bleed the surplus
+back with a negative margin) worked — every mark measured 20.0px — and was **reverted anyway**,
+because the owner then reported the button's wood grain shifting. The compensated box is
+24.6154px centred by a −2.3077px margin; snapping it to a whole even pixel fixed a real defect it
+introduced (the mark's rendered size jumping between 24px and 25px across window widths) but did not
+settle the report.
 
-**The tab seat now uses that same mechanism, not a second one** ([ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)),
-and declares ONE fraction for all five marks — which is the fit's payoff: no tab carries a number of
-its own. Measured after: every mark 20.0px against the title marks' 22.0px, on seats of 20px and
-27px.
+**The wood was never shown to move.** Its box, `background-position`, `background-size`, padding,
+phase index, frame covers and image were watched at frame rate across thirty interaction rounds on
+two routes, including the Strategikon opening and closing: none of them ever changed. The strip
+renders byte-identically across eight fresh page loads and across single-pixel window resizes. So
+whatever is moving on the owner's screen is a RASTERISATION difference of unchanged declared paint,
+which headless Chrome — software-rendered — cannot show.
 
-**The compensated box must land on WHOLE pixels.** 20 / 0.8125 is 24.6154, and the first pass used
-it raw — a fractional box centred by a fractional margin. The compartment tracks are themselves
-fractional (measured 58.438, 62.563, 66.109 across window widths), so the mark landed on a different
-device-pixel grid at every width, and with `image-rendering: pixelated` its RENDERED SIZE was
-measured jumping between 24px and 25px across eight widths. That reads as the glyph shifting inside
-its button, intermittently, with nothing having changed — and it is what the owner reported. The
-canvas is now `round(…, 2px)`, which keeps both the box and the half taken off each side whole, so
-the mark occupies the same pixels wherever its compartment lands. The declared fraction stays the
-ART's own; only the box is snapped.
+So the seat is back to a plain 20px box: **a mark that reads slightly small and holds still beats a
+correctly-sized one under a report that is not understood.** Re-attempting the size means first
+removing what makes the wood fragile, which is a property of the strip and not of this seat:
 
-A residual difference survives and is **pre-existing, not introduced here**: because the tracks are
-fractional, a `pixelated` 64→24 downscale still resamples very slightly differently at some widths.
-Measured across eight widths, the old uncompensated 20px box produced six distinct renderings and
-the snapped box produces seven at ONE constant size — the whole-pixel jump is gone, the sub-pixel
-resample is not. Removing it means making the head's tracks land on whole pixels, which is shared
-chrome (ADR-0569) and a wider change than this decision.
+- the oak is a 768×768 texture drawn at `background-size: 1024px` — a **×1.33 upscale** — under
+  `image-rendering: pixelated`, so pixel doubling is uneven by construction and any change in where
+  it is drawn re-rolls which rows double. [ADR-0076](0076-scaling-is-calibration-production-art-is-native-1x.md)
+  says production art is native 1×; this is not.
+- each compartment then offsets into that upscaled tile by `index × −54px`, so the five buttons are
+  five different samplings of it rather than one continuous surface.
+- and every compartment's content carries a **transitioning `filter`** (`style.css`, the
+  `button.shell-controls-head-section > *` rule), which promotes and drops a composited layer on
+  every hover and every selection.
+
+Any of those three can make identical declared paint rasterise differently. Which one it is was not
+established, and the two buttons the owner named — Log and Controls — are also the two a player
+actually presses, so the pattern points at the interaction path rather than at position in the row.
 
 **`verify:icon-seats` had to learn that a seat can pin its HEIGHT.** Its `fill` is the LONG axis over
 the canvas, and those are different numbers for a mark wider than it is tall: the pawn pair is 60×52
