@@ -260,6 +260,12 @@ The **default** ruleset is **real chess**:
   ghost that already stands there, and carries the answer on the queued step — a premove exists
   to spend the opponent's thinking time, so it does not stop the game to ask a turn later. The
   chain continues past it as the chosen piece (ADR-0541).
+- Either way the picker carries an **Undo**, because the question opens before anything commits:
+  declining it withdraws the move that raised it — the Pawn returns to its square still selected,
+  the turn and clock are still the player's, and it costs nothing in any Battle, Run or lobby. This
+  is not the Run's paid Undo, which rewinds a move that really was played. A queued step is
+  withdrawn alone, leaving the rest of the premove chain; Escape still drops the whole chain
+  (ADR-0641).
 - Either way the complete chosen move commits atomically once, including from a multiplayer seat.
 - **Capture is one-hit, like chess.** There are **no hit points, no action points,
   no command points, and no per-piece "powers."** The stat/RPG layer shown in the

@@ -1862,6 +1862,7 @@ export function SkirmishBoard({
   const storedFocusedId = useSkirmish((s) => s.focusedId);
   const storedPendingPromotion = useSkirmish((s) => s.pendingPromotion);
   const choosePromotion = useSkirmish((s) => s.choosePromotion);
+  const undoPromotionMove = useSkirmish((s) => s.undoPromotionMove);
   const storedSeed = useSkirmish((s) => s.seed);
   const game = surfaceState?.game ?? storedGame;
   const previewPieces = surfaceState?.previewPieces ?? EMPTY_PREVIEW_PIECES;
@@ -2750,6 +2751,7 @@ export function SkirmishBoard({
               boardSeat={promotionPickerSeat}
               boardZoom={boardZoom}
               onChoose={choosePromotion}
+              onUndo={undoPromotionMove}
             />
           ) : null}
         </BoardLabBoard>
