@@ -27488,6 +27488,14 @@ button.tileset-relationship-cell {
   overflow: auto;
   padding: calc(var(--app-header-h, 84px) + 12px) 16px 16px;
 }
+
+/* Inside the Studio the shell already reserves the title bar and owns the page inset, so the
+   route's own clearance would be counted twice — a band of dead space above the controls. The
+   lab is one instrument with two entrances (ADR-0058); only its outermost padding differs. */
+.mobile-lab-viewer {
+  block-size: auto;
+  padding: 0;
+}
 .mobile-lab-bar { display: grid; gap: 4px; }
 .mobile-lab-title { font-size: var(--ds-text-lg, 1.25rem); letter-spacing: .04em; margin: 0; text-transform: uppercase; }
 .mobile-lab-note { color: var(--ds-ink-3, #9eb1c5); font-size: var(--ds-text-sm, .85rem); line-height: 1.45; margin: 0; max-inline-size: 92ch; }

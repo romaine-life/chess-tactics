@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { replaceAppHistoryState, subscribeAppLocation } from './navigation';
 import { useSceneParticipant } from './shell/SceneBoundary';
@@ -140,24 +140,30 @@ export function describeFrameWait(state: FrameWait): string {
   return `scene ${phases} · no surface reporting`;
 }
 
-export default function MobileLab() {
-  const [{ device, route, zoom, hud }, setState] = useState(readParams);
-  // The address IS the state, so a specific device + screen is always one link.
-  const write = useCallback((next: Partial<{ device: string; route: string; zoom: number; hud: string }>) => {
-    setState((previous) => {
-      const merged = { ...previous, ...next };
-      const params = new URLSearchParams();
-      params.set('device', merged.device);
-      params.set('route', merged.route);
-      if (merged.zoom) params.set('zoom', String(merged.zoom));
-      if (merged.hud !== 'legacy') params.set('hud', merged.hud);
-      replaceAppHistoryState(null, `/mobile-lab?${params}`);
-      return merged;
-    });
-  }, []);
+export type MobileLabState = { device: string; route: string; zoom: number; hud: string };
 
-  useEffect(() => subscribeAppLocation(() => setState(readParams())), []);
+/** The screens this lab offers, exported so the Studio catalog lists exactly what it opens. */
+export const MOBILE_LAB_SURFACES: readonly Surface[] = SURFACES;
+export const MOBILE_LAB_DEFAULT_ROUTE = DEFAULT_ROUTE;
 
+/**
+ * The lab itself — controls and framed devices — with no page chrome and no opinion about where
+ * its state lives.
+ *
+ * Split out so the Studio Viewer and the `/mobile-lab` route are the SAME instrument rather than
+ * two that drift. ADR-0058 requires a dev surface to be reachable by clicking through the running
+ * app, as a Studio category plus a Viewer; this lab shipped URL-only, which is the violation that
+ * ADR was written about. A second copy inside the Studio would have satisfied the click-path and
+ * broken the point of it.
+ */
+export function MobileLabStage({
+  state: { device, route, zoom, hud },
+  onChange,
+}: {
+  state: MobileLabState;
+  onChange: (next: Partial<MobileLabState>) => void;
+}) {
+  const write = onChange;
   const shown = useMemo(
     () => (device === 'all' ? DEVICES : DEVICES.filter((d) => d.id === device)),
     [device],
@@ -166,21 +172,8 @@ export default function MobileLab() {
   // difference between reviewing a Run state and reviewing a stale one.
   const [reloadKey, setReloadKey] = useState(0);
 
-  // The lab's own chrome is painted as soon as it renders; each framed route runs its own
-  // scene lifecycle inside its iframe and is not this scene's business.
-  useSceneParticipant('mobile-lab', 'painted');
-
   return (
-    <main className="mobile-lab">
-      <header className="mobile-lab-bar">
-        <h1 className="mobile-lab-title">Mobile review</h1>
-        <p className="mobile-lab-note">
-          Real routes at exact device viewports, portrait and landscape. These frames report a
-          desktop pointer and desktop input, so they show layout, not touch behaviour —{' '}
-          <code>npm run verify:mobile</code> is what drives a real touch device.
-        </p>
-      </header>
-
+    <>
       <section className="mobile-lab-controls" aria-label="Device">
         <span className="mobile-lab-legend">Device</span>
         <button
@@ -257,77 +250,166 @@ export default function MobileLab() {
         ))}
       </section>
 
-      <div className="mobile-lab-stage">
-        {shown.map((d) => (
-          <figure key={d.id} className="mobile-lab-device">
-            <figcaption className="mobile-lab-caption">
-              {d.label} <span className="mobile-lab-dim">{d.width}×{d.height}</span>
-            </figcaption>
-            {/* The frame reserves the SCALED footprint so neighbours never overlap; the
-                iframe keeps its true pixel size and is scaled from its top-left corner, so
-                its own layout viewport — and every width media query — stays honest. */}
-            <div
-              className="mobile-lab-viewport"
-              style={{
-                width: `${d.width * (zoom || 1)}px`,
-                height: `${d.height * (zoom || 1)}px`,
-              }}
-            >
-              {/* A frame that has not painted yet says so. An iframe renders as a black
-                  rectangle until the app inside it composes, and this app takes about four
-                  seconds on a plain route and closer to six on a `?craft=` one, because
-                  crafting mints a Run and the scene restarts on the new document. Black for
-                  six seconds is indistinguishable from broken — it was reported as a blank
-                  screen more than once, and the frame was working every time. The state
-                  belongs on screen instead of in the reader's head. */}
-              <div className="mobile-lab-frame-status" aria-hidden="true">
-                <span data-frame-status-line>Composing {d.label.toLowerCase()}…</span>
-              </div>
-              <iframe
-                key={`${d.id}-${route}-${hud}-${reloadKey}`}
-                className="mobile-lab-frame"
-                title={`${d.label} — ${route}`}
-                src={framedAddress(route, hud)}
-                onLoad={(event) => {
-                  // `load` fires when the document is parsed, which is well before the app
-                  // paints, so the placeholder is dismissed by the scene actually arriving.
-                  // Same-origin by construction, and any failure to reach in leaves the
-                  // placeholder up rather than uncovering a black frame.
-                  //
-                  // It also REPORTS what it is waiting on, because a frame that never paints is
-                  // the one failure this lab exists to surface and the owner's browser is the
-                  // only place it has ever happened. A generic "Composing…" that sticks says
-                  // nothing more than a black rectangle did; naming the stage turns a screenshot
-                  // of the stuck frame into the diagnosis.
-                  const frame = event.currentTarget;
-                  const started = Date.now();
-                  const line = frame.parentElement?.querySelector('[data-frame-status-line]');
-                  const settle = (): void => {
-                    const doc = frame.contentDocument;
-                    const painted = Boolean(doc?.querySelector('[data-scene-phase="current"]'))
-                      && !doc?.getElementById('app-bootstrap-status');
-                    if (painted) {
-                      frame.parentElement?.setAttribute('data-frame-painted', '');
-                      return;
-                    }
-                    const seconds = Math.round((Date.now() - started) / 1000);
-                    if (line && seconds > 3) {
-                      line.textContent = `${describeFrameWait(readFrameWait(doc))} · ${seconds}s`;
-                    }
-                    requestAnimationFrame(settle);
-                  };
-                  settle();
-                }}
-                style={{
-                  width: `${d.width}px`,
-                  height: `${d.height}px`,
-                  ...(zoom ? { transform: `scale(${zoom})`, transformOrigin: 'top left' } : null),
-                }}
-              />
-            </div>
-          </figure>
-        ))}
-      </div>
+      <MobileLabFrames shown={shown} route={route} hud={hud} zoom={zoom} reloadKey={reloadKey} />
+    </>
+  );
+}
+
+/**
+ * The Studio Viewer. Same instrument, entered by clicking a catalog category (ADR-0058), with its
+ * state local to the viewer rather than in the address — the Studio owns its own route grammar,
+ * and `/mobile-lab` remains the addressable form for handing a specific device + screen over.
+ */
+export function MobileLabViewer({
+  header,
+  route,
+  onRoute,
+}: {
+  header?: ReactNode;
+  /** The screen chosen in the catalog, so opening a card lands on that screen. */
+  route: string;
+  onRoute: (next: string) => void;
+}) {
+  const [local, setLocal] = useState<Omit<MobileLabState, 'route'>>({
+    device: DEFAULT_DEVICE,
+    zoom: 0,
+    hud: 'legacy',
+  });
+  return (
+    <div className="mobile-lab mobile-lab-viewer">
+      {header}
+      <MobileLabStage
+        state={{ ...local, route }}
+        onChange={({ route: nextRoute, ...rest }) => {
+          if (nextRoute !== undefined) onRoute(nextRoute);
+          if (Object.keys(rest).length) setLocal((prev) => ({ ...prev, ...rest }));
+        }}
+      />
+    </div>
+  );
+}
+
+export default function MobileLab() {
+  const [{ device, route, zoom, hud }, setState] = useState(readParams);
+  // The address IS the state, so a specific device + screen is always one link.
+  const write = useCallback((next: Partial<{ device: string; route: string; zoom: number; hud: string }>) => {
+    setState((previous) => {
+      const merged = { ...previous, ...next };
+      const params = new URLSearchParams();
+      params.set('device', merged.device);
+      params.set('route', merged.route);
+      if (merged.zoom) params.set('zoom', String(merged.zoom));
+      if (merged.hud !== 'legacy') params.set('hud', merged.hud);
+      replaceAppHistoryState(null, `/mobile-lab?${params}`);
+      return merged;
+    });
+  }, []);
+
+  useEffect(() => subscribeAppLocation(() => setState(readParams())), []);
+
+  // The lab's own chrome is painted as soon as it renders; each framed route runs its own
+  // scene lifecycle inside its iframe and is not this scene's business.
+  useSceneParticipant('mobile-lab', 'painted');
+
+  return (
+    <main className="mobile-lab">
+      <header className="mobile-lab-bar">
+        <h1 className="mobile-lab-title">Mobile review</h1>
+        <p className="mobile-lab-note">
+          Real routes at exact device viewports, portrait and landscape. These frames report a
+          desktop pointer and desktop input, so they show layout, not touch behaviour —{' '}
+          <code>npm run verify:mobile</code> is what drives a real touch device.
+        </p>
+      </header>
+
+      <MobileLabStage state={{ device, route, zoom, hud }} onChange={write} />
     </main>
+  );
+}
+
+
+/**
+ * The framed devices themselves. Every device shown side by side at its true pixel size, each
+ * frame covered until the app inside it has actually painted (see the cover below).
+ */
+function MobileLabFrames({ shown, route, hud, zoom, reloadKey }: {
+  shown: readonly Device[];
+  route: string;
+  hud: string;
+  zoom: number;
+  reloadKey: number;
+}) {
+  return (
+  <div className="mobile-lab-stage">
+    {shown.map((d) => (
+      <figure key={d.id} className="mobile-lab-device">
+        <figcaption className="mobile-lab-caption">
+          {d.label} <span className="mobile-lab-dim">{d.width}×{d.height}</span>
+        </figcaption>
+        {/* The frame reserves the SCALED footprint so neighbours never overlap; the
+            iframe keeps its true pixel size and is scaled from its top-left corner, so
+            its own layout viewport — and every width media query — stays honest. */}
+        <div
+          className="mobile-lab-viewport"
+          style={{
+            width: `${d.width * (zoom || 1)}px`,
+            height: `${d.height * (zoom || 1)}px`,
+          }}
+        >
+          {/* A frame that has not painted yet says so. An iframe renders as a black
+              rectangle until the app inside it composes, and this app takes about four
+              seconds on a plain route and closer to six on a `?craft=` one, because
+              crafting mints a Run and the scene restarts on the new document. Black for
+              six seconds is indistinguishable from broken — it was reported as a blank
+              screen more than once, and the frame was working every time. The state
+              belongs on screen instead of in the reader's head. */}
+          <div className="mobile-lab-frame-status" aria-hidden="true">
+            <span data-frame-status-line>Composing {d.label.toLowerCase()}…</span>
+          </div>
+          <iframe
+            key={`${d.id}-${route}-${hud}-${reloadKey}`}
+            className="mobile-lab-frame"
+            title={`${d.label} — ${route}`}
+            src={framedAddress(route, hud)}
+            onLoad={(event) => {
+              // `load` fires when the document is parsed, which is well before the app
+              // paints, so the placeholder is dismissed by the scene actually arriving.
+              // Same-origin by construction, and any failure to reach in leaves the
+              // placeholder up rather than uncovering a black frame.
+              //
+              // It also REPORTS what it is waiting on, because a frame that never paints is
+              // the one failure this lab exists to surface and the owner's browser is the
+              // only place it has ever happened. A generic "Composing…" that sticks says
+              // nothing more than a black rectangle did; naming the stage turns a screenshot
+              // of the stuck frame into the diagnosis.
+              const frame = event.currentTarget;
+              const started = Date.now();
+              const line = frame.parentElement?.querySelector('[data-frame-status-line]');
+              const settle = (): void => {
+                const doc = frame.contentDocument;
+                const painted = Boolean(doc?.querySelector('[data-scene-phase="current"]'))
+                  && !doc?.getElementById('app-bootstrap-status');
+                if (painted) {
+                  frame.parentElement?.setAttribute('data-frame-painted', '');
+                  return;
+                }
+                const seconds = Math.round((Date.now() - started) / 1000);
+                if (line && seconds > 3) {
+                  line.textContent = `${describeFrameWait(readFrameWait(doc))} · ${seconds}s`;
+                }
+                requestAnimationFrame(settle);
+              };
+              settle();
+            }}
+            style={{
+              width: `${d.width}px`,
+              height: `${d.height}px`,
+              ...(zoom ? { transform: `scale(${zoom})`, transformOrigin: 'top left' } : null),
+            }}
+          />
+        </div>
+      </figure>
+    ))}
+  </div>
   );
 }

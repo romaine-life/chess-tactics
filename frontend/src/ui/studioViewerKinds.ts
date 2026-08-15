@@ -40,6 +40,7 @@ export const STUDIO_VIEWER_KIND_LABELS = {
   cardoutline: 'Card Outline',
   cardprompts: 'Card Prompts',
   loading: 'Loading Lab',
+  mobilelab: 'Mobile Review',
 } as const;
 
 export type ViewerKind = keyof typeof STUDIO_VIEWER_KIND_LABELS;
