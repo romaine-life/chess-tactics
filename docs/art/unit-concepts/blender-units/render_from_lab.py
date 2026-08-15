@@ -78,16 +78,31 @@ if os.environ.get("SWITCHES", "ship") == "ship":
 # it was not: the table said 6 for this piece while the file says 7. Every Pixelate in the
 # graph is one stage of one filter and they must agree, so disagreement is an error rather
 # than something to average.
-_sizes = set()
+# A BLOCK SIZE group drives every Pixelate stage from one Int, so the stages themselves
+# read 1 and the group input is the real control -- which is the one the owner turns.
+# Read the group first and fall back to the stages for a lab built before it existed.
+BLOCK = None
 for n in tree.nodes:
-    if n.bl_idname != "CompositorNodePixelate":
+    if n.bl_idname != "CompositorNodeGroup" or not n.node_tree:
+        continue
+    if "BLOCK" not in (n.node_tree.name or "").upper():
         continue
     for inp in n.inputs:
-        if inp.name.lower() in ("size", "pixel size"):
-            _sizes.add(int(round(inp.default_value)))
-if len(_sizes) != 1:
-    raise SystemExit("lab Pixelate stages disagree on block size: %s" % sorted(_sizes))
-BLOCK = _sizes.pop()
+        if inp.type in ("INT", "VALUE"):
+            BLOCK = int(round(inp.default_value))
+if BLOCK is None:
+    _sizes = set()
+    for n in tree.nodes:
+        if n.bl_idname != "CompositorNodePixelate":
+            continue
+        for inp in n.inputs:
+            if inp.name.lower() in ("size", "pixel size"):
+                _sizes.add(int(round(inp.default_value)))
+    if len(_sizes) != 1:
+        raise SystemExit("lab Pixelate stages disagree on block size: %s" % sorted(_sizes))
+    BLOCK = _sizes.pop()
+if BLOCK < 1:
+    raise SystemExit("lab reports a block size of %s" % BLOCK)
 print("BLOCK from lab = %d" % BLOCK)
 
 scene.cycles.samples = SAMPLES

@@ -34,3 +34,8 @@ docs/art/**/runs/evidence/
 # Advance Wars ROMs — copyrighted, never commit (see tools/aw-import)
 roms/
 frontend/public/dev-filtered/
+
+# Blender tuning labs. Too big for git (the no-committed-media guard refuses them) and
+# they must NOT live in %TEMP%, which is where the king lab was destroyed. One artifact
+# per piece, driven directly by render_from_lab.py.
+blender-labs/
