@@ -425,9 +425,32 @@ for _n in tree.nodes:
 # build time, so turning the main one down left the masks quantised at the old value --
 # the image went smooth while the accent edge stayed blocky. They all read this Value
 # node now, so the control means what it says.
-block_size = tree.nodes.new("ShaderNodeValue")
-block_size.label = "BLOCK SIZE (one art pixel)"
-block_size.outputs[0].default_value = float(BLOCK)
+def _int_field(name, value, lo=1, hi=64):
+    """A control that steps in WHOLE numbers.
+
+    A ShaderNodeValue is a float socket, so dragging it moves in tenths -- and every one
+    of these fields counts art pixels, where 5.3 means nothing and getting from 5 to 6
+    takes ten drags. A group with an INT input steps by one and clamps to a sane range.
+    The group's output is still a float, which is what the sockets downstream want.
+    """
+    g = bpy.data.node_groups.get(name)
+    if g is None:
+        g = bpy.data.node_groups.new(name, "CompositorNodeTree")
+        gi = g.nodes.new("NodeGroupInput")
+        go = g.nodes.new("NodeGroupOutput")
+        go.location = (200, 0)
+        sock = g.interface.new_socket(name, in_out="INPUT", socket_type="NodeSocketInt")
+        sock.min_value, sock.max_value, sock.default_value = lo, hi, int(value)
+        g.interface.new_socket(name, in_out="OUTPUT", socket_type="NodeSocketFloat")
+        g.links.new(gi.outputs[0], go.inputs[0])
+    node = tree.nodes.new("CompositorNodeGroup")
+    node.node_tree = g
+    node.label = name
+    node.inputs[0].default_value = int(value)
+    return node
+
+
+block_size = _int_field("BLOCK SIZE (one art pixel)", BLOCK)
 
 def _use_block(node, socket="Size", scale=1):
     if scale == 1:
@@ -528,9 +551,14 @@ if len(BODY_POSITIONS) != 5 or any(len(c) != 5 for _, c in BODY_COLOURS):
 
 BODY_PALETTES = [(name, list(zip(BODY_POSITIONS, cols))) for name, cols in BODY_COLOURS]
 
-select = tree.nodes.new("ShaderNodeValue")
-select.label = "PALETTE  0=navy 1=white 2=golden 3=emerald 4=crimson 5=black"
-select.outputs[0].default_value = float(os.environ.get("BODY_PALETTE_INDEX", "0"))
+# Whole numbers, same as the other fields: this picks one of six teams, and 2.4 is not
+# a team. As a float socket it dragged in tenths, so changing colour took ten drags.
+select = _int_field(
+    "PALETTE  0=navy 1=white 2=golden 3=emerald 4=crimson 5=black",
+    int(os.environ.get("BODY_PALETTE_INDEX", "0")),
+    lo=0,
+    hi=len(BODY_COLOURS) - 1,
+)
 select.location = (-160, 460)
 
 body = None
@@ -885,9 +913,22 @@ if not os.environ.get("SOFT_ALPHA"):
     _alpha = _cut.outputs["Color"]
 
 if not os.environ.get("NO_STROKE"):
+    # The stroke gets its OWN field rather than following BLOCK SIZE.
+    #
+    # It used to be driven off the block driver, on the reasoning that a stroke tuned at
+    # one block size should not break at another. The cost was that the node named
+    # "STROKE width" had a linked Size socket, so its number read 0 and turning it did
+    # nothing -- a control that is visible and inert, which is worse than no control.
+    # Every lab before the driver had a plain adjustable Size, and that is what the owner
+    # tunes with. Default follows the block so nothing moves on rebuild; the field is
+    # there the moment it needs to move.
+    _stroke_px = _int_field(
+        "STROKE width (art pixels)",
+        int(BLOCK) * int(os.environ.get("STROKE_PX", "1")),
+    )
     _fat = tree.nodes.new("CompositorNodeDilateErode")
-    _use_block(_fat, scale=int(os.environ.get("STROKE_PX", "1")))
-    _fat.label = "STROKE width (Size follows BLOCK SIZE)"
+    tree.links.new(_stroke_px.outputs[0], _fat.inputs["Size"])
+    _fat.label = "STROKE width"
     tree.links.new(_alpha, _fat.inputs[0])
     _ring = tree.nodes.new("ShaderNodeMath")
     _ring.operation = "SUBTRACT"
