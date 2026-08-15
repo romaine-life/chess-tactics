@@ -447,6 +447,12 @@ def _int_field(name, value, lo=1, hi=64):
     node.node_tree = g
     node.label = name
     node.inputs[0].default_value = int(value)
+    # Marked, so the tuning column can find it. It cannot be found by TYPE -- these are
+    # node groups, and groups are excluded there on purpose because the addon ships its
+    # own "Palette" group that is machinery rather than a knob. Unmarked, these fields
+    # were skipped by the layout, kept their creation position, and were drawn
+    # underneath the chain: present, correct, and invisible.
+    node["tuning_field"] = 1
     return node
 
 
@@ -1222,8 +1228,9 @@ if os.environ.get("LAB_OUT"):
                       "CompositorNodeDilateErode", "ShaderNodeMix", "CompositorNodeSwitch"}
     _tune_names = ("PALETTE", "BODY ", "BLOCK SIZE", "STROKE", "ACCENT EDGE", "ALPHA CUTOFF", "OUTLINE", ACCENT_LABEL)
     _tune = [n for n in _nodes
-             if n.bl_idname in _tunable_types
-             and (n.label or "").upper().startswith(_tune_names)]
+             if n.get("tuning_field")
+             or (n.bl_idname in _tunable_types
+                 and (n.label or "").upper().startswith(_tune_names))]
     # Ordered by how often it is reached for, not alphabetically.
     #
     # The six body ramps are bulky, so sorting them first pushed the stroke controls
