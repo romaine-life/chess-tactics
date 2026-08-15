@@ -10326,6 +10326,12 @@ body.loading-bootstrap .app-startup-status {
       block-size: 100dvh;
       grid-template-rows: var(--app-header-h) minmax(0, 1fr) minmax(0, var(--mobile-controls-max));
       overflow: hidden;
+      /* Full bleed. The screen carries an 8px inline gutter, which held the Controls panel at
+         8..382 of a 390px viewport — so the panel's top rail stopped 8px short of each edge while
+         the title bar's divider immediately above it ran the full width. Two horizontal rails on
+         one screen, one reaching the edge and one not. A rail can only reach the edge if its
+         panel does, and on a phone there is no room to spend on a gutter anyway. */
+      padding-inline: 0;
     }
 
     /* The board no longer demands 520px. It gets what the panel leaves, and a fitted board simply
@@ -10362,17 +10368,21 @@ body.loading-bootstrap .app-startup-status {
 
      This wrapper is `overflow: visible` everywhere else so divider atoms can sit over the frame.
      On a phone the panel has no frame for them to sit over. */
+  /* The panel's column no longer scrolls itself. Its body is wrapped in the app's own KitScroll
+     (see ShellControlsPanel), which draws the carved rail and thumb every other scrollable
+     surface in this app uses. Scrolling this box natively worked, and wore a BROWSER scrollbar:
+     first the default grey bar, then a thin tinted one, neither of which is the app's. A styled
+     native bar is still not the supported scrollbar. */
   .skirmish-screen:not(.level-editor-screen) .le-outer-panel-content {
     min-block-size: 0;
-    overflow-x: hidden;
-    overflow-y: auto;
-    /* Wearing the same bar the HUD scroller wears. A new scroller does not inherit one: this
-       box is `overflow: visible` everywhere else, so making it scroll here handed it the
-       BROWSER's default bar — a fat grey OS scrollbar down the inside of a marble panel, which
-       is the "why doesn't it look like desktop" tell. Desktop shows none because its scroller is
-       .skirmish-hud-panel, which states these two lines. */
-    scrollbar-color: #315160 #071017;
-    scrollbar-width: thin;
+    overflow: visible;
+  }
+
+  /* The head stays put and the body scrolls under it — the locked head this panel has had since
+     the section pickers landed. */
+  .skirmish-screen:not(.level-editor-screen) .shell-controls-scroll {
+    flex: 1 1 auto;
+    min-block-size: 0;
   }
 
   /* One scroller in the panel, and it is the wrapper above. This block owns a scrollport of its
@@ -10428,7 +10438,12 @@ body.loading-bootstrap .app-startup-status {
   }
 
   /* Frozen: the row is the limit, so this cell must not report a content minimum of its own or
-     the grid grows past the screen it was told to fit. Stacked screens only — see above. */
+     the grid grows past the screen it was told to fit. Stacked screens only — see above.
+
+     Full bleed, too. This cell carried an 8px inline gutter, which held the panel at 8..382 of a
+     390px viewport — so its top rail stopped 8px short of each screen edge while the title bar's
+     divider directly above ran the full width. Two horizontal rails on the same screen, one
+     reaching the edge and one not. The rail can only reach the edge if the panel does. */
   @media (min-height: 541px) {
     .skirmish-screen:not(.level-editor-screen) .skirmish-hud {
       block-size: 100%;
@@ -10436,6 +10451,7 @@ body.loading-bootstrap .app-startup-status {
       min-block-size: 0;
       overflow: hidden;
       padding-block-end: 0;
+      padding-inline: 0;
     }
   }
 

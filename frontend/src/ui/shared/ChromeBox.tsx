@@ -9,6 +9,7 @@ import { useLayoutEffect, useState } from 'react';
 import { ControlsDockToggle } from './ControlsDockToggle';
 import { controlsMobileLayout } from './controlsMobileLayout';
 import { useIsMobileLayout } from '../shell/layoutMode';
+import { KitScroll } from '../KitScroll';
 // Cyclic with ChromeDividedGrid on purpose and safely: the grid needs this module's box and fill,
 // and the Controls panel's head IS a divided block. Every reference on both sides is inside a
 // component body, so neither module touches the other while it is still evaluating.
@@ -334,7 +335,12 @@ export function ShellControlsPanel({
           <ChromeDivider role="outer" />
         </div>
       ) : null}
-      {children}
+      {/* Stacked, the panel's body is the app's own scroller rather than a native one. The frozen
+          screen caps this panel, so its body has to scroll — and scrolling it with `overflow-y`
+          gave it the BROWSER's scrollbar down the inside of a marble panel. KitScroll is what
+          every other scrollable surface here uses: a carved rail and thumb drawn from the kit.
+          Only the body is wrapped, so the head stays locked above it. */}
+      {mobile ? <KitScroll className="shell-controls-scroll">{children}</KitScroll> : children}
     </OuterChromeBox>
   );
 }
