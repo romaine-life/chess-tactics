@@ -215,7 +215,7 @@ test('ADR-0560 main-menu marks carry a typed projection instead of staying bridg
     );
   }
   // The Battle HUD's four other section tabs share the strip with the gear, so they share its
-  // fit (ADR-0641). Named explicitly rather than left to the loop above: dropping one would
+  // fit (ADR-0643). Named explicitly rather than left to the loop above: dropping one would
   // refuse its Install with "requires one of its registered semantic slots", which reads as a
   // bug in the review page rather than a missing member here.
   for (const slot of [

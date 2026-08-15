@@ -60,7 +60,7 @@ function fittedMarkTransform(slot) {
 // are drawn through the identical fixed-seat-plus-contain rule.
 //
 // The Battle HUD's four other SECTION tabs joined for the reason the gear was already here, made
-// visible (ADR-0641): the tab strip is five compartments of one box drawing one 20px seat with
+// visible (ADR-0643): the tab strip is five compartments of one box drawing one 20px seat with
 // `contain`, so the gear read at full size while `unit-studio` — 26x40 of ink on its 64px canvas —
 // arrived beside it roughly 12px tall. One list, one height, and the strip stops reading as five
 // different sizes.

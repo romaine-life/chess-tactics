@@ -425,12 +425,12 @@ export function minimumZoomToCoverViewport({
  */
 export function boardZoomFloor({
   viewport,
-  coverPolygon,
+  coverPolygon,
   minZoom,
   maxZoom,
 }: {
   viewport: ViewPaneCoverViewport;
-  coverPolygon?: readonly ViewPanePoint[];
+  coverPolygon?: readonly ViewPanePoint[];
   minZoom: number;
   maxZoom: number;
 }): number {
@@ -447,7 +447,7 @@ export function ViewPane({
   maxZoom,
   onZoomChange,
   onPanChange,
-  coverPolygon,
+  coverPolygon,
   onMinimumZoomChange,
   onViewportSizeChange,
   onViewInteraction,
@@ -470,7 +470,7 @@ export function ViewPane({
    * the camera goes, so there is nothing for a boundary to protect.
    */
   coverPolygon?: readonly ViewPanePoint[];
-  /** The level's own extent, so zooming out ends with the whole of it visible. */
+  /** The level's own extent, so zooming out ends with the whole of it visible. */
   /** Reports the viewport-derived floor so external steppers clamp identically to the wheel. */
   onMinimumZoomChange?: (zoom: number) => void;
   /** Reports the live drawable viewport used by projection-aware editor actions. */
@@ -555,7 +555,7 @@ export function ViewPane({
       }
       const next = boardZoomFloor({
         viewport: cover,
-        coverPolygon,
+        coverPolygon,
         minZoom,
         maxZoom: Math.max(maxZoom, COVER_SEARCH_MAX_ZOOM),
       });

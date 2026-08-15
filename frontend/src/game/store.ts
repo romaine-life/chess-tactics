@@ -669,6 +669,15 @@ export interface SkirmishState {
    *  live move; both paths still perform their canonical fresh legality check. */
   releaseMoveGesture: (pieceId: string, x: number, y: number, startedAsPremove: boolean) => void;
   choosePromotion: (type: PromotionPieceType) => void;
+  /**
+   * Withdraw the move that opened the promotion question, unanswered (ADR-0641).
+   *
+   * A promotion asks BEFORE anything commits (ADR-0559/ADR-0541), so the position on the board
+   * is still the position before the move: this takes back an INTENT, not a played move. It is
+   * therefore not `undoLastPlayerMove` — no gold is spent, no clock is restored, no relay is
+   * involved, and it exists in a free skirmish and in netplay exactly as it does in a Run.
+   */
+  undoPromotionMove: () => void;
   /** Run-only checkpoints, one per committed player move this Battle, oldest first. Undo pops
    * the last, so a player can walk the whole Battle back a decision at a time (ADR-0556). */
   undoStack: PlayerMoveUndoCheckpoint[];
@@ -2239,6 +2248,38 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       set({ premoves: [], premoveInputOpen: false });
     }
     commitPlayerMove(p, mv, type, true);
+  },
+
+  undoPromotionMove: () => {
+    const s = get();
+    const pending = s.pendingPromotion;
+    // A submitted netplay promotion is already an ordered intent in the server's hands, and the
+    // picker is gone by then — only an unanswered question can be withdrawn.
+    if (!pending || pending.phase !== 'choosing') return;
+
+    // Queued: drop the step the question was asked for, and any planned FROM it — those were
+    // drawn against a piece nobody chose. Nothing can be queued while the question is open, so
+    // in practice it is the tail. The rest of the chain is untouched, unlike Escape, which drops
+    // the whole plan (ADR-0541).
+    if (pending.mode === 'premove-queue') {
+      let index = -1;
+      for (let at = s.premoves.length - 1; at >= 0; at -= 1) {
+        const step = s.premoves[at];
+        if (step.pieceId === pending.pieceId && step.x === pending.move.x && step.y === pending.move.y) { index = at; break; }
+      }
+      set({ pendingPromotion: null, premoves: index < 0 ? s.premoves : s.premoves.slice(0, index) });
+      return;
+    }
+
+    // Committing: the projected arrival is dropped and the Pawn is back on its own square, still
+    // selected, with the turn and the clock still the player's — nothing was applied, so there is
+    // nothing to roll back. The rest of the chain goes with it because this move was its head: a
+    // manual move has already taken the wheel by the time the question is on screen, and a drained
+    // step that is withdrawn leaves everything behind it planned from a move that never happened.
+    set({ pendingPromotion: null, premoves: [], premoveInputOpen: false });
+    // The beat held the clock open for this question (finishPremoveInputBeat); with the question
+    // gone and the beat closed, the player is simply on move again.
+    startClock();
   },
 
   queueMove: (pieceId, x, y) => {

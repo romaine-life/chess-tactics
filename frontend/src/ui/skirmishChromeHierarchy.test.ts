@@ -329,6 +329,17 @@ describe('Skirmish chrome hierarchy', () => {
 
     expect(promotion, 'expected anchored Pawn promotion choice').toBeDefined();
     expectChromeUnit(promotion!, 'inner-asset-swatch');
+
+    // The way out of the question is a TEXT button, not a fifth swatch (ADR-0641): a swatch says
+    // "the Pawn becomes this", and declining is not a piece. It wears the same leaf material as
+    // the choices it stands under, so the callout is one plank run rather than a framed row plus
+    // a bare control.
+    const promotionUndo = buttonBlocks(pawnPromotionPicker).find((candidate) => candidate.includes('onClick={onUndo}'));
+    expect(promotionUndo, 'expected a way out of the promotion question').toBeDefined();
+    expectChromeUnit(promotionUndo!, 'inner-text-button');
+    expect(promotionUndo!).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
+    expect(promotionUndo!).toContain('data-testid="undo-promotion-move"');
+    expect(styleCss).toMatch(/\.skirmish-promotion-picker \[data-chrome-fill-surface\]\s*\{[\s\S]*?--promotion-leaf-index/);
     expect(pawnPromotionPicker).toContain('<InnerChromeBox');
     expect(pawnPromotionPicker).toContain('fillRole="outer"');
     expect(pawnPromotionPicker).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');

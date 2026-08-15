@@ -25,9 +25,32 @@ export type PromotionPickerSide = 'left' | 'right';
  */
 export type PromotionPickerSubject = 'promoting' | 'queued';
 
-const SUBJECT_COPY: Record<PromotionPickerSubject, { eyebrow: string; question: string }> = {
-  promoting: { eyebrow: 'Pawn promoting', question: 'Choose what this Pawn becomes' },
-  queued: { eyebrow: 'Premove queued', question: 'Choose what this Pawn will become' },
+/**
+ * The question's copy, and the copy of the way out of it (ADR-0641).
+ *
+ * Undo names what it takes back, because the two subjects take back different things: a played
+ * move that has not been applied yet, and a step that is only queued. Neither has happened, so
+ * neither costs anything — that is what separates this from the Run's paid Undo, and the tip
+ * says so rather than leaving the player to find out by pressing it.
+ */
+const SUBJECT_COPY: Record<PromotionPickerSubject, {
+  eyebrow: string;
+  question: string;
+  undoLabel: string;
+  undoTitle: string;
+}> = {
+  promoting: {
+    eyebrow: 'Pawn promoting',
+    question: 'Choose what this Pawn becomes',
+    undoLabel: 'Undo this move',
+    undoTitle: 'Take the move back. The Pawn returns to its square, nothing is played, and it costs nothing.',
+  },
+  queued: {
+    eyebrow: 'Premove queued',
+    question: 'Choose what this Pawn will become',
+    undoLabel: 'Undo this premove',
+    undoTitle: 'Take the queued step back. The rest of the premove chain stays.',
+  },
 };
 
 /** How far the callout stands clear of the Pawn it is asking about, in screen pixels. */
@@ -156,6 +179,7 @@ export function PawnPromotionPicker({
   boardSeat,
   boardZoom,
   onChoose,
+  onUndo,
 }: {
   piece: Piece;
   choices: readonly PromotionPieceType[];
@@ -163,6 +187,8 @@ export function PawnPromotionPicker({
   boardSeat: { left: number; top: number };
   boardZoom: number;
   onChoose: (type: PromotionPieceType) => void;
+  /** Withdraw the move that raised the question, unanswered (ADR-0641). */
+  onUndo: () => void;
 }): ReactElement {
   const anchorRef = useRef<HTMLDivElement>(null);
   const [placement, setPlacement] = useState<PromotionPickerPlacement | null>(null);
@@ -224,6 +250,22 @@ export function PawnPromotionPicker({
             </ChromeButton>
           ))}
         </div>
+        {/* The way out of the question (ADR-0641). A text button rather than a fifth swatch,
+            because it is not a piece the Pawn can become — the swatches answer "what", this
+            answers "not this move". It continues the leaf phase past the choices so its plank
+            is cut from the same run rather than repeating the Queen's grain. */}
+        <ChromeButton
+          unit="inner-text-button"
+          data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+          className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-promotion-undo')}
+          style={{ ['--promotion-leaf-index' as string]: choices.length }}
+          data-testid="undo-promotion-move"
+          onClick={onUndo}
+          aria-label={copy.undoLabel}
+          title={copy.undoTitle}
+        >
+          <span>Undo</span>
+        </ChromeButton>
       </InnerChromeBox>
     </div>
   );

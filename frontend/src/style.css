@@ -5468,7 +5468,7 @@ body.loading-bootstrap .app-startup-status {
    a moving sample grid redraws the rim visibly. Reverted: a mark that reads slightly small
    and holds still beats a correctly-sized one that does not. If the size is worth another
    attempt it needs the compartment landing on whole pixels first, which is the divided
-   grid's geometry and not this seat's (ADR-0641). */
+   grid's geometry and not this seat's (ADR-0643). */
 .skirmish-tab-icon {
   background-position: center;
   background-repeat: no-repeat;
@@ -5865,7 +5865,6 @@ body.loading-bootstrap .app-startup-status {
 }
 
 .skirmish-promotion-options {
-  --promotion-leaf-surface-pitch: calc(60px + var(--ds-inline-tight));
   display: grid;
   gap: var(--ds-inline-tight);
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5912,6 +5911,7 @@ body.loading-bootstrap .app-startup-status {
    position 296 BOARD units wide, and the callout swung further right the more the player
    zoomed in — straight under the Controls panel (ADR-0570). */
 .skirmish-promotion-picker {
+  --promotion-leaf-surface-pitch: calc(60px + var(--ds-inline-tight));
   color: #eff9ff;
   display: grid;
   gap: var(--ds-inline);
@@ -5920,8 +5920,17 @@ body.loading-bootstrap .app-startup-status {
   pointer-events: auto;
 }
 
-.skirmish-promotion-options [data-chrome-fill-surface] {
+/* Every leaf in the callout — the four replacement swatches and the Undo that declines all four
+   (ADR-0643) — is phased off the index its own call site states, so the whole set is cut from one
+   plank run instead of stamping the same grain per control. */
+.skirmish-promotion-picker [data-chrome-fill-surface] {
   --chrome-surface-position-y: calc(var(--promotion-leaf-index, 0) * -1 * var(--promotion-leaf-surface-pitch));
+}
+
+/* Undo declines the question rather than answering it, so it stands apart from the swatch grid:
+   full width under the choices, at the ordinary text-button height, not a fifth piece. */
+.skirmish-promotion-undo.app-header-button {
+  justify-content: center;
 }
 
 /* Gold the Run paid for something that happened ON the board reads off that square, not off a
@@ -18999,6 +19008,9 @@ button.tileset-relationship-cell {
   align-items: baseline;
   display: flex;
   min-width: 0;
+  /* A trail longer than the brand column is CLIPPED inside that column. Without this the
+     overflow paints on across the bar's centre, over the live status the centre track owns. */
+  overflow: hidden;
 }
 
 .brand-lockup-route:not(:empty) {
@@ -19008,6 +19020,8 @@ button.tileset-relationship-cell {
 .brand-lockup-route:not(:empty)::before {
   color: #79d3ff;
   content: "\203A";
+  /* An anonymous flex item shrinks like any other, and this one is a mark, not a spring. */
+  flex: none;
   margin-inline: .5em .5em;
   opacity: .75;
 }
@@ -19016,10 +19030,12 @@ button.tileset-relationship-cell {
   align-items: baseline;
   display: flex;
   min-width: 0;
+  overflow: hidden;
 }
 
 .title-route-separator {
   color: #79d3ff;
+  flex: none;
   margin-inline: .5em;
   opacity: .75;
 }
@@ -19033,6 +19049,14 @@ button.tileset-relationship-cell {
   color: inherit;
   cursor: pointer;
   display: inline;
+  /* A crumb is never narrower than the word it carries. It is a flex item with
+     `min-inline-size: 0`, so without this it shrinks under its own text and the next crumb
+     paints straight over it: at 1440 on `Run › Battle › Strategikon › Chartulary` the brand
+     column offers the trail 191px against the 258px it wants, and every crumb AND every
+     separator gave a share — the line read `RUN › BATTLESTRATEGIKONCHARTUL` with the
+     separators buried under the words beside them. Overflow is answered below, by choosing
+     what gives; it is never answered by letting the words collide. */
+  flex: none;
   font: inherit;
   letter-spacing: inherit;
   line-height: inherit;
@@ -19043,6 +19067,22 @@ button.tileset-relationship-cell {
   text-shadow: inherit;
   text-transform: inherit;
   white-space: nowrap;
+}
+
+/* A crumb TitleRoute has shed to make the trail fit. `.title-route-button` sets `display`, so
+   the UA's `[hidden]` rule loses to it and a shed crumb would keep its box. */
+.title-route-button[hidden] {
+  display: none;
+}
+
+/* The mark that stands in for the shed crumbs. It is chrome, not a name: it wears the
+   separators' colour so the eye reads `Battle › … › Chartulary` as one trail with something
+   left out, rather than as a place you could go. It is not a NavButton — a shed ancestor is no
+   longer named, so under ADR-0409 there is nothing here to be the canonical address of. */
+.title-route-elision {
+  color: #79d3ff;
+  flex: none;
+  opacity: .75;
 }
 
 .title-route-button:is(:hover, :focus-visible) {
@@ -26376,7 +26416,7 @@ button.tileset-relationship-cell {
 }
 
 /* THREE marks, ONE declaration, because all three are FITTED: 52px of ink centred on the 64x64
-   canvas, so each carries 6/64 below it and 52/64 across it (ADR-0560, ADR-0641).
+   canvas, so each carries 6/64 below it and 52/64 across it (ADR-0560, ADR-0643).
    - enchiridion.png — the Strategikon's Enchiridion tab draws whatever the Enchiridion
      DESTINATION draws (menuModeIcon), so it moved off the shared design-index kit glyph when that
      destination gained a mark of its own family.
