@@ -153,7 +153,7 @@ export function OuterChromeBox({
    * media queries add no specificity — so the offscreen-rails contract thousands of lines later
    * won on source order and put the rails back. Declared here, there is nothing to win against.
    */
-  framed?: boolean;
+  framed?: boolean | 'top';
   contentClassName?: string;
 }): ReactElement {
   const contentClasses = [
@@ -166,7 +166,7 @@ export function OuterChromeBox({
     <Element
       {...props}
       data-chrome-unit="outer-panel"
-      data-chrome-frame={framed ? undefined : 'none'}
+      data-chrome-frame={framed === true ? undefined : framed === 'top' ? 'top' : 'none'}
       data-chrome-consumer={chromeConsumer}
       className={chromeUnitClassNames('outer-panel', 'le-outer-panel', className)}
     >
@@ -301,7 +301,7 @@ export function ShellControlsPanel({
       {...props}
       chromeConsumer="shell-controls"
       titled
-      framed={!mobile}
+      framed={mobile ? 'top' : true}
       data-shell-controls-panel=""
       data-controls-collapsed={mobileLayout === 'sheet' && collapsed ? '' : undefined}
       // Narrow-width placement is this primitive's business, not each workflow's — the same

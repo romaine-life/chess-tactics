@@ -30,7 +30,7 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": ":root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel]::before",
+      "selector": ":root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel]:not([data-chrome-frame=\"top\"])::before",
       "surfaceHash": "5b6813844f46f7cc719075af782803c0600c2417060d1073567ccd582cf71169",
       "occurrence": 1
     },
@@ -5688,6 +5688,14 @@
       "context": "",
       "selector": "transparent board corners reveal the level world, never a transparency checkerboard (ADR-0067). */ .ce-level-viewer",
       "surfaceHash": "e6539ac5fc48204168a234c3a5cb11cd480cc0f5db1505dc1933d8609022c269",
+      "occurrence": 1
+    },
+    {
+      "kind": "css",
+      "file": "src/style.css",
+      "context": "",
+      "selector": "unframed that inset is just a strip of backdrop between the surface and the edge of the screen. The head's tracks reserve the frame's width the same way, and would clear themselves against rails that are not there. */ /* A panel whose only INTERIOR edge is its top wears one rail there, and nothing anywhere else. This is the same reduction the offscreen-rails contract performs, pointed at the edge a STACKED panel actually faces. Docked right on a desktop the panel has board to its left and the screen on its other three sides, so that contract leaves one rail on the left — which is why desktop looks finished. Stacked under the board on a phone, BOTH sides are the screen (measured: panel spans 8..382 of a 390px viewport), so the same contract leaves nothing, and turning the frame back on is visually identical to leaving it off. The edge facing the board has simply moved from the side to the top, and the rail has to move with it. Stated at the frame's source, and the offscreen-rails contract below excludes this case, so neither can win by being later in the file. */ :is(.level-editor-screen, .skirmish-screen) .le-outer-panel[data-chrome-frame=\"top\"]::before",
+      "surfaceHash": "b87e75a2faa84b36f286a2e540895b783fa1381e62a44094af2450e1a021340f",
       "occurrence": 1
     },
     {

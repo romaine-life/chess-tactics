@@ -6105,6 +6105,34 @@ body.loading-bootstrap .app-startup-status {
    couple of pixels inside so a rail can sit over its edge; unframed that inset is just a strip
    of backdrop between the surface and the edge of the screen. The head's tracks reserve the
    frame's width the same way, and would clear themselves against rails that are not there. */
+/* A panel whose only INTERIOR edge is its top wears one rail there, and nothing anywhere else.
+   This is the same reduction the offscreen-rails contract performs, pointed at the edge a STACKED
+   panel actually faces.
+
+   Docked right on a desktop the panel has board to its left and the screen on its other three
+   sides, so that contract leaves one rail on the left — which is why desktop looks finished.
+   Stacked under the board on a phone, BOTH sides are the screen (measured: panel spans 8..382 of
+   a 390px viewport), so the same contract leaves nothing, and turning the frame back on is
+   visually identical to leaving it off. The edge facing the board has simply moved from the side
+   to the top, and the rail has to move with it.
+
+   Stated at the frame's source, and the offscreen-rails contract below excludes this case, so
+   neither can win by being later in the file. */
+:is(.level-editor-screen, .skirmish-screen) .le-outer-panel[data-chrome-frame="top"]::before {
+  border-width: var(--le-control-rail-w) 0 0 0;
+  border-image-width: var(--le-control-rail-w) 0 0 0;
+}
+
+/* The rail sits ON the top edge, so the fill must not be held back from it — that inset exists to
+   hide under a rail, and on the three edges with no rail it would show as backdrop. */
+:is(.level-editor-screen, .skirmish-screen) .le-outer-panel[data-chrome-frame="top"] {
+  --le-outer-fill-box-bottom: 0px;
+  --le-outer-fill-box-left: 0px;
+  --le-outer-fill-box-right: 0px;
+  --shell-controls-frame-cover-end: 0px;
+  --shell-controls-frame-cover-start: 0px;
+}
+
 :is(.level-editor-screen, .skirmish-screen) .le-outer-panel[data-chrome-frame="none"] {
   --le-outer-fill-box-bottom: 0px;
   --le-outer-fill-box-left: 0px;
@@ -10338,6 +10366,13 @@ body.loading-bootstrap .app-startup-status {
     min-block-size: 0;
     overflow-x: hidden;
     overflow-y: auto;
+    /* Wearing the same bar the HUD scroller wears. A new scroller does not inherit one: this
+       box is `overflow: visible` everywhere else, so making it scroll here handed it the
+       BROWSER's default bar — a fat grey OS scrollbar down the inside of a marble panel, which
+       is the "why doesn't it look like desktop" tell. Desktop shows none because its scroller is
+       .skirmish-hud-panel, which states these two lines. */
+    scrollbar-color: #315160 #071017;
+    scrollbar-width: thin;
   }
 
   /* One scroller in the panel, and it is the wrapper above. This block owns a scrollport of its
@@ -18668,7 +18703,7 @@ button.tileset-relationship-cell {
   content: none !important;
 }
 
-:root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel]::before {
+:root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel]:not([data-chrome-frame="top"])::before {
   border-width: 0 0 0 var(--le-chrome-outer-rail-w) !important;
   border-image-width: 0 0 0 var(--le-chrome-outer-rail-w) !important;
 }
@@ -18685,7 +18720,7 @@ button.tileset-relationship-cell {
    box, so fixing one and not the other leaves the strip showing beside the title
    and nowhere else. The title's own padding already subtracts this inset, so its
    text and marks stay exactly where they were while its wood reaches the edge. */
-:root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel] {
+:root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel]:not([data-chrome-frame="top"]) {
   --le-outer-fill-box-right: 0px;
   /* No rail is drawn on this edge, so nothing covers what reaches it. */
   --shell-controls-frame-cover-end: 0px;
