@@ -35,7 +35,12 @@ export const STUDIO_VIEWER_KIND_LABELS = {
   cardlayout: 'Card Layout',
   cardsize: 'Card Size',
   carddivider: 'Card Gold Divider',
-  cardicons: 'Card Icon Fitting',
+  // NOTE: `cardicons` was removed here. It was registered with no `viewerKind === 'cardicons'`
+  // branch, so selecting it fell through the viewer chain and quietly rendered the Asset Lab —
+  // a named destination showing an unrelated surface. Its `?runIconPairReview=1` alias still
+  // canonicalises (see TilePreview's route reader) and now lands on the card categories rather
+  // than on a name that resolves to nothing. check-studio-reachability.mjs makes a kind without
+  // a render branch a build failure, so this cannot come back silently.
   cardfit: 'Card Fit',
   cardoutline: 'Card Outline',
   cardprompts: 'Card Prompts',
