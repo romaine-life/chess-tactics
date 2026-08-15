@@ -238,6 +238,13 @@ interface TitleBarControlBase {
   id: string;
   /** Visible text for labeled controls; accessible name for icon controls. */
   label: string;
+  /**
+   * Visible text where the bar has no room for the full one. The ACCESSIBLE NAME stays
+   * `label` either way, so a screen reader always hears the whole destination — only the
+   * pixels shorten. "‹ Back to Run" is 127px of a 390px row, which is what pushed the brand
+   * out of its own bar on a phone.
+   */
+  shortLabel?: string;
   title?: string;
   active?: boolean;
   disabled?: boolean;
@@ -266,6 +273,9 @@ function renderContributedControl(control: TitleBarControlSpec, index: number): 
     // The seat comes from this control's place in the contributed ARRAY, which is the only
     // ordering the screen actually authored — a spec carries no markup or layout of its own.
     surfacePhase: CONTRIBUTED_LEAF_PHASE_BASE + index,
+    // With a short form the visible text varies, so the accessible name is pinned to the full
+    // label rather than left to whichever span the width happens to display.
+    'aria-label': control.shortLabel ? control.label : undefined,
     'aria-pressed': control.pressed,
     'data-testid': control.testId,
     'data-titlebar-control-id': control.id,
@@ -293,7 +303,15 @@ function renderContributedControl(control: TitleBarControlSpec, index: number): 
     );
   }
 
-  const content = control.label;
+  // Both are rendered and one is displayed (see .titlebar-control-label-* in style.css):
+  // the label is CONTENT, so it cannot be shortened by CSS, and swapping it in JS on a width
+  // query would make the bar's text depend on a second source of layout truth.
+  const content = control.shortLabel ? (
+    <>
+      <span className="titlebar-control-label-full">{control.label}</span>
+      <span className="titlebar-control-label-short">{control.shortLabel}</span>
+    </>
+  ) : control.label;
   return control.kind === 'navigation' ? (
     <TitleBarButtonPrimitive
       key={control.id}

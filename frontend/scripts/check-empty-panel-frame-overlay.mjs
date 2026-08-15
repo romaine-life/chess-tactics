@@ -184,8 +184,16 @@ if (!outerFillLayer
   failures.push('level editor outer-panel fill must use the Fill Box values directly as its four insets');
 }
 
-const overlay = blockFor(`${outerPanelSelector}::before`);
-if (!overlay) failures.push('missing shared .le-outer-panel::before frame overlay');
+// The overlay carries the frame opt-out in its own selector, and that is part of the contract
+// rather than an accident of formatting. A panel that declares `data-chrome-frame="none"` (the
+// stacked mobile Controls rail — see src/ui/shell/layoutMode.ts) must match NO frame rule at all.
+// It was previously drawn here and unpainted by a media-query override far below, which lost to
+// the offscreen-rails contract on source order and left one rail down the panel's left side. So
+// asserting the qualifier is present keeps the opt-out from being quietly deleted and the
+// subtract-it-afterwards approach from coming back.
+const FRAME_OPT_OUT = ':not([data-chrome-frame="none"])';
+const overlay = blockFor(`${outerPanelSelector}${FRAME_OPT_OUT}::before`);
+if (!overlay) failures.push(`missing shared .le-outer-panel${FRAME_OPT_OUT}::before frame overlay`);
 for (const [re, message] of [
   [/position\s*:\s*absolute\s*;/, 'frame overlay must be absolutely positioned'],
   [/inset\s*:\s*0\s*;/, 'frame overlay must cover the shell edge-to-edge'],

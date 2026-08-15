@@ -26,6 +26,7 @@ import { decodeShellChromeArt } from './ui/shell/shellChromeArt';
 import { startAuthSession, watchAuthSession } from './net/authSession';
 import { initBoardGridStyle } from './settings/boardGridStyle';
 import { initPlayerPalette } from './settings/playerPalette';
+import { installAppLayoutMode } from './ui/shell/layoutMode';
 
 installLoadingResourceObserver();
 loadingMark('app', 'entry-module');
@@ -42,6 +43,10 @@ initBoardGridStyle();
 // Likewise the color the player's own pieces wear: published for the whole session before any
 // board can paint, so a battle entered straight from a cold load is already in the chosen set.
 initPlayerPalette();
+// Desktop or mobile — application state, like the two above, not screen state. Published on the
+// root element and to every component before React mounts, so the first tree a phone builds is
+// already the mobile composition rather than a desktop one corrected afterwards.
+installAppLayoutMode();
 
 class AppCrashBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };

@@ -8,6 +8,8 @@ import {
 import { useLayoutEffect, useState } from 'react';
 import { ControlsDockToggle } from './ControlsDockToggle';
 import { controlsMobileLayout } from './controlsMobileLayout';
+import { useIsMobileLayout } from '../shell/layoutMode';
+import { KitScroll } from '../KitScroll';
 // Cyclic with ChromeDividedGrid on purpose and safely: the grid needs this module's box and fill,
 // and the Controls panel's head IS a divided block. Every reference on both sides is inside a
 // component body, so neither module touches the other while it is still evaluating.
@@ -133,6 +135,7 @@ export function OuterChromeBox({
   as: Element = 'aside',
   chromeConsumer,
   titled = false,
+  framed = true,
   contentClassName = '',
   className = '',
   children,
@@ -141,6 +144,17 @@ export function OuterChromeBox({
   as?: 'aside' | 'div';
   chromeConsumer: string;
   titled?: boolean;
+  /**
+   * Whether this panel wears the outer frame. It stays the registered outer unit either way —
+   * same box, same installed surface, same content contract — it simply has no rails.
+   *
+   * Unframed is a COMPOSITION, not a correction: style.css skips the frame rules entirely for
+   * `[data-chrome-frame="none"]` rather than drawing them and subtracting them afterwards. The
+   * difference is not cosmetic. The frame was previously removed by a media-query override, and
+   * media queries add no specificity — so the offscreen-rails contract thousands of lines later
+   * won on source order and put the rails back. Declared here, there is nothing to win against.
+   */
+  framed?: boolean | 'top';
   contentClassName?: string;
 }): ReactElement {
   const contentClasses = [
@@ -153,6 +167,7 @@ export function OuterChromeBox({
     <Element
       {...props}
       data-chrome-unit="outer-panel"
+      data-chrome-frame={framed === true ? undefined : framed === 'top' ? 'top' : 'none'}
       data-chrome-consumer={chromeConsumer}
       className={chromeUnitClassNames('outer-panel', 'le-outer-panel', className)}
     >
@@ -250,6 +265,11 @@ export function ShellControlsPanel({
   fixed?: ReactNode;
 }): ReactElement {
   const mobileLayout = controlsMobileLayout();
+  // Stacked full width under a board, this panel has no interior edge for a frame to describe,
+  // and width is what the view has least of. So on a phone it is the same registered outer box
+  // wearing the same installed surface, with no rails — decided HERE, in the tree, rather than
+  // by a stylesheet trying to take rails back off a panel that already drew them.
+  const mobile = useIsMobileLayout();
   // Collapse belongs to the DOCK, not to any workflow: it is what the rail does when the
   // screen it shares is worth more than its own body. So it lives here with placement, and
   // every host gets the same affordance rather than the Battle growing a private one.
@@ -282,6 +302,7 @@ export function ShellControlsPanel({
       {...props}
       chromeConsumer="shell-controls"
       titled
+      framed={mobile ? 'top' : true}
       data-shell-controls-panel=""
       data-controls-collapsed={mobileLayout === 'sheet' && collapsed ? '' : undefined}
       // Narrow-width placement is this primitive's business, not each workflow's — the same
@@ -314,7 +335,12 @@ export function ShellControlsPanel({
           <ChromeDivider role="outer" />
         </div>
       ) : null}
-      {children}
+      {/* Stacked, the panel's body is the app's own scroller rather than a native one. The frozen
+          screen caps this panel, so its body has to scroll — and scrolling it with `overflow-y`
+          gave it the BROWSER's scrollbar down the inside of a marble panel. KitScroll is what
+          every other scrollable surface here uses: a carved rail and thumb drawn from the kit.
+          Only the body is wrapped, so the head stays locked above it. */}
+      {mobile ? <KitScroll className="shell-controls-scroll">{children}</KitScroll> : children}
     </OuterChromeBox>
   );
 }
