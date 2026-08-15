@@ -60,6 +60,11 @@ try {
 
   const geometry = await page.evaluate(() => {
     const rect = (element) => {
+      // A region the route does not mount at all. A bar without a centre slot (every menu
+      // screen) and a mounted-but-empty one (a Run whose Strategikon covers the phase, which
+      // is exactly where the title trail gets longest) both land here, and reading a rect off
+      // null crashed the gate before it reached a single assertion.
+      if (!element) return null;
       const value = element.getBoundingClientRect();
       return {
         top: value.top,
@@ -167,8 +172,8 @@ try {
   // lane, which makes the home shield and the Run breadcrumb untappable — every tap in that
   // region lands on the status chip on top. Measured against the CONTENT of the centre, because
   // the centre element itself may legitimately stretch while its chips sit in the free space.
-  const centerInk = geometry.centerContent.width > 0 ? geometry.centerContent : geometry.center;
-  if (centerInk.width > 0) {
+  const centerInk = geometry.centerContent?.width > 0 ? geometry.centerContent : geometry.center;
+  if (centerInk && centerInk.width > 0) {
     if (centerInk.left < geometry.brandLayout.right - tolerance) {
       failures.push(
         `title-bar centre overlaps the brand lockup by ${Math.round(geometry.brandLayout.right - centerInk.left)}px`
