@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createSkirmishStore, useSkirmish, shouldStartFreshSkirmish } from './store';
+import type { RelayMove } from './store';
 import { legalMoves, livingPieces } from '../core/rules';
 import type { MoveEnv } from '../core/rules';
 import type { GameState, Piece, PieceType, Side } from '../core/types';
@@ -1632,6 +1633,62 @@ describe('skirmish store: premoves', () => {
     expect(useSkirmish.getState().game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'pawn', x: 0, y: 1 });
   });
 
+  // The question opens before anything commits, so declining it takes back an INTENT — there is
+  // no played move to rewind and nothing to pay for (ADR-0641).
+  it('withdraws a played promotion when the question is undone, leaving the Pawn to move again', () => {
+    loadPromotionBoard();
+    useSkirmish.setState({ selectedId: 'pp', focusedId: 'pp' });
+    useSkirmish.getState().tryMoveTo(0, 0);
+    expect(useSkirmish.getState().pendingPromotion).toMatchObject({ mode: 'move', phase: 'choosing' });
+
+    useSkirmish.getState().undoPromotionMove();
+
+    const s = useSkirmish.getState();
+    expect(s.pendingPromotion).toBeNull();
+    expect(s.game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'pawn', x: 0, y: 1 });
+    // Still the player's move, with the Pawn still in hand: the point of undoing is to play
+    // something else, not to lose the turn.
+    expect(s.game.turn).toBe('player');
+    expect(s.selectedId).toBe('pp');
+    expect(s.undoStack).toEqual([]); // nothing was played, so nothing was checkpointed or charged
+
+    // ...and no enemy reply was ever staged, so the board simply waits.
+    vi.advanceTimersByTime(2000);
+    expect(useSkirmish.getState().game.turn).toBe('player');
+
+    useSkirmish.getState().tryMoveTo(0, 0);
+    useSkirmish.getState().choosePromotion('queen');
+    expect(useSkirmish.getState().game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'queen', x: 0, y: 0 });
+  });
+
+  it('undoes only the queued step a premove question was asked for, keeping the rest of the chain', () => {
+    loadBoard(
+      [
+        piece('pp', 'player', 'pawn', 0, 1),
+        piece('pr', 'player', 'rook', 4, 4),
+        piece('pk', 'player', 'king', 0, 7),
+        piece('ek', 'enemy', 'king', 7, 7),
+      ],
+      'pk',
+    );
+    useSkirmish.setState({ game: { ...useSkirmish.getState().game, promotionZones: [{ x: 0, y: 0 }] } });
+    useSkirmish.getState().tryMoveTo(1, 7); // king step → the opponent is thinking
+
+    useSkirmish.getState().queueMove('pr', 4, 5);
+    useSkirmish.getState().queueMove('pp', 0, 0);
+    expect(useSkirmish.getState().pendingPromotion).toMatchObject({ mode: 'premove-queue', phase: 'choosing' });
+
+    useSkirmish.getState().undoPromotionMove();
+
+    expect(useSkirmish.getState().pendingPromotion).toBeNull();
+    // Escape drops the whole plan (ADR-0541); Undo drops the one step it was asked about.
+    expect(useSkirmish.getState().premoves).toEqual([{ pieceId: 'pr', x: 4, y: 5 }]);
+
+    vi.advanceTimersByTime(520 + 620); // the reply lands and the surviving step fires
+    expect(useSkirmish.getState().game.pieces.find((p) => p.id === 'pr')).toMatchObject({ x: 4, y: 5 });
+    expect(useSkirmish.getState().game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'pawn', x: 0, y: 1 });
+  });
+
   it('asks a programmatic promotion premove as it fires, since nobody chose for it', () => {
     loadPromotionBoard();
     useSkirmish.getState().tryMoveTo(1, 7);
@@ -1651,6 +1708,29 @@ describe('skirmish store: premoves', () => {
     expect(s.premoves).toEqual([]); // NOT parked as a premove the player must repeat
     expect(s.game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'queen', x: 0, y: 0 });
     expect(s.game.turn).toBe('enemy');
+  });
+
+  it('withdraws a drained promotion step and the chain that was planned behind it', () => {
+    loadPromotionBoard();
+    useSkirmish.getState().tryMoveTo(1, 7);
+    // A programmatic/legacy chain: an unanswered promotion at the head, another step behind it.
+    useSkirmish.setState({ premoves: [{ pieceId: 'pp', x: 0, y: 0 }, { pieceId: 'pk', x: 0, y: 7 }] });
+
+    vi.advanceTimersByTime(520 + 620);
+    expect(useSkirmish.getState().pendingPromotion).toMatchObject({ mode: 'premove', phase: 'choosing' });
+
+    useSkirmish.getState().undoPromotionMove();
+
+    const s = useSkirmish.getState();
+    expect(s.pendingPromotion).toBeNull();
+    // The head is what the rest was planned from, so nothing behind it survives it.
+    expect(s.premoves).toEqual([]);
+    expect(s.premoveInputOpen).toBe(false);
+    expect(s.game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'pawn', x: 0, y: 1 });
+    expect(s.game.turn).toBe('player');
+
+    vi.advanceTimersByTime(2000);
+    expect(useSkirmish.getState().game.turn).toBe('player'); // no step fires behind the withdrawal
   });
 
   it('closes the post-reply premove input beat when no premove is queued', () => {
@@ -1772,6 +1852,24 @@ describe('skirmish store: premoves', () => {
 });
 
 describe('skirmish store: multiplayer session parity', () => {
+  /** A lobby board with the local seat's Pawn one step from an authored promotion cell. */
+  function loadNetPromotionBoard(): void {
+    useSkirmish.setState({
+      game: {
+        size: { cols: 8, rows: 8 },
+        pieces: [piece('pp', 'player', 'pawn', 0, 1), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)],
+        promotionZones: [{ x: 0, y: 0 }],
+        turn: 'player',
+        winner: null,
+      },
+      env: { terrain: undefined, lastMove: undefined },
+      objective: 'capture-king',
+      objectiveCtx: { kingSide: 'enemy' },
+      selectedId: 'pp',
+      focusedId: 'pp',
+    });
+  }
+
   it.each([
     ['player', 'The opposing force was eliminated', 'The opposing force was eliminated'],
     ['enemy', 'Your force was eliminated', 'Your force was eliminated'],
@@ -1987,6 +2085,42 @@ describe('skirmish store: multiplayer session parity', () => {
     expect(useSkirmish.getState().net).toMatchObject({ moveCount: 2, pendingMove: null });
     expect(useSkirmish.getState().selectedId).toBeNull();
     expect(useSkirmish.getState().focusedId).toBeNull();
+  });
+
+  // Undoing an unanswered promotion is purely local, because the intent it withdraws was never
+  // sent: a netplay seat submits ONE complete `{ destination, promotion }` with the answer
+  // (ADR-0559), so there is nothing in flight to recall and no rollback surface (ADR-0641).
+  it('relays nothing when a netplay promotion is undone before it is answered', () => {
+    const sent: { pieceId: string; move: RelayMove }[] = [];
+    useSkirmish.getState().setNetMoveSink((pieceId, move) => { sent.push({ pieceId, move }); });
+    useSkirmish.getState().newNetMatch({ lobbyId: 'L1', localSide: 'player', level: playableNetLevel(), seed: 7 });
+    loadNetPromotionBoard();
+
+    useSkirmish.getState().tryMoveTo(0, 0);
+    expect(useSkirmish.getState().pendingPromotion).toMatchObject({ mode: 'move', phase: 'choosing' });
+    expect(sent).toEqual([]);
+
+    useSkirmish.getState().undoPromotionMove();
+    expect(useSkirmish.getState().pendingPromotion).toBeNull();
+    expect(sent).toEqual([]);
+    expect(useSkirmish.getState().net?.pendingMove ?? null).toBeNull();
+    expect(useSkirmish.getState().game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'pawn', x: 0, y: 1 });
+  });
+
+  it('leaves a submitted netplay promotion alone — an ordered intent is not an open question', () => {
+    const sent: { pieceId: string; move: RelayMove }[] = [];
+    useSkirmish.getState().setNetMoveSink((pieceId, move) => { sent.push({ pieceId, move }); });
+    useSkirmish.getState().newNetMatch({ lobbyId: 'L1', localSide: 'player', level: playableNetLevel(), seed: 7 });
+    loadNetPromotionBoard();
+
+    useSkirmish.getState().tryMoveTo(0, 0);
+    useSkirmish.getState().choosePromotion('queen');
+    expect(useSkirmish.getState().pendingPromotion).toMatchObject({ phase: 'submitted' });
+    expect(sent).toEqual([{ pieceId: 'pp', move: { x: 0, y: 0, promotion: 'queen' } }]);
+
+    // The picker is already gone at 'submitted', and the seat's move is the server's to order.
+    useSkirmish.getState().undoPromotionMove();
+    expect(useSkirmish.getState().pendingPromotion).toMatchObject({ phase: 'submitted' });
   });
 
   it('retains a move-derived terminal result at its exact authoritative relay count', () => {

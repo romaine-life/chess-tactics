@@ -388,11 +388,16 @@ and don't tell the user screenshots are impossible. Use the helper below.
    npm run verify:mobile -- '<vite-url>'
    npm run verify:mobile -- '<vite-url>' --profile phone-landscape --route '/settings'
    ```
-   It reports five things per route per device: the page scrolling sideways, a control
-   that cannot be scrolled into view, a control clipped under 60% of itself, content
-   stranded in a container that cannot scroll, and a hit box under 44x44. A control below
-   the fold is NOT a finding — the gate scrolls it into view and re-measures, so only a
-   genuinely unreachable control fails. **This is why it exists:** the narrow-width chrome
+   It reports six things per route per device: the page scrolling sideways, a control
+   that cannot be scrolled into view, a control clipped under 60% of itself, a control
+   something else is sitting on top of, content stranded in a container that cannot
+   scroll, and a crowded hit box under 24x24 (WCAG 2.5.8, with the standard's spacing
+   exception). A control below the fold is NOT a finding — the gate scrolls it into view
+   and re-measures, so only a genuinely unreachable control fails. That rule binds every
+   check, the sitting-on-top-of one included: a resting hit test cannot tell "covered"
+   from "scrolled out of view", because a control below its scroller's clip edge is not
+   painted there and its centre reports whatever is. So a control counts as covered only
+   when it STILL loses its own centre after being scrolled into view. **This is why it exists:** the narrow-width chrome
    is a band of overrides that neutralise baked desktop offsets, and when the menu shell
    was rebuilt into the twin screen the band stopped reaching the destination row — every
    Settings and Play destination tab rendered at centre x = -56, entirely off the left

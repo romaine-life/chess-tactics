@@ -291,9 +291,12 @@ if (!/<CyclePicker[\s\S]*?className="le-layer-picker-row"[\s\S]*?previousLabel="
   failures.push('level editor Controls header must expose registered previous/dropdown/next layer navigation');
 }
 
-const dividerHost = blockFor('.level-editor-screen .le-control-divider-host');
+// Every screen the shared Controls panel is laid on, not only the editor: the Run's head breaks on
+// this same host, and scoped to `.level-editor-screen` it lost the z-index and its gold tee was
+// buried under the panel's own side rail.
+const dividerHost = blockFor(':is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .le-control-divider-host');
 if (!/position\s*:\s*relative\s*;/.test(dividerHost) || !/z-index\s*:\s*4\s*;/.test(dividerHost) || !/pointer-events\s*:\s*none\s*;/.test(dividerHost)) {
-  failures.push('level editor divider host must render above the frame overlay without catching interactions');
+  failures.push('the Controls divider host must render above the frame overlay on every chrome-family screen, without catching interactions');
 }
 if (!/function\s+renderFrameEdgeTileDataUrl/.test(chromeRuntime)) {
   failures.push('Chrome Lab dividers must derive their rails from the normalized host frame edge');

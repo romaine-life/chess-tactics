@@ -375,7 +375,26 @@ function ShellControlsHead({
     : content
       ? [{ id: 'head-content', content, className: 'shell-controls-head-row' }]
       : [];
-  if (!members.length) return name;
+  // A head that is ONLY its name — the Run's borrowed panel, which puts its whole activity in the
+  // body — has no block, because a block is what rules the lines BETWEEN a head's members and this
+  // head has none. What it has is the panel's own section break against the body, which is the
+  // standard outer divider: the same one the panel lays under a `fixed` section below, laid here
+  // for the same reason and by the same primitive.
+  //
+  // It is not the block's inner rail. Inner is the weight the owner chose for the strip's own
+  // divisions (ADR-0589), and this line is not one of those — it is where the head ends and the
+  // panel's content begins. Returning the bare name drew nothing at all, which is what left
+  // CONTROLS floating on unbroken marble on every Run phase.
+  if (!members.length) {
+    return (
+      <>
+        {name}
+        <div className="le-control-divider-host shell-controls-break" aria-hidden="true">
+          <ChromeDivider role="outer" />
+        </div>
+      </>
+    );
+  }
   const divided = members.length > 1;
   // Equal tracks do not give equal compartments (ADR-0569). Two different things are taken off a
   // cell here, and both have to be given back or the openings are not equal:

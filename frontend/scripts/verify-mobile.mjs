@@ -13,7 +13,8 @@
 // What it measures, per route per device profile:
 //   page-overflow-x   the page scrolls sideways (the classic desktop-layout-on-a-phone tell)
 //   screen-scrolls    a gameplay screen is taller than the device; it must be frozen, not a page
-//   control-obscured  a control's own centre hit-tests to something else — it cannot be tapped
+//   control-obscured  a control's own centre STILL hit-tests to something else once scrolled
+//                     into view — something is sitting on top of it
 //   control-cut-off   a control is clipped to under 60% of itself by an ancestor or the viewport
 //   control-offscreen a control's centre lies outside the viewport — unreachable at any scroll
 //   touch-target      an undersized hit box that also crowds another (WCAG 2.5.8: 24x24,
@@ -201,43 +202,6 @@ function measure() {
     return area(intersect(rect, clip)) / area(rect);
   };
 
-  // Is this point of the control actually PAINTED where it claims to be right now?
-  //
-  // A different question from visibleFraction above, and the obscured test needs this one. A
-  // control scrolled below the fold of an inner scrollport still reports a live rect at its
-  // laid-out position — getBoundingClientRect does not know the scrollport ends higher up. Hit
-  // testing that point therefore returns whatever IS painted there, which is some other screen
-  // furniture, and the control gets reported as unreachable when it is merely scrolled away.
-  //
-  // That is not hypothetical: the third unit in a Run army ledger sat at y=643 while its own
-  // scrollport ended at y=601, so its centre hit the Controls panel's "Sectio views" eyebrow
-  // behind it. It was reported as obscured on two device profiles for weeks, and several rounds
-  // of layout surgery went into "fixing" a control that was never broken — scrolling reaches it,
-  // which is exactly what visibleFraction says by treating a scrollable axis as unclipped.
-  //
-  // So here a scrollable ancestor DOES clip: the question is what is on screen at this instant,
-  // not what is reachable. Same containing-block walk, because an out-of-flow subtree escapes
-  // ancestors that do not contain it.
-  const pointIsPresented = (el, x, y) => {
-    let effective = getComputedStyle(el).position;
-    for (let node = el.parentElement; node && node !== document.documentElement; node = node.parentElement) {
-      const style = getComputedStyle(node);
-      const canClip = effective === 'fixed'
-        ? (style.transform !== 'none' || style.filter !== 'none' || style.perspective !== 'none')
-        : effective === 'absolute' ? containingBlockFor(style) : true;
-      if (style.position === 'fixed' || style.position === 'absolute') effective = style.position;
-      else if (canClip) effective = 'static';
-      if (!canClip) continue;
-      const clipsX = style.overflowX !== 'visible';
-      const clipsY = style.overflowY !== 'visible';
-      if (!clipsX && !clipsY) continue;
-      const box = node.getBoundingClientRect();
-      if (clipsX && (x < box.left || x > box.right)) return false;
-      if (clipsY && (y < box.top || y > box.bottom)) return false;
-    }
-    return true;
-  };
-
   const INTERACTIVE = [
     'button', 'a[href]', '[role="button"]', '[role="tab"]', '[role="link"]',
     'input:not([type="hidden"])', 'select', 'textarea', 'summary',
@@ -367,20 +331,36 @@ function measure() {
   // underlaps a control and loses the stacking order — but who actually RECEIVES the tap.
   // So ask the browser: hit-test the control's own centre and see what comes back. That
   // reports exactly the defect a player would hit and stays quiet about decoration that
-  // merely shares the same pixels from below. Measured BEFORE anything is scrolled, so
-  // every hit test shares one resting layout.
+  // merely shares the same pixels from below.
+  //
+  // Collected BEFORE anything is scrolled, so every hit test shares one resting layout —
+  // but a resting hit test alone CANNOT tell "covered" from "scrolled out of view". A
+  // control sitting below its scroller's clip edge is not painted there, so its centre
+  // reports whatever IS painted at that coordinate — which is why the Strategikon's rail
+  // read as buried under the Battle HUD when in truth it was forty pixels below the fold.
+  // That is the same "below the fold is NORMAL" rule the reachability pass already keeps,
+  // so a candidate is only a finding once it has been scrolled into view and STILL loses
+  // its own centre. Verified in a second pass below, after the scrolling one.
+  const obscuredCandidates = [];
   for (const el of chromeControls) {
     const rect = el.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
     if (cx < 0 || cx > vw || cy < 0 || cy > vh) continue; // reported as offscreen above
-    // Scrolled out of an inner scrollport, not covered by anything. Reachability is the
-    // separate question the cut-off/offscreen checks above already answer.
-    if (!pointIsPresented(el, cx, cy)) continue;
     const hit = document.elementFromPoint(cx, cy);
     if (!hit || hit === el || el.contains(hit) || hit.contains(el)) continue;
-    push('control-obscured', `its centre taps ${describe(hit)} instead`, el);
+    obscuredCandidates.push(el);
   }
+
+  // Every scroll container back to rest, so the next measurement starts where the player
+  // would find the screen rather than wherever the previous one left it.
+  const resetScroll = () => {
+    for (const el of document.querySelectorAll('*')) {
+      if (el.scrollTop) el.scrollTop = 0;
+      if (el.scrollLeft) el.scrollLeft = 0;
+    }
+    window.scrollTo(0, 0);
+  };
 
   const stillUnreachable = new Set();
   for (const el of unreachable) {
@@ -397,12 +377,32 @@ function measure() {
       push('control-cut-off', `only ${Math.round(frac * 100)}% visible even scrolled into view`, el);
     }
   }
-  // Put the page back so the overflow pass below measures the resting layout.
-  for (const el of document.querySelectorAll('*')) {
-    if (el.scrollTop) el.scrollTop = 0;
-    if (el.scrollLeft) el.scrollLeft = 0;
+  resetScroll();
+
+  // Now judge the obscured candidates the same way: bring each into view and ask again.
+  // A control the player can simply scroll to is not obscured, however its resting centre
+  // hit-tested. One that is genuinely covered stays covered — its coverer travels with it
+  // (a sticky header, a mispositioned sibling), which is exactly the squeezed-tracks defect
+  // this check was written for. Each candidate is scrolled from rest so no two verifications
+  // interfere, and anything the reachability pass already spoke for is left to that finding
+  // rather than reported twice under a second name.
+  for (const el of obscuredCandidates) {
+    if (stillUnreachable.has(el)) continue;
+    el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+    const rect = el.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    if (cx >= 0 && cx <= vw && cy >= 0 && cy <= vh) {
+      const hit = document.elementFromPoint(cx, cy);
+      if (hit && hit !== el && !el.contains(hit) && !hit.contains(el)) {
+        push('control-obscured', `its centre taps ${describe(hit)} instead, even scrolled into view`, el);
+      }
+    }
+    resetScroll();
   }
-  window.scrollTo(0, 0);
+
+  // Put the page back so the overflow pass below measures the resting layout.
+  resetScroll();
 
   // Content that overflows a container which cannot scroll is simply unreachable.
   for (const el of document.querySelectorAll('body *')) {

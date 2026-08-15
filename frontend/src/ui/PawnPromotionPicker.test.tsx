@@ -38,12 +38,15 @@ describe('PawnPromotionPicker', () => {
         boardSeat={{ left: 0, top: 0 }}
         boardZoom={2}
         onChoose={() => {}}
+        onUndo={() => {}}
       />,
     );
 
     expect(markup).toContain('aria-label="Pawn promotion"');
     expect(markup).toContain('data-chrome-fill-role="outer"');
-    expect(markup.match(/data-chrome-fill-surface="hybrid-wood-oak"/g)).toHaveLength(4);
+    // Four replacements and the Undo that declines all four (ADR-0641) — every leaf in the
+    // callout is on the oak, so nothing in it arrives as a bare control.
+    expect(markup.match(/data-chrome-fill-surface="hybrid-wood-oak"/g)).toHaveLength(5);
     // The default subject opens while the Pawn is still gliding in, so the eyebrow names the
     // event rather than claiming it has landed (ADR-0559).
     expect(markup).toContain('Pawn promoting');
@@ -53,6 +56,16 @@ describe('PawnPromotionPicker', () => {
     for (const label of ['Queen', 'Rook', 'Bishop', 'Knight']) {
       expect(markup).toContain(`aria-label="Promote to ${label}"`);
     }
+    // The question is answerable OR withdrawable — a forced choice was the whole defect
+    // (ADR-0641). Undo is a text button, not a fifth swatch: it is not a piece.
+    expect(markup).toContain('data-testid="undo-promotion-move"');
+    expect(markup).toContain('aria-label="Undo this move"');
+    expect(markup).toContain('data-chrome-unit="inner-text-button"');
+    // It names the price so it cannot be mistaken for the Run's paid Undo, which rewinds a
+    // move that really was played.
+    expect(markup).toContain('it costs nothing');
+    // ...and it carries the phase past the last choice, so its plank is not the Queen's again.
+    expect(markup).toContain('--promotion-leaf-index:4');
   });
 
   it('asks about a Pawn that has not arrived yet when the subject is a queued premove', () => {
@@ -64,6 +77,7 @@ describe('PawnPromotionPicker', () => {
         boardSeat={{ left: 0, top: 0 }}
         boardZoom={1}
         onChoose={() => {}}
+        onUndo={() => {}}
       />,
     );
 
@@ -71,6 +85,13 @@ describe('PawnPromotionPicker', () => {
     expect(markup).toContain('Choose what this Pawn will become');
     expect(markup).not.toContain('Pawn promoting');
     expect(markup).toContain('aria-label="Pawn promotion"');
+    // Undo names what it takes back, because a queued step is not a played move — and says the
+    // rest of the plan survives, which is what separates it from Escape (ADR-0541/ADR-0641).
+    expect(markup).toContain('aria-label="Undo this premove"');
+    expect(markup).toContain('The rest of the premove chain stays.');
+    expect(markup).not.toContain('Undo this move"');
+    // Two choices, so the phase continues from two — the index is the data's, not the DOM's.
+    expect(markup).toContain('--promotion-leaf-index:2');
   });
 
   it('opens toward the board middle and cancels board zoom for its screen-size controls', () => {
