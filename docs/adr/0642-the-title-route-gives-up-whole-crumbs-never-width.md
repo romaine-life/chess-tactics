@@ -7,7 +7,7 @@ refines:
   - "[ADR-0023](0023-app-title-bar-layout-and-controls.md)"
 ---
 
-# ADR-0641: The title route gives up whole crumbs, never width
+# ADR-0642: The title route gives up whole crumbs, never width
 
 ## Context
 
