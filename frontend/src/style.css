@@ -5855,7 +5855,6 @@ body.loading-bootstrap .app-startup-status {
 }
 
 .skirmish-promotion-options {
-  --promotion-leaf-surface-pitch: calc(60px + var(--ds-inline-tight));
   display: grid;
   gap: var(--ds-inline-tight);
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5902,6 +5901,7 @@ body.loading-bootstrap .app-startup-status {
    position 296 BOARD units wide, and the callout swung further right the more the player
    zoomed in — straight under the Controls panel (ADR-0570). */
 .skirmish-promotion-picker {
+  --promotion-leaf-surface-pitch: calc(60px + var(--ds-inline-tight));
   color: #eff9ff;
   display: grid;
   gap: var(--ds-inline);
@@ -5910,8 +5910,17 @@ body.loading-bootstrap .app-startup-status {
   pointer-events: auto;
 }
 
-.skirmish-promotion-options [data-chrome-fill-surface] {
+/* Every leaf in the callout — the four replacement swatches and the Undo that declines all four
+   (ADR-0641) — is phased off the index its own call site states, so the whole set is cut from one
+   plank run instead of stamping the same grain per control. */
+.skirmish-promotion-picker [data-chrome-fill-surface] {
   --chrome-surface-position-y: calc(var(--promotion-leaf-index, 0) * -1 * var(--promotion-leaf-surface-pitch));
+}
+
+/* Undo declines the question rather than answering it, so it stands apart from the swatch grid:
+   full width under the choices, at the ordinary text-button height, not a fifth piece. */
+.skirmish-promotion-undo.app-header-button {
+  justify-content: center;
 }
 
 /* Gold the Run paid for something that happened ON the board reads off that square, not off a
