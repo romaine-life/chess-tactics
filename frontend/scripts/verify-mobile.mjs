@@ -12,7 +12,8 @@
 //
 // What it measures, per route per device profile:
 //   page-overflow-x   the page scrolls sideways (the classic desktop-layout-on-a-phone tell)
-//   control-obscured  a control's own centre hit-tests to something else — it cannot be tapped
+//   control-obscured  a control's own centre STILL hit-tests to something else once scrolled
+//                     into view — something is sitting on top of it
 //   control-cut-off   a control is clipped to under 60% of itself by an ancestor or the viewport
 //   control-offscreen a control's centre lies outside the viewport — unreachable at any scroll
 //   touch-target      an undersized hit box that also crowds another (WCAG 2.5.8: 24x24,
@@ -294,8 +295,17 @@ function measure() {
   // underlaps a control and loses the stacking order — but who actually RECEIVES the tap.
   // So ask the browser: hit-test the control's own centre and see what comes back. That
   // reports exactly the defect a player would hit and stays quiet about decoration that
-  // merely shares the same pixels from below. Measured BEFORE anything is scrolled, so
-  // every hit test shares one resting layout.
+  // merely shares the same pixels from below.
+  //
+  // Collected BEFORE anything is scrolled, so every hit test shares one resting layout —
+  // but a resting hit test alone CANNOT tell "covered" from "scrolled out of view". A
+  // control sitting below its scroller's clip edge is not painted there, so its centre
+  // reports whatever IS painted at that coordinate — which is why the Strategikon's rail
+  // read as buried under the Battle HUD when in truth it was forty pixels below the fold.
+  // That is the same "below the fold is NORMAL" rule the reachability pass already keeps,
+  // so a candidate is only a finding once it has been scrolled into view and STILL loses
+  // its own centre. Verified in a second pass below, after the scrolling one.
+  const obscuredCandidates = [];
   for (const el of chromeControls) {
     const rect = el.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
@@ -303,8 +313,18 @@ function measure() {
     if (cx < 0 || cx > vw || cy < 0 || cy > vh) continue; // reported as offscreen above
     const hit = document.elementFromPoint(cx, cy);
     if (!hit || hit === el || el.contains(hit) || hit.contains(el)) continue;
-    push('control-obscured', `its centre taps ${describe(hit)} instead`, el);
+    obscuredCandidates.push(el);
   }
+
+  // Every scroll container back to rest, so the next measurement starts where the player
+  // would find the screen rather than wherever the previous one left it.
+  const resetScroll = () => {
+    for (const el of document.querySelectorAll('*')) {
+      if (el.scrollTop) el.scrollTop = 0;
+      if (el.scrollLeft) el.scrollLeft = 0;
+    }
+    window.scrollTo(0, 0);
+  };
 
   const stillUnreachable = new Set();
   for (const el of unreachable) {
@@ -321,12 +341,32 @@ function measure() {
       push('control-cut-off', `only ${Math.round(frac * 100)}% visible even scrolled into view`, el);
     }
   }
-  // Put the page back so the overflow pass below measures the resting layout.
-  for (const el of document.querySelectorAll('*')) {
-    if (el.scrollTop) el.scrollTop = 0;
-    if (el.scrollLeft) el.scrollLeft = 0;
+  resetScroll();
+
+  // Now judge the obscured candidates the same way: bring each into view and ask again.
+  // A control the player can simply scroll to is not obscured, however its resting centre
+  // hit-tested. One that is genuinely covered stays covered — its coverer travels with it
+  // (a sticky header, a mispositioned sibling), which is exactly the squeezed-tracks defect
+  // this check was written for. Each candidate is scrolled from rest so no two verifications
+  // interfere, and anything the reachability pass already spoke for is left to that finding
+  // rather than reported twice under a second name.
+  for (const el of obscuredCandidates) {
+    if (stillUnreachable.has(el)) continue;
+    el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+    const rect = el.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    if (cx >= 0 && cx <= vw && cy >= 0 && cy <= vh) {
+      const hit = document.elementFromPoint(cx, cy);
+      if (hit && hit !== el && !el.contains(hit) && !hit.contains(el)) {
+        push('control-obscured', `its centre taps ${describe(hit)} instead, even scrolled into view`, el);
+      }
+    }
+    resetScroll();
   }
-  window.scrollTo(0, 0);
+
+  // Put the page back so the overflow pass below measures the resting layout.
+  resetScroll();
 
   // Content that overflows a container which cannot scroll is simply unreachable.
   for (const el of document.querySelectorAll('body *')) {
