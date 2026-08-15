@@ -253,7 +253,9 @@ describe('Run chrome hierarchy', () => {
     expect(runForm).toContain('<Strategikon path={form.routePath} search={form.routeSearch} run={form.run} />');
     expect(runScreen).toContain('isStrategikonPath(routePath) && !run');
     expect(runScreen).not.toContain("sceneSnapshot.phase !== 'battle'");
-    expect(skirmishHud).toContain('<StrategikonTitleNavigation path={strategikonPath} search={strategikonSearch} />');
+    expect(skirmishHud).toContain(
+      '<StrategikonTitleNavigation path={strategikonPath} search={strategikonSearch} heldCards={strategikonHeldCards} />',
+    );
     expect(skirmishHud).toContain('titleActions={strategikonNavigation}');
     expect(strategikonTitleNavigation).toContain('data-testid="strategikon-toggle"');
     expect(strategikonTitleNavigation).toContain('data-run-card-flight-target');
@@ -656,8 +658,12 @@ describe('Run chrome hierarchy', () => {
     expect(runArmyWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
     expect(runExpunctioWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
     // Every element in the Run bar is a framed leaf now, so the leaf fill rides the
-    // shared box-is-the-tooltip primitive rather than a hand-placed attribute.
-    expect((runTitleBarChips.match(/fillSurface=\{CHROME_LEAF_FILL_SURFACE\}/g) ?? [])).toHaveLength(2);
+    // shared box-is-the-tooltip primitive rather than a hand-placed attribute. The deck
+    // measure is the third: it NAVIGATES, and navigating is a mode of that same primitive
+    // rather than a nav control a caller assembles beside its own tooltip.
+    expect((runTitleBarChips.match(/fillSurface=\{CHROME_LEAF_FILL_SURFACE\}/g) ?? [])).toHaveLength(3);
+    expect(runTitleBarChips).toContain('<TitleBarStatusTip');
+    expect(titleBarControls).toMatch(/triggerIsInteractive=\{Boolean\(to\)\}/);
     expect(runTitleBarChips).not.toContain('data-chrome-fill-surface=');
     expect(titleBarControls).toContain('data-chrome-fill-surface={fillSurface}');
     expect(runExpunctioWorkspace).toContain('fillRole="outer"');

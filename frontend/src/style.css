@@ -4600,18 +4600,20 @@ h1 {
    read as one row of marks.
    The seat alone is not enough to make them MATCH, because the two families are drawn
    differently. Every Run mark ships trimmed to its own ink, so `contain` in a square
-   seat draws it at the seat's full size. The kit's game glyphs carry their transparent
-   margin — measured, the hourglass's ink fills 63% of its 64px canvas and the flag's
-   73%, against 100% for every Run mark — and `contain` scales the CANVAS, so that
-   margin comes straight off the drawn glyph: the hourglass rendered about 15px beside
-   26px marks. So an untrimmed glyph states the fraction of its canvas its own ink
-   fills, and its box grows by exactly that much and BLEEDS the surplus back out with a
-   negative margin — the drawn ink lands on the shared seat while the layout footprint
-   stays the seat. It is geometry, not paint: the sprite is never rescaled by a
-   background declaration. A trimmed mark declares nothing and needs nothing, which is
-   the whole point of the trimming rule; trimming these two source PNGs would delete
-   their two lines below. The fractions are measured from the installed bytes, not
-   guessed. */
+   seat draws it at the seat's full size. A kit game glyph may instead carry transparent
+   margin on a 64px canvas — the flag's ink fills 73% of its, against 100% for every
+   trimmed mark — and `contain` scales the CANVAS, so that margin comes straight off the
+   drawn glyph: an untrimmed mark rendered about 15px beside 26px ones. So an untrimmed
+   glyph states the fraction of its canvas its own ink fills, and its box grows by
+   exactly that much and BLEEDS the surplus back out with a negative margin — the drawn
+   ink lands on the shared seat while the layout footprint stays the seat. It is
+   geometry, not paint: the sprite is never rescaled by a background declaration. A
+   trimmed mark declares nothing and needs nothing, which is the whole point of the
+   trimming rule, and the hourglass is the case in point: it once needed a line here and
+   was re-uploaded trimmed (27x40, all ink), so its line is gone. Trimming the flag would
+   delete the one line left below. The fractions are measured from the installed bytes,
+   not guessed, and scripts/verify-icon-seats.mjs fails when a re-upload stops matching
+   one — which is how the row above came back to one size. */
 .skirmish-topbar-status {
   --titlebar-mark-seat: 26px;
 }
@@ -10334,6 +10336,30 @@ body.loading-bootstrap .app-startup-status {
      Controls), so this is the same answer both bars give: a stacked narrow Battle reads its
      forces off the board and its Controls, not off the title bar. */
   .app-shell-titlebar .run-topbar-status .skirmish-material {
+    display: none;
+  }
+}
+
+/* The end of the shedding above: below this the Run's status row cannot be squeezed any further,
+   because there is nothing left to take off it.
+   The phone bar's two anchors take the width they need and the CENTRE yields (see the narrow
+   `grid-template-columns: auto minmax(0, 1fr) auto` band) — which is right for a bar whose sides
+   are navigation, but the centre had no floor, so it yielded past zero. Measured on the live Run
+   Battle: the status row is squeezed under its own content from about 620px, and at 390 it is
+   given 4px to hold 99px — a sliver with the last mark spilling out of it, which is what a phone
+   was actually showing. Nothing was READ off that row at those widths; it merely occupied the
+   middle of the bar and clipped.
+   So it yields completely, the way the Skirmish bar's row already does at 860. This is a shed,
+   not a loss: the Controls title survives at every phone width, and the Strategikon index in it
+   carries the Chartulary's own count — so the DECK, the one measure here that is also a
+   destination, is still both readable and reachable on a phone. It is also why that count is not
+   a duplicate of the title-bar measure: it is the same fact in the surface that has room for it.
+   Stated as a floor on the row rather than per measure, so a measure added later cannot quietly
+   reintroduce the sliver. `npm run verify:mobile` is what measures this; it caught the deck
+   measure landing under the persistent divider at phone portrait, which is a defect the four
+   measures beside it had been getting away with only because none of them is a control. */
+@media (max-width: 620px) {
+  .app-shell-titlebar .run-topbar-status {
     display: none;
   }
 }
@@ -22148,6 +22174,62 @@ button.tileset-relationship-cell {
   white-space: nowrap;
 }
 
+.run-topbar-deck {
+  /* The deck is the one measure that is also a DESTINATION — the others are positions the Run
+     has reached, but a deck is a thing you own and go through, so the measure is the way into
+     it. It is a <button> (ADR-0052: nothing player-hoverable carries an href), which is the only
+     reason this rule exists: the native control arrives with its own background, border, font
+     and colour, while the box's frame is drawn by the registered inner-box unit behind it. So
+     this strips the UA control back to the measure it stands among and adds nothing the other
+     four do not have — whatever `.run-topbar-measure` says is what it looks like.
+     The comment sits INSIDE the braces on purpose: check-ui-surface-contract reads a rule's
+     selector as everything since the last `}`, so a comment above a rule that touches
+     background/border/box-shadow becomes part of its identity and no approved-reset entry can
+     match it. */
+  appearance: none;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  transition: filter var(--ds-duration-fast) var(--ds-ease-standard);
+}
+
+/* Reachable-and-pressable feedback, in the same channel the Strategikon's marks answer on, so a
+   control in the measure row does not invent a second hover language for the bar. */
+.run-topbar-deck:is(:hover, :focus-visible) {
+  filter: brightness(1.22) saturate(1.08);
+}
+
+.run-topbar-deck:focus-visible {
+  outline: 2px solid rgba(255, 216, 122, .85);
+  outline-offset: 1px;
+}
+
+/* The bar's shared mark seat, exactly as .run-progress-icon takes it. The card back is trimmed to
+   its own edges — it is printed edge to edge — so `contain` in a square seat draws its longest edge
+   at one seat with no compensation, which is the whole point of the trimming rule.
+   No `image-rendering: pixelated` here, and that is deliberate: this mark is a 1060x1484 PAINTING
+   rather than a native sprite, so it asks the compositor to filter (see .strategikon-card-mark). */
+.run-topbar-deck-mark {
+  align-items: center;
+  block-size: var(--run-measure-seat);
+  display: inline-flex;
+  flex: none;
+  inline-size: var(--run-measure-seat);
+  justify-content: center;
+}
+
+.run-topbar-deck-mark img {
+  block-size: 100%;
+  inline-size: 100%;
+  object-fit: contain;
+}
+
 /* Every element in the bar is a tooltip target and therefore a box. The shared
    trigger is already inline-flex and hugs the frame exactly, which is what lets the
    tip hang off the BOX's own rect — it must keep a box of its own for that, so this
@@ -26288,16 +26370,16 @@ button.tileset-relationship-cell {
   --titlebar-mark-ink-fill: .8125;
 }
 
-/* ui/kit/icons/unit-studio.png — ink 26x40 at (19,12) on a 64x64 canvas. */
+/* ui/kit/icons/unit-studio.png — ink 44x52 at (10,6) on a 64x64 canvas. */
 [data-strategikon-section="prosopography"] img {
-  --titlebar-mark-ink-below: .1875;
-  --titlebar-mark-ink-fill: .625;
+  --titlebar-mark-ink-below: .09375;
+  --titlebar-mark-ink-fill: .8125;
 }
 
-/* ui/kit/icons/info.png — ink 39x40 at (12,12) on a 64x64 canvas. */
+/* ui/kit/icons/info.png — ink 52x52 at (6,6) on a 64x64 canvas. */
 [data-strategikon-section="lipsanotheca"] img {
-  --titlebar-mark-ink-below: .1875;
-  --titlebar-mark-ink-fill: .625;
+  --titlebar-mark-ink-below: .09375;
+  --titlebar-mark-ink-fill: .8125;
 }
 
 /* The Chartulary's mark is whichever Run card back the player chose. Every one of
@@ -26306,6 +26388,33 @@ button.tileset-relationship-cell {
 
 .strategikon-title-section-action {
   transition: filter var(--ds-duration-fast) var(--ds-ease-standard);
+}
+
+/* A register's size, on the register's own mark. It is seated in the CORNER of the 24px target
+   rather than beside the mark, because the row is an index of marks on one shared seat: a number
+   given a column of its own would make that destination wider than the three beside it and the
+   row would stop reading as one set. The seat is `position: relative` for this and nothing else.
+   Ink over the mark, with no plate under it: a filled badge here would be the only forged shape
+   in a row of drawn marks, and at this size it covers the very art it is counting. The dark
+   outline is what keeps a light digit legible over a light card back — the same trick the bar's
+   own type uses, four ways so no edge of the glyph is left on its own. */
+.strategikon-title-section-action.has-count {
+  position: relative;
+}
+
+.strategikon-title-count {
+  bottom: -2px;
+  color: #f6e6b4;
+  font: var(--ds-weight-strong) var(--ds-text-xs)/1 var(--ds-font-display);
+  inset-inline-end: -2px;
+  letter-spacing: 0;
+  pointer-events: none;
+  position: absolute;
+  text-shadow:
+    1px 1px 0 #06090d,
+    -1px 1px 0 #06090d,
+    1px -1px 0 #06090d,
+    -1px -1px 0 #06090d;
 }
 
 .strategikon-title-section-action:is(:hover, :focus-visible, .active) {

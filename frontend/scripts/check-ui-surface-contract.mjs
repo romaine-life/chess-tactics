@@ -144,6 +144,18 @@ const APPROVED_FRAMELESS_SURFACE_RESETS = new Map([
     'border-radius:0',
     'box-shadow:none',
   ])],
+  // The Run's deck measure is a title-bar status box that NAVIGATES — the same registered
+  // inner-box unit as the four measures beside it, drawn by the same frame, made pressable.
+  // It is a <button> because nothing player-hoverable in this app carries an href (ADR-0052),
+  // and a native control arrives with its own chrome; these declarations take that off so a
+  // measure you can press and a measure you cannot are pixel-identical. No surface is painted
+  // in its place. Same category as the seat resets above.
+  ['src/style.css|.run-topbar-deck', new Set([
+    'background:none',
+    'border:0',
+    'border-radius:0',
+    'box-shadow:none',
+  ])],
 ]);
 
 function normalize(value) {
