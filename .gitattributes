@@ -1,4 +1,21 @@
-# The generated server-render bundle is built with LF (esbuild) and freshness-checked byte-for-byte
-# by `npm run build:server-render -- --check`. Pin it to LF so a Windows/autocrlf checkout doesn't
-# rewrite it to CRLF and make the check diverge from the committed blob.
-backend/generated/board-render.cjs text eol=lf
+# Every text file is stored LF, whatever the committing machine's core.autocrlf says.
+#
+# Why this is a rule and not a preference: git can only normalize a file it believes is TEXT, and
+# its heuristic calls a file binary the moment it finds a bare CR. SkirmishBoard.tsx and
+# ViewPane.tsx had picked up doubled terminators (CR CR LF) on a handful of lines, which flipped
+# both files to `-text` — so autocrlf stopped touching them, their blobs stayed CRLF while all
+# 2077 other files were LF, and every edit to either one landed as a whole-file rewrite. A
+# two-line change to SkirmishBoard.tsx committed as 5566 changed lines, with the real edit buried
+# in 2784 lines of line-ending churn that no reviewer could see past.
+#
+# `text=auto` closes that off for good: git normalizes on the way IN, so a commit made with
+# autocrlf off — another machine, an agent environment, a CI job — can no longer put CRLF in the
+# index. The working tree is left alone (no `eol=` here, so checkout follows core.eol/native),
+# which is why turning this on changed no file on disk and no blob in the index.
+#
+# Verify with `git ls-files --eol`: every tracked file should read `i/lf`, except the binary
+# pinned below.
+* text=auto
+
+# Detected as binary today, declared so it can never be guessed at.
+*.wasm binary

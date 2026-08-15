@@ -53,7 +53,7 @@ import {
   BOARD_PREVIEW_ASPECT,
   boardBounds,
   boardContentHash,
-  boardDrawOps,
+  boardDrawOps,
   effectiveBoardCameraCoverPolygon,
   boardVisualFeatures,
   boardVisualTerrainCells,
@@ -2028,7 +2028,7 @@ export function SkirmishBoard({
   const preparedMinimumZoom = useMemo(() => viewViewportSize
     ? boardZoomFloor({
         viewport: viewViewportSize,
-        coverPolygon: cameraCoverPolygon,
+        coverPolygon: cameraCoverPolygon,
         minZoom: PLAYER_TECHNICAL_MINIMUM_ZOOM,
         maxZoom: 16,
       })
@@ -2621,7 +2621,7 @@ export function SkirmishBoard({
         maxZoom={boardMaxZoom}
         onZoomChange={setZoom}
         onPanChange={setBoardPan}
-        coverPolygon={cameraCoverPolygon}
+        coverPolygon={cameraCoverPolygon}
         onMinimumZoomChange={setMinZoom}
         onViewportSizeChange={setViewViewportSize}
         onViewInteraction={markViewInteraction}
