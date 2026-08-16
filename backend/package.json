@@ -25,7 +25,7 @@
     "@azure/identity": "^4.13.1",
     "@azure/storage-blob": "^12.33.0",
     "@chess-tactics/board-render": "file:../packages/board-render",
-    "@napi-rs/canvas": "^1.0.2",
+    "@napi-rs/canvas": "^1.0.5",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.23.0",
