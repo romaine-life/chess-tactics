@@ -22,7 +22,7 @@
     "test:pr-gate": "node --check ../bin/pr-gate.mjs && node --check ../bin/pr-gate.test.mjs && node --test ../bin/pr-gate.test.mjs"
   },
   "dependencies": {
-    "@azure/identity": "^4.13.2",
+    "@azure/identity": "^4.13.3",
     "@azure/storage-blob": "^12.33.0",
     "@chess-tactics/board-render": "file:../packages/board-render",
     "@napi-rs/canvas": "^1.0.9",
