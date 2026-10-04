@@ -8,6 +8,8 @@ import {
 import { EnchiridionReference, EnchiridionSectionRail, LipsanaCodex } from './Enchiridion';
 import { HeldCardCodex } from './HeldCardCodex';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
+import type { HouseSelectOption } from './shared/HouseSelect';
+import { RailSectionPicker } from './shared/RailSectionPicker';
 import { useOpenRailTab } from './shared/railOpenIntent';
 import { InnerChromeBox, ShellWorkspace } from './shared/ChromeBox';
 import { CHROME_STRUCTURAL_FILL_ROLE } from './shared/chromeSurfacePolicy';
@@ -97,6 +99,12 @@ export function Strategikon({
   // return use — named for its destination so it never reads as a second bare "Back"
   // beside a playtest's own return control.
   const returnName = base === '/run' ? 'Run' : 'Battle';
+  const sectionItems = strategikonNavigationItems(cardsIcon);
+  const sectionOptions: readonly HouseSelectOption<StrategikonSection>[] = sectionItems.map((item) => ({
+    value: item.section,
+    label: item.label,
+    title: item.title,
+  }));
 
   return (
     <ShellWorkspace
@@ -113,21 +121,41 @@ export function Strategikon({
       )}
       edgeAttached
       rail={(
-        <ApparatusRailColumn opens="panel-beside" className="strategikon-rail" aria-label="Strategikon sections">
-          {strategikonNavigationItems(cardsIcon).map((item, index) => (
-            <ApparatusRailTab
-              key={item.section}
-              label={item.label}
-              title={item.title}
-              to={href(item.section)}
-              index={index}
-              active={section === item.section}
-              expanded={openSection === item.section}
-              iconSrc={item.iconSrc}
-              iconClassName={item.iconClassName}
-            />
-          ))}
-        </ApparatusRailColumn>
+        <>
+          <ApparatusRailColumn opens="panel-beside" className="strategikon-rail" aria-label="Strategikon sections">
+            {sectionItems.map((item, index) => (
+              <ApparatusRailTab
+                key={item.section}
+                label={item.label}
+                title={item.title}
+                to={href(item.section)}
+                index={index}
+                active={section === item.section}
+                expanded={openSection === item.section}
+                iconSrc={item.iconSrc}
+                iconClassName={item.iconClassName}
+              />
+            ))}
+          </ApparatusRailColumn>
+          {/* The same four sections as ONE control, for a screen that cannot spend four rows on
+              them. A phone stacks this rail above the section's own reference rail above the
+              record, so navigation took most of the screen and the content scrolled in a slot
+              too short to read — the rail does not scroll away, because it is the shell's, not
+              the content's.
+
+              It is the canonical picker (HouseSelect), not a bespoke menu, and it is the same
+              addresses the rail uses, so a section is reached identically either way. Only one
+              of the two is ever displayed — the narrow band hides the rail and shows this — so
+              nothing is duplicated in the accessibility tree. */}
+          <RailSectionPicker<StrategikonSection>
+            value={section}
+            placeholder="Choose a section"
+            options={sectionOptions}
+            href={(next) => href(next)}
+            ariaLabel="Strategikon section"
+            testId="strategikon-section-picker"
+          />
+        </>
       )}
       aria-label="Strategikon"
       data-testid="strategikon"
@@ -140,6 +168,9 @@ export function Strategikon({
           kind: 'navigation',
           presentation: 'return',
           label: `‹ Back to ${returnName}`,
+          // 127px of a 390px row for a destination the screen already names. The full text
+          // stays the accessible name and returns wherever the bar has room.
+          shortLabel: '‹ Back',
           destination: `${base}${search}`,
           title: `Close the Strategikon and return to the ${returnName}.`,
           testId: 'strategikon-back',
