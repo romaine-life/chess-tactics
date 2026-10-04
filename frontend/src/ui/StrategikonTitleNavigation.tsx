@@ -17,9 +17,15 @@ import {
 export function StrategikonTitleNavigation({
   path,
   search = '',
+  heldCards,
 }: {
   path: string;
   search?: string;
+  /**
+   * Cards this Run holds, counted on the Chartulary's own mark. Absent on a Skirmish, which
+   * mounts this index with no Run behind it and so has no register to count.
+   */
+  heldCards?: number;
 }): ReactElement {
   const cardsIcon = useStrategikonCardsIcon();
   const open = isStrategikonPath(path);
@@ -35,12 +41,21 @@ export function StrategikonTitleNavigation({
     <nav className="strategikon-title-navigation" aria-label="Strategikon destinations">
       {strategikonNavigationItems(cardsIcon).map((item) => {
         const active = item.section === current;
+        // The register's own size, on the register's own mark. It rides the CORNER of the seat
+        // rather than sitting beside it: the row is an index of four marks on one shared seat,
+        // and a number given its own column would make this destination wider than the three
+        // beside it — the row would stop reading as one set.
+        const count = item.section === 'chartulary' ? heldCards : undefined;
         return (
           <NavButton
             key={item.section}
-            className={`skirmish-hud-title-action strategikon-title-section-action${active ? ' active' : ''}`}
+            className={`skirmish-hud-title-action strategikon-title-section-action${active ? ' active' : ''}${
+              count === undefined ? '' : ' has-count'
+            }`}
             to={`${strategikonHref(base, item.section)}${search}`}
-            aria-label={`Open ${item.label}`}
+            aria-label={count === undefined
+              ? `Open ${item.label}`
+              : `Open ${item.label} — ${count} card${count === 1 ? '' : 's'} held`}
             aria-current={active ? 'page' : undefined}
             title={item.title}
             data-testid={`strategikon-title-${item.section}`}
@@ -48,6 +63,9 @@ export function StrategikonTitleNavigation({
             data-run-card-flight-target={item.section === 'chartulary' ? '' : undefined}
           >
             <img className={item.iconClassName} src={item.iconSrc} alt="" aria-hidden="true" />
+            {count === undefined
+              ? null
+              : <span className="strategikon-title-count" aria-hidden="true">{count}</span>}
           </NavButton>
         );
       })}
