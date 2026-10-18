@@ -119,8 +119,12 @@ describe('Skirmish chrome hierarchy', () => {
     expect(skirmish).not.toContain("from '../core/clock'");
     expect(titleContent).not.toMatch(/<div\b[^>]*skirmish-status-chip/);
     expect(skirmish).toMatch(/import \{[^}]*TitleBarStatusTip[^}]*\} from '\.\/shell\/TitleBarControls';/);
-    // The box IS the trigger, so the tip hangs off the frame's own rect.
-    expect(titleBarControls).toMatch(/trigger=\{\([\s\S]*?<TitleBarStatus as="span"/);
+    // The box IS the trigger, so the tip hangs off the frame's own rect — in BOTH of the
+    // primitive's modes: a static status box, and the same box as a destination. A caller
+    // that wanted a navigating status box would otherwise assemble its own control beside
+    // its own Tooltip, which is a second status box that merely looks like this one.
+    expect(titleBarControls).toMatch(/trigger=\{to \? \([\s\S]*?<ChromeNavButton[\s\S]*?unit="inner-box"/);
+    expect(titleBarControls).toMatch(/\) : \([\s\S]*?<TitleBarStatus as="span"/);
   });
 
   it('shows elapsed time instead of a static infinity for an untimed Battle', () => {

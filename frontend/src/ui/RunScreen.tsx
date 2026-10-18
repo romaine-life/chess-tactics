@@ -13,7 +13,8 @@ import { CHROME_LEAF_FILL_SURFACE, CHROME_STRUCTURAL_FILL_ROLE } from './shared/
 import { TitleBarStatus } from './shell/TitleBarControls';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleRoute, type TitleRouteSegment } from './shell/TitleRoute';
-import { RunIdentityChip, RunTitleBarMeasures } from './RunTitleBarChips';
+import { RunDeckMeasure, RunIdentityChip, RunTitleBarMeasures } from './RunTitleBarChips';
+import { strategikonBase, strategikonHref } from './strategikonRoute';
 import { BattleClockChip } from './BattleClockChip';
 import { BattleMaterialChip } from './BattleMaterialChip';
 import { PLAY_RUN_SELECTOR_HREF } from './playHubRoute';
@@ -59,6 +60,8 @@ import {
   restartBattle,
   runBattleActivityId,
   runCardUnitIds,
+  runDeploymentDealCount,
+  sectioUpcomingBattleIndex,
   performExpunctio,
   sectioAdlectioSpent,
   sectioHasChanges,
@@ -263,6 +266,16 @@ function RunTitleBarStatus({ run, path, search, view, battlefieldMounted }: {
 }): ReactElement {
   const progress = runBattleProgress(run);
   const levelName = run.war.battles[run.battleIndex]?.level.name ?? 'Battle';
+  // The deal belongs to the Battle the Run is heading INTO, which is not `battleIndex` while a
+  // Sectio is open — that still names the Battle just fought, so reading it there would price
+  // the deck against the map already behind you. Same reader the Sectio's reconnaissance uses.
+  const deckBattleIndex = run.phase === 'sectio' ? sectioUpcomingBattleIndex(run) : run.battleIndex;
+  // The canonical runtime answer, capped at what is actually held: a Battle can ask for more
+  // than an early Run carries, and a deck smaller than the deal is dealt whole.
+  const dealt = Math.min(
+    runDeploymentDealCount({ war: run.war, battleIndex: deckBattleIndex }),
+    run.cards.length,
+  );
   return (
     <>
       {/* The phase is the durable Run position; an open Strategikon appends the exact
@@ -304,6 +317,13 @@ function RunTitleBarStatus({ run, path, search, view, battlefieldMounted }: {
           conflict={progress.conflict}
           battle={progress.battle}
           battlesInConflict={progress.battlesInConflict}
+          deck={(
+            <RunDeckMeasure
+              held={run.cards.length}
+              dealt={dealt}
+              to={`${strategikonHref(strategikonBase(path), 'chartulary')}${search}`}
+            />
+          )}
         />
       </div>
     </>

@@ -62,19 +62,36 @@ export function TitleBarStatus({
  *
  * The box is the trigger, not a wrapper around one — the tip is positioned from the
  * frame's own rect, so it hangs off the box rather than off some span inside it.
+ *
+ * Given `to`, the same box is a DESTINATION: the trigger becomes the shared navigation
+ * control instead of a span, and the tip is told its trigger owns the tab stop and the
+ * accessible name. That belongs here rather than in a caller, because a status box that
+ * navigates must be the same box in every other respect — same registered unit, same
+ * frame, same leaf fill, same tip hanging off the same rect. A caller assembling its own
+ * nav control plus its own Tooltip would be a second status box that merely looks like
+ * this one, which is the parallel ADR-0059 forbids.
  */
 export function TitleBarStatusTip({
   children,
   className,
+  controlLabel,
   detail,
   explainMechanics,
   fillSurface,
   label,
   name,
   popupClassName,
+  testId,
+  to,
 }: {
   children: ReactNode;
   className?: string;
+  /**
+   * The control's own accessible name, when the box navigates — what a screen reader hears
+   * on the button itself, as opposed to `label`, which stays the spoken form of the whole
+   * explanation. Ignored without `to`.
+   */
+  controlLabel?: string;
   /** The explanation. */
   detail: ReactNode;
   explainMechanics?: boolean;
@@ -85,6 +102,9 @@ export function TitleBarStatusTip({
   /** The named thing the tip is about. */
   name?: ReactNode;
   popupClassName?: string;
+  testId?: string;
+  /** Where pressing the box goes. A button, never an anchor (ADR-0052). */
+  to?: string | (() => string);
 }): ReactElement {
   return (
     <Tooltip
@@ -94,8 +114,20 @@ export function TitleBarStatusTip({
       title={name}
       explainMechanics={explainMechanics}
       popupClassName={popupClassName}
-      trigger={(
-        <TitleBarStatus as="span" className={className} data-chrome-fill-surface={fillSurface}>
+      triggerIsInteractive={Boolean(to)}
+      trigger={to ? (
+        <ChromeNavButton
+          unit="inner-box"
+          to={to}
+          className={cx('titlebar-status', className)}
+          data-chrome-fill-surface={fillSurface}
+          data-testid={testId}
+          aria-label={controlLabel ?? label}
+        >
+          {children}
+        </ChromeNavButton>
+      ) : (
+        <TitleBarStatus as="span" className={className} data-chrome-fill-surface={fillSurface} data-testid={testId}>
           {children}
         </TitleBarStatus>
       )}

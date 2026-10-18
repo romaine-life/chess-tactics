@@ -4,6 +4,7 @@ import { RunGoldIcon } from './RunResources';
 import { ataraxiaNumeralArtUrl } from './ataraxiaNumeral';
 import { RunProgressIcon } from './shared/RunProgressIcon';
 import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
+import { STRATEGIKON_CARD_MARK_CLASS, useStrategikonCardsIcon } from './strategikonNavigation';
 import { TitleBarStatusTip } from './shell/TitleBarControls';
 
 // What the persistent title bar says about a Run.
@@ -80,6 +81,69 @@ function RunMeasure({
   );
 }
 
+/**
+ * The deck: how many cards this Run holds, and how many of them the Battle it stands at deals.
+ *
+ * Both facts were reachable only by going and looking — the held count by opening the Chartulary,
+ * the deal by reading a sentence in the Sectio's reconnaissance — and a player deciding what to buy
+ * or which Battle to take is deciding about exactly these two numbers. So they stand in the row the
+ * bar already keeps for a Run's measures, beside the gold that buys the cards.
+ *
+ * It is ONE measure and not two, because the pair is one fact: how much of what you carry this
+ * Battle actually gets. `dealt/held` is the same reading the Battle measure two seats along gives
+ * ("4/5"), which is what lets the row be scanned rather than parsed.
+ *
+ * The mark is the player's own card back, not a forged deck glyph — the same mark the Chartulary
+ * wears, so the register, the pile on the Deployment table and this measure are visibly the same
+ * kind of thing (ADR-0059).
+ *
+ * It is the one measure that is also a CONTROL: gold, Ataraxia and the Run's position are places
+ * the Run has arrived at, but a deck is a thing you own and go through, so the measure is the way
+ * in. It is a button rather than a link (ADR-0052), and the tooltip hangs off the control itself.
+ */
+export function RunDeckMeasure({
+  held,
+  dealt,
+  to,
+  cardBackSrc,
+}: {
+  /** Cards this Run holds — the Chartulary's whole register. */
+  held: number;
+  /** What this Battle's Deployment actually deals, which a hand smaller than the deal caps. */
+  dealt: number;
+  /** The Chartulary. */
+  to: string;
+  /** Review-only: paint exact candidate bytes in the real seat without installing them. */
+  cardBackSrc?: string;
+}): ReactElement {
+  const installed = useStrategikonCardsIcon();
+  const src = cardBackSrc ?? installed;
+  // A Battle can ask for more than the player is carrying, so the sentence must not read a
+  // fraction off a smaller hand — the same distinction the Sectio's reconnaissance draws.
+  const detail = held <= dealt
+    ? <>Every card you hold is dealt into this Battle&rsquo;s Deployment. Open the Chartulary.</>
+    : <>This Battle&rsquo;s Deployment deals {dealt} of them. Open the Chartulary.</>;
+  const cards = `${held} card${held === 1 ? '' : 's'}`;
+  return (
+    <TitleBarStatusTip
+      className="skirmish-status-chip run-topbar-measure run-topbar-deck"
+      fillSurface={CHROME_LEAF_FILL_SURFACE}
+      label={`Deck. ${cards} held, ${dealt} dealt into this Battle.`}
+      controlLabel={`Deck: ${cards} held, ${dealt} dealt into this Battle. Open the Chartulary.`}
+      name="Deck"
+      detail={detail}
+      explainMechanics={false}
+      testId="run-topbar-deck"
+      to={to}
+    >
+      <span className="run-topbar-deck-mark" aria-hidden="true">
+        <img className={STRATEGIKON_CARD_MARK_CLASS} src={src} alt="" draggable={false} />
+      </span>
+      <span>{dealt}/{held}</span>
+    </TitleBarStatusTip>
+  );
+}
+
 function AtaraxiaTooltipRules({ tier }: { tier: AtaraxiaTier }): ReactElement {
   const activeTiers = ATARAXIA_TIERS.filter((activeTier) => activeTier <= tier);
   return (
@@ -114,6 +178,7 @@ export function RunTitleBarMeasures({
   conflict,
   battle,
   battlesInConflict,
+  deck,
   ataraxiaIconSrc,
   goldIconSrc,
   conflictIconSrc,
@@ -124,6 +189,14 @@ export function RunTitleBarMeasures({
   conflict: number;
   battle: number;
   battlesInConflict: number;
+  /**
+   * The deck measure, when the mounting screen can address the Chartulary. It is passed in
+   * rather than built here because it is the row's one measure that NAVIGATES, and the
+   * address belongs to the route — the Strategikon hangs off `/run` and `/play` both.
+   * The icon review mounts this row without one; a measure that is also a destination has
+   * nowhere to go on a Studio page.
+   */
+  deck?: ReactNode;
   ataraxiaIconSrc?: string;
   goldIconSrc?: string;
   conflictIconSrc?: string;
@@ -161,6 +234,9 @@ export function RunTitleBarMeasures({
         <RunGoldIcon src={goldIconSrc} />
         <span>{gold}</span>
       </RunMeasure>
+      {/* Beside the gold, because gold and cards are the two things a Run HAS; Conflict and
+          Battle after them are where it stands. */}
+      {deck}
       <RunMeasure
         label={`Conflict ${conflict}`}
         name={`Conflict ${conflict}`}
