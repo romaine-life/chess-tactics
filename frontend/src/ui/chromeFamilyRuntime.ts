@@ -1348,10 +1348,22 @@ ${familySurface} [data-shell-controls-panel] {
    behind shows through it as a hairline. Outset the border image by the bleed so the ink
    lands on the panel's own edge; the transparent margin moves harmlessly over the
    workspace. Every other edge meets the viewport, where the same margin costs nothing. */
-${familySurface} [data-shell-controls-panel]::before {
+${familySurface} [data-shell-controls-panel]:not([data-chrome-frame="top"])::before {
   border-width: 0 ${outerRailWidth}px ${outerRailWidth}px ${outerRailWidth}px !important;
   border-image-width: 0 ${outerRailWidth}px ${outerRailWidth}px ${outerRailWidth}px !important;
   border-image-outset: 0 0 0 ${FRAME_EDGE_BLEED_PX}px !important;
+}
+/* Stacked under the board, the panel's edges swap roles: both SIDES and the bottom now meet the
+   viewport, and the one edge bordering a foreign surface is the TOP. So the rule above inverts —
+   a rail on the top alone, with the bleed outset moved to that edge. Declared by the panel
+   (data-chrome-frame="top", from the layout mode) and excluded above rather than overridden
+   after: this block is GENERATED and injected after style.css with !important on every
+   declaration, so nothing written in the stylesheet could ever have reached it. That is why the
+   stacked panel kept its side and bottom rails and no top through several attempts to move them. */
+${familySurface} [data-shell-controls-panel][data-chrome-frame="top"]::before {
+  border-width: ${outerRailWidth}px 0 0 0 !important;
+  border-image-width: ${outerRailWidth}px 0 0 0 !important;
+  border-image-outset: ${FRAME_EDGE_BLEED_PX}px 0 0 0 !important;
 }
 ${cornerAtomOverlayCss(`${familySurface} .le-outer-panel`, outerFrame.atomOverlay)}
 ${controlSeamAtomCss}

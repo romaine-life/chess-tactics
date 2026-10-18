@@ -6077,7 +6077,20 @@ body.loading-bootstrap .app-startup-status {
   position: relative;
 }
 
-:is(.level-editor-screen, .skirmish-screen) .le-outer-panel::before {
+/* An outer panel may declare that it has NO frame, and this rule is where that is honoured —
+   the frame is simply never drawn, rather than drawn and then taken back somewhere else.
+
+   That distinction is the whole point. The frame used to be removed by a narrow-band rule far
+   below, and the offscreen-rails contract further down still set the same border property at the
+   same specificity with the same `!important`. Media queries add no specificity, so the later
+   rule won on source order and the panel kept one rail down its left side with no top to meet.
+   Four attempts to subtract it failed for that reason alone. An unframed panel now matches no
+   frame rule at all, so there is nothing left for a later rule to restore.
+
+   Who declares it: ShellControlsPanel, from the layout MODE (ui/shell/layoutMode.ts). Stacked
+   full width under a board there is no interior edge for a frame to describe, and width is what
+   that view has least of. */
+:is(.level-editor-screen, .skirmish-screen) .le-outer-panel:not([data-chrome-frame="none"])::before {
   border: var(--le-control-rail-w) solid transparent;
   border-image: var(--skirmish-chrome-outer-line-image) 24 / var(--le-control-rail-w) round;
   box-sizing: border-box;
@@ -6087,6 +6100,55 @@ body.loading-bootstrap .app-startup-status {
   pointer-events: none;
   position: absolute;
   z-index: 3;
+}
+
+/* Corner and edge atoms belong to the frame, so they go with it. Both pseudos are named rather
+   than only the one above being skipped, so no other rule anywhere can hand this panel a box to
+   paint a frame into. */
+:is(.level-editor-screen, .skirmish-screen) .le-outer-panel[data-chrome-frame="none"]::before,
+:is(.level-editor-screen, .skirmish-screen) .le-outer-panel[data-chrome-frame="none"]::after {
+  content: none;
+}
+
+/* With no rail on any edge, nothing covers what reaches them. The fill box is normally held a
+   couple of pixels inside so a rail can sit over its edge; unframed that inset is just a strip
+   of backdrop between the surface and the edge of the screen. The head's tracks reserve the
+   frame's width the same way, and would clear themselves against rails that are not there. */
+/* A panel whose only INTERIOR edge is its top wears one rail there, and nothing anywhere else.
+   This is the same reduction the offscreen-rails contract performs, pointed at the edge a STACKED
+   panel actually faces.
+
+   Docked right on a desktop the panel has board to its left and the screen on its other three
+   sides, so that contract leaves one rail on the left — which is why desktop looks finished.
+   Stacked under the board on a phone, BOTH sides are the screen (measured: panel spans 8..382 of
+   a 390px viewport), so the same contract leaves nothing, and turning the frame back on is
+   visually identical to leaving it off. The edge facing the board has simply moved from the side
+   to the top, and the rail has to move with it.
+
+   Stated at the frame's source, and the offscreen-rails contract below excludes this case, so
+   neither can win by being later in the file. */
+:is(.level-editor-screen, .skirmish-screen) .le-outer-panel[data-chrome-frame="top"]::before {
+  border-width: var(--le-control-rail-w) 0 0 0;
+  border-image-width: var(--le-control-rail-w) 0 0 0;
+}
+
+/* The rail sits ON the top edge, so the fill must not be held back from it — that inset exists to
+   hide under a rail, and on the three edges with no rail it would show as backdrop. */
+:is(.level-editor-screen, .skirmish-screen) .le-outer-panel[data-chrome-frame="top"] {
+  --le-outer-fill-box-bottom: 0px;
+  --le-outer-fill-box-left: 0px;
+  --le-outer-fill-box-right: 0px;
+  --shell-controls-frame-cover-end: 0px;
+  --shell-controls-frame-cover-start: 0px;
+}
+
+:is(.level-editor-screen, .skirmish-screen) .le-outer-panel[data-chrome-frame="none"] {
+  --le-outer-fill-box-bottom: 0px;
+  --le-outer-fill-box-left: 0px;
+  --le-outer-fill-box-right: 0px;
+  --le-outer-fill-box-top: 0px;
+  --shell-controls-frame-cover-end: 0px;
+  --shell-controls-frame-cover-start: 0px;
 }
 
 .chrome-surface-fill {
@@ -10266,8 +10328,121 @@ body.loading-bootstrap .app-startup-status {
     overflow-y: auto;
   }
 
-  .run-lipsanon-strip {
-    max-inline-size: calc(100% - (2 * var(--ds-space-3)));
+  /* The stacked Controls row must be as tall as the Controls panel, and it was not: measured
+     205px against 323px of content, so the panel's frame stopped mid-panel and Selected unit
+     spilled out the bottom onto the page behind it.
+
+     The panel carries `min-block-size: 0` — correct on the desktop rail, where it is a
+     full-height column that owns a scroller — and that removes the automatic minimum an `auto`
+     grid row would otherwise take from its content, letting the row compress below it. Asking
+     for the content minimum back is the whole fix; the row is already `auto`.
+
+     Its body then stops being a flexible scroller. `flex: 1 1 auto` + `min-height: 0` is what
+     makes it fill a full-height rail, and in a content-sized row it resolved to ZERO height —
+     which is why the tab panel measured 312x0 while its contents painted outside the frame.
+     Stacked, the page is the scroller and the body is simply as tall as what it holds. */
+  /* FROZEN. A phone gets an application that fills the screen exactly, not a web page you
+     scroll: the board is what is left after the Controls panel, and the panel scrolls inside
+     itself when it holds more than its share.
+
+     The alternative was measured and is worse. Sized `max-content`, the panel grew past the
+     viewport and took the screen with it — 130px of page scroll on a Battle, 360px on a Sectio
+     with "Continue to next Battle" under the fold, and 730px on a Deployment where every
+     formation control AND "Begin Battle" were off the bottom of the screen. Reachable by
+     scrolling, which is why the usability audit passed them, and unfindable in practice.
+
+     So the panel takes its content height CAPPED, and the elastic row is the board. The cap is
+     one number, stated here: below it the panel is exactly as tall as it needs to be, above it
+     the panel's own body scrolls (which is what it does on the desktop rail too).
+
+     STACKED SCREENS ONLY. A phone in landscape is 390px tall and composes in two columns with the
+     Controls as a side rail — a completely different shape, stated in the (max-height: 540px)
+     band far below. Applying the frozen stack there capped a rail that needed to scroll and put
+     48 controls out of reach across 14 routes. `min-height: 541px` is the same boundary that band
+     uses, from the other side, so the two can never both apply. */
+  @media (min-height: 541px) {
+    .skirmish-screen:not(.level-editor-screen) {
+      --mobile-controls-max: 44vh;
+      block-size: 100dvh;
+      grid-template-rows: var(--app-header-h) minmax(0, 1fr) minmax(0, var(--mobile-controls-max));
+      overflow: hidden;
+      /* Full bleed. The screen carries an 8px inline gutter, which held the Controls panel at
+         8..382 of a 390px viewport — so the panel's top rail stopped 8px short of each edge while
+         the title bar's divider immediately above it ran the full width. Two horizontal rails on
+         one screen, one reaching the edge and one not. A rail can only reach the edge if its
+         panel does, and on a phone there is no room to spend on a gutter anyway. */
+      padding-inline: 0;
+    }
+
+    /* The board no longer demands 520px. It gets what the panel leaves, and a fitted board simply
+       draws itself smaller — that is what it does at every other size. Left at 520px it forced the
+       screen taller than the viewport again, which is the scroll this section exists to remove. */
+    .skirmish-screen:not(.level-editor-screen) .skirmish-war-room {
+      min-height: 0;
+    }
+  }
+
+  /* The stacked panel has no frame. That is declared in the tree now, by ShellControlsPanel from
+     the layout MODE, and honoured where the frame rules are stated -- search
+     `[data-chrome-frame="none"]`. It was four times a media-query override here, and lost every
+     time to the offscreen-rails contract below, which sets the same property at the same
+     specificity with the same `!important` and simply comes later in the file. */
+
+  /* Everything below belongs to the frozen STACKED screen — see the boundary note above. */
+  @media (min-height: 541px) {
+  /* The tab body is the panel's scroller again — the same contract it has on the desktop rail,
+     and the right one for a frozen screen. It was made `flex: none` while the page was the
+     scroller; with the page frozen that would push the panel past its capped row instead. */
+  .skirmish-screen:not(.level-editor-screen) .skirmish-hud-panel {
+    flex: 1 1 auto;
+    min-block-size: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  /* …and the panel's own content column scrolls too, because the tab body is not where every
+     screen puts its controls. Deployment hangs its formation controls and Begin Battle off this
+     wrapper directly, so with only the tab body scrolling they were simply CLIPPED by the capped
+     row — measured at y=997 on an 844px screen with no scroller anywhere in their ancestry.
+     Whatever a phase hangs here is reachable now.
+
+     This wrapper is `overflow: visible` everywhere else so divider atoms can sit over the frame.
+     On a phone the panel has no frame for them to sit over. */
+  /* The panel's column no longer scrolls itself. Its body is wrapped in the app's own KitScroll
+     (see ShellControlsPanel), which draws the carved rail and thumb every other scrollable
+     surface in this app uses. Scrolling this box natively worked, and wore a BROWSER scrollbar:
+     first the default grey bar, then a thin tinted one, neither of which is the app's. A styled
+     native bar is still not the supported scrollbar. */
+  .skirmish-screen:not(.level-editor-screen) .le-outer-panel-content {
+    min-block-size: 0;
+    overflow: visible;
+  }
+
+  /* The head stays put and the body scrolls under it — the locked head this panel has had since
+     the section pickers landed. */
+  .skirmish-screen:not(.level-editor-screen) .shell-controls-scroll {
+    flex: 1 1 auto;
+    min-block-size: 0;
+  }
+
+  /* One scroller in the panel, and it is the wrapper above. This block owns a scrollport of its
+     own on the desktop rail; nested inside the panel's it made the sticky verb below anchor to a
+     scrollport bottom that was itself past the screen edge — Continue to next Battle came to rest
+     at y=861 on an 844px screen, still 17px out of reach after being pinned. */
+  .skirmish-screen:not(.level-editor-screen) .run-meta-controls {
+    max-block-size: none;
+    min-block-size: 0;
+    overflow: visible;
+  }
+
+  /* NOT DONE: the phase's committing verb — Begin Battle, Continue to next Battle — is reached by
+     one short scroll of the panel rather than always being on screen.
+     `position: sticky` was tried here and is the wrong tool. Pinned inside the scroller it does
+     bring the verb into view, and then it sits ON TOP of whatever is under it at rest: Exploratio
+     and Expunctio became untappable on every Sectio-family screen, which is the same defect moved
+     somewhere else. A bar that never covers anything has to be OUTSIDE the scroller, and that is a
+     footer slot on ShellControlsPanel (it has `fixed` for pinning above the body; there is no
+     counterpart below), not a stylesheet rule. */
   }
 
   /* The editor assigns named board/rail areas on desktop. When the shared Skirmish shell drops
@@ -10302,6 +10477,24 @@ body.loading-bootstrap .app-startup-status {
     padding: 0 8px 12px;
   }
 
+  /* Frozen: the row is the limit, so this cell must not report a content minimum of its own or
+     the grid grows past the screen it was told to fit. Stacked screens only — see above.
+
+     Full bleed, too. This cell carried an 8px inline gutter, which held the panel at 8..382 of a
+     390px viewport — so its top rail stopped 8px short of each screen edge while the title bar's
+     divider directly above ran the full width. Two horizontal rails on the same screen, one
+     reaching the edge and one not. The rail can only reach the edge if the panel does. */
+  @media (min-height: 541px) {
+    .skirmish-screen:not(.level-editor-screen) .skirmish-hud {
+      block-size: 100%;
+      max-block-size: 100%;
+      min-block-size: 0;
+      overflow: hidden;
+      padding-block-end: 0;
+      padding-inline: 0;
+    }
+  }
+
   /* Page scrolls on mobile — expand the editor's sole desktop KitScroll into the
      document instead of leaving its 100%-height flex child collapsed inside an
      auto-height rail. */
@@ -10319,8 +10512,10 @@ body.loading-bootstrap .app-startup-status {
     display: none;
   }
 
-  /* Page scrolls on mobile — don't nest a gameplay panel scroll inside it. */
-  .skirmish-hud-panel {
+  /* The editor still scrolls its page on mobile (it is out of scope for the frozen gameplay
+     shell above, and its rail is a long authoring column). Gameplay screens keep the panel
+     scroll — see the `:not(.level-editor-screen)` rules above. */
+  .level-editor-screen .skirmish-hud-panel {
     overflow: visible;
   }
 
@@ -18564,7 +18759,7 @@ button.tileset-relationship-cell {
   content: none !important;
 }
 
-:root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel]::before {
+:root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel]:not([data-chrome-frame="top"])::before {
   border-width: 0 0 0 var(--le-chrome-outer-rail-w) !important;
   border-image-width: 0 0 0 var(--le-chrome-outer-rail-w) !important;
 }
@@ -18581,7 +18776,7 @@ button.tileset-relationship-cell {
    box, so fixing one and not the other leaves the strip showing beside the title
    and nowhere else. The title's own padding already subtracts this inset, so its
    text and marks stay exactly where they were while its wood reaches the edge. */
-:root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel] {
+:root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel]:not([data-chrome-frame="top"]) {
   --le-outer-fill-box-right: 0px;
   /* No rail is drawn on this edge, so nothing covers what reaches it. */
   --shell-controls-frame-cover-end: 0px;
@@ -22472,6 +22667,14 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
   position: absolute;
   z-index: 40;
+}
+
+/* Mobile keeps no docked rail beside the board, so the width reserved for one is width the strip
+   can have. Keyed on the layout MODE and written beside the rule it amends, rather than as a
+   media-query override in the responsive band: that override was written, and never applied once,
+   because this rule is unconditional and comes later in the file. check-layout-mode.mjs found it. */
+:root[data-app-layout="mobile"] .run-lipsanon-strip {
+  max-inline-size: calc(100% - (2 * var(--ds-space-3)));
 }
 
 .run-lipsanon-inventory-list {
@@ -27407,6 +27610,14 @@ button.tileset-relationship-cell {
   overflow: auto;
   padding: calc(var(--app-header-h, 84px) + 12px) 16px 16px;
 }
+
+/* Inside the Studio the shell already reserves the title bar and owns the page inset, so the
+   route's own clearance would be counted twice — a band of dead space above the controls. The
+   lab is one instrument with two entrances (ADR-0058); only its outermost padding differs. */
+.mobile-lab-viewer {
+  block-size: auto;
+  padding: 0;
+}
 .mobile-lab-bar { display: grid; gap: 4px; }
 .mobile-lab-title { font-size: var(--ds-text-lg, 1.25rem); letter-spacing: .04em; margin: 0; text-transform: uppercase; }
 .mobile-lab-note { color: var(--ds-ink-3, #9eb1c5); font-size: var(--ds-text-sm, .85rem); line-height: 1.45; margin: 0; max-inline-size: 92ch; }
@@ -27438,6 +27649,38 @@ button.tileset-relationship-cell {
 /* Size comes from the element's own inline style in real px — an iframe left at `auto`
    falls back to the CSS default 300x150 and silently ignores its width/height attributes. */
 .mobile-lab-frame { display: block; }
+
+/* Covers the frame until the app inside it has actually painted (see MobileLab). A bare iframe
+   is BLACK while it composes, and this app takes seconds on a craft route, so the wait read as a
+   dead screen every time. */
+.mobile-lab-frame-status {
+  align-items: center;
+  box-sizing: border-box;
+  line-height: 1.5;
+  padding-inline: var(--ds-space-3);
+  background: var(--ds-surface-sunken, #0b1622);
+  color: var(--ds-text-muted, #8fb0c4);
+  display: flex;
+  font-size: var(--ds-text-sm);
+  inset: 0;
+  justify-content: center;
+  pointer-events: none;
+  position: absolute;
+  text-align: center;
+  z-index: 1;
+}
+
+.mobile-lab-viewport[data-frame-painted] .mobile-lab-frame-status { display: none; }
+
+/* A title-bar control may carry a short visible form for a row with no room for the full one.
+   Both are rendered; exactly one is displayed, and the accessible name is pinned to the full
+   label either way (see TitleBarControls). */
+.titlebar-control-label-short { display: none; }
+
+/* A rail of sections has two forms: the column of tabs (wherever a rail has room) and ONE
+   picker (narrow, where a row per section is most of the screen). Exactly one is displayed at
+   a time, so the sections are never duplicated in the accessibility tree. */
+.rail-section-picker { display: none; }
 
 /* The docked Controls strip's collapse toggle. Rendered by ShellControlsPanel whenever the
    sheet placement is selected, but there is nothing to reclaim on the desktop rail — it is a
@@ -27729,6 +27972,102 @@ button.tileset-relationship-cell {
     flex-direction: column;
     align-items: stretch;
   }
+  /* Each rail becomes its picker. A rail cannot scroll away — it belongs to the shell, not the
+     content — so the Strategikon stacked four rows of section navigation above the
+     Enchiridion's own six above the record, and the record got what was left. Collapsed, each
+     rail costs one row.
+
+     ONE height governs a tab and a picker alike, so a picker is a PEER of the rail it replaces
+     rather than a form sitting where a menu used to be, and the two pickers the Enchiridion
+     shows are peers of each other. Measured from the tab it replaces: 61px. */
+  :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) { --rail-tab-block-size: 61px; }
+
+  .strategikon-rail,
+  .enchiridion-section-rail { display: none; }
+
+  /* The bar has no room for a destination spelled out — the brand was being cut to "CH" to
+     make space for it. */
+  .titlebar-control-label-full { display: none; }
+  .titlebar-control-label-short { display: inline; }
+
+  /* The two pickers are peers, so they share a left edge — and the record below them shares
+     it too. One sits in the workspace rail slot and one inside the body, which carries the
+     workspace content inset, so they started 22px apart. The rail-slot picker takes the same
+     inset rather than the body giving its up. */
+  .strategikon-workspace-layout > .rail-section-picker {
+    margin-inline-start: var(--shell-workspace-body-inset-start, 0px);
+  }
+
+  .rail-section-picker {
+    display: block;
+    flex: none;
+    padding-block-end: var(--ds-space-2);
+  }
+
+  /* LOCKED, not scrollable. The pickers and the section name are the pane's fixed head; the
+     record is the only thing that moves. The outer body scrolled as well — the panel was
+     taller than the pane, so the whole head slid away and you lost the control you had just
+     used — while the record has its OWN scrollport and was scrolling too. Two nested scrolls,
+     one of which took the navigation with it.
+
+     Height is handed down instead: the body stops scrolling, and each box between it and the
+     record gives the record the space left over. Sticky was the alternative and is worse here
+     — a pinned head over a scrolling record needs an opaque fill of its own, and this chrome
+     has no business painting one (ADR-0032). */
+  .strategikon-content { overflow: hidden; }
+  /* The head is `flex: none` (above); the RECORD is what absorbs the remainder. Without this
+     the reference pane kept its `block-size: 100%` — a full pane's worth of height starting
+     below a 69px picker — so the body overflowed by exactly the head and scrolled it away. */
+  .strategikon-workspace-layout > .shell-workspace-body,
+  .strategikon-pane.has-secondary-rail > .strategikon-reference-pane {
+    flex: 1 1 auto;
+    block-size: auto;
+    min-block-size: 0;
+  }
+  .strategikon-pane,
+  .strategikon-reference-pane,
+  .enchiridion-panel {
+    min-block-size: 0;
+  }
+  .strategikon-reference-pane,
+  .enchiridion-panel {
+    display: flex;
+    flex-direction: column;
+  }
+  .enchiridion-panel > .settings-section-title { flex: none; }
+  .enchiridion-reference-scroll {
+    flex: 1 1 auto;
+    min-block-size: 0;
+  }
+  /* The Lipsanotheca has no reference scrollport of its own — its rows and its detail are the
+     record — so removing the outer scroll left it clipped. It absorbs the remainder the same
+     way and scrolls its own rows. The mobile gate is what found this: every other section was
+     clean and this one stranded its list in landscape. */
+  .enchiridion-lipsanon-layout {
+    /* Flex, not the one-column grid: its children are scroll hosts carrying `min-block-size: 0`,
+       so a definite-height grid squeezed the two rows and the detail card painted over the row
+       list behind it — a tap on "Royal Tent" landed on the card covering it. Same squeeze the
+       menu shell and the Strategikon panes both hit; `flex: none` cannot go below content. */
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-block-size: 0;
+  }
+  .enchiridion-lipsanon-layout > * { flex: none; }
+  .enchiridion-lipsanon-layout > .enchiridion-lipsanon-browse-panel {
+    flex: 1 1 auto;
+    min-block-size: 0;
+    overflow: hidden auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .rail-section-picker .house-select {
+    block-size: var(--rail-tab-block-size, 61px);
+    inline-size: 100%;
+  }
+  /* The tab keeps the same number, so neither can drift from the other. */
+  :is(.strategikon-rail, .enchiridion-section-rail) .settings-tab {
+    min-block-size: var(--rail-tab-block-size, 61px);
+  }
   .strategikon-workspace-layout > *,
   .strategikon-pane.has-secondary-rail > * {
     flex: none;
@@ -27788,32 +28127,9 @@ button.tileset-relationship-cell {
   [data-shell-controls-panel][data-controls-mobile="sheet"][data-controls-collapsed] {
     block-size: auto;
   }
-  /* The rail belongs on whichever edge is INTERIOR, and this dock changes which one that is.
-     Docked right, the panel meets the viewport on its right, the title bar on its top and the
-     floor on its bottom, so the offscreen-rails contract reduces its frame to a LEFT rail
-     only. Pinned to the bottom it spans the full width instead: left and right now reach the
-     viewport and the TOP is the one edge facing the board. Left as-is it drew a rail down the
-     side it no longer needs and nothing at all where the board meets it, which is the "just
-     abruptly starts" edge.
-
-     Same installed frame and the same rail width — only the side moves. Written at the same
-     specificity as the contract it amends, because that rule carries !important. */
-  :root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel][data-controls-mobile="sheet"]::before {
-    border-width: var(--le-chrome-outer-rail-w) 0 0 0 !important;
-    border-image-width: var(--le-chrome-outer-rail-w) 0 0 0 !important;
-  }
-  /* Both side edges now reach the screen, so neither carries a rail for the fill to hide
-     under — the inset that keeps the surface from bleeding past the art becomes a visible
-     strip of backdrop instead. Spend it only on the top, where the rail actually lands. */
-  :root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel][data-controls-mobile="sheet"] {
-    --le-outer-fill-box-right: 0px;
-    --le-outer-fill-box-left: 0px;
-    /* Both covers go to zero with the rails they stood in for. These are what the panel's
-       name and its title marks clear themselves by, so leaving them derived would inset the
-       head by a rail that is no longer drawn on either side. */
-    --shell-controls-frame-cover-start: 0px;
-    --shell-controls-frame-cover-end: 0px;
-  }
+  /* No frame rules here: the panel is unframed at every width in this band, declared by
+     ShellControlsPanel from the layout mode. This block once moved the frame's single rail from
+     the left edge to the top, which was the right answer while the panel still had a frame. */
 
   /* OuterChromeBox wraps its children in this content div, so the column lives here — the
      panel element itself holds only the installed fill and that wrapper. */
@@ -27957,6 +28273,11 @@ button.tileset-relationship-cell {
     height: 100%; max-height: none;
     overflow-y: auto; -webkit-overflow-scrolling: touch;
   }
+
+  /* Landscape needs no defence against the stacked band above: those rules are gated on
+     `min-height: 541px`, and this band is `max-height: 540px`, so they can never both apply.
+     Landscape is already frozen in its own way — two columns, two rows, `overflow: hidden`
+     above — with the Controls as a scrolling side rail rather than a capped strip. */
 
   /* Level authoring needs a usable board plus full-width controls, not the battle HUD's compact
      landscape split. Keep the editor's named areas stacked even though this later rule restores
