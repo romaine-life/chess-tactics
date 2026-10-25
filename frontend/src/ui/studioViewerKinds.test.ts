@@ -9,7 +9,6 @@ describe('Studio viewer kind registry', () => {
   it('uses the registry for route validation', () => {
     expect(isViewerKind('divider')).toBe(true);
     expect(isViewerKind('unitart')).toBe(true);
-    expect(isViewerKind('cardicons')).toBe(true);
     expect(isViewerKind('carddivider')).toBe(true);
     expect(isViewerKind('deployment')).toBe(true);
     expect(isViewerKind('not-a-viewer')).toBe(false);
@@ -19,7 +18,7 @@ describe('Studio viewer kind registry', () => {
   it('keeps Viewer kinds addressable without rendering them as a second catalog', () => {
     const studio = readFileSync(new URL('./TilePreview.tsx', import.meta.url), 'utf8');
 
-    expect(Object.keys(STUDIO_VIEWER_KIND_LABELS)).toContain('cardicons');
+    expect(Object.keys(STUDIO_VIEWER_KIND_LABELS)).toContain('cardfit');
     expect(Object.keys(STUDIO_VIEWER_KIND_LABELS)).toContain('carddivider');
     expect(Object.keys(STUDIO_VIEWER_KIND_LABELS)).toContain('deployment');
     expect(studio).not.toContain('STUDIO_VIEWER_KIND_OPTIONS');

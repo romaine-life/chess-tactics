@@ -72,6 +72,14 @@
 
     <script>
       (() => {
+        // The layout mode, before first paint, so a phone never flashes the desktop composition.
+        // src/ui/shell/layoutMode.ts is the authority and overwrites this within a frame; the
+        // width is pinned to MOBILE_LAYOUT_MAX_WIDTH by scripts/check-mobile-breakpoint.mjs.
+        document.documentElement.setAttribute(
+          'data-app-layout',
+          window.matchMedia('(max-width: 960px)').matches ? 'mobile' : 'desktop',
+        );
+
         const status = document.getElementById('app-bootstrap-status');
         const fontReady = document.fonts
           .load('19px "Advance Wars 2 GBA"', 'Loading...')

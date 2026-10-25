@@ -57,6 +57,7 @@ import { ChromeLabCatalog, ChromeLabViewer, CHROME_LAB_TARGETS, defaultChromeLab
 import { RailLab } from './RailLab';
 import { GameLabCatalog, GameLabViewer } from './GameLab';
 import { DeploymentLabCatalog, DeploymentLabViewer } from './DeploymentLab';
+import { MOBILE_LAB_DEFAULT_ROUTE, MOBILE_LAB_SURFACES, MobileLabViewer } from './MobileLab';
 import { LoadingLab } from './LoadingLab';
 import { useSceneParticipant } from './shell/SceneBoundary';
 import { GymCatalog, GymViewer, type GymMode } from './Gym';
@@ -149,7 +150,7 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'deployment' | 'gym' | 'solver' | 'cardlayout' | 'cardsize' | 'carddivider' | 'cardicons' | 'cardfit' | 'cardpool' | 'cardoutline' | 'cardprompts' | 'screenart' | 'lipsanonmat' | 'actionmarks' | 'adlectiomark' | 'runrailmarks' | 'confirmmark' | 'brushmark' | 'menumarks' | 'runprogressmarks' | 'sectiowrap' | 'lipsanonart' | 'terrainmark' | 'commandcardmarks' | 'cardartreview' | 'kiticons' | 'liveruns' | 'logmarks';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'deployment' | 'gym' | 'solver' | 'cardlayout' | 'cardsize' | 'carddivider' | 'cardfit' | 'cardpool' | 'cardoutline' | 'cardprompts' | 'screenart' | 'lipsanonmat' | 'actionmarks' | 'adlectiomark' | 'runrailmarks' | 'confirmmark' | 'brushmark' | 'menumarks' | 'runprogressmarks' | 'sectiowrap' | 'lipsanonart' | 'terrainmark' | 'commandcardmarks' | 'cardartreview' | 'kiticons' | 'liveruns' | 'logmarks' | 'mobilelab';
 
 // Every prop KIND present in the catalog, in definition order — DERIVED from PROP_DEFS so a new
 // kind (e.g. 'rock') is a filter facet automatically. Hardcoding ['tree','house'] here silently
@@ -293,7 +294,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => Boolean(value && studioFamilies.some((family) => family.id === value));
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'deployment' || value === 'gym' || value === 'solver' || value === 'cardlayout' || value === 'cardsize' || value === 'carddivider' || value === 'cardicons' || value === 'cardfit' || value === 'cardpool' || value === 'cardoutline' || value === 'cardprompts' || value === 'screenart' || value === 'lipsanonmat' || value === 'actionmarks' || value === 'adlectiomark' || value === 'runrailmarks' || value === 'confirmmark' || value === 'brushmark' || value === 'menumarks' || value === 'runprogressmarks' || value === 'sectiowrap' || value === 'lipsanonart' || value === 'terrainmark' || value === 'commandcardmarks' || value === 'cardartreview' || value === 'kiticons' || value === 'liveruns' || value === 'logmarks';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'deployment' || value === 'gym' || value === 'solver' || value === 'cardlayout' || value === 'cardsize' || value === 'carddivider' || value === 'cardfit' || value === 'cardpool' || value === 'cardoutline' || value === 'cardprompts' || value === 'screenart' || value === 'lipsanonmat' || value === 'actionmarks' || value === 'adlectiomark' || value === 'runrailmarks' || value === 'confirmmark' || value === 'brushmark' || value === 'menumarks' || value === 'runprogressmarks' || value === 'sectiowrap' || value === 'lipsanonart' || value === 'terrainmark' || value === 'commandcardmarks' || value === 'cardartreview' || value === 'kiticons' || value === 'liveruns' || value === 'logmarks' || value === 'mobilelab';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -406,7 +407,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   // Destination is decoupled from category — any mode is valid with any category,
   // so the URL is taken at face value (no normalization).
   const studioMode = legacyReviewCategory ? 'catalog' : isCardIconReviewAlias || isUnitStudioAlias || isNineSliceAlias || isPropLabAlias || isTileCompareAlias || isSurfaceLabAlias || isSceneAnimAlias || isDoodadEditorAlias || isArtworkCompareAlias || isWallCandidatesAlias ? 'viewer' : isStudioMode(mode) ? mode : defaults.studioMode;
-  const routeCategory = legacyReviewCategory ?? (isCardIconReviewAlias ? 'cardicons' : isUnitStudioAlias ? 'units' : isNineSliceAlias ? 'assets' : isPropLabAlias ? 'props' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isDoodadEditorAlias ? 'doodads' : isArtworkCompareAlias ? 'pages' : isWallCandidatesAlias ? 'walls' : isStudioCategory(normalizedCat) ? normalizedCat : undefined);
+  const routeCategory = legacyReviewCategory ?? (isCardIconReviewAlias ? 'cardfit' : isUnitStudioAlias ? 'units' : isNineSliceAlias ? 'assets' : isPropLabAlias ? 'props' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isDoodadEditorAlias ? 'doodads' : isArtworkCompareAlias ? 'pages' : isWallCandidatesAlias ? 'walls' : isStudioCategory(normalizedCat) ? normalizedCat : undefined);
   const routeTileFilter = view === 'board' ? 'board' : isTileFilter(collection) ? collection : defaults.tileFilter;
   const explicitLabMode = isLabMode(lab) ? lab : undefined;
   const brushParam = params.get('brush');
@@ -454,7 +455,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedFenceArtworkId: fenceArt || undefined,
     selectedSurfaceFamily: sfamily || undefined,
     selectedRegionId: regionParam || undefined,
-    viewerKind: isCardIconReviewAlias ? 'cardicons' : isUnitStudioAlias ? 'unitart' : isNineSliceAlias ? 'nineslice' : isPropLabAlias || isDoodadEditorAlias ? 'propseat' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isWallCandidatesAlias ? 'wallcandidates' : isArtworkCompareAlias ? 'artworkcompare'
+    viewerKind: isCardIconReviewAlias ? 'cardfit' : isUnitStudioAlias ? 'unitart' : isNineSliceAlias ? 'nineslice' : isPropLabAlias || isDoodadEditorAlias ? 'propseat' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isWallCandidatesAlias ? 'wallcandidates' : isArtworkCompareAlias ? 'artworkcompare'
       : isViewerKind(normalizedVk) ? normalizedVk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
@@ -507,7 +508,7 @@ function preserveCardPoolRouteParams(params: URLSearchParams, route: TilesetStud
 }
 
 function preserveCardIconFittingRouteParams(params: URLSearchParams, route: TilesetStudioRouteState): void {
-  if (route.viewerKind !== 'cardicons') return;
+  if (route.viewerKind !== 'cardfit') return;
   const value = new URLSearchParams(window.location.search).get('iconPair');
   if (value) params.set('iconPair', value);
 }
@@ -725,6 +726,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [gameLabSearch, setGameLabSearch] = useState('');
   const [selectedGameLabLevelId, setSelectedGameLabLevelId] = useState<string | undefined>(initialRoute.selectedGameLabLevelId);
   const [gymSearch, setGymSearch] = useState('');
+  const [mobileLabRoute, setMobileLabRoute] = useState<string>(MOBILE_LAB_DEFAULT_ROUTE);
   const [selectedGymLevelId, setSelectedGymLevelId] = useState<string | undefined>(initialRoute.selectedGymLevelId);
   const [solverSearch, setSolverSearch] = useState('');
   // Card Pool's body size lives here rather than inside the page, because the control for it
@@ -1736,7 +1738,14 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     {
       id: 'units', label: 'Units', hint: 'Browse chess-piece units.',
       main: <CatalogGrid type={unitsCatalogType} />,
-      controls: <CatalogControls type={unitsCatalogType} />,
+      controls: (
+        <>
+          <CatalogControls type={unitsCatalogType} />
+          {/* The Unit Roster reviews these same units as a set. Registered and implemented, but
+              openable only by typing ?vk= until now — see check-studio-reachability.mjs. */}
+          <button type="button" className="tileset-view-action" onClick={() => openViewer('unitroster')}>Open Unit Roster</button>
+        </>
+      ),
     },
     {
       id: 'doodads', label: 'Doodads', hint: 'Browse terrain doodads (placed on matching tiles).',
@@ -2165,6 +2174,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <input type="search" value={pageSearch} onChange={(event) => setPageSearch(event.target.value)} placeholder="page name…" />
           </label>
           <button type="button" className="tileset-view-action" onClick={() => openViewer('page')}>View Selected</button>
+          {/* The Loading Lab inspects how these same pages compose on the way in, so it belongs
+              beside them. It was registered and implemented but openable only by typing ?vk= —
+              see check-studio-reachability.mjs. */}
+          <button type="button" className="tileset-view-action" onClick={() => openViewer('loading')}>Open Loading Lab</button>
           <button type="button" className="tileset-view-action" onClick={() => openViewer('artworkcompare')} title="Compare a screen against its accepted concept art (art vs live).">Compare to art ▸</button>
         </>
       ),
@@ -2186,6 +2199,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <input type="search" value={chromeLabSearch} onChange={(event) => setChromeLabSearch(event.target.value)} placeholder="page or unit…" />
           </label>
           <button type="button" className="tileset-view-action" onClick={() => openViewer('chromelab')}>Open Selected</button>
+          {/* The Rail Lab tunes the rail families this same chrome inherits, so it belongs beside
+              it. Registered and implemented, but openable only by typing ?vk= until now. */}
+          <button type="button" className="tileset-view-action" onClick={() => openViewer('raillab')}>Open Rail Lab</button>
         </>
       ),
     },
@@ -2206,6 +2222,32 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       id: 'deployment', label: 'Deployment Lab', hint: 'Exercise the canonical Run placement phase across rows, dedicated regions, obstacles, rosters, abilities, seeds, and layout rolls.',
       main: <DeploymentLabCatalog onOpen={() => openViewer('deployment')} />,
       controls: <button type="button" className="tileset-view-action" onClick={() => openViewer('deployment')}>Open Deployment Lab</button>,
+    },
+    {
+      id: 'mobilelab', label: 'Mobile Review', hint: 'Review the real screens at exact phone and tablet viewports, portrait and landscape, side by side.',
+      // The screens the lab offers ARE the catalog, read from the lab's own list, so a screen
+      // added there appears here without a second edit. Picking one opens the Viewer already
+      // pointed at it.
+      main: (
+        <div className="tileset-catalog-grid">
+          {MOBILE_LAB_SURFACES.map((surface) => (
+            <button
+              key={surface.path}
+              type="button"
+              className="tileset-catalog-cell"
+              aria-pressed={mobileLabRoute === surface.path}
+              onClick={() => { setMobileLabRoute(surface.path); openViewer('mobilelab'); }}
+            >
+              <span className="tileset-catalog-cell-label">{surface.label}</span>
+            </button>
+          ))}
+        </div>
+      ),
+      controls: (
+        <button type="button" className="tileset-view-action" onClick={() => openViewer('mobilelab')}>
+          Open Mobile Review
+        </button>
+      ),
     },
     {
       id: 'gym', label: 'Training Gym', hint: 'Train the AI on a level, stepping at your own pace — tune its eval weights with SPSA, or learn the board’s piece values from scratch by TD self-play and watch the numbers move.',
@@ -2476,6 +2518,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                         ? <GymViewer levelId={selectedGymLevelId} header={studioViewerHeader} initialMode={initialGymTab} />
                         : viewerKind === 'solver'
                         ? <SolveViewer levelId={selectedSolverLevelId} header={studioViewerHeader} tab={solverTab} onTabChange={setSolverTab} />
+                        : viewerKind === 'mobilelab'
+                        ? <MobileLabViewer header={studioViewerHeader} route={mobileLabRoute} onRoute={setMobileLabRoute} />
                         : viewerKind === 'loading'
                         ? <LoadingLab header={studioViewerHeader} />
                         : viewerKind === 'tileside'
