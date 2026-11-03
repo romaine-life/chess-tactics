@@ -26,11 +26,11 @@ jobs:
       ARM_SUBSCRIPTION_ID: ${{ vars.ARM_SUBSCRIPTION_ID }}
     steps:
       - uses: actions/checkout@v4
-      - uses: opentofu/setup-opentofu@v1
+      - uses: https://github.com/opentofu/setup-opentofu@v1
         with:
           tofu_version: '1.9.0'
           tofu_wrapper: false
-      - uses: azure/login@v3
+      - uses: https://github.com/azure/login@v3
         with:
           client-id: ${{ vars.ARM_CLIENT_ID }}
           tenant-id: ${{ vars.ARM_TENANT_ID }}
