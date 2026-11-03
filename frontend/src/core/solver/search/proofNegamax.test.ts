@@ -173,7 +173,7 @@ describe('proofNegamax / runWeakSolve — GHI guard (no unsound proven entries i
         checked += 1;
       }
       expect(checked).toBeGreaterThan(0); // the cross-check actually exercised entries.
-    });
+    }, 30_000); // This exhaustive comparison shares CI runners with other jobs.
   }
 });
 

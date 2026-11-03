@@ -1,0 +1,59 @@
+name: Infrastructure
+on:
+  pull_request:
+    branches: [main]
+    paths: ['tofu/**', '.forgejo/workflows/tofu.yaml']
+  push:
+    branches: [main]
+    paths: ['tofu/**', '.forgejo/workflows/tofu.yaml']
+  workflow_dispatch:
+concurrency:
+  group: tofu-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  tofu:
+    name: Plan and apply infrastructure
+    runs-on: windows-latest
+    enable-openid-connect: true
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: tofu
+    env:
+      ARM_USE_OIDC: 'true'
+      ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.ARM_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.ARM_SUBSCRIPTION_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: https://github.com/opentofu/setup-opentofu@v1
+        with:
+          tofu_version: '1.9.0'
+          tofu_wrapper: false
+      - uses: https://github.com/azure/login@v3
+        with:
+          client-id: ${{ vars.ARM_CLIENT_ID }}
+          tenant-id: ${{ vars.ARM_TENANT_ID }}
+          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
+      - name: Install shared provider locks
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $base = 'https://raw.githubusercontent.com/romaine-life/infra-bootstrap/main/tofu/provider'
+          Invoke-WebRequest "$base/shared-providers.tf" -OutFile shared-providers.tf
+          Invoke-WebRequest "$base/.terraform.lock.hcl" -OutFile .terraform.lock.hcl
+          "ARM_OIDC_REQUEST_URL=$env:ACTIONS_ID_TOKEN_REQUEST_URL" | Add-Content $env:GITHUB_ENV
+          "ARM_OIDC_REQUEST_TOKEN=$env:ACTIONS_ID_TOKEN_REQUEST_TOKEN" | Add-Content $env:GITHUB_ENV
+      - name: Plan and apply
+        env:
+          EVENT: ${{ github.event_name }}
+          STATE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT || 'nelsontofu' }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          tofu init -backend-config=resource_group_name=infra "-backend-config=storage_account_name=$env:STATE_ACCOUNT" -backend-config=container_name=tfstate '-backend-config=key=chess-tactics.tfstate'
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          tofu plan -out=tfplan
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if ($env:EVENT -ne 'pull_request') {
+            tofu apply tfplan
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }

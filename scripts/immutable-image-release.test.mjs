@@ -4,8 +4,8 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const candidatePath = `${root}.github/workflows/docker-build-check.yaml`;
-const productionPath = `${root}.github/workflows/build-and-deploy.yaml`;
+const candidatePath = `${root}.forgejo/workflows/docker-build-check.yaml`;
+const productionPath = `${root}.forgejo/workflows/build-and-deploy.yaml`;
 const backendPackagePath = `${root}backend/package.json`;
 const readWorkflow = (path) => readFileSync(path, 'utf8').replaceAll('\r\n', '\n');
 const candidate = readWorkflow(candidatePath);
@@ -70,7 +70,7 @@ test('pull-request CI publishes the tested ref for validation without owning pro
   const build = workflowStep(candidate, 'Build and push image');
   const alias = workflowStep(candidate, 'Tag app image by commit');
 
-  assert.match(build, /uses: docker\/build-push-action@v7/);
+  assert.match(build, /uses: https:\/\/github\.com\/docker\/build-push-action@v7/);
   assert.match(build, /platforms: linux\/amd64/);
   assert.match(build, /NODE_BASE=\$\{\{ steps\.fingerprint\.outputs\.resolved_base_ref \}\}/);
   assert.match(build, /push: true/);
@@ -94,7 +94,7 @@ test('main builds the merged revision and deploys its immutable digest', () => {
 
   assert.match(resolve, /target_ref="\$\{INPUT_REF:-\$GITHUB_SHA\}"/);
   assert.match(build, /id: build/);
-  assert.match(build, /uses: docker\/build-push-action@v7/);
+  assert.match(build, /uses: https:\/\/github\.com\/docker\/build-push-action@v7/);
   assert.match(build, /platforms: linux\/amd64/);
   assert.match(build, /NODE_BASE=\$\{\{ steps\.fingerprint\.outputs\.resolved_base_ref \}\}/);
   assert.match(build, /push: true/);
@@ -111,7 +111,7 @@ test('main builds the merged revision and deploys its immutable digest', () => {
   assert.match(capture, /DEPLOY_IMAGE_REF=\$\{image_ref\}/);
 
   assert.match(publish, /tag: \\"\$\{DEPLOY_IMAGE_REF\}\\"/);
-  assert.match(publish, /git -C prod-deploy push origin HEAD:prod/);
+  assert.match(publish, /git -C prod-deploy .*push origin HEAD:prod/);
   assert.doesNotMatch(production, /trusted[-_ ]approver/i);
   assert.doesNotMatch(production, /gh pr comment/);
   assert.doesNotMatch(production, /requires exactly one merged-to-main PR/i);
