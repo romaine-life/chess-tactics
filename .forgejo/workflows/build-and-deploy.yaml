@@ -147,9 +147,10 @@ jobs:
       - name: Resolve requested ref
         env:
           INPUT_REF: ${{ inputs.git_ref }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          git fetch --force --tags origin '+refs/heads/*:refs/remotes/origin/*'
+          git -c credential.helper='!f() { echo username=forgejo-actions; echo "password=$GH_TOKEN"; }; f' fetch --force --tags origin '+refs/heads/*:refs/remotes/origin/*'
           target_ref="${INPUT_REF:-$GITHUB_SHA}"
           if full_sha="$(git rev-parse --verify "${target_ref}^{commit}" 2>/dev/null)"; then
             :
@@ -236,6 +237,8 @@ jobs:
       - name: Compute release version (patch) — sourced from the prod deploy branch
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           # Version-of-record lives on the long-lived `prod` DEPLOY branch (its
@@ -249,7 +252,7 @@ jobs:
           # content fingerprint, so a new version always yields a fresh image tag. The bake
           # is EPHEMERAL — written into this checkout's package.json for the build only,
           # never committed to main. It's committed to prod (appVersion) further below.
-          git fetch --force origin '+refs/heads/prod:refs/remotes/origin/prod'
+          git -c credential.helper='!f() { echo username=forgejo-actions; echo "password=$GH_TOKEN"; }; f' fetch --force origin '+refs/heads/prod:refs/remotes/origin/prod'
           prod_ver="$(git show origin/prod:k8s/Chart.yaml 2>/dev/null \
             | sed -n 's/^appVersion:[[:space:]]*"\{0,1\}\([0-9][0-9.]*\)"\{0,1\}.*/\1/p' | head -1)"
           base_ver="$(node -p "require('./frontend/package.json').version")"
@@ -408,7 +411,7 @@ jobs:
           # No [skip ci] needed: this workflow triggers on main, so a prod push starts nothing.
           git config user.name "forgejo-actions[bot]"
           git config user.email "forgejo-actions@noreply.romaine.life"
-          git fetch --force origin '+refs/heads/prod:refs/remotes/origin/prod'
+          git -c credential.helper='!f() { echo username=forgejo-actions; echo "password=$GH_TOKEN"; }; f' fetch --force origin '+refs/heads/prod:refs/remotes/origin/prod'
           git worktree add --detach prod-deploy origin/prod
           rm -rf prod-deploy/k8s
           cp -r k8s prod-deploy/k8s

@@ -151,7 +151,7 @@ without serializing or repeating the frontend gate (ADR-0255).
 
 ## Deploy
 
-The Forgejo migration workflows are staged in `.forgejo/workflows` under [FORGEJO-3](https://openproject.romaine.life/wp/FORGEJO-3). The migration must verify default-branch CI and a Forgejo source release before disabling GitHub CI or enabling its push mirror (ADR-0643). Azure retains the existing app registration through Forgejo OIDC. The source release identifies the immutable ACR image; this application has no publish script or local publishing command.
+Forgejo owns CI and releases through `.forgejo/workflows` ([FORGEJO-3](https://openproject.romaine.life/wp/FORGEJO-3), ADR-0643). Azure retains the existing app registration through Forgejo OIDC. The source release identifies the immutable ACR image; this application has no publish script or local publishing command.
 
 The app is deployed from `k8s/` by ArgoCD. PR CI tests the pushed ref, publishes
 its content-fingerprint image for validation, and records the `sha-<commit>`
