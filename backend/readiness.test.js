@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const http = require('node:http');
+const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
@@ -58,12 +59,24 @@ async function stopChild(child) {
 }
 
 test('liveness stays up while readiness fails closed on an unavailable database', async (t) => {
+  // Accept TCP but withhold the PostgreSQL handshake. Connection refusal is
+  // immediate and cannot prove that liveness is independent of DB startup.
+  const connections = new Set();
+  const database = net.createServer((socket) => {
+    connections.add(socket);
+    socket.once('close', () => connections.delete(socket));
+  });
+  await new Promise((resolve) => database.listen(0, '127.0.0.1', resolve));
+  t.after(() => {
+    for (const socket of connections) socket.destroy();
+    database.close();
+  });
   const port = await unusedLoopbackPort();
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ct-readiness-'));
   const env = {
     ...process.env,
     PORT: String(port),
-    DATABASE_URL: 'postgres://readiness:readiness@127.0.0.1:1/readiness',
+    DATABASE_URL: `postgres://readiness:readiness@127.0.0.1:${database.address().port}/readiness`,
     LIVE_MEDIA_STORAGE_DIR: path.join(tempRoot, 'live-media'),
     SCHEMA_MIGRATIONS: 'auto',
     BAKED_BACKEND_DIR: __dirname,
@@ -91,6 +104,11 @@ test('liveness stays up while readiness fails closed on an unavailable database'
   const liveness = await request(port, '/health');
   assert.equal(liveness.statusCode, 200);
   assert.equal(liveness.body, 'ok');
+  assert.ok(connections.size > 0, 'DB initialization is still awaiting its handshake');
+
+  // Release the stalled handshake, then prove the application fails closed.
+  for (const socket of connections) socket.destroy();
+  await new Promise((resolve) => database.close(resolve));
 
   const readiness = await request(port, '/ready');
   assert.equal(readiness.statusCode, 503);

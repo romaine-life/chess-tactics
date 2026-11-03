@@ -367,18 +367,34 @@ function startSecondaryBackend() {
 }
 
 async function waitForSecondarySchemaCheck() {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (!secondaryChild || secondaryChild.exitCode !== null) {
-      throw new Error(`Secondary backend exited before its schema check\n${secondaryOutput}`);
+  await waitForSchemaReady(secondaryChild, () => secondaryOutput, 'check');
+}
+
+async function waitForSchemaReady(proc, readOutput, mode) {
+  const started = Date.now();
+  let nextProgress = started + 10000;
+  // This fixture upgrades 51 migrations and validates their postconditions.
+  // Process liveness deliberately does not wait for that work. Await the
+  // completed schema report before inspecting the ledger or signing in;
+  // /ready also needs catalog fixtures that this test has not seeded yet.
+  while (Date.now() - started < 120000) {
+    const text = readOutput();
+    if (!proc || proc.exitCode !== null || text.includes('postgres init failed;')) {
+      throw new Error(`Backend failed its schema=${mode} initialization\n${text}`);
     }
-    if (
-      secondaryOutput
-        .split(/\r?\n/)
-        .some((line) => line.includes('postgres ready') && line.includes('schema=check'))
-    ) return;
+    if (text.split(/\r?\n/).some((line) => (
+      line.includes('postgres ready') && line.includes(`schema=${mode}`)
+    ))) {
+      console.log(`smoke-test: schema=${mode} ready after ${Date.now() - started}ms`);
+      return;
+    }
+    if (Date.now() >= nextProgress) {
+      console.log(`smoke-test: waiting for schema=${mode} (${Date.now() - started}ms)`);
+      nextProgress += 10000;
+    }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error(`Secondary backend did not finish its schema check\n${secondaryOutput}`);
+  throw new Error(`Backend did not finish schema=${mode} initialization\n${readOutput()}`);
 }
 
 function waitForProcessExit(proc, timeoutMs = 5000) {
@@ -3486,6 +3502,7 @@ async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
+  await waitForSchemaReady(child, () => output, 'auto');
   await validatePrimarySparseNumericMigrationUpgrade64();
 
   // Sign in for real, once per identity, before anything that needs a session. The schema check

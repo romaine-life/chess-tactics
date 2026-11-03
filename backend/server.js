@@ -25472,6 +25472,7 @@ if (schemaMigrationCommand) {
     );
   }
   pool.on('error', (error) => console.error('postgres pool error:', error));
+  startServer();
   ensureDbReady()
     .then(() => {
       console.log(`postgres ready (mode=${databaseUrl ? 'connection-string' : 'workload-identity'}, schema=${schemaMigrationMode}); ${schemaReadyMessage()}`);
@@ -25485,8 +25486,7 @@ if (schemaMigrationCommand) {
       } else {
         console.error('postgres init failed; application readiness will remain 503 until it recovers or schema is prepared:', error);
       }
-    })
-    .finally(startServer);
+    });
 } else {
   console.warn('no database configured (set DATABASE_URL, or POSTGRES_HOST/POSTGRES_DATABASE/POSTGRES_USER); application readiness will remain 503');
   startServer();
