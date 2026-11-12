@@ -221,18 +221,18 @@ jobs:
       - name: Install Azure CLI when absent
         run: |
           if ! command -v az >/dev/null 2>&1; then
-            curl -fsSL https://aka.ms/InstallAzureCLIDeb | bash
+            curl -fsSL https://aka.ms/InstallAzureCLIDeb | bash # internet: Azure CLI install source
           fi
 
       - name: Azure Login
-        uses: https://github.com/azure/login@v3
+        uses: azure/login@v3
         with:
           client-id: ${{ vars.ARM_CLIENT_ID }}
           tenant-id: ${{ vars.ARM_TENANT_ID }}
           subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
 
       - name: Set up Buildx
-        uses: https://github.com/docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@v4
         with:
           driver-opts: network=host
 
@@ -316,7 +316,7 @@ jobs:
       - name: Build and push merged image
         id: build
         if: steps.image.outputs.target_exists != 'true'
-        uses: https://github.com/docker/build-push-action@v7
+        uses: docker/build-push-action@v7
         with:
           network: host
           context: .

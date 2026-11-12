@@ -52,11 +52,11 @@ jobs:
       - name: Install Azure CLI when absent
         run: |
           if ! command -v az >/dev/null 2>&1; then
-            curl -fsSL https://aka.ms/InstallAzureCLIDeb | bash
+            curl -fsSL https://aka.ms/InstallAzureCLIDeb | bash # internet: Azure CLI install source
           fi
 
       - name: Azure login (OIDC)
-        uses: https://github.com/azure/login@v3
+        uses: azure/login@v3
         with:
           client-id: ${{ vars.ARM_CLIENT_ID }}
           tenant-id: ${{ vars.ARM_TENANT_ID }}

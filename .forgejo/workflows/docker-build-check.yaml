@@ -41,6 +41,8 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || inputs.git_ref || github.sha }}
 
+      - uses: romaine-life/pipeline-templates/actions/check-fetches@main
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -159,7 +161,7 @@ jobs:
           echo "sha=${full_sha}" >> "${GITHUB_OUTPUT}"
 
       - name: Set up Buildx
-        uses: https://github.com/docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@v4
         with:
           driver-opts: network=host
 
@@ -170,12 +172,12 @@ jobs:
       - name: Install Azure CLI when absent
         run: |
           if ! command -v az >/dev/null 2>&1; then
-            curl -fsSL https://aka.ms/InstallAzureCLIDeb | bash
+            curl -fsSL https://aka.ms/InstallAzureCLIDeb | bash # internet: Azure CLI install source
           fi
 
       - name: Azure Login
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-        uses: https://github.com/azure/login@v3
+        uses: azure/login@v3
         with:
           client-id: ${{ vars.ARM_CLIENT_ID }}
           tenant-id: ${{ vars.ARM_TENANT_ID }}
@@ -219,7 +221,7 @@ jobs:
 
       - name: Build and push image
         if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && steps.image.outputs.target_exists != 'true'
-        uses: https://github.com/docker/build-push-action@v7
+        uses: docker/build-push-action@v7
         with:
           network: host
           context: .
@@ -251,7 +253,7 @@ jobs:
         # Fork PRs stay build-only: no ACR login, no push. This preserves the
         # original fork-safe behavior of this workflow verbatim.
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: https://github.com/docker/build-push-action@v7
+        uses: docker/build-push-action@v7
         with:
           network: host
           context: .
