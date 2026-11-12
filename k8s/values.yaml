@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:496ca5ab6a453edd725229091628c2e1573ca22c1c7e63f0982654d388d16a51"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:f443e7809bb4009896a792800fd7d267cefd24bf530154a786e88b7e6353ed31"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Retire migrated GitHub automation (FORGEJO-3)"
-  prNumber: "991"
-  prUrl: "https://forgejo.romaine.life/romaine-life/chess-tactics/pulls/991"
-  commit: "138b4141"
+  prTitle: "Fetch CI actions and downloads through home caches (FORGEJO-28)"
+  prNumber: "992"
+  prUrl: "https://forgejo.romaine.life/romaine-life/chess-tactics/pulls/992"
+  commit: "a1b45cec"
 
 name: chess-tactics
 namespace: chess-tactics
