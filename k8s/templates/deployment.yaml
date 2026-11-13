@@ -60,7 +60,7 @@ spec:
               value: {{ printf "https://%s" (required "hostname is required" .Values.hostname) | quote }}
             {{- with .Values.build }}
             # Human-facing build provenance for Settings → About (/api/build-info).
-            # Written into values.yaml by build-and-deploy.yaml at deploy time; empty
+            # Written into values.yaml by ci.yml's deploy job at deploy time; empty
             # on non-main lanes, where each `if` below renders nothing.
             {{- if .prTitle }}
             - name: BUILD_PR_TITLE
