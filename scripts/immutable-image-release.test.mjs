@@ -72,7 +72,6 @@ test('pull-request CI publishes the tested ref for validation without owning pro
 
   assert.match(build, /uses: docker\/build-push-action@v7/);
   assert.match(build, /platforms: linux\/amd64/);
-  assert.match(build, /NODE_BASE=\$\{\{ steps\.fingerprint\.outputs\.resolved_base_ref \}\}/);
   assert.match(build, /push: true/);
   assert.match(build, /tags: \$\{\{ env\.REGISTRY \}\}\/\$\{\{ env\.IMAGE \}\}:\$\{\{ steps\.fingerprint\.outputs\.proof_tag \}\}/);
 
@@ -96,7 +95,6 @@ test('main builds the merged revision and deploys its immutable digest', () => {
   assert.match(build, /id: build/);
   assert.match(build, /uses: docker\/build-push-action@v7/);
   assert.match(build, /platforms: linux\/amd64/);
-  assert.match(build, /NODE_BASE=\$\{\{ steps\.fingerprint\.outputs\.resolved_base_ref \}\}/);
   assert.match(build, /push: true/);
   assert.match(build, /tags: \$\{\{ env\.REGISTRY \}\}\/\$\{\{ env\.IMAGE \}\}:\$\{\{ env\.TAG \}\}/);
 
@@ -115,6 +113,13 @@ test('main builds the merged revision and deploys its immutable digest', () => {
   assert.doesNotMatch(production, /trusted[-_ ]approver/i);
   assert.doesNotMatch(production, /gh pr comment/);
   assert.doesNotMatch(production, /requires exactly one merged-to-main PR/i);
+});
+
+test('the base image is pinned in the Dockerfile, whose hash the fingerprint covers', () => {
+  const dockerfile = readFileSync(`${root}Dockerfile`, 'utf8');
+  assert.match(dockerfile, /^ARG NODE_BASE=\S+@sha256:[0-9a-f]{64}\r?$/m);
+  assert.doesNotMatch(candidate, /NODE_BASE/);
+  assert.doesNotMatch(production, /NODE_BASE/);
 });
 
 test('the completed cutover approval implementation stays deleted', () => {

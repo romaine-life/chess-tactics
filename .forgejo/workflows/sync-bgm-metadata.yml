@@ -49,11 +49,7 @@ jobs:
           if [ -z "$CONTAINER_URL" ]; then echo "could not read bgm.containerUrl from k8s/values.yaml" >&2; exit 1; fi
           echo "container_url=$CONTAINER_URL" >> "$GITHUB_OUTPUT"
 
-      - name: Install Azure CLI when absent
-        run: |
-          if ! command -v az >/dev/null 2>&1; then
-            curl -fsSL https://aka.ms/InstallAzureCLIDeb | bash # internet: Azure CLI install source
-          fi
+      - uses: romaine-life/pipeline-templates/actions/azure-cli@main
 
       - name: Azure login (OIDC)
         uses: azure/login@v3

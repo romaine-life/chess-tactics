@@ -58,7 +58,7 @@ jobs:
         run: |
           set -euo pipefail
           port="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"
-          id="$(docker run -d --network host -e PGPORT="$port" -e POSTGRES_USER=chess_tactics -e POSTGRES_PASSWORD=chess_tactics -e POSTGRES_DB=chess_tactics postgres:16)"
+          id="$(docker run -d --network host -e PGPORT="$port" -e POSTGRES_USER=chess_tactics -e POSTGRES_PASSWORD=chess_tactics -e POSTGRES_DB=chess_tactics artifacts.home.romaine.life/dockerhub/library/postgres:16@sha256:63e83b5a3dc36a917dccb76fe1bd2ac51f1ec9c1deb47ff20d4f04233bf6eae9)"
           echo "id=$id" >> "$GITHUB_OUTPUT"
           echo "port=$port" >> "$GITHUB_OUTPUT"
           for attempt in $(seq 1 30); do
@@ -163,17 +163,15 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v4
         with:
-          driver-opts: network=host
+          driver-opts: |
+            network=host
+            image=artifacts.home.romaine.life/dockerhub/moby/buildkit:buildx-stable-1@sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe
 
       # Same-repo PRs and workflow dispatches publish the content fingerprint
       # image used by Glimmung test slots. Production independently builds the
       # merged main revision; PR images are validation artifacts, not release
       # candidates that main must promote.
-      - name: Install Azure CLI when absent
-        run: |
-          if ! command -v az >/dev/null 2>&1; then
-            curl -fsSL https://aka.ms/InstallAzureCLIDeb | bash # internet: Azure CLI install source
-          fi
+      - uses: romaine-life/pipeline-templates/actions/azure-cli@main
 
       - name: Azure Login
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
@@ -197,8 +195,7 @@ jobs:
             --dockerfile Dockerfile \
             --context . \
             --paths 'Dockerfile .dockerignore backend frontend packages/board-render' \
-            --platform linux/amd64 \
-            --base-images 'node:20-alpine'
+            --platform linux/amd64
 
       - name: Check existing image tag
         id: image
@@ -227,8 +224,6 @@ jobs:
           context: .
           file: Dockerfile
           platforms: linux/amd64
-          build-args: |
-            NODE_BASE=${{ steps.fingerprint.outputs.resolved_base_ref }}
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ steps.fingerprint.outputs.proof_tag }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app
@@ -259,8 +254,6 @@ jobs:
           context: .
           file: Dockerfile
           platforms: linux/amd64
-          build-args: |
-            NODE_BASE=${{ steps.fingerprint.outputs.resolved_base_ref }}
           push: false
           load: false
           cache-from: type=gha
