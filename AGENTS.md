@@ -61,7 +61,7 @@ contracts whenever the task vocabulary suggests one.
 | Database schema migrations | [ADR-0174](docs/adr/0174-database-migrations-are-append-only-checksummed-and-explicit.md), [`docs/persistence.md`](docs/persistence.md), and the shared-database workflow below |
 | Backend, multiplayer, and local server work | `CLAUDE.md` and the relevant backend smoke tests |
 | Solver and AI work | [`docs/per-board-ai-plan.md`](docs/per-board-ai-plan.md), [`docs/board-solver-implementation-plan.md`](docs/board-solver-implementation-plan.md), and ADR-0069 through ADR-0071 as applicable |
-| Deployment and infrastructure | The Deploy section of [`README.md`](README.md), [`.github/workflows/`](.github/workflows/), [`k8s/`](k8s/), and [`tofu/`](tofu/) |
+| Deployment and infrastructure | The Deploy section of [`README.md`](README.md), [`.forgejo/workflows/`](.forgejo/workflows/), [`k8s/`](k8s/), and [`tofu/`](tofu/) |
 | Retiring or migrating a system | [`docs/migration-policy.md`](docs/migration-policy.md) and the ADR that retires or supersedes the old path |
 | Running and visual verification | `CLAUDE.md` for the current server, dynamic-port, direct-link, and screenshot workflow |
 | Opening a PR and waiting on CI | The `pr-gate` section of `CLAUDE.md`; run `node bin/pr-gate.mjs` rather than hand-writing a `gh` poll loop |

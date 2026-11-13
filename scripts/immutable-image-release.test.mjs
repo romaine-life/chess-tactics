@@ -4,12 +4,11 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const candidatePath = `${root}.forgejo/workflows/docker-build-check.yaml`;
-const productionPath = `${root}.forgejo/workflows/build-and-deploy.yaml`;
+const ciPath = `${root}.forgejo/workflows/ci.yml`;
 const backendPackagePath = `${root}backend/package.json`;
-const readWorkflow = (path) => readFileSync(path, 'utf8').replaceAll('\r\n', '\n');
-const candidate = readWorkflow(candidatePath);
-const production = readWorkflow(productionPath);
+const ci = readFileSync(ciPath, 'utf8').replaceAll('\r\n', '\n');
+const candidate = workflowJob(ci, 'image');
+const production = workflowJob(ci, 'deploy');
 const backendPackage = JSON.parse(readFileSync(backendPackagePath, 'utf8'));
 
 function workflowStep(source, name) {
@@ -30,34 +29,32 @@ function workflowJob(source, id) {
 }
 
 test('backend and frontend validation run once in parallel before image work', () => {
-  for (const [label, source, finalJobId, finalJobName] of [
-    ['pull-request', candidate, 'test-and-build', 'Test and build app image'],
-    ['production', production, 'build-and-deploy', 'Build merged image and pin Helm digest'],
-  ]) {
-    const backend = workflowJob(source, 'backend-tests');
-    const frontend = workflowJob(source, 'frontend-checks');
-    const final = workflowJob(source, finalJobId);
+  const backend = workflowJob(ci, 'backend-tests');
+  const frontend = workflowJob(ci, 'frontend-checks');
 
-    assert.match(backend, /name: Test backend/);
-    assert.match(backend, /DATABASE_URL:/);
-    assert.match(backend, /\bnpm test\b/);
-    assert.doesNotMatch(backend, /npm run check/);
+  assert.match(backend, /name: Test backend/);
+  assert.match(backend, /DATABASE_URL:/);
+  assert.match(backend, /\bnpm test\b/);
+  assert.doesNotMatch(backend, /npm run check/);
 
-    assert.match(frontend, /name: Check frontend contracts/);
-    assert.match(frontend, /\bnpm run check\b/);
-    assert.match(frontend, /node --test scripts\/immutable-image-release\.test\.mjs/);
-    assert.doesNotMatch(frontend, /DATABASE_URL:/);
+  assert.match(frontend, /name: Check frontend contracts/);
+  assert.match(frontend, /\bnpm run check\b/);
+  assert.match(frontend, /node --test scripts\/immutable-image-release\.test\.mjs/);
+  assert.doesNotMatch(frontend, /DATABASE_URL:/);
 
-    assert.match(final, new RegExp(`name: ${finalJobName}`));
-    assert.match(final, /needs: \[backend-tests, frontend-checks\]/);
+  assert.match(candidate, /name: Test and build app image/);
+  assert.match(candidate, /needs: \[backend-tests, frontend-checks\]/);
+  assert.match(production, /name: Build merged image and pin Helm digest/);
+  assert.match(production, /needs: \[changes, backend-tests, frontend-checks, image\]/);
+  for (const final of [candidate, production]) {
     assert.doesNotMatch(final, /\bnpm test\b|\bnpm run check\b|DATABASE_URL:/);
-
-    assert.equal(
-      (source.match(/\bnpm run check\b/g) ?? []).length,
-      1,
-      `${label} workflow must run the frontend gate exactly once`,
-    );
   }
+
+  assert.equal(
+    (ci.match(/\bnpm run check\b/g) ?? []).length,
+    1,
+    'CI must run the frontend gate exactly once',
+  );
 
   assert.equal(backendPackage.scripts.test, 'npm run test:prepare && npm run test:backend');
   assert.match(backendPackage.scripts['test:prepare'], /frontend run build &&/);
@@ -69,6 +66,15 @@ test('backend and frontend validation run once in parallel before image work', (
 test('pull-request CI publishes the tested ref for validation without owning production release state', () => {
   const build = workflowStep(candidate, 'Build and push image');
   const alias = workflowStep(candidate, 'Tag app image by commit');
+
+  assert.match(candidate, /^    if: github\.event_name != 'push'$/m);
+  const deployIf = production.match(/^    if: >-\n((?: {6}.*\n)+)/m)?.[1] ?? '';
+  assert.match(deployIf, /github\.event_name != 'pull_request'/);
+  for (const need of ['changes', 'backend-tests', 'frontend-checks']) {
+    assert.match(deployIf, new RegExp(`needs\\.${need}\\.result == 'success'`));
+  }
+  assert.match(deployIf, /needs\.image\.result == 'success' \|\| \(github\.event_name == 'push' && needs\.image\.result == 'skipped'\)/);
+  assert.doesNotMatch(deployIf, /failure\(\)/);
 
   assert.match(build, /uses: docker\/build-push-action@v7/);
   assert.match(build, /platforms: linux\/amd64/);
@@ -110,6 +116,9 @@ test('main builds the merged revision and deploys its immutable digest', () => {
 
   assert.match(publish, /tag: \\"\$\{DEPLOY_IMAGE_REF\}\\"/);
   assert.match(publish, /git -C prod-deploy .*push origin HEAD:prod/);
+  for (const step of [publish, workflowStep(production, 'Cut source release on Forgejo')]) {
+    assert.match(step, /if: github\.event_name != 'pull_request' && github\.ref == 'refs\/heads\/main' && !inputs\.git_ref\n/);
+  }
   assert.doesNotMatch(production, /trusted[-_ ]approver/i);
   assert.doesNotMatch(production, /gh pr comment/);
   assert.doesNotMatch(production, /requires exactly one merged-to-main PR/i);

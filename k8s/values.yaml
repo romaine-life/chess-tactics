@@ -1,4 +1,4 @@
-# Build and Deploy replaces this value with the full, digest-pinned image ref
+# CI's deploy job replaces this value with the full, digest-pinned image ref
 # built from the exact merged main revision. Non-production lanes may still
 # supply an ordinary content-fingerprint or commit tag.
 image:
@@ -9,7 +9,7 @@ image:
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
 # (backend/server.js reads these as env; deployment.yaml wires them onto the
-# container). Written by .github/workflows/build-and-deploy.yaml on every push to
+# container). Written by .forgejo/workflows/ci.yml's deploy job on every push to
 # main — the SAME commit that pins the image reference above — via
 # scripts/write-build-info.mjs (a targeted per-line replace, so these are the only
 # lines it touches). Deliberately carried in the manifest, NOT baked into the

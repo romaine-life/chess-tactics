@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Write human-facing build provenance into k8s/values.yaml's `build:` block.
-// Run by .forgejo/workflows/build-and-deploy.yaml at deploy time, alongside the
+// Run by .forgejo/workflows/ci.yml's deploy job at deploy time, alongside the
 // image-tag bump.
 //
 // Deliberately a TARGETED, block-scoped, per-line replacement — NOT a YAML

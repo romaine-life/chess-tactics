@@ -1,54 +1,110 @@
-name: Build and Deploy
+name: CI
 
+# One workflow for pull requests, merges to main and manual runs (ADR-0644). A pull request that
+# changes only Markdown skips the backend, frontend and image jobs; `docs` runs the guards that
+# read Markdown on every run. A pull request builds its validation image in `image`, a push to
+# main builds and deploys in `deploy`, and a dispatch runs both; a dispatch publishes to prod only
+# when it runs main with no `git_ref`.
 on:
+  pull_request:
   push:
     branches: [main]
-    paths:
-      - backend/**
-      - frontend/**
-      - packages/board-render/**
-      - Dockerfile
-      - .dockerignore
-      - scripts/image-fingerprint.sh
-      - scripts/immutable-image-release.test.mjs
-      - k8s/**
-      - .forgejo/workflows/**
-      - .github/workflows/**
   workflow_dispatch:
     inputs:
       git_ref:
-        description: "Git ref or commit SHA to build without publishing to prod."
+        description: "Git ref or commit SHA to build without publishing to prod. Leave blank to build the dispatch revision, which publishes to prod when it is main."
         required: false
         type: string
 
 permissions:
+  contents: read
   id-token: write
-  contents: write
-  # Resolve the merged PR (title/number/url) for the built commit — surfaced in
-  # Settings → About. See the "Resolve build metadata" step.
-  pull-requests: read
 
+# Pushes and dispatches keep Build and Deploy's shared group, so releases run one at a time. Nothing
+# is cancelled: `backend-tests` starts a PostgreSQL container, which a cancelled job leaves running.
 concurrency:
-  group: build-and-deploy
+  group: ${{ github.event_name == 'pull_request' && format('ci-{0}', github.ref) || 'build-and-deploy' }}
   cancel-in-progress: false
 
-# Skip onnxruntime-node's CUDA execution provider download in every job that runs `npm ci`. See the
-# same declaration in docker-build-check.yaml for why it is waste rather than a tradeoff: nothing in
-# this repo imports onnxruntime-node, and no runner has the GPU the EP needs.
+# Every job here runs `npm ci` in frontend/, and `onnxruntime-node`'s install script downloads its
+# CUDA execution provider from a GitHub release whenever the platform is Linux/x64 and the .so is
+# absent — which is every runner. That ~200MB fetch failed three jobs in one afternoon (ECONNRESET
+# twice, 503 once), each passing on a blind re-run, and it is pure waste: nothing in this repo
+# imports onnxruntime-node at all. It arrives as a required dependency of
+# @huggingface/transformers, whose only consumer is a browser web worker running the 'webgpu' |
+# 'wasm' backends through onnxruntime-web. Every other binary is bundled in the npm tarball, so
+# skipping leaves the package importable on CPU; the CUDA EP needs an NVIDIA GPU no runner has.
+# The env var is read ahead of npm config on purpose — the equivalent .npmrc key is an unknown npm
+# config, so it warns on every npm command in frontend/ and says it stops working in the next major.
 env:
   ONNXRUNTIME_NODE_INSTALL_CUDA: skip
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: romaine-life/pipeline-templates/actions/check-fetches@main
+      # Only Markdown and LICENSE count as documentation: docs/ also holds JSON, Python and text
+      # that the frontend tests and scripts read.
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT" != pull_request ]; then
+            echo code=true >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(git diff --name-only "$BASE...HEAD")
+          if grep -qvE '\.md$|^LICENSE$' <<< "$files"; then
+            echo code=true >> "$GITHUB_OUTPUT"
+          fi
+
+  # The frontend gate's guards that read Markdown, run alone so a Markdown-only change is still
+  # checked; they need Node and git, not node_modules.
+  docs:
+    name: Check docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.git_ref || github.sha }}
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check docs
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          node scripts/check-no-committed-media.mjs
+          node scripts/check-doc-links.mjs
+          node --test scripts/check-doc-links.node-test.mjs
+          node scripts/check-decision-log-index.mjs
+          node --test scripts/check-decision-log-index.node-test.mjs
+          node scripts/check-adr-numbers.mjs
+          node --test scripts/check-adr-numbers.node-test.mjs
+
   backend-tests:
     name: Test backend
-    if: github.event_name == 'workflow_dispatch' || vars.ARM_CLIENT_ID != ''
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ inputs.git_ref || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.git_ref || github.sha }}
           persist-credentials: false
 
       - name: Set up Node
@@ -90,7 +146,8 @@ jobs:
 
   frontend-checks:
     name: Check frontend contracts
-    if: github.event_name == 'workflow_dispatch' || vars.ARM_CLIENT_ID != ''
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     defaults:
       run:
@@ -100,7 +157,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ inputs.git_ref || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.git_ref || github.sha }}
           persist-credentials: false
 
       - name: Set up Node
@@ -124,13 +181,176 @@ jobs:
       - name: Test immutable-image release contract
         run: node --test scripts/immutable-image-release.test.mjs
 
-  build-and-deploy:
-    name: Build merged image and pin Helm digest
-    if: github.event_name == 'workflow_dispatch' || vars.ARM_CLIENT_ID != ''
+  # The validation image for pull requests and dispatches; a push to main builds its image in
+  # `deploy` instead.
+  image:
+    name: Test and build app image
+    if: github.event_name != 'push'
     needs: [backend-tests, frontend-checks]
     runs-on: ubuntu-latest
+    # PR validation images and manual prebuilds use the dev identity. Only the deploy job, on a
+    # push to main, may enter the production environment.
     enable-openid-connect: true
     environment: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+    env:
+      REGISTRY: romainecr.azurecr.io
+      IMAGE: chess-tactics
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Resolve image source ref
+        id: source
+        env:
+          INPUT_REF: ${{ inputs.git_ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+        run: |
+          set -euo pipefail
+          git fetch --force --tags origin '+refs/heads/*:refs/remotes/origin/*'
+          if [ -n "${PR_HEAD_SHA}" ]; then
+            full_sha="${PR_HEAD_SHA}"
+          elif [ -n "${INPUT_REF}" ]; then
+            if full_sha="$(git rev-parse --verify "${INPUT_REF}^{commit}" 2>/dev/null)"; then
+              :
+            elif git show-ref --verify --quiet "refs/remotes/origin/${INPUT_REF}"; then
+              full_sha="$(git rev-parse "refs/remotes/origin/${INPUT_REF}^{commit}")"
+            elif git show-ref --verify --quiet "refs/tags/${INPUT_REF}"; then
+              full_sha="$(git rev-parse "refs/tags/${INPUT_REF}^{commit}")"
+            else
+              echo "::error::Unable to resolve git_ref '${INPUT_REF}' to a commit."
+              exit 1
+            fi
+          else
+            full_sha="$(git rev-parse HEAD)"
+          fi
+          git checkout --detach "$full_sha"
+          echo "Resolved image source -> ${full_sha}"
+          echo "sha=${full_sha}" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: |
+            network=host
+            image=artifacts.home.romaine.life/dockerhub/moby/buildkit:buildx-stable-1@sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe
+
+      # Same-repo PRs and workflow dispatches publish the content fingerprint
+      # image used by Glimmung test slots. Production independently builds the
+      # merged main revision; PR images are validation artifacts, not release
+      # candidates that main must promote.
+      - uses: romaine-life/pipeline-templates/actions/azure-cli@main
+
+      - name: Azure Login
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.ARM_CLIENT_ID }}
+          tenant-id: ${{ vars.ARM_TENANT_ID }}
+          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
+
+      - name: Login to ACR
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        run: az acr login --name romainecr
+
+      - name: Compute image fingerprint
+        id: fingerprint
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/image-fingerprint.sh \
+            --image app \
+            --dockerfile Dockerfile \
+            --context . \
+            --paths 'Dockerfile .dockerignore backend frontend packages/board-render' \
+            --platform linux/amd64
+
+      - name: Check existing image tag
+        id: image
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ steps.fingerprint.outputs.proof_tag }}"
+          if az acr repository show-tags \
+              --name romainecr \
+              --repository "${IMAGE}" \
+              --query "[?@=='${tag}'] | [0]" \
+              --output tsv | grep -qx "${tag}"; then
+            echo "target_exists=true" >>"${GITHUB_OUTPUT}"
+            echo "Found reusable image ${REGISTRY}/${IMAGE}:${tag}"
+          else
+            echo "target_exists=false" >>"${GITHUB_OUTPUT}"
+            echo "No image found for app fingerprint ${{ steps.fingerprint.outputs.fingerprint }}"
+          fi
+
+      - name: Build and push image
+        if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && steps.image.outputs.target_exists != 'true'
+        uses: docker/build-push-action@v7
+        with:
+          network: host
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ steps.fingerprint.outputs.proof_tag }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app,mode=max
+
+      - name: Tag app image by commit
+        # Glimmung resolves the CI-proven image for a pushed ref through this
+        # commit-addressed alias. Production does not consume this alias.
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          canonical="${{ steps.fingerprint.outputs.proof_tag }}"
+          commit_tag="sha-${{ steps.source.outputs.sha }}"
+          az acr import --name romainecr \
+            --source "${REGISTRY}/${IMAGE}:${canonical}" \
+            --image "${IMAGE}:${commit_tag}" \
+            --force
+          echo "Tagged ${REGISTRY}/${IMAGE}:${commit_tag} -> ${canonical}"
+
+      - name: Build image without pushing (fork PRs)
+        # Fork PRs stay build-only: no ACR login, no push. This preserves the
+        # original fork-safe behavior of this workflow verbatim.
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        uses: docker/build-push-action@v7
+        with:
+          network: host
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # A push to main, or a dispatch of main with no `git_ref`, builds the revision and deploys it;
+  # any other dispatch builds and locks its ref without publishing. It waits for `image`, which on
+  # a dispatch pushes the same fingerprint tag this job locks, and which is skipped only on a push.
+  deploy:
+    name: Build merged image and pin Helm digest
+    if: >-
+      ${{ !cancelled() && github.event_name != 'pull_request'
+      && (github.event_name == 'workflow_dispatch' || vars.ARM_CLIENT_ID != '')
+      && needs.changes.result == 'success'
+      && needs.backend-tests.result == 'success'
+      && needs.frontend-checks.result == 'success'
+      && (needs.image.result == 'success' || (github.event_name == 'push' && needs.image.result == 'skipped')) }}
+    needs: [changes, backend-tests, frontend-checks, image]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+      # Resolve the merged PR (title/number/url) for the built commit — surfaced in
+      # Settings → About. See the "Resolve build metadata" step.
+      pull-requests: read
+    enable-openid-connect: true
+    environment: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && !inputs.git_ref && 'prod' || 'dev' }}
     env:
       REGISTRY: romainecr.azurecr.io
       IMAGE: chess-tactics
@@ -235,7 +455,7 @@ jobs:
             image=artifacts.home.romaine.life/dockerhub/moby/buildkit:buildx-stable-1@sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe
 
       - name: Compute release version (patch) — sourced from the prod deploy branch
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && !inputs.git_ref
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -393,7 +613,7 @@ jobs:
           echo "Built merged ref $(git rev-parse HEAD) and pinned ${image_ref}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish tag + version to the prod deploy branch
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && !inputs.git_ref
         env:
           GH_TOKEN: ${{ github.token }}
           PR_TITLE: ${{ steps.meta.outputs.pr_title }}
@@ -432,7 +652,7 @@ jobs:
           git worktree remove --force prod-deploy
 
       - name: Cut source release on Forgejo
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && !inputs.git_ref
         env:
           TOKEN: ${{ github.token }}
         run: |

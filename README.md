@@ -145,9 +145,11 @@ cd frontend
 npm run check   # node checks + vitest + tsc
 ```
 
-CI runs those backend and frontend lanes in parallel. The required image job
-depends on both, so registry or deployment work cannot begin until both pass
-without serializing or repeating the frontend gate (ADR-0255).
+CI (`.forgejo/workflows/ci.yml`, ADR-0644) runs those backend and frontend lanes in
+parallel; a pull request that changes only Markdown skips them and runs only the
+Markdown guards. The required image job depends on both, so registry or
+deployment work cannot begin until both pass without serializing or repeating
+the frontend gate (ADR-0255).
 
 ## Deploy
 
@@ -157,7 +159,7 @@ The app is deployed from `k8s/` by ArgoCD. PR CI tests the pushed ref, publishes
 its content-fingerprint image for validation, and records the `sha-<commit>`
 alias used by Glimmung test slots. PR images do not own production release state.
 
-Merging to `main` authorizes deployment. Build and Deploy checks out and tests
+Merging to `main` authorizes deployment. CI's deploy job checks out and tests
 that exact merged revision, running backend and frontend validation in parallel
 before it computes the patch version and a fingerprint over
 the complete tracked Docker inputs, explicit `linux/amd64` platform, Buildx

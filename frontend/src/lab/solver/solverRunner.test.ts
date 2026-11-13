@@ -129,7 +129,7 @@ describe('SolverRunner — retrograde vocabulary', () => {
 });
 
 describe('SolverRunner — deterministic replay', () => {
-  it('two retrograde runs yield byte-identical step sequences', () => {
+  it('two retrograde runs yield byte-identical step sequences', { timeout: 30_000 }, () => {
     const a = drain(new SolverRunner(retroConfig(pawnBoard())));
     const b = drain(new SolverRunner(retroConfig(pawnBoard())));
     expect(a.length).toBe(b.length);

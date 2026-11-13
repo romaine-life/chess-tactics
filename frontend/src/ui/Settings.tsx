@@ -128,7 +128,7 @@ declare const __BUILD_INFO__:
   | undefined;
 
 // Deploy-time provenance served by the backend from k8s env (backend/server.js
-// GET /api/build-info; populated by build-and-deploy.yaml into k8s/values.yaml's
+// GET /api/build-info; populated by ci.yml's deploy job into k8s/values.yaml's
 // `build:` block on each deploy). All fields optional — the endpoint never 500s and
 // non-prod lanes leave it empty, so About degrades to just the baked app version.
 type BuildInfoRemote = { prTitle?: string; prNumber?: string | number; prUrl?: string; commit?: string };
