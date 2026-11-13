@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:f443e7809bb4009896a792800fd7d267cefd24bf530154a786e88b7e6353ed31"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:c85bd8cdd0860fcf09837c81048a6fa981e2b56280af87f5e5b16853fbdcb1b8"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Fetch CI actions and downloads through home caches (FORGEJO-28)"
-  prNumber: "992"
-  prUrl: "https://forgejo.romaine.life/romaine-life/chess-tactics/pulls/992"
-  commit: "a1b45cec"
+  prTitle: "Pin the base image in the Dockerfile; Azure CLI, images and npm through Artifact Keeper"
+  prNumber: "993"
+  prUrl: "https://forgejo.romaine.life/romaine-life/chess-tactics/pulls/993"
+  commit: "6d958a6c"
 
 name: chess-tactics
 namespace: chess-tactics
