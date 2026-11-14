@@ -161,7 +161,7 @@ alias used by Glimmung test slots. PR images do not own production release state
 
 Merging to `main` authorizes deployment. CI's deploy job checks out and tests
 that exact merged revision, running backend and frontend validation in parallel
-before it computes the patch version and a fingerprint over
+before it bakes the release version (numbered by `actions/release-version`, PIPT-7) and computes a fingerprint over
 the complete tracked Docker inputs, explicit `linux/amd64` platform, Buildx
 version, and resolved base-image digest, then builds and pushes the production
 image when it is not already present. The workflow locks both the fingerprint

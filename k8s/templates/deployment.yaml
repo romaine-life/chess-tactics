@@ -74,10 +74,6 @@ spec:
             - name: BUILD_PR_URL
               value: {{ .prUrl | quote }}
             {{- end }}
-            {{- if .commit }}
-            - name: BUILD_COMMIT
-              value: {{ .commit | quote }}
-            {{- end }}
             {{- end }}
             {{- if .Values.adminEmails }}
             # ADR-0038: who may author/publish the global OFFICIAL campaign tier.

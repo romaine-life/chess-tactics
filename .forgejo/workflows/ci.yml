@@ -42,13 +42,26 @@ env:
 jobs:
   changes:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       code: ${{ steps.diff.outputs.code }}
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: romaine-life/pipeline-templates/actions/check-fetches@main
+      - uses: romaine-life/pipeline-templates/actions/check-versions@main
+      # One number per run for the image, About and the release (PIPT-7). A push to main, or a
+      # dispatch of main with no git_ref, reserves v0.1.N on the commit; anything else builds
+      # v0.1.N-prX.Y or v0.1.N-runY. A MINOR or MAJOR bump is a change to the prefix.
+      - id: version
+        uses: romaine-life/pipeline-templates/actions/release-version@main
+        with:
+          prefix: v0.1
+          publish: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && !inputs.git_ref }}
       # Only Markdown and LICENSE count as documentation: docs/ also holds JSON, Python and text
       # that the frontend tests and scripts read.
       - id: diff
@@ -186,7 +199,7 @@ jobs:
   image:
     name: Test and build app image
     if: github.event_name != 'push'
-    needs: [backend-tests, frontend-checks]
+    needs: [changes, backend-tests, frontend-checks]
     runs-on: ubuntu-latest
     # PR validation images and manual prebuilds use the dev identity. Only the deploy job, on a
     # push to main, may enter the production environment.
@@ -229,6 +242,27 @@ jobs:
           git checkout --detach "$full_sha"
           echo "Resolved image source -> ${full_sha}"
           echo "sha=${full_sha}" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Node
+        uses: romaine-life/pipeline-templates/actions/setup-node@main
+        with:
+          node-version: "22"
+
+      # The version is baked into this checkout's package.json files for the build only (never
+      # committed), so it is in the image (Settings → About → Build) and in the content
+      # fingerprint: a new version always yields a fresh image tag. A dispatch's image and deploy
+      # jobs bake the same version, so deploy reuses the image job's tag.
+      - name: Bake the build version
+        shell: bash
+        env:
+          VERSION: ${{ needs.changes.outputs.version }}
+        run: |
+          set -euo pipefail
+          test -n "${VERSION}"
+          for dir in frontend backend packages/board-render; do
+            (cd "${dir}" && npm version "${VERSION#v}" --no-git-tag-version --allow-same-version >/dev/null)
+          done
+          echo "Build ${VERSION}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v4
@@ -392,7 +426,6 @@ jobs:
         run: |
           set -euo pipefail
           sha="$(git rev-parse HEAD)"
-          short="$(git rev-parse --short HEAD)"
           # Resolve the merged-to-main PR whose merge commit is this revision
           # for build provenance. Deployment identity comes from the checked-out
           # content fingerprint and locked registry digest, not PR metadata.
@@ -416,7 +449,6 @@ jobs:
             fi
           fi
           {
-            echo "commit=${short}"
             echo "pr_number=${pr_number}"
             echo "pr_url=${pr_url}"
           } >> "$GITHUB_OUTPUT"
@@ -426,7 +458,7 @@ jobs:
             printf '%s\n' "$pr_title"
             echo "__META_EOF__"
           } >> "$GITHUB_OUTPUT"
-          echo "Build metadata: ${short} — ${pr_title:-(no title)} (#${pr_number:-?})" >> "$GITHUB_STEP_SUMMARY"
+          echo "Build metadata: ${pr_title:-(no title)} (#${pr_number:-?})" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Set up Node
         uses: romaine-life/pipeline-templates/actions/setup-node@main
@@ -454,39 +486,21 @@ jobs:
             network=host
             image=artifacts.home.romaine.life/dockerhub/moby/buildkit:buildx-stable-1@sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe
 
-      - name: Compute release version (patch) — sourced from the prod deploy branch
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && !inputs.git_ref
+      # The version is baked into this checkout's package.json files for the build only (never
+      # committed), so it is in the image (Settings → About → Build) and in the content
+      # fingerprint: a new version always yields a fresh image tag. A dispatch's image and deploy
+      # jobs bake the same version, so deploy reuses the image job's tag.
+      - name: Bake the build version
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.changes.outputs.version }}
         run: |
           set -euo pipefail
-          # Version-of-record lives on the long-lived `prod` DEPLOY branch (its
-          # k8s/Chart.yaml appVersion), NOT on main — so a release never commits back to
-          # main and main can stay branch-protected. Take the greater of prod's current
-          # version and main's package.json (the latter is the FLOOR for a hand MINOR/MAJOR
-          # bump made in a normal PR), then patch-bump it.
-          #
-          # Runs BEFORE the fingerprint + docker build on purpose: the bumped version is
-          # baked into the image that deploys (Settings → About → Build) AND changes the
-          # content fingerprint, so a new version always yields a fresh image tag. The bake
-          # is EPHEMERAL — written into this checkout's package.json for the build only,
-          # never committed to main. It's committed to prod (appVersion) further below.
-          git -c credential.helper='!f() { echo username=forgejo-actions; echo "password=$GH_TOKEN"; }; f' fetch --force origin '+refs/heads/prod:refs/remotes/origin/prod'
-          prod_ver="$(git show origin/prod:k8s/Chart.yaml 2>/dev/null \
-            | sed -n 's/^appVersion:[[:space:]]*"\{0,1\}\([0-9][0-9.]*\)"\{0,1\}.*/\1/p' | head -1)"
-          base_ver="$(node -p "require('./frontend/package.json').version")"
-          backend_ver="$(node -p "require('./backend/package.json').version")"
-          board_render_ver="$(node -p "require('./packages/board-render/package.json').version")"
-          floor="$(printf '%s\n%s\n%s\n%s\n' "${prod_ver:-0.0.0}" "${base_ver}" "${backend_ver}" "${board_render_ver}" | sort -V | tail -1)"
-          IFS=. read -r MA MI PA <<<"${floor}"
-          new_version="${MA}.${MI}.$((PA + 1))"
-          # Bake into THIS checkout only, for the build; not committed to main.
-          (cd frontend && npm version "${new_version}" --no-git-tag-version --allow-same-version >/dev/null)
-          (cd backend  && npm version "${new_version}" --no-git-tag-version --allow-same-version >/dev/null)
-          (cd packages/board-render && npm version "${new_version}" --no-git-tag-version --allow-same-version >/dev/null)
-          echo "APP_VERSION=${new_version}" >> "$GITHUB_ENV"
-          echo "Release v${new_version} (prod ${prod_ver:-none} / package floors ${base_ver}, ${backend_ver}, ${board_render_ver})" >> "$GITHUB_STEP_SUMMARY"
+          test -n "${VERSION}"
+          for dir in frontend backend packages/board-render; do
+            (cd "${dir}" && npm version "${VERSION#v}" --no-git-tag-version --allow-same-version >/dev/null)
+          done
+          echo "Build ${VERSION}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Compute image fingerprint
         id: fingerprint
@@ -619,7 +633,7 @@ jobs:
           PR_TITLE: ${{ steps.meta.outputs.pr_title }}
           PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
           PR_URL: ${{ steps.meta.outputs.pr_url }}
-          COMMIT: ${{ steps.meta.outputs.commit }}
+          VERSION: ${{ needs.changes.outputs.version }}
         run: |
           set -euo pipefail
           # DEPLOY STATE goes to the long-lived orphan `prod` branch, never main. prod carries
@@ -627,6 +641,7 @@ jobs:
           # through), then pin the registry-locked image digest + appVersion + build provenance, and
           # commit there. ArgoCD tracks `prod`. main takes zero bot commits → it stays protected.
           # No [skip ci] needed: this workflow triggers on main, so a prod push starts nothing.
+          APP_VERSION="${VERSION#v}"
           git config user.name "forgejo-actions[bot]"
           git config user.email "forgejo-actions@noreply.romaine.life"
           git -c credential.helper='!f() { echo username=forgejo-actions; echo "password=$GH_TOKEN"; }; f' fetch --force origin '+refs/heads/prod:refs/remotes/origin/prod'
@@ -655,9 +670,18 @@ jobs:
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && !inputs.git_ref
         env:
           TOKEN: ${{ github.token }}
+          RELEASE: ${{ needs.changes.outputs.tag }}
         run: |
           set -euo pipefail
-          jq -n --arg tag "v${APP_VERSION}" --arg sha "$GITHUB_SHA" --arg image "$DEPLOY_IMAGE_REF" \
+          test -n "${RELEASE}"
+          # A re-run of a released commit keeps its number and release.
+          code="$(curl -sS -o /dev/null -w '%{http_code}' --config - "${GITHUB_SERVER_URL}/api/v1/repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE}" <<EOF
+          header = "Authorization: token ${TOKEN}"
+          EOF
+          )"
+          if [ "${code}" = 200 ]; then echo "${RELEASE} is already released"; exit 0; fi
+          [ "${code}" = 404 ] || { echo "::error::release lookup for ${RELEASE} returned HTTP ${code}"; exit 1; }
+          jq -n --arg tag "${RELEASE}" --arg sha "$GITHUB_SHA" --arg image "$DEPLOY_IMAGE_REF" \
             '{tag_name:$tag,target_commitish:$sha,name:$tag,body:("Source release; production image: `" + $image + "`.\n\nhttps://openproject.romaine.life/wp/FORGEJO-3"),draft:false,prerelease:false}' > release.json
           curl -fsS --config - --request POST --data-binary @release.json \
             "${GITHUB_SERVER_URL}/api/v1/repos/${GITHUB_REPOSITORY}/releases" <<EOF | jq '{tag_name,html_url}'

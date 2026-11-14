@@ -9,15 +9,14 @@ import { execSync, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 // Stamp build/server provenance into the bundle so Settings → About can always
-// say exactly what's serving this page. Every build carries the app's semver
-// (package.json) — the human-facing "which release is this". In dev it also names
-// the WORKTREE + commit (the thing that would have made "you're on the wrong
-// worktree's server" a glance instead of a two-hour hunt — a server from another
-// worktree injects its own name). Prod builds run inside Docker with no .git, so
-// the commit is unknowable here (it falls back to nothing) and the deploy-time
-// PR/commit provenance is served separately at runtime by /api/build-info — see
-// backend/server.js and k8s/values.yaml's `build:` block. Always defined, so the
-// reader never hits an undefined global.
+// say exactly what's serving this page. A build carries the release version CI
+// bakes into package.json (actions/release-version, PIPT-7) — the human-facing
+// "which release is this". In dev it names the WORKTREE instead (the thing that
+// would have made "you're on the wrong worktree's server" a glance instead of a
+// two-hour hunt — a server from another worktree injects its own name). The
+// deploy-time PR provenance is served separately at runtime by /api/build-info —
+// see backend/server.js and k8s/values.yaml's `build:` block. Always defined, so
+// the reader never hits an undefined global.
 function buildInfo() {
   return {
     name: 'build-info',
@@ -27,14 +26,13 @@ function buildInfo() {
         try { return JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version || ''; }
         catch { return ''; }
       })();
-      const commit = sh('git rev-parse --short HEAD') || '(no-git)';
       const dirty = sh('git status --porcelain').length > 0;
       if (command !== 'serve') {
-        return { define: { __BUILD_INFO__: JSON.stringify({ mode: 'prod', version, commit, dirty }) } };
+        return { define: { __BUILD_INFO__: JSON.stringify({ mode: 'prod', version }) } };
       }
       const cwd = process.cwd();
       const worktree = cwd.replace(/[\\/]frontend[\\/]?$/, '').split(/[\\/]/).pop() || cwd;
-      return { define: { __BUILD_INFO__: JSON.stringify({ mode: 'dev', version, worktree, commit, dirty, startedAt: Date.now() }) } };
+      return { define: { __BUILD_INFO__: JSON.stringify({ mode: 'dev', worktree, dirty, startedAt: Date.now() }) } };
     },
   };
 }

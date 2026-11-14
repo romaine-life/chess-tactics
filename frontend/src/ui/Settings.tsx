@@ -117,21 +117,21 @@ function asset(file: string): string {
 
 // Build / server provenance, stamped by vite.config buildInfo, surfaced in About so
 // "which server/build am I actually on?" is summonable from one place — dev or prod.
-// Every build carries the app's semver. In dev it also names the WORKTREE + commit +
-// live port (a server from the wrong worktree reports its own name, so being on the
-// wrong one is a glance, not a 2-hour hunt). In prod the deploy-time PR/commit is not
-// knowable at build time (Docker has no .git) — it's fetched at runtime from
+// A build carries its release version (CI's actions/release-version). In dev it names
+// the WORKTREE + live port instead (a server from the wrong worktree reports its own
+// name, so being on the wrong one is a glance, not a 2-hour hunt). In prod the
+// deploy-time PR is not knowable at build time — it's fetched at runtime from
 // /api/build-info (see BuildInfoRemote below).
 declare const __BUILD_INFO__:
-  | { mode: 'dev'; version: string; worktree: string; commit: string; dirty: boolean; startedAt: number }
-  | { mode: 'prod'; version: string; commit: string; dirty: boolean }
+  | { mode: 'dev'; worktree: string; dirty: boolean; startedAt: number }
+  | { mode: 'prod'; version: string }
   | undefined;
 
 // Deploy-time provenance served by the backend from k8s env (backend/server.js
 // GET /api/build-info; populated by ci.yml's deploy job into k8s/values.yaml's
 // `build:` block on each deploy). All fields optional — the endpoint never 500s and
 // non-prod lanes leave it empty, so About degrades to just the baked app version.
-type BuildInfoRemote = { prTitle?: string; prNumber?: string | number; prUrl?: string; commit?: string };
+type BuildInfoRemote = { prTitle?: string; prNumber?: string | number; prUrl?: string };
 
 const BUILD_MONO: CSSProperties = { fontFamily: 'ui-monospace, monospace' };
 
@@ -313,7 +313,7 @@ export function Settings({
   }, []);
 
   // Deploy-time build provenance for About (prod only). Dev already knows its
-  // worktree + commit from the baked __BUILD_INFO__, so it skips the call. Best-
+  // worktree from the baked __BUILD_INFO__, so it skips the call. Best-
   // effort and defensively parsed: any failure (no backend, non-JSON SPA fallback,
   // empty env) just leaves About showing the baked app version.
   useEffect(() => {
@@ -400,13 +400,12 @@ export function Settings({
     buildDetail = `Local dev server · :${port} · started ${new Date(buildInfo.startedAt).toLocaleTimeString()}`;
     buildValue = (
       <span style={{ ...BUILD_MONO, fontSize: 12 }}>
-        {`${buildInfo.worktree} · ${buildInfo.commit}${buildInfo.dirty ? '*' : ''}`}
+        {`${buildInfo.worktree}${buildInfo.dirty ? '*' : ''}`}
       </span>
     );
   } else {
     const version = buildInfo?.version ? `v${buildInfo.version}` : '(unknown)';
-    const commit = (buildRemote?.commit || '').trim();
-    buildDetail = `Production build${commit ? ` · ${commit}` : ''}`;
+    buildDetail = 'Production build';
     const prTitle = (buildRemote?.prTitle || '').trim();
     const prUrl = (buildRemote?.prUrl || '').trim();
     const prNumber = buildRemote?.prNumber != null ? String(buildRemote.prNumber).trim() : '';

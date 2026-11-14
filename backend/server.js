@@ -8571,7 +8571,7 @@ app.get('/ready', async (_req, res) => {
 });
 
 // Human-facing build/deploy provenance for Settings → About. The frontend bakes
-// the app semver at build time; the deploy-time PR/commit are not knowable then
+// the release version at build time; the deploy-time PR is not knowable then
 // (the frontend builds inside Docker with no .git), so they ride as env stamped
 // into k8s/values.yaml's `build:` block by .forgejo/workflows/ci.yml's deploy job
 // on each deploy — the SAME commit that bumps the image tag. That means the labels
@@ -8584,7 +8584,6 @@ app.get('/api/build-info', (_req, res) => {
     prTitle: process.env.BUILD_PR_TITLE || '',
     prNumber: process.env.BUILD_PR_NUMBER || '',
     prUrl: process.env.BUILD_PR_URL || '',
-    commit: process.env.BUILD_COMMIT || '',
   });
 });
 

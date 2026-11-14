@@ -43,7 +43,7 @@ test('backend and frontend validation run once in parallel before image work', (
   assert.doesNotMatch(frontend, /DATABASE_URL:/);
 
   assert.match(candidate, /name: Test and build app image/);
-  assert.match(candidate, /needs: \[backend-tests, frontend-checks\]/);
+  assert.match(candidate, /needs: \[changes, backend-tests, frontend-checks\]/);
   assert.match(production, /name: Build merged image and pin Helm digest/);
   assert.match(production, /needs: \[changes, backend-tests, frontend-checks, image\]/);
   for (const final of [candidate, production]) {

@@ -5,10 +5,10 @@
 //
 // Deliberately a TARGETED, block-scoped, per-line replacement — NOT a YAML
 // round-trip — so the file's comments and formatting stay byte-for-byte identical
-// outside the four value lines (matching the existing `sed` tag-bump philosophy;
+// outside the three value lines (matching the existing `sed` tag-bump philosophy;
 // values.yaml is heavily commented Helm config we must not reflow). Values arrive
 // via env and are never shell-interpolated, so a PR title containing quotes, `&`,
-// or `:` is safe. Fails loudly if any of the four keys is missing, so a renamed
+// or `:` is safe. Fails loudly if any of the three keys is missing, so a renamed
 // block never silently no-ops.
 import { readFileSync, writeFileSync } from 'node:fs';
 
@@ -17,12 +17,11 @@ const fields = {
   prTitle: process.env.PR_TITLE ?? '',
   prNumber: process.env.PR_NUMBER ?? '',
   prUrl: process.env.PR_URL ?? '',
-  commit: process.env.COMMIT ?? '',
 };
 
 // Minimal YAML double-quoted scalar: escape backslash and quote. Sufficient for
 // the whole Unicode range in the double-quoted style (control chars aside, which
-// PR titles / short SHAs never contain).
+// PR titles never contain).
 const dq = (value) => `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 
 const lines = readFileSync(path, 'utf8').split('\n');
@@ -34,7 +33,7 @@ for (let i = 0; i < lines.length; i++) {
   // non-comment line).
   if (inBuild && /^[^\s#]/.test(lines[i])) inBuild = false;
   if (!inBuild) continue;
-  const match = /^(  )(prTitle|prNumber|prUrl|commit):/.exec(lines[i]);
+  const match = /^(  )(prTitle|prNumber|prUrl):/.exec(lines[i]);
   if (match) {
     const key = match[2];
     lines[i] = `  ${key}: ${dq(fields[key])}`;

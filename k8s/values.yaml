@@ -20,7 +20,6 @@ build:
   prTitle: "Persistent menu shell: button column stays; Settings / Campaign / Editor drill in"
   prNumber: "385"
   prUrl: "https://github.com/romaine-life/chess-tactics/pull/385"
-  commit: "a2ff9f0"
 
 name: chess-tactics
 namespace: chess-tactics
