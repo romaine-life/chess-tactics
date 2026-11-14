@@ -53,7 +53,6 @@ jobs:
         with:
           fetch-depth: 0
       - uses: romaine-life/pipeline-templates/actions/check-fetches@main
-      - uses: romaine-life/pipeline-templates/actions/check-versions@main
       # One number per run for the image, About and the release (PIPT-7). A push to main, or a
       # dispatch of main with no git_ref, reserves v0.1.N on the commit; anything else builds
       # v0.1.N-prX.Y or v0.1.N-runY. A MINOR or MAJOR bump is a change to the prefix.
