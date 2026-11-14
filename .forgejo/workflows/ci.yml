@@ -681,7 +681,7 @@ jobs:
           if [ "${code}" = 200 ]; then echo "${RELEASE} is already released"; exit 0; fi
           [ "${code}" = 404 ] || { echo "::error::release lookup for ${RELEASE} returned HTTP ${code}"; exit 1; }
           jq -n --arg tag "${RELEASE}" --arg sha "$GITHUB_SHA" --arg image "$DEPLOY_IMAGE_REF" \
-            '{tag_name:$tag,target_commitish:$sha,name:$tag,body:("Source release; production image: `" + $image + "`.\n\nhttps://openproject.romaine.life/wp/FORGEJO-3"),draft:false,prerelease:false}' > release.json
+            '{tag_name:$tag,target_commitish:$sha,name:$tag,body:("Source release; production image: `" + $image + "`.\n\nhttps://openproject.home.romaine.life/wp/FORGEJO-3"),draft:false,prerelease:false}' > release.json
           curl -fsS --config - --request POST --data-binary @release.json \
             "${GITHUB_SERVER_URL}/api/v1/repos/${GITHUB_REPOSITORY}/releases" <<EOF | jq '{tag_name,html_url}'
           header = "Authorization: token ${TOKEN}"
