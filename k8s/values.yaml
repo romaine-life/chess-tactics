@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:9492f56f8b878e0c323acfadef7dd89d073068747165b1a5cac4b8599f23cf2c"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:04bd8d948c47950ad8aaf142bec622e7e1145f8976ac195b23c39c056ac47370"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Node and OpenTofu at exact pins through Artifact Keeper, tofu providers through its mirror"
-  prNumber: "995"
-  prUrl: "https://forgejo.romaine.life/romaine-life/chess-tactics/pulls/995"
-  commit: "7a28e8db"
+  prTitle: "Move OpenProject links to openproject.home.romaine.life"
+  prNumber: "998"
+  prUrl: "https://forgejo.romaine.life/romaine-life/chess-tactics/pulls/998"
+  commit: "e19871af"
 
 name: chess-tactics
 namespace: chess-tactics
