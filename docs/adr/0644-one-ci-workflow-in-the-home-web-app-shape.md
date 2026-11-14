@@ -10,7 +10,7 @@ refines:
 
 ## Context and Problem Statement
 
-[PIPT-4](https://openproject.romaine.life/wp/PIPT-4) brings every home repo's Forgejo CI to one reference shape per kind of project. Here, pull requests ran Docker Build Check and merges ran Build and Deploy behind a `paths` filter, so each repeated the backend and frontend lanes in its own file, and a Markdown-only pull request occupied the Windows runner for the whole frontend gate.
+[PIPT-4](https://openproject.home.romaine.life/wp/PIPT-4) brings every home repo's Forgejo CI to one reference shape per kind of project. Here, pull requests ran Docker Build Check and merges ran Build and Deploy behind a `paths` filter, so each repeated the backend and frontend lanes in its own file, and a Markdown-only pull request occupied the Windows runner for the whole frontend gate.
 
 ## Decision Outcome
 

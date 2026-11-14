@@ -10,7 +10,7 @@ refines:
 
 ## Context
 
-[FORGEJO-3](https://openproject.romaine.life/wp/FORGEJO-3) moves the repository's writable home to Forgejo. GitHub remains a push mirror for cloud source readers; ArgoCD cannot reach the home-only Forgejo service.
+[FORGEJO-3](https://openproject.home.romaine.life/wp/FORGEJO-3) moves the repository's writable home to Forgejo. GitHub remains a push mirror for cloud source readers; ArgoCD cannot reach the home-only Forgejo service.
 
 ## Decision
 
