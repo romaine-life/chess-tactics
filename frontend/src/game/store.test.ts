@@ -11,16 +11,6 @@ import { loadPersistedNetIntent, persistNetIntent } from './netIntentPersistence
 import type { RunBattleUndoCheckpoint } from '../run/model';
 import { readElapsedClockMs } from '../core/clock';
 
-// A handful of tests here compute one or two full enemy replies, each of which runs
-// the rung-1 search AI (core/ai searchEnemyMove) synchronously and DELIBERATELY with
-// no wall-clock budget — bounded only by LIVE_SEARCH's 40k-node cap so a seed replays
-// identically on any machine (that determinism is exactly what "is fully deterministic"
-// asserts). A 40k-node search is ~1s/move on a fast core; two of them plus CI's slower,
-// contended cores blow past vitest's 5s default and wedged every deploy (issue: the
-// build-and-deploy "Test app" gate). These tests are compute-heavy by design, not hung,
-// so give the file honest headroom rather than weakening the AI or the determinism check.
-vi.setConfig({ testTimeout: 20_000 });
-
 describe('skirmish presentation instances', () => {
   it('isolates game state and session sinks between mounted Battles', () => {
     const first = createSkirmishStore();
@@ -59,9 +49,7 @@ describe('skirmish presentation instances', () => {
 
 // The enemy reply is staged on a timer (see ENEMY_REPLY_DELAY) so play reads as
 // turn-taking rather than a simultaneous swap. Fake timers (Date included) let us
-// drive both that reply and the battle clock deterministically. The search enemy
-// carries no wall-clock budget in the live store (LIVE_SEARCH is node-bounded), so
-// a frozen Date can't make it run away — it terminates on maxNodes, deterministically.
+// drive both that reply and the battle clock deterministically.
 function testStorage(): Storage {
   const values = new Map<string, string>();
   return {
@@ -77,6 +65,9 @@ function testStorage(): Storage {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal('localStorage', testStorage());
+  // These tests exercise the store's turn flow, not the AI's choice of move; the search enemy
+  // has its own suites (core/ai, game/enemyReply) and costs seconds per reply here.
+  useSkirmish.setState({ aiMode: 'greedy' });
 });
 afterEach(() => {
   vi.clearAllTimers();

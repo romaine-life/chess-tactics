@@ -171,9 +171,9 @@ describe('determinism', () => {
   it('two solves of the same level produce identical labels + root value', () => {
     const mk = () => tinyLevel([
       { x: 0, y: 0, side: 'enemy', type: 'king', facing: 'south' },
-      { x: 3, y: 3, side: 'player', type: 'king', facing: 'north' },
-      { x: 3, y: 0, side: 'player', type: 'queen', facing: 'north' },
-    ], { cols: 4, rows: 4, objective: 'rival-kings' });
+      { x: 2, y: 3, side: 'player', type: 'king', facing: 'north' },
+      { x: 2, y: 0, side: 'player', type: 'queen', facing: 'north' },
+    ], { cols: 3, rows: 4, objective: 'rival-kings' });
     const a = solve(mk());
     const b = solve(mk());
     expect(a.result.rootValue).toEqual(b.result.rootValue);

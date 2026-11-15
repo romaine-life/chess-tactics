@@ -9,9 +9,14 @@ const SEARCH = { maxDepth: 2, maxNodes: 20_000, epsilon: 0 } as const;
 
 // A small deterministic corpus from the real sandbox board — enough to exercise the
 // fitter without the cost of a decisive-signal run (that lives in the checkpoint).
+// Built once: every test only reads it.
+let corpusCache: ReturnType<typeof buildSelfPlayCorpus> | null = null;
 function smallCorpus() {
-  const book = generateOpeningBook(breakLineLevel, { size: 4, seedBase: 1, plies: 3, variety: 0.6 }, { search: SEARCH });
-  return buildSelfPlayCorpus(breakLineLevel, book, { search: SEARCH, maxPlies: 80 });
+  if (!corpusCache) {
+    const book = generateOpeningBook(breakLineLevel, { size: 4, seedBase: 1, plies: 3, variety: 0.6 }, { search: SEARCH });
+    corpusCache = buildSelfPlayCorpus(breakLineLevel, book, { search: SEARCH, maxPlies: 80 });
+  }
+  return corpusCache;
 }
 
 describe('texel primitives', () => {

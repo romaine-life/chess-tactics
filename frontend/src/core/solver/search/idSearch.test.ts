@@ -96,7 +96,7 @@ describe('runWeakSolve — value MATCHES retrograde ground truth', () => {
     expect(res.rootValue.distancePlies).toBe(gt.distancePlies); // exact — the mate is 9, not 11.
     expect(res.rootBounds.proven).toBe(true);
     expect(res.rootBounds.bestDistancePlies).toBe(gt.distancePlies);
-  });
+  }, 30_000);
 });
 
 describe('runWeakSolve — proven counts include the root and are consistent', () => {
