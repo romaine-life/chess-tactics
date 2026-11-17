@@ -1,26 +1,22 @@
-# CI's deploy job replaces this value with the full, digest-pinned image ref
-# built from the exact merged main revision. Non-production lanes may still
-# supply an ordinary content-fingerprint or commit tag.
+# The released image by tag and digest, rewritten on main by the web-app suite's pin PR for each
+# release (ADR-0645); Argo CD deploys main. Non-production lanes may still supply an ordinary
+# tag.
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "app-d8b760f7bd2277a16d792ec4c39d158d2482445670540d88a3ac2626789318aa"
+  tag: "romainecr.azurecr.io/chess-tactics:app-a7686a41b5f2fa751c9657b43815f88f4e51a176c77f96b1b62e3c75ce604517@sha256:d97b3c277f3d8e695098fbad0f3d1cda7b275f9b7cae6a56a3495b28cc68bff9"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
 # (backend/server.js reads these as env; deployment.yaml wires them onto the
-# container). Written by .forgejo/workflows/ci.yml's deploy job on every push to
-# main — the SAME commit that pins the image reference above — via
-# scripts/write-build-info.mjs (a targeted per-line replace, so these are the only
-# lines it touches). Deliberately carried in the manifest, NOT baked into the
-# image: the deployed ref is content-addressed and can be reused, so baking these
-# in would let a reused image show a stale PR. Empty by
-# default; non-main lanes (test slots / dev) show just the baked app version.
+# container). The same pin PR that pins the image writes them: the release's commit
+# and the PR it merged (pipeline-templates pinFields). Non-main lanes (test slots /
+# dev) show just the baked app version.
 build:
-  prTitle: "Persistent menu shell: button column stays; Settings / Campaign / Editor drill in"
-  prNumber: "385"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/385"
-  commit: "a2ff9f0"
+  prTitle: "Make slow frontend tests cheap so a busy runner doesn't time them out"
+  prNumber: "999"
+  prUrl: "https://forgejo.romaine.life/romaine-life/chess-tactics/pulls/999"
+  commit: "08be7858"
 
 name: chess-tactics
 namespace: chess-tactics

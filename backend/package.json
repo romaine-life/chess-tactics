@@ -10,6 +10,7 @@
     "schema:check-history": "node scripts/check-schema-migration-history.mjs",
     "schema:migrate": "node scripts/run-schema-migrations.mjs",
     "units:prune-unused": "node scripts/prune-unused-unit-assets.mjs",
+    "lint": "node --check server.js && node --check supervisor.js && node --check self-check.js",
     "test": "npm run test:prepare && npm run test:backend",
     "test:prepare": "npm --prefix ../frontend ci && npm --prefix ../frontend run build && npm --prefix ../packages/board-render run build && npm --prefix ../frontend run build:trainer",
     "test:backend": "npm run test:schema-mirror && npm run test:bgm && npm run test:thumbnail && npm run test:live-media && npm run test:dev-auth && npm run test:oidc && npm run test:pr-gate && node --check server.js && node --check supervisor.js && node --check readiness.test.js && node --test readiness.test.js && node --check smoke-test.js && node --check netplay-smoke-test.js && node --check solve-worker-smoke-test.js && node --check train-worker.mjs && node --check solve-worker.mjs && node --check scripts/prune-unused-unit-assets.mjs && node --check train/restart-thread.mjs && node --check train/db.mjs && node --check train/k8s.mjs && node --check solve/k8s.mjs && node check-sse-route.js && node netplay-smoke-test.js && node solve-worker-smoke-test.js && node smoke-test.js",

@@ -145,27 +145,19 @@ cd frontend
 npm run check   # node checks + vitest + tsc
 ```
 
-CI (`.forgejo/workflows/ci.yml`, ADR-0644) runs those backend and frontend lanes in
-parallel; a pull request that changes only Markdown skips them and runs only the
-Markdown guards. The required image job depends on both, so registry or
-deployment work cannot begin until both pass without serializing or repeating
-the frontend gate (ADR-0255).
+CI comes from pipeline-templates' suites (its `fleet.json` entry, ADR-0645): on a pull
+request the web-app suite runs each package's `npm run lint` and `npm test` (the backend
+against a PostgreSQL service it starts) and builds the image and runs its `--self-test`,
+each only when its inputs changed; a pull request that changes only Markdown runs only
+the Markdown guards (`.forgejo/workflows/checks.yml`).
 
 ## Deploy
 
-Forgejo owns CI and releases through `.forgejo/workflows` ([FORGEJO-3](https://openproject.home.romaine.life/wp/FORGEJO-3), ADR-0643). Azure retains the existing app registration through Forgejo OIDC. The source release identifies the immutable ACR image; this application has no publish script or local publishing command.
+Forgejo owns CI and releases through pipeline-templates' suites ([PIPT-12](https://openproject.home.romaine.life/wp/PIPT-12), ADR-0645). Azure retains the existing app registration through Forgejo OIDC; this application has no publish script or local publishing command.
 
-The app is deployed from `k8s/` by ArgoCD. PR CI tests the pushed ref, publishes
-its content-fingerprint image for validation, and records the `sha-<commit>`
-alias used by Glimmung test slots. PR images do not own production release state.
-
-Merging to `main` authorizes deployment. CI's deploy job checks out and tests
-that exact merged revision, running backend and frontend validation in parallel
-before it computes the patch version and a fingerprint over
-the complete tracked Docker inputs, explicit `linux/amd64` platform, Buildx
-version, and resolved base-image digest, then builds and pushes the production
-image when it is not already present. The workflow locks both the fingerprint
-tag and manifest against overwrite and deletion, then writes the full
-`romainecr.azurecr.io/chess-tactics@sha256:...` reference to the Argo-tracked
-`prod` branch. No pull-request comment or second release gesture is required
+The app is deployed from `k8s/` on `main` by ArgoCD. Pull requests build and self-test
+the image but publish nothing. A merge that changes the application releases the next
+`v0.1.N`: the web-app suite pushes the image to ACR and opens a pin PR on `main` writing
+its tag and digest and the build provenance (the release commit and the PR it merged)
+into `k8s/values.yaml`, which merge-queue lands. No second release gesture is required
 after merge.

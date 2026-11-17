@@ -32,7 +32,7 @@ COPY packages/board-render/package*.json packages/board-render/
 COPY --from=frontend-build /app/packages/board-render/dist packages/board-render/dist
 COPY backend/package*.json backend/
 ARG NPM_CONFIG_REGISTRY=https://artifacts.home.romaine.life/npm/npm/
-RUN cd backend && npm install --omit=dev
+RUN cd backend && npm ci --omit=dev
 
 COPY backend/ backend/
 COPY --from=frontend-build /app/frontend/dist frontend/dist
@@ -54,4 +54,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1))"
 
-CMD ["node", "backend/supervisor.js"]
+# An entrypoint, so the image check's `--self-test` reaches the supervisor.
+ENTRYPOINT ["node", "backend/supervisor.js"]

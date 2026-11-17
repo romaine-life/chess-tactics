@@ -1,5 +1,5 @@
 ---
-status: "accepted as PIPT-4's decision; this record of how chess-tactics applies it has not been reviewed by Nelson"
+status: "superseded by ADR-0645"
 date: 2026-11-13
 deciders: "Nelson decided in PIPT-4 (2026-11-13) that every repo's CI converges on the pipeline-templates reference shape; Claude applied it here and wrote this record"
 refines:

@@ -1,8 +1,6 @@
 # Remote state in Azure Storage (backend config passed by CI). Authentication
-# uses GitHub OIDC through this repo's app service principal. Provider versions
-# and the lockfile are injected by the shared pipeline template
-# (tofu-plan-apply-template.yml downloads tofu/provider/shared-providers.tf from
-# infra-bootstrap), so they are intentionally not declared here.
+# uses OIDC through this repo's app service principal. The providers and their
+# versions are pinned in versions.tf and .terraform.lock.hcl.
 
 terraform {
   backend "azurerm" {

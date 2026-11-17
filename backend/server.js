@@ -8571,14 +8571,10 @@ app.get('/ready', async (_req, res) => {
 });
 
 // Human-facing build/deploy provenance for Settings → About. The frontend bakes
-// the app semver at build time; the deploy-time PR/commit are not knowable then
-// (the frontend builds inside Docker with no .git), so they ride as env stamped
-// into k8s/values.yaml's `build:` block by .forgejo/workflows/ci.yml's deploy job
-// on each deploy — the SAME commit that bumps the image tag. That means the labels
-// stay correct even when a content-identical rebuild is skipped and the old image
-// is reused (the image bytes never carry this — only the k8s manifest does). Pure
-// chrome: never 500s; unset fields degrade to '' and the client shows just the
-// baked version.
+// the app semver at build time; the release's PR/commit ride as env from
+// k8s/values.yaml's `build:` block, which the release's pin PR writes alongside the
+// image (pipeline-templates pinFields, ADR-0645). Pure chrome: never 500s; unset
+// fields degrade to '' and the client shows just the baked version.
 app.get('/api/build-info', (_req, res) => {
   res.status(200).json({
     prTitle: process.env.BUILD_PR_TITLE || '',

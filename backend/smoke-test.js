@@ -324,6 +324,9 @@ const sharedBackendEnv = {
   ADMIN_EMAILS: 'player@example.com,second-admin@example.com',
   UNIT_ASSET_STORAGE_DIR: path.join(hotRoot, 'unit-assets'),
   LIVE_MEDIA_STORAGE_DIR: liveMediaStorageDir,
+  // This file wipes its database on startup and refuses production above, so whatever host
+  // it is on (a CI job service is not loopback), it is a disposable database like a test slot's.
+  LIVE_MEDIA_ISOLATED_DATABASE: 'test-slot',
 };
 
 const child = spawn(process.execPath, ['supervisor.js'], {

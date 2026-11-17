@@ -27,6 +27,10 @@ permissions:
   id-token: write
   contents: read
 
+concurrency:
+  group: sync-bgm-metadata-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   sync:
     runs-on: ubuntu-latest

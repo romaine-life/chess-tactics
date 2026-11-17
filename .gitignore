@@ -14,6 +14,7 @@ npm-debug.log
 # by the shared pipeline (see tofu/provider.tf), so neither is committed here.
 .terraform/
 .terraform.lock.hcl
+!tofu/.terraform.lock.hcl
 
 # Local Claude Code tooling: worktrees, launch config, and a scratch dir used
 # for headless screenshot capture (Playwright + Chromium). Never committed —
