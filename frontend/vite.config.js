@@ -501,7 +501,9 @@ export default defineConfig(async ({ command }) => {
   const devctlPort = Number(process.env.DEVCTL_FRONTEND_PORT || process.env.PORT || 0);
   return {
     plugins: [react(), buildInfo(), devctlHealth(), ...devApiPlugins],
-    test: { setupFiles: ['./src/test/setupDrawableCatalog.ts'] },
+    // CPU-bound tests (the enemy's search, texel tuning) finish in a second or two alone but
+    // pass vitest's 5s default when a shared CI runner is busy; 30s keeps them deterministic.
+    test: { setupFiles: ['./src/test/setupDrawableCatalog.ts'], testTimeout: 30_000 },
     // `/assets/*` belongs exclusively to backend-resolved live media. Keep
     // executable Vite chunks in a disjoint namespace so production code can
     // never be mistaken for a semantic media slot.
