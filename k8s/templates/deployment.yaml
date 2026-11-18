@@ -58,10 +58,10 @@ spec:
             # where the warm-lane hostname guards do not run.
             - name: PUBLIC_ORIGIN
               value: {{ printf "https://%s" (required "hostname is required" .Values.hostname) | quote }}
-            {{- with .Values.build }}
+            {{- with .Values.release }}
             # Human-facing build provenance for Settings → About (/api/build-info).
-            # Written into values.yaml by ci.yml's deploy job at deploy time; empty
-            # on non-main lanes, where each `if` below renders nothing.
+            # Written into values.yaml by the release's pin PR; empty on non-main
+            # lanes, where each `if` below renders nothing.
             {{- if .prTitle }}
             - name: BUILD_PR_TITLE
               value: {{ .prTitle | quote }}

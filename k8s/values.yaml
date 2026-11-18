@@ -4,18 +4,16 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics:v0.1.540@sha256:00a15ba0732f5d7da1f54f\
-    dbf21762c1c94b4b9b35a55bbcd1516b0803bfa60c"
+  tag: "romainecr.azurecr.io/chess-tactics:v0.1.540@sha256:00a15ba0732f5d7da1f54fdbf21762c1c94b4b9b35a55bbcd1516b0803bfa60c"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
 # (backend/server.js reads these as env; deployment.yaml wires them onto the
-# container). The same pin PR that pins the image writes them: the release's commit
-# and the PR it merged (pipeline-templates pinFields). Non-main lanes (test slots /
+# container). The same pin PR that pins the image writes them, each named for what
+# it takes: the release's commit and the PR it merged. Non-main lanes (test slots /
 # dev) show just the baked app version.
-build:
-  prTitle: "CI from the suites; Argo CD deploys main through pin PRs; the image
-    tests itself"
+release:
+  prTitle: "CI from the suites; Argo CD deploys main through pin PRs; the image tests itself"
   prNumber: "1000"
   prUrl: "https://forgejo.romaine.life/romaine-life/chess-tactics/pulls/1000"
   commit: "57c73e8cd1bdaa9c39c83d122f7ccb25b61ab7e7"
