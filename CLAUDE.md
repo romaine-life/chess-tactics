@@ -224,6 +224,15 @@ and don't tell the user screenshots are impossible. Use the helper below.
    Output defaults to `frontend/tmp-shots/shot.png` (gitignored). **Default to showing the
    small PNG inline — never substitute a link + description for the pixels.**
 
+   **The PNG is for Nelson's eyes, not proof to you.** Judging a capture by eye ("the board
+   fills", "no checkerboard") has been wrong every time it was tried, and a two-hour preview-box
+   hunt ended only when a number was read. Prove a visual claim by measuring the live page
+   yourself through `puppeteer-core`: `getBoundingClientRect`, `getComputedStyle`, element
+   stacks, and canvas pixels via `drawImage` + `getImageData` (alpha, per-corner RGBA). Measure
+   the state that actually mounts the code you changed — `LevelPreviewColumn` exists only once a
+   level is selected — and when a symptom survives a fix, measure again before forming a
+   new theory. What only an eye can settle (does it look right) is Nelson's call.
+
    Persistent title-bar control changes additionally run the rendered geometry gate
    on the exact live route and every affected responsive width:
    ```

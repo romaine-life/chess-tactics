@@ -184,3 +184,12 @@ search for before constructing a control or repeated surface.
 buttons, hand-built Studio card roots, hand-built segmented groups, positional
 row spacing, and copied generic JSON request helpers. Its node tests and the
 primitive render tests run in the normal frontend `check` command.
+
+A reported inconsistency between surfaces ("the menu buttons no longer match Settings") is
+fixed here, never with a per-surface pixel nudge, which re-breaks at another viewport: find
+the one shared rule that should place both, delete the per-surface fork, fold any needed fix
+into that rule, add a guard test that fails if a fork returns, and record the invariant as an
+ADR. The settings-twin rail is the founding case
+([ADR-0062](adr/0062-settings-twin-rail-is-placed-by-one-shared-rule.md), guarded by
+`mmLive.test.ts`; then [ADR-0063](adr/0063-rail-tab-continuity-is-data-indexed-not-dom-positioned.md),
+`settingsRailContinuity.test.ts`).
