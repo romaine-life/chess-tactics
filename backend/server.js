@@ -8,6 +8,7 @@ const { Pool } = require('pg');
 // from a temp dir by supervisor.js, so sibling backend assets must resolve from
 // the baked backend dir instead of this process' __dirname.
 const bakedBackendDir = process.env.BAKED_BACKEND_DIR || __dirname;
+const { log, outside, errorText } = require(path.join(bakedBackendDir, 'log'));
 const { createDevGrantSessionReader } = require(path.join(bakedBackendDir, 'devAuthGrant'));
 const { createOIDCSessionManager } = require(path.join(bakedBackendDir, 'oidcAuth'));
 const { createByteReadBudget } = require(path.join(bakedBackendDir, 'liveMediaReadBudget'));
@@ -159,7 +160,7 @@ let serverRender = null;
 try {
   serverRender = require('@chess-tactics/board-render');
 } catch (error) {
-  console.error('board-render package unavailable; level thumbnails will return 503:', error && error.message);
+  log.error('board-render package unavailable; level thumbnails will return 503', { error: errorText(error, { stack: false }) });
 }
 const withServerRenderCriticalSection = createRenderCriticalSection();
 const LEVEL_THUMBNAIL_RENDER_CONCURRENCY = 2;
@@ -169,7 +170,7 @@ const withLevelThumbnailRenderSlot = createAsyncWorkLimiter(LEVEL_THUMBNAIL_REND
 // or catalog revision actually moved.
 const thumbnailManifestMemo = createRevisionMemo({
   onBackgroundError: (error, key) => {
-    console.error(`thumbnail manifest refresh failed (${key}):`, error && error.message);
+    log.error('thumbnail manifest refresh failed', { key, error: errorText(error, { stack: false }) });
   },
 });
 const backgroundVersionUploadsInFlight = new Set();
@@ -184,7 +185,7 @@ app.use((req, res, next) => {
   res.on('finish', () => {
     const elapsedMs = Number((process.hrtime.bigint() - startedAt) / 1000000n);
     if (elapsedMs >= SLOW_REQUEST_LOG_MS) {
-      console.warn(`slow request: ${req.method} ${req.path} ${res.statusCode} ${elapsedMs}ms`);
+      log.warn('slow request', { method: req.method, path: outside(req.path), status: res.statusCode, ms: elapsedMs });
     }
   });
   next();
@@ -328,7 +329,7 @@ function createInMemoryAuthSessionStore() {
 const useTestAuthSessionStore = process.env.NODE_ENV === 'test'
   && process.env.AUTH_SESSION_TEST_STORE === 'memory';
 if (useTestAuthSessionStore) {
-  console.warn('auth sessions: in-memory test store active (NODE_ENV=test + AUTH_SESSION_TEST_STORE=memory)');
+  log.warn('auth sessions: in-memory test store active', { node_env: 'test', auth_session_test_store: 'memory' });
 }
 
 const oidcSessions = createOIDCSessionManager({
@@ -366,7 +367,7 @@ if (process.env.NODE_ENV === 'test' && process.env.LOBBY_TEST_LEVEL_METADATA) {
     const parsed = JSON.parse(process.env.LOBBY_TEST_LEVEL_METADATA);
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) lobbyTestLevelMetadata = parsed;
   } catch (error) {
-    console.warn('LOBBY_TEST_LEVEL_METADATA is invalid JSON and will be ignored:', error.message);
+    log.warn('LOBBY_TEST_LEVEL_METADATA is invalid JSON and will be ignored', { error: errorText(error, { stack: false }) });
   }
 }
 // SSE subscribers. Global list channel (lobby list changed) and per-lobby game
@@ -390,19 +391,19 @@ const bgmSignals = {
 
 function recordBgmSignal(event, details = {}) {
   if (event === 'catalog_refresh_success') {
-    console.info(`bgm catalog refresh success tracks=${details.trackCount} latency_ms=${details.durationMs}`);
+    log.info('bgm catalog refresh success', { tracks: details.trackCount, latency_ms: details.durationMs });
     return;
   }
   if (event === 'catalog_refresh_failure') {
-    console.warn(`bgm catalog refresh failure code=${details.errorCode} last_good=${details.usedLastGood ? 1 : 0} latency_ms=${details.durationMs}`);
+    log.warn('bgm catalog refresh failure', { code: details.errorCode, last_good: details.usedLastGood ? 1 : 0, latency_ms: details.durationMs });
     return;
   }
   if (event === 'delegation_key_refresh_success') {
-    console.info(`bgm delegation-key refresh success latency_ms=${details.durationMs}`);
+    log.info('bgm delegation-key refresh success', { latency_ms: details.durationMs });
     return;
   }
   if (event === 'delegation_key_refresh_failure') {
-    console.warn(`bgm delegation-key refresh failure code=${details.errorCode} latency_ms=${details.durationMs}`);
+    log.warn('bgm delegation-key refresh failure', { code: details.errorCode, latency_ms: details.durationMs });
     return;
   }
   if (event === 'capability_success') {
@@ -422,11 +423,12 @@ function recordBgmSignal(event, details = {}) {
   const averageLatency = totalCapabilities
     ? Math.round(bgmSignals.capabilityLatencyMs / totalCapabilities)
     : 0;
-  console.info(
-    `bgm capability counters issued=${bgmSignals.capabilitySuccess}`
-    + ` failed=${bgmSignals.capabilityFailure} unknown=${bgmSignals.unknownTrack}`
-    + ` avg_latency_ms=${averageLatency}`,
-  );
+  log.info('bgm capability counters', {
+    issued: bgmSignals.capabilitySuccess,
+    failed: bgmSignals.capabilityFailure,
+    unknown: bgmSignals.unknownTrack,
+    avg_latency_ms: averageLatency,
+  });
 }
 
 function createTestBgmStorage() {
@@ -467,7 +469,7 @@ function createConfiguredBgmDelivery() {
     const code = String(error && (error.code || error.name) || 'configuration_error')
       .replace(/[^a-zA-Z0-9_.-]/g, '_')
       .slice(0, 80);
-    console.warn(`bgm configuration unavailable code=${code}`);
+    log.warn('bgm configuration unavailable', { code });
     return createBgmDelivery({
       listTracks: async () => [],
       signTrack: async () => { throw new Error('bgm_not_configured'); },
@@ -748,7 +750,7 @@ const SCHEMA_MIGRATION_MODES = new Set(['check', 'auto', 'off']);
 function schemaMigrationModeFromEnv(raw) {
   const value = String(raw || 'check').trim().toLowerCase();
   if (SCHEMA_MIGRATION_MODES.has(value)) return value;
-  console.warn(`invalid SCHEMA_MIGRATIONS="${raw}"; using read-only check mode`);
+  log.warn('invalid SCHEMA_MIGRATIONS; using read-only check mode', { value: raw });
   return 'check';
 }
 
@@ -7571,7 +7573,7 @@ async function ensureDbReady() {
 }
 
 function dbUnavailable(res, message, error, code) {
-  console.error(`${message}:`, error);
+  log.error(message, { code: error && error.code, error: errorText(error) });
   const schemaError = error && (
     error.code === 'schema_migration_required'
     || error.code === 'schema_migration_history_invalid'
@@ -8219,7 +8221,7 @@ async function requireUser(req, res) {
   try {
     session = await readSession(req, res);
   } catch (error) {
-    console.error('auth session check failed:', error);
+    log.error('auth session check failed', { error: errorText(error) });
     res.status(error.statusCode || 502).json({ error: 'auth_unavailable' });
     return null;
   }
@@ -8520,7 +8522,7 @@ app.put('/api/studio/run-card-row-sizing/defaults', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.status(200).json(sizing);
   } catch (error) {
-    console.error('run card row sizing save failed:', error);
+    log.error('run card row sizing save failed', { error: errorText(error) });
     res.status(error.statusCode || 500).json({
       error: error.statusCode === 400 ? 'invalid_sizing' : 'sizing_save_failed',
       details: error.message,
@@ -8546,7 +8548,7 @@ app.put('/api/studio/run-card-gold-tier-divider/defaults', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.status(200).json(geometry);
   } catch (error) {
-    console.error('run card gold-tier divider geometry save failed:', error);
+    log.error('run card gold-tier divider geometry save failed', { error: errorText(error) });
     res.status(error.statusCode || 500).json({
       error: error.statusCode === 400 ? 'invalid_geometry' : 'geometry_save_failed',
       details: error.message,
@@ -8565,7 +8567,7 @@ app.get('/ready', async (_req, res) => {
     const readiness = await liveMediaReadiness();
     res.status(200).json({ status: 'ready', ...readiness });
   } catch (error) {
-    console.error('application readiness check failed:', error && error.message);
+    log.error('application readiness check failed', { error: errorText(error, { stack: false }) });
     res.status(503).json({ error: 'application_not_ready' });
   }
 });
@@ -8664,7 +8666,7 @@ async function withDisplayName(user) {
     const displayName = await dbGetDisplayName(user.email);
     if (displayName) return { ...user, name: displayName };
   } catch (error) {
-    console.warn('display-name lookup failed; using upstream name:', error.message);
+    log.warn('display-name lookup failed; using upstream name', { error: errorText(error, { stack: false }) });
   }
   return user;
 }
@@ -8674,7 +8676,7 @@ app.get('/api/auth/me', async (req, res) => {
     const session = await readSession(req, res);
     res.status(200).json(await withDisplayName(publicUser(session)));
   } catch (error) {
-    console.error('auth session check failed:', error);
+    log.error('auth session check failed', { error: errorText(error) });
     res.status(502).json({ signed_in: false, error: 'auth_unavailable' });
   }
 });
@@ -8828,7 +8830,7 @@ async function canonicalLobbyLevelMetadata(levelId) {
     if (!isObjectRecord(level)) return null;
     return { timed: Boolean(level.timeControl), level };
   } catch (error) {
-    console.warn('canonical lobby level lookup failed:', error.message);
+    log.warn('canonical lobby level lookup failed', { error: errorText(error, { stack: false }) });
     return null;
   }
 }
@@ -9628,7 +9630,7 @@ app.get('/api/auth/sign-in', async (req, res) => {
     });
     res.redirect(302, authorizeURL);
   } catch (error) {
-    console.error('OIDC sign-in start failed:', error);
+    log.error('OIDC sign-in start failed', { error: errorText(error) });
     res.status(error.statusCode || 502).send('sign-in unavailable');
   }
 });
@@ -9642,7 +9644,7 @@ app.get('/api/auth/callback', async (req, res) => {
     }, res);
     res.redirect(302, returnTo);
   } catch (error) {
-    console.error('OIDC callback failed:', error);
+    log.error('OIDC callback failed', { error: errorText(error) });
     res.status(error.statusCode || 502).send('sign-in failed');
   }
 });
@@ -9656,7 +9658,7 @@ app.post('/api/auth/sign-out', async (req, res) => {
   } catch (error) {
     // The session is ended locally regardless; upstream revocation is best-effort and its failure
     // must not answer an error to someone who asked to be signed out.
-    console.warn('sign-out revocation failed:', error.message);
+    log.warn('sign-out revocation failed', { error: errorText(error, { stack: false }) });
   }
   // The local dev lane signs in with a mock cookie rather than a real session, so signing out has
   // to clear that too or a developer can never reach the signed-out state on their own machine.
@@ -12279,7 +12281,7 @@ function respondBackgroundVersionError(res, error, operation) {
   }
   const schemaViolation = backgroundStoreSchemaViolation(error);
   if (schemaViolation) {
-    console.error(`background version ${operation} violated a database schema contract:`, error);
+    log.error('background version violated a database schema contract', { operation, error: errorText(error) });
     res.status(500).json({
       error: 'background_version_schema_contract_violation',
       details: {
@@ -13680,7 +13682,7 @@ app.post('/api/editor-documents/:documentId/save', async (req, res) => {
       // work failed merely because its disposable list derivative could not be
       // prepared; the read-through route will retry generation on the next read.
       thumbnailReady = false;
-      console.error('saved level thumbnail preparation failed:', thumbnailError && thumbnailError.message);
+      log.error('saved level thumbnail preparation failed', { error: errorText(thumbnailError, { stack: false }) });
     }
     res.status(200).json({
       document: publicEditorDocument(saved.row),
@@ -16403,10 +16405,7 @@ app.post('/api/editor-documents/:documentId/generation-attempts/:attemptId/archi
       ensureLevelThumbnailDerivative,
     );
     if (thumbnail.error) {
-      console.error(
-        'archived generation attempt thumbnail preparation failed:',
-        thumbnail.error && thumbnail.error.message,
-      );
+      log.error('archived generation attempt thumbnail preparation failed', { error: errorText(thumbnail.error, { stack: false }) });
     }
     res.status(200).json({
       attempt: publicGenerationAttempt(result.row),
@@ -16529,7 +16528,7 @@ app.post('/api/editor-documents/:documentId/background-versions/copy', async (re
       // and the caller selects the artwork through the profile-free selection shape.
       moveHighlightProfile = resigned.error ? null : (resigned.value ?? resigned);
       if (resigned.error) {
-        console.warn('background artwork copy dropped its move-highlight profile:', resigned.error);
+        log.warn('background artwork copy dropped its move-highlight profile', { error: errorText(resigned.error, { stack: false }) });
       }
     }
     res.status(201).json({
@@ -17058,7 +17057,7 @@ app.post('/api/train-runs', async (req, res) => {
     }
   } catch (error) {
     try { await dbSetTrainRunJob(id, null, 'error'); } catch { /* best effort */ }
-    console.error('train job launch failed', error);
+    log.error('train job launch failed', { id, error: errorText(error) });
     res.status(502).json({ error: 'train_launch_failed', id, details: String((error && error.message) || error) });
   }
 });
@@ -17093,7 +17092,7 @@ app.delete('/api/train-runs/:id', async (req, res) => {
     const run = await dbGetTrainRun(user.email, req.params.id);
     if (run && run.job_name) {
       try { const k8s = await import('./train/k8s.mjs'); await k8s.deleteTrainerJob(run.job_name); }
-      catch (e) { console.warn('trainer job delete failed', e && e.message); }
+      catch (e) { log.warn('trainer job delete failed', { job: run.job_name, error: errorText(e, { stack: false }) }); }
     }
     await dbDeleteTrainRun(user.email, req.params.id);
     res.status(200).json({ ok: true });
@@ -17133,7 +17132,7 @@ app.post('/api/solve-runs', async (req, res) => {
     }
   } catch (error) {
     try { await dbSetSolveRunJob(id, null, 'error'); } catch { /* best effort */ }
-    console.error('solve job launch failed', error);
+    log.error('solve job launch failed', { id, error: errorText(error) });
     res.status(502).json({ error: 'solve_launch_failed', id, details: String((error && error.message) || error) });
   }
 });
@@ -17170,7 +17169,7 @@ app.delete('/api/solve-runs/:id', async (req, res) => {
     const run = await dbGetSolveRun(user.email, req.params.id);
     if (run && run.job_name) {
       try { const k8s = await import('./solve/k8s.mjs'); await k8s.deleteSolverJob(run.job_name); }
-      catch (e) { console.warn('solver job delete failed', e && e.message); }
+      catch (e) { log.warn('solver job delete failed', { job: run.job_name, error: errorText(e, { stack: false }) }); }
     }
     await dbCancelSolveRun(user.email, req.params.id);
     res.status(200).json({ ok: true });
@@ -17438,7 +17437,7 @@ app.put('/api/official-campaigns/:id', async (req, res) => {
     const thumbnailUrls = {};
     thumbnailResults.forEach((thumbnailResult, index) => {
       if (thumbnailResult.status === 'rejected') {
-        console.error('saved official level thumbnail preparation failed:', thumbnailResult.reason && thumbnailResult.reason.message);
+        log.error('saved official level thumbnail preparation failed', { error: errorText(thumbnailResult.reason, { stack: false }) });
         return;
       }
       const levelId = publishedLevels[index][0];
@@ -20221,7 +20220,7 @@ async function seedLiveMediaCatalogFromLiveSource() {
     client.release();
   }
   invalidateMediaCatalogCache();
-  console.log(`seeded ${catalog.slots.length} live media slots into ephemeral catalog; objects remain lazy`);
+  log.info('seeded live media slots into ephemeral catalog; objects remain lazy', { slots: catalog.slots.length });
 }
 
 function validateMediaVersionInput(raw) {
@@ -22064,7 +22063,7 @@ app.get(/^\/api\/campaign-workspace\/level-thumbnails\/([^/]{1,80})\/([0-9a-f]{6
     }
     await serveImmutableMedia(req, res, record, { privateRead: true });
   } catch (error) {
-    console.error('private level thumbnail read failed:', error && error.message);
+    log.error('private level thumbnail read failed', { error: errorText(error, { stack: false }) });
     res.setHeader('Cache-Control', 'private, no-store');
     res.status(503).json({ error: 'thumbnail_unavailable' });
   }
@@ -22080,7 +22079,7 @@ app.get(/^\/api\/media\/([0-9a-f]{64})$/, async (req, res) => {
     if (!record) { res.setHeader('Cache-Control', 'no-store'); res.status(404).send('not found'); return; }
     await serveImmutableMedia(req, res, record);
   } catch (error) {
-    console.error('public immutable media read failed:', error && error.message);
+    log.error('public immutable media read failed', { error: errorText(error, { stack: false }) });
     res.setHeader('Cache-Control', 'no-store');
     res.status(503).json({ error: 'media_unavailable' });
   }
@@ -22095,7 +22094,7 @@ app.get(/^\/api\/admin\/media\/([0-9a-f]{64})$/, async (req, res) => {
     if (!record) { res.setHeader('Cache-Control', 'private, no-store'); res.status(404).send('not found'); return; }
     await serveImmutableMedia(req, res, record, { privateRead: true });
   } catch (error) {
-    console.error('admin immutable media read failed:', error && error.message);
+    log.error('admin immutable media read failed', { error: errorText(error, { stack: false }) });
     res.setHeader('Cache-Control', 'private, no-store');
     res.status(503).json({ error: 'media_unavailable' });
   }
@@ -22446,7 +22445,7 @@ async function seedUnitCatalogFromLiveSource() {
     client.release();
   }
   invalidateUnitCatalogCache();
-  console.log(`seeded ${accepted.length} live unit families into ephemeral storage`);
+  log.info('seeded live unit families into ephemeral storage', { families: accepted.length });
 }
 
 function invalidateUnitCatalogCache() {
@@ -22734,7 +22733,7 @@ app.get(/^\/api\/unit-sprites\/([0-9a-f]{64})\.png$/, async (req, res) => {
     res.setHeader('Content-Length', String(png.length));
     res.status(200).end(png);
   } catch (error) {
-    console.error('unit sprite read failed:', error && error.message);
+    log.error('unit sprite read failed', { error: errorText(error, { stack: false }) });
     res.status(503).json({ error: 'unit_sprite_unavailable' });
   }
 });
@@ -22783,7 +22782,7 @@ app.get(/^\/api\/unit-sprites\/([0-9a-f-]{36})\/(\d+)\/([a-z-]+)\/([a-z-]+)\/(\d
     res.setHeader('Content-Length', String(png.length));
     res.status(200).end(png);
   } catch (error) {
-    console.error('unit sprite rung read failed:', error && error.message);
+    log.error('unit sprite rung read failed', { error: errorText(error, { stack: false }) });
     res.status(503).json({ error: 'unit_sprite_unavailable' });
   }
 });
@@ -23897,7 +23896,7 @@ async function resolveRunOwner(req, res) {
   try {
     session = await readSession(req, res);
   } catch (error) {
-    console.error('auth session check failed:', error);
+    log.error('auth session check failed', { error: errorText(error) });
     res.status(error.statusCode || 502).json({ error: 'auth_unavailable' });
     return null;
   }
@@ -24986,7 +24985,7 @@ async function storedLevelThumbnailUrls(authorityEntries) {
   const retries = await ensurePreparedLevelThumbnailDerivativeBatch(missing, preparedBatch.renderInputs);
   for (const retry of retries) {
     if (retry.status === 'rejected') {
-      console.error('canonical level thumbnail read repair failed:', retry.reason && retry.reason.message);
+      log.error('canonical level thumbnail read repair failed', { error: errorText(retry.reason, { stack: false }) });
     }
   }
   return currentStoredLevelThumbnailUrls(preparedBatch.entries);
@@ -25049,7 +25048,7 @@ function warmOfficialCampaignThumbnailManifest(reason) {
       Object.entries(levels).map(([levelId, level]) => [`official:${id}:${levelId}`, levelId, level]),
     );
   })().catch((error) => {
-    console.error(`official thumbnail manifest warmup failed (${reason}):`, error && error.message);
+    log.error('official thumbnail manifest warmup failed', { reason, error: errorText(error, { stack: false }) });
   });
 }
 
@@ -25281,7 +25280,7 @@ app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
     res.setHeader('Cache-Control', 'public, max-age=86400');
     res.status(200).end(png);
   } catch (error) {
-    console.error('level-thumb render failed:', error && error.message);
+    log.error('level-thumb render failed', { error: errorText(error, { stack: false }) });
     res.status(503).json({ error: 'thumbnail_render_unavailable' });
   }
 });
@@ -25425,7 +25424,7 @@ app.use(async (req, res) => {
 
 function startServer() {
   app.listen(port, () => {
-    console.log(`chess-tactics listening on :${port}`);
+    log.info('chess-tactics listening', { port });
   });
 }
 
@@ -25436,26 +25435,24 @@ function startServer() {
 pool = buildPool();
 if (schemaMigrationCommand) {
   if (!pool) {
-    console.error('schema migration command requires DATABASE_URL or POSTGRES_HOST/POSTGRES_DATABASE/POSTGRES_USER');
+    log.error('schema migration command requires a database', { needs: 'DATABASE_URL or POSTGRES_HOST/POSTGRES_DATABASE/POSTGRES_USER' });
     process.exitCode = 1;
   } else if (schemaMigrationMode !== 'auto') {
-    console.error('schema migration command requires SCHEMA_MIGRATIONS=auto');
+    log.error('schema migration command requires SCHEMA_MIGRATIONS=auto', { schema: schemaMigrationMode });
     process.exitCode = 1;
     pool.end().catch(() => {});
   } else {
-    console.log(
-      `postgres schema migration target: ${formatSchemaMigrationTarget(schemaMigrationTarget(process.env))}`,
-    );
-    pool.on('error', (error) => console.error('postgres pool error:', error));
+    log.info('postgres schema migration target', { target: formatSchemaMigrationTarget(schemaMigrationTarget(process.env)) });
+    pool.on('error', (error) => log.error('postgres pool error', { error: errorText(error) }));
     runMigrations()
       .then((report) => {
-        console.log(`postgres schema migration complete; ${formatMigrationRunResult(report)}`);
+        log.info('postgres schema migration complete', { migrations: formatMigrationRunResult(report) });
       })
       .catch((error) => {
         if (error instanceof MigrationExecutionError) {
-          console.error(`postgres schema migration failed; ${formatMigrationRunFailure(error)}`);
+          log.error('postgres schema migration failed', { error: outside(formatMigrationRunFailure(error)) });
         } else {
-          console.error('postgres schema migration failed:', error);
+          log.error('postgres schema migration failed', { error: errorText(error) });
         }
         process.exitCode = 1;
       })
@@ -25463,27 +25460,23 @@ if (schemaMigrationCommand) {
   }
 } else if (pool) {
   if (schemaMigrationMode === 'auto') {
-    console.log(
-      `postgres schema migration target: ${formatSchemaMigrationTarget(schemaMigrationTarget(process.env))}`,
-    );
+    log.info('postgres schema migration target', { target: formatSchemaMigrationTarget(schemaMigrationTarget(process.env)) });
   }
-  pool.on('error', (error) => console.error('postgres pool error:', error));
+  pool.on('error', (error) => log.error('postgres pool error', { error: errorText(error) }));
   startServer();
   ensureDbReady()
     .then(() => {
-      console.log(`postgres ready (mode=${databaseUrl ? 'connection-string' : 'workload-identity'}, schema=${schemaMigrationMode}); ${schemaReadyMessage()}`);
+      log.info('postgres ready', { mode: databaseUrl ? 'connection-string' : 'workload-identity', schema: schemaMigrationMode, migrations: schemaReadyMessage() });
       warmOfficialCampaignThumbnailManifest('boot');
     })
     .catch((error) => {
       if (error instanceof MigrationExecutionError) {
-        console.error(
-          `postgres init failed; application readiness will remain 503 until it recovers or schema is prepared; ${formatMigrationRunFailure(error)}`,
-        );
+        log.error('postgres init failed; application readiness will remain 503 until it recovers or schema is prepared', { error: outside(formatMigrationRunFailure(error)) });
       } else {
-        console.error('postgres init failed; application readiness will remain 503 until it recovers or schema is prepared:', error);
+        log.error('postgres init failed; application readiness will remain 503 until it recovers or schema is prepared', { error: errorText(error) });
       }
     });
 } else {
-  console.warn('no database configured (set DATABASE_URL, or POSTGRES_HOST/POSTGRES_DATABASE/POSTGRES_USER); application readiness will remain 503');
+  log.warn('no database configured; application readiness will remain 503', { needs: 'DATABASE_URL, or POSTGRES_HOST/POSTGRES_DATABASE/POSTGRES_USER' });
   startServer();
 }

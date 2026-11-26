@@ -6,6 +6,7 @@ if (process.argv.includes('--self-test')) {
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
+const { log } = require('./log');
 
 const bakedServer = path.join(__dirname, 'server.js');
 const bakedFrontendDir = process.env.FRONTEND_DIR || path.join(__dirname, '..', 'frontend', 'dist');
@@ -65,7 +66,7 @@ function startChild() {
       return;
     }
 
-    console.error(`chess-tactics child exited unexpectedly: code=${code} signal=${signal}`);
+    log.error('chess-tactics child exited unexpectedly', { code, signal });
     setTimeout(startChild, 1000);
   });
 }

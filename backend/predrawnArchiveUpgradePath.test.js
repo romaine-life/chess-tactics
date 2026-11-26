@@ -984,7 +984,7 @@ test('local schema mutation is a dedicated one-shot command, not normal server s
   const startupOffset = serverSource.indexOf('pool = buildPool();');
   assert.ok(startupOffset >= 0, 'server startup contract must remain inspectable');
   const startup = serverSource.slice(startupOffset);
-  const targetOutputOffset = startup.indexOf('postgres schema migration target:');
+  const targetOutputOffset = startup.indexOf("log.info('postgres schema migration target'");
   const migrationRunOffset = startup.indexOf('runMigrations()');
   assert.ok(
     targetOutputOffset >= 0 && targetOutputOffset < migrationRunOffset,
@@ -1519,7 +1519,7 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
 
   const checkModeProof = sourceSection(
     smokeSource,
-    'const secondaryReadyLine = secondaryOutput',
+    'const secondaryReadyEntry = entries(secondaryOutput)',
     '\n    secondaryChild.kill();',
   );
   assert.match(

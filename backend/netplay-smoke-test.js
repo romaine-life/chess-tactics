@@ -14,6 +14,7 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { entries } = require('./log');
 
 const port = 31347;
 const authPort = 31348;
@@ -65,7 +66,7 @@ function startServer() {
     child = spawn(process.execPath, ['server.js'], { cwd: __dirname, env: childEnv, stdio: ['ignore', 'pipe', 'pipe'] });
     const onData = (chunk) => {
       serverOutput += chunk.toString();
-      if (serverOutput.includes(`listening on :${port}`)) resolve();
+      if (entries(serverOutput).some((e) => e.message === 'chess-tactics listening' && e.fields.port === String(port))) resolve();
     };
     child.stdout.on('data', onData);
     child.stderr.on('data', onData);

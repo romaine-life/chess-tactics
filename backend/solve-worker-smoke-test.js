@@ -14,6 +14,7 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const { pathToFileURL } = require('url');
+const { entries } = require('./log');
 
 const bundleUrl = pathToFileURL(path.join(__dirname, '..', 'frontend', 'trainer-bundle', 'engine.mjs')).href;
 
@@ -58,16 +59,15 @@ async function main() {
 
   if (code !== 0) fail(`worker exited with code ${code}\n${out}`);
 
-  // Parse the JSON log lines and find the terminal `done` record with a rootValue.
-  const lines = out.split('\n').map((l) => l.trim()).filter(Boolean);
-  const records = [];
-  for (const l of lines) { try { records.push(JSON.parse(l)); } catch { /* non-json line */ } }
-  const done = records.find((r) => r.event === 'done');
-  if (!done) fail(`no \`done\` log record\n${out}`);
-  if (!done.rootValue || typeof done.rootValue.outcome !== 'string') fail(`\`done\` record has no rootValue.outcome\n${out}`);
-  if (done.rootValue.outcome === 'unknown') fail(`root value should be proven for this trivial board, got 'unknown'\n${out}`);
+  // Read the worker's log lines back (log.js) and find the terminal `done` event with a root value.
+  const done = entries(out).find((entry) => entry.message === 'done');
+  if (!done) fail(`no \`done\` log line\n${out}`);
+  let rootValue = null;
+  try { rootValue = JSON.parse(done.fields.root_value); } catch { /* checked below */ }
+  if (!rootValue || typeof rootValue.outcome !== 'string') fail(`\`done\` line has no root_value.outcome\n${out}`);
+  if (rootValue.outcome === 'unknown') fail(`root value should be proven for this trivial board, got 'unknown'\n${out}`);
 
-  console.log(`solve-worker-smoke-test: OK — feasibility + bounded solve verified with NO database (rootValue=${done.rootValue.outcome}${done.rootValue.winner ? `/${done.rootValue.winner}` : ''}, provenCount=${done.provenCount}).`);
+  console.log(`solve-worker-smoke-test: OK — feasibility + bounded solve verified with NO database (rootValue=${rootValue.outcome}${rootValue.winner ? `/${rootValue.winner}` : ''}, provenCount=${done.fields.proven_count}).`);
   process.exit(0);
 }
 

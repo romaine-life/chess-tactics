@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { entries } = require('./log');
 const { createCanvas } = require('@napi-rs/canvas');
 const boardRender = require('@chess-tactics/board-render');
 const {
@@ -385,9 +386,7 @@ async function waitForSchemaReady(proc, readOutput, mode) {
     if (!proc || proc.exitCode !== null || text.includes('postgres init failed;')) {
       throw new Error(`Backend failed its schema=${mode} initialization\n${text}`);
     }
-    if (text.split(/\r?\n/).some((line) => (
-      line.includes('postgres ready') && line.includes(`schema=${mode}`)
-    ))) {
+    if (entries(text).some((entry) => entry.message === 'postgres ready' && entry.fields.schema === mode)) {
       console.log(`smoke-test: schema=${mode} ready after ${Date.now() - started}ms`);
       return;
     }
@@ -1038,9 +1037,9 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
       return `${version} (${migration.name})`;
     })
     .join(', ');
-  const readyLine = output
-    .split(/\r?\n/)
-    .find((line) => line.includes('postgres ready') && line.includes('schema=auto'));
+  const readyEntry = entries(output)
+    .find((entry) => entry.message === 'postgres ready' && entry.fields.schema === 'auto');
+  const readyLine = readyEntry && readyEntry.fields.migrations;
   const revisionReasonRows = await queryDb(
     `SELECT reason
        FROM level_working_copy_revision_reasons
@@ -3519,9 +3518,9 @@ async function main() {
   if (!isPgliteRuntime) {
     startSecondaryBackend();
     await waitForSecondarySchemaCheck();
-    const secondaryReadyLine = secondaryOutput
-      .split(/\r?\n/)
-      .find((line) => line.includes('postgres ready') && line.includes('schema=check'));
+    const secondaryReadyEntry = entries(secondaryOutput)
+      .find((entry) => entry.message === 'postgres ready' && entry.fields.schema === 'check');
+    const secondaryReadyLine = secondaryReadyEntry && secondaryReadyEntry.fields.migrations;
     if (
       !secondaryReadyLine
       || !secondaryReadyLine.includes('schema migrations applied: none')

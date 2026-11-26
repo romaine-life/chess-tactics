@@ -11,13 +11,15 @@
 // no server — this is a run-to-completion batch job.
 import { Worker } from 'node:worker_threads';
 import os from 'node:os';
+import { workerEvent } from './log.js';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { generateCuratedBook, splitBook, decodeWeights, validateStep, DEFAULT_SPRT, DEFAULT_EVAL_WEIGHTS } from '../frontend/trainer-bundle/engine.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const log = (o) => console.log(JSON.stringify({ t: new Date().toISOString(), ...o }));
+// One standard log line per event (log.js, AHT-204).
+const log = workerEvent;
 
 async function loadSpec() {
   if (process.env.TRAIN_SPEC) return JSON.parse(process.env.TRAIN_SPEC);

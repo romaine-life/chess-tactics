@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { createTokenCipher } = require('./tokenCipher');
+const { log } = require('./log');
 
 // Chess Tactics is a Backend-For-Frontend, and a BFF hands the browser a session cookie while the
 // OAuth tokens stay on the server (draft-ietf-oauth-browser-based-apps-26 §6.1.1). One cookie, and
@@ -114,9 +115,9 @@ function createOIDCSessionManager({
   // to remember to do it and no store implementation can forget. The session row is the only thing
   // that ever holds them; the browser never does (ADR-0576).
   const tokenCipher = createTokenCipher(tokenEncryptionKey, {
-    onMissingKey: () => console.warn(
-      'auth sessions: AUTH_TOKEN_ENCRYPTION_KEY is unset; OAuth tokens are stored in PLAINTEXT. '
-      + 'A read of the database is then a working refresh token.',
+    onMissingKey: () => log.warn(
+      'auth sessions: AUTH_TOKEN_ENCRYPTION_KEY is unset; OAuth tokens are stored in PLAINTEXT',
+      { consequence: 'a read of the database is then a working refresh token' },
     ),
   });
   const decryptRecord = (record) => (record ? {

@@ -30,9 +30,10 @@ WORKDIR /app
 
 COPY packages/board-render/package*.json packages/board-render/
 COPY --from=frontend-build /app/packages/board-render/dist packages/board-render/dist
-COPY backend/package*.json backend/
+# @romaine-life/logline comes from Forgejo's npm registry (backend/.npmrc), read with CI's sign-in.
+COPY backend/package*.json backend/.npmrc backend/
 ARG NPM_CONFIG_REGISTRY=https://artifacts.home.romaine.life/npm/npm/
-RUN cd backend && npm ci --omit=dev
+RUN --mount=type=secret,id=FORGEJO_PACKAGES_TOKEN,env=FORGEJO_PACKAGES_TOKEN cd backend && npm ci --omit=dev
 
 COPY backend/ backend/
 COPY --from=frontend-build /app/frontend/dist frontend/dist

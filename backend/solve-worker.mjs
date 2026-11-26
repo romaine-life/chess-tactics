@@ -15,9 +15,11 @@
 // guarantee — a cancel/budget/memory stop still leaves a well-formed result.
 import { performance } from 'node:perf_hooks';
 import { gzipSync } from 'node:zlib';
+import { workerEvent } from './log.js';
 import { estimateFeasibility, runSolve } from '../frontend/trainer-bundle/engine.mjs';
 
-const log = (o) => console.log(JSON.stringify({ t: new Date().toISOString(), ...o }));
+// One standard log line per event (log.js, AHT-204).
+const log = workerEvent;
 
 // Default bounds when a spec omits them — matches the SolveRuns UI launch defaults
 // (contract SolveBounds shape: ms + states + bytes; maxMemoryBytes set UNDER the 12Gi

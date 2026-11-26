@@ -5,6 +5,9 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
+// Loading the log also proves this image's Node loads @romaine-life/logline, an ES module,
+// with require().
+const { log } = require('./log');
 
 const app = path.join(__dirname, '..');
 const failures = [];
@@ -33,8 +36,8 @@ for (const entry of ['server.js', 'supervisor.js', 'train-worker.mjs', 'solve-wo
 }
 
 if (failures.length) {
-  console.error(`chess-tactics self-test failed:\n- ${failures.join('\n- ')}`);
+  log.error('chess-tactics self-test failed', { failures: failures.join('; ') });
   process.exitCode = 1;
 } else {
-  console.log('chess-tactics self-test passed');
+  log.info('chess-tactics self-test passed');
 }
